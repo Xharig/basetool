@@ -49,8 +49,21 @@ public final class LayoutResponses {
     return new MeLayoutResponse(
         null,
         List.of(),
-        new CapabilitiesResponse(canSeeBlueprintOverview, canViewJobOrders, canViewOwnJobOrders),
+        new CapabilitiesResponse(
+            canSeeBlueprintOverview, canViewJobOrders, canViewOwnJobOrders, false),
         0L);
+  }
+
+  /**
+   * A layout answer carrying only the „gestohlen" marking switch (REQ-INV-053).
+   *
+   * @param canMarkStolen whether the server allows booking in as, marking and unmarking stolen
+   * @return the answer, with every role capability off, no org unit, no pinnable units and no
+   *     unread notifications
+   */
+  public static MeLayoutResponse stolenMarking(boolean canMarkStolen) {
+    return new MeLayoutResponse(
+        null, List.of(), new CapabilitiesResponse(false, false, false, canMarkStolen), 0L);
   }
 
   /**

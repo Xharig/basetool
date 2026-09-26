@@ -18,7 +18,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/* global stackEntriesI18n, bookOutI18n, inventoryConflictI18n, assocI18n */
+/* global stackEntriesI18n, bookOutI18n, inventoryConflictI18n, assocI18n, stolenMarkI18n */
 (function () {
     'use strict';
 
@@ -66,6 +66,15 @@
         /** @type {string | null} */
         let bookOutItemId = null;
         let bookOutInFlight = false;
+
+        /**
+         * The row whose „gestohlen" marker is being changed (REQ-INV-053): its id and version, the
+         * marker it is to receive, its amount and whether it counts whole pieces.
+         *
+         * @type {{ id: string | null, version: number | null, stolen: boolean, max: number, piece: boolean }}
+         */
+        let stolenMarkTarget = { id: null, version: null, stolen: true, max: 0, piece: false };
+        let stolenMarkInFlight = false;
         /** @type {string | null} */
         let umbuchenCurrentOwningOrgUnitId = null;
 
@@ -164,6 +173,7 @@
             if (cfg.stackPersonalFlag) {
                 params.set('personal', headerRow.getAttribute('data-personal') || 'false');
             }
+            if (headerRow.getAttribute('data-stolen') === 'true') params.set('stolen', 'true');
             const owningOrgUnitId = headerRow.getAttribute('data-owning-org-unit-id');
             if (owningOrgUnitId) params.set('owningOrgUnitId', owningOrgUnitId);
             if (page != null) params.set('page', String(page));
@@ -897,6 +907,127 @@
                 });
         }
 
+        /**
+         * Opens the mark / unmark dialog for one row, preset to the whole row (REQ-INV-053).
+         *
+         * @param {Element} el the row's action button
+         */
+        function openStolenMarkModal(el) {
+            const modal = document.getElementById('stolenMarkModal');
+            if (!modal) return;
+            const version = parseInt(el.getAttribute('data-version') || '', 10);
+            const amount = parseFloat(el.getAttribute('data-amount') || '');
+            const marking = el.getAttribute('data-stolen') !== 'true';
+            stolenMarkTarget = {
+                id: el.getAttribute('data-id'),
+                version: Number.isNaN(version) ? null : version,
+                stolen: marking,
+                max: Number.isNaN(amount) ? 0 : amount,
+                piece: el.getAttribute('data-quantity-type') === 'PIECE',
+            };
+            const title = document.getElementById('stolenMarkTitle');
+            if (title) {
+                title.textContent = marking ? stolenMarkI18n.markTitle : stolenMarkI18n.unmarkTitle;
+            }
+            const message = document.getElementById('stolenMarkMessage');
+            if (message) {
+                message.textContent = marking
+                    ? stolenMarkI18n.markMessage
+                    : stolenMarkI18n.unmarkMessage;
+            }
+            const submitBtn = document.getElementById('stolenMarkSubmitBtn');
+            if (submitBtn) {
+                submitBtn.textContent = marking
+                    ? stolenMarkI18n.confirmMark
+                    : stolenMarkI18n.confirmUnmark;
+            }
+            const amountInput = input('stolenMarkAmount');
+            if (amountInput) {
+                amountInput.step = stolenMarkTarget.piece ? '1' : '0.001';
+                amountInput.value = String(stolenMarkTarget.max);
+            }
+            const scuHint = document.getElementById('stolen-mark-scu-hint');
+            if (scuHint) scuHint.classList.toggle('krtm-hidden', stolenMarkTarget.piece);
+            const amountOf = document.getElementById('stolenMarkAmountOfText');
+            if (amountOf) {
+                amountOf.textContent = (amountOf.getAttribute('data-template') ?? '').replace(
+                    '{0}',
+                    String(stolenMarkTarget.max),
+                );
+            }
+            window.krtModal.open(modal);
+        }
+
+        /** Closes the mark / unmark dialog. */
+        function closeStolenMarkModal() {
+            const modal = document.getElementById('stolenMarkModal');
+            if (modal) window.krtModal.close(modal);
+        }
+
+        /** Presets the amount of the mark / unmark dialog to the whole row. */
+        function fillStolenMarkAll() {
+            const amountInput = input('stolenMarkAmount');
+            if (amountInput) amountInput.value = String(stolenMarkTarget.max);
+        }
+
+        /**
+         * Submits the marker change for the whole row or a part of it to POST
+         * /inventory/{id}/stolen, then re-pulls the table in place and tells peers.
+         *
+         * @param {Event} event the form submit
+         */
+        function submitStolenMark(event) {
+            event.preventDefault();
+            if (stolenMarkInFlight || !window.krtFetch || !stolenMarkTarget.id) return;
+            const amountInput = input('stolenMarkAmount');
+            const raw = amountInput ? amountInput.value : '';
+            const amount = window.krtScuInput ? window.krtScuInput.parse(raw) : parseFloat(raw);
+            const invalid =
+                amount == null ||
+                Number.isNaN(amount) ||
+                amount <= 0 ||
+                amount > stolenMarkTarget.max + 0.0005 ||
+                (stolenMarkTarget.piece && !Number.isInteger(amount));
+            if (invalid) {
+                if (typeof window.showFrontendErrorToast === 'function') {
+                    window.showFrontendErrorToast(stolenMarkI18n.errorAmount);
+                }
+                return;
+            }
+            const whole = amount >= stolenMarkTarget.max - 0.0005;
+            const marking = stolenMarkTarget.stolen;
+            const submitBtn = /** @type {HTMLButtonElement | null} */ (
+                document.getElementById('stolenMarkSubmitBtn')
+            );
+            stolenMarkInFlight = true;
+            if (submitBtn) submitBtn.disabled = true;
+            window.krtFetch
+                .write({
+                    method: 'POST',
+                    url: '/inventory/' + stolenMarkTarget.id + '/stolen',
+                    payload: {
+                        version: stolenMarkTarget.version,
+                        stolen: marking,
+                        amount: whole ? null : amount,
+                    },
+                    successMessage: marking
+                        ? stolenMarkI18n.successMark
+                        : stolenMarkI18n.successUnmark,
+                    errorMessage: stolenMarkI18n.error,
+                    conflict: inventoryConflictI18n,
+                    onSuccess() {
+                        closeStolenMarkModal();
+                        cfg.refreshTable();
+                        cfg.notifyInventoryChanged();
+                        broadcastBoardChanged();
+                    },
+                })
+                .then(function () {
+                    stolenMarkInFlight = false;
+                    if (submitBtn) submitBtn.disabled = false;
+                });
+        }
+
         /** Closes the Umbuchen modal and resets its unsaved-changes and Herkunft state. */
         function closeUmbuchenModal() {
             if (typeof window.resetUnsavedChanges === 'function') window.resetUnsavedChanges();
@@ -1405,6 +1536,9 @@
                     );
                 });
                 window.krtEvents.on('click', trigger('close-bookout'), closeBookOutModal);
+                window.krtEvents.on('click', trigger('stolen'), openStolenMarkModal);
+                window.krtEvents.on('click', trigger('close-stolen'), closeStolenMarkModal);
+                window.krtEvents.on('click', trigger('stolen-all'), fillStolenMarkAll);
                 window.krtEvents.on('input', trigger('amount-from-target'), updateAmountFromTarget);
                 window.krtEvents.on('input', trigger('target-from-amount'), updateTargetFromAmount);
                 window.krtEvents.on(
@@ -1435,6 +1569,8 @@
                     submitBookOut(/** @type {SubmitEvent} */ (e));
                 });
             }
+            const stolenMarkForm = document.getElementById('stolenMarkForm');
+            if (stolenMarkForm) stolenMarkForm.addEventListener('submit', submitStolenMark);
             window.onclick = function (event) {
                 const modal = document.getElementById('bookOutModal');
                 if (modal && event.target === modal) {

@@ -66,7 +66,7 @@
     const SORT_KEYS = ['qual', 'menge', 'mat', 'neu'];
 
     function defaultBoardFilters() {
-        return { minQuality: '', minAmount: '', sort: 'qual' };
+        return { minQuality: '', minAmount: '', sort: 'qual', excludeStolen: false };
     }
 
     function readFilterPref() {
@@ -96,6 +96,9 @@
         }
         if (SORT_KEYS.indexOf(saved.sort) >= 0) {
             target.sort = saved.sort;
+        }
+        if (typeof saved.excludeStolen === 'boolean') {
+            target.excludeStolen = saved.excludeStolen;
         }
     }
 
@@ -132,6 +135,7 @@
             filterState.offers.minQuality = val('[data-mb-minquality]');
             filterState.offers.minAmount = val('[data-mb-minamount]');
             filterState.offers.sort = val('[data-mb-sort]') || 'qual';
+            filterState.offers.excludeStolen = excludeStolenChecked();
         }
         if (document.querySelector('[data-mg-minquality]')) {
             filterState.requests.minQuality = val('[data-mg-minquality]');
@@ -147,6 +151,19 @@
             return el.value.trim();
         }
         return savedValue == null ? '' : String(savedValue);
+    }
+
+    /**
+     * Whether the board's „ohne gestohlene" filter is on (REQ-INV-053), falling back to the saved
+     * state while the toolbar is not rendered.
+     *
+     * @returns {boolean} the filter state
+     */
+    function excludeStolenChecked() {
+        const el = /** @type {HTMLInputElement | null} */ (
+            document.querySelector('[data-mb-exclude-stolen]')
+        );
+        return el ? el.checked : filterState.offers.excludeStolen === true;
     }
 
     function params() {
@@ -167,6 +184,9 @@
         const sort = filterVal('[data-mb-sort]', filterState.offers.sort);
         if (sort) {
             p.set('sort', sort);
+        }
+        if (excludeStolenChecked()) {
+            p.set('excludeStolen', 'true');
         }
         if (selectedId) {
             p.set('selected', selectedId);
@@ -561,6 +581,12 @@
             setInputVal('[data-mb-search]', '');
             setInputVal('[data-mb-minquality]', '');
             setInputVal('[data-mb-minamount]', '');
+            const excludeStolenBox = /** @type {HTMLInputElement | null} */ (
+                document.querySelector('[data-mb-exclude-stolen]')
+            );
+            if (excludeStolenBox) {
+                excludeStolenBox.checked = false;
+            }
             setActiveTabEl(tabEl('offers', 'alle'));
             persistFilters();
             selectedId = null;
@@ -638,7 +664,7 @@
     });
 
     document.addEventListener('change', function (e) {
-        if (e.target.matches('[data-mb-sort]')) {
+        if (e.target.matches('[data-mb-sort], [data-mb-exclude-stolen]')) {
             persistFilters();
             swapList();
         } else if (e.target.matches('[data-mg-sort]')) {
@@ -689,11 +715,22 @@
         let changed = setIfDifferent('[data-' + prefix + '-minquality]', saved.minQuality);
         changed = setIfDifferent('[data-' + prefix + '-minamount]', saved.minAmount) || changed;
         changed = setIfDifferent('[data-' + prefix + '-sort]', saved.sort) || changed;
+        const stolenBox = /** @type {HTMLInputElement | null} */ (
+            document.querySelector('[data-' + prefix + '-exclude-stolen]')
+        );
+        if (stolenBox && stolenBox.checked !== (saved.excludeStolen === true)) {
+            stolenBox.checked = saved.excludeStolen === true;
+            changed = true;
+        }
         return changed;
     }
 
     function restoreFilters() {
-        if (/[?&](mode|tab|q|minQuality|minAmount|sort|selected)=/.test(window.location.search)) {
+        if (
+            /[?&](mode|tab|q|minQuality|minAmount|sort|selected|excludeStolen)=/.test(
+                window.location.search,
+            )
+        ) {
             persistFilters();
             return;
         }

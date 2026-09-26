@@ -19,18 +19,11 @@
 
 package de.greluc.krt.profit.basetool.frontend.model.dto;
 
-import java.util.UUID;
-
 /**
- * Frontend mirror of one handed-over line of a job-order handover: the material, quality, amount
- * and origin location snapshot, and whether the stock was marked „gestohlen" (REQ-INV-053).
+ * Frontend mirror of the backend {@code BulkStolenMarkResultDto}: how many rows of a selection
+ * changed their „gestohlen" marker and how many already carried it (REQ-INV-053).
+ *
+ * @param changed the number of rows that now carry the requested marker
+ * @param skipped the number of rows that already carried it
  */
-public record JobOrderHandoverItemDto(
-    UUID id,
-    UUID jobOrderHandoverId,
-    MaterialDto material,
-    Integer quality,
-    Double amount,
-    String locationName,
-    Boolean stolen,
-    Long version) {}
+public record BulkStolenMarkResultDto(int changed, int skipped) {}

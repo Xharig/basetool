@@ -19,18 +19,15 @@
 
 package de.greluc.krt.profit.basetool.frontend.model.dto;
 
-import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Frontend mirror of one handed-over line of a job-order handover: the material, quality, amount
- * and origin location snapshot, and whether the stock was marked „gestohlen" (REQ-INV-053).
+ * Frontend mirror of the backend {@code InventoryItemStolenMarkDto}: sets or removes the
+ * „gestohlen" marker on a Lager row or a part of it (REQ-INV-053).
+ *
+ * @param version the row version the page last rendered
+ * @param stolen the requested marker
+ * @param amount the part to change, split off as a new row; {@code null} changes the whole row
  */
-public record JobOrderHandoverItemDto(
-    UUID id,
-    UUID jobOrderHandoverId,
-    MaterialDto material,
-    Integer quality,
-    Double amount,
-    String locationName,
-    Boolean stolen,
-    Long version) {}
+public record InventoryItemStolenMarkDto(
+    @Nullable Long version, @Nullable Boolean stolen, @Nullable Double amount) {}

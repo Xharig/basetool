@@ -19,18 +19,18 @@
 
 package de.greluc.krt.profit.basetool.frontend.model.dto;
 
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Frontend mirror of one handed-over line of a job-order handover: the material, quality, amount
- * and origin location snapshot, and whether the stock was marked „gestohlen" (REQ-INV-053).
+ * Frontend mirror of the backend {@code BulkStolenMarkRequest}: sets or removes the „gestohlen"
+ * marker on a selection of the caller's own Lager rows, whole rows only (REQ-INV-053).
+ *
+ * @param itemIds the selected rows; at least one, none null
+ * @param stolen the requested marker
  */
-public record JobOrderHandoverItemDto(
-    UUID id,
-    UUID jobOrderHandoverId,
-    MaterialDto material,
-    Integer quality,
-    Double amount,
-    String locationName,
-    Boolean stolen,
-    Long version) {}
+public record BulkStolenMarkRequest(
+    @NotNull @NotEmpty List<@NotNull UUID> itemIds, @Nullable Boolean stolen) {}

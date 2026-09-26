@@ -18,7 +18,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/* global bulkI18n, bulkRebookI18n, orgUnitChangeI18n, inventoryConflictI18n, umbuchenI18n, assocI18n, showInventoryToast, openNoteModal, closeNoteModal, updateNoteCounter, saveNote, removeNote */
+/* global bulkI18n, bulkRebookI18n, orgUnitChangeI18n, stolenMarkI18n, inventoryConflictI18n, umbuchenI18n, assocI18n, showInventoryToast, openNoteModal, closeNoteModal, updateNoteCounter, saveNote, removeNote */
 
 const myLager = /** @type {KrtInventoryApi} */ (window.krtInventory).createLager({
     triggerPrefix: 'inv-my',
@@ -112,6 +112,10 @@ function updateBulkCheckoutState() {
         document.getElementById('bulkOrgUnitBtn')
     );
     if (orgUnitBtn) orgUnitBtn.disabled = count === 0;
+    ['bulkStolenMarkBtn', 'bulkStolenUnmarkBtn'].forEach(function (id) {
+        const stolenBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById(id));
+        if (stolenBtn) stolenBtn.disabled = count === 0;
+    });
     if (countSpan) countSpan.textContent = count > 0 ? '(' + count + ')' : '';
     /** @type {NodeListOf<HTMLInputElement>} */ (
         document.querySelectorAll('.group-select-all')
@@ -205,6 +209,7 @@ function fetchAllMatchingEntryIds() {
     activeMissions.forEach((m) => url.searchParams.append('missionIds', m));
     if (personalOnly) url.searchParams.append('personalOnly', 'true');
     if (nonPersonalOnly) url.searchParams.append('nonPersonalOnly', 'true');
+    appendMyStolenFilter(url.searchParams, myStolenFilterValue());
 
     return fetch(url, {
         method: 'GET',
@@ -556,6 +561,38 @@ function personalFlagChecked(materialId, itemId) {
     return el ? el.checked : false;
 }
 
+/**
+ * The „gestohlen" select of the active view (REQ-INV-053), when the page renders one.
+ *
+ * @returns {HTMLSelectElement | null} the select, or null when absent
+ */
+function myStolenFilterSelect() {
+    return /** @type {HTMLSelectElement | null} */ (
+        document.getElementById('stolenFilter') || document.getElementById('itemStolenFilter')
+    );
+}
+
+/**
+ * The „gestohlen" filter of the active view: '' for all, 'non' without, 'only' stolen only.
+ *
+ * @returns {string} the filter value
+ */
+function myStolenFilterValue() {
+    const el = myStolenFilterSelect();
+    return el ? el.value : '';
+}
+
+/**
+ * Appends the backend flag of a „gestohlen" filter value to a query.
+ *
+ * @param {URLSearchParams} params the query to extend
+ * @param {string} value the filter value ('', 'non' or 'only')
+ */
+function appendMyStolenFilter(params, value) {
+    if (value === 'only') params.append('stolenOnly', 'true');
+    else if (value === 'non') params.append('nonStolenOnly', 'true');
+}
+
 const MY_INVENTORY_FILTER_KEY = 'inventory_my_filters';
 
 const MY_INVENTORY_FILTER_PARAMS = [
@@ -567,6 +604,8 @@ const MY_INVENTORY_FILTER_PARAMS = [
     'missionIds',
     'personalOnly',
     'nonPersonalOnly',
+    'stolenOnly',
+    'nonStolenOnly',
 ];
 
 function readMyInventoryFilterPref() {
@@ -605,6 +644,7 @@ function snapshotMyInventoryFilters() {
             jobOrders: myInventoryFilterSelection('jobOrderCheck'),
             personalOnly: personalFlagChecked('personalOnly', 'itemPersonalOnly'),
             nonPersonalOnly: personalFlagChecked('nonPersonalOnly', 'itemNonPersonalOnly'),
+            stolen: myStolenFilterValue(),
         };
     }
     const minQualitySelect = /** @type {HTMLSelectElement | null} */ (
@@ -618,6 +658,7 @@ function snapshotMyInventoryFilters() {
         missions: myInventoryFilterSelection('missionCheck'),
         personalOnly: personalFlagChecked('personalOnly', 'itemPersonalOnly'),
         nonPersonalOnly: personalFlagChecked('nonPersonalOnly', 'itemNonPersonalOnly'),
+        stolen: myStolenFilterValue(),
     };
 }
 
@@ -696,6 +737,11 @@ function restoreMyInventoryFilters() {
         nonPersonalBox.checked = true;
         changed = true;
     }
+    const stolenSelect = myStolenFilterSelect();
+    if (stolenSelect && (saved.stolen === 'non' || saved.stolen === 'only')) {
+        stolenSelect.value = saved.stolen;
+        changed = true;
+    }
     return changed;
 }
 
@@ -708,6 +754,7 @@ function countActiveMyInventoryFilters() {
     if (typeof snapshot.minQuality === 'string' && snapshot.minQuality !== '') active++;
     if (snapshot.personalOnly === true) active++;
     if (snapshot.nonPersonalOnly === true) active++;
+    if (snapshot.stolen === 'non' || snapshot.stolen === 'only') active++;
     return active;
 }
 
@@ -727,6 +774,7 @@ function filterMyInventory() {
     const minQuality = minQualitySelect ? minQualitySelect.value : '';
     const personalOnly = personalFlagChecked('personalOnly', 'itemPersonalOnly');
     const nonPersonalOnly = personalFlagChecked('nonPersonalOnly', 'itemNonPersonalOnly');
+    const stolenFilter = myStolenFilterValue();
 
     const container = document.getElementById('myInventoryTableContainer');
     if (!container) return;
@@ -744,6 +792,7 @@ function filterMyInventory() {
     activeMissions.forEach((m) => url.searchParams.append('missionIds', m));
     if (personalOnly) url.searchParams.append('personalOnly', 'true');
     if (nonPersonalOnly) url.searchParams.append('nonPersonalOnly', 'true');
+    appendMyStolenFilter(url.searchParams, stolenFilter);
 
     const visibleUrl = new URL(window.location.origin + '/inventory/my');
     if (itemsView) visibleUrl.searchParams.append('view', 'items');
@@ -755,6 +804,7 @@ function filterMyInventory() {
     activeMissions.forEach((m) => visibleUrl.searchParams.append('missionIds', m));
     if (personalOnly) visibleUrl.searchParams.append('personalOnly', 'true');
     if (nonPersonalOnly) visibleUrl.searchParams.append('nonPersonalOnly', 'true');
+    appendMyStolenFilter(visibleUrl.searchParams, stolenFilter);
     try {
         window.history.replaceState({}, '', visibleUrl.toString());
     } catch {}
@@ -803,6 +853,8 @@ function resetMyInventoryFilter() {
             if (el) el.checked = false;
         },
     );
+    const stolenSelect = myStolenFilterSelect();
+    if (stolenSelect) stolenSelect.value = '';
     if (document.getElementById('materialHeader'))
         myLager.updateSelectState('matAll', 'matCheck', 'materialHeader');
     if (document.getElementById('gameItemHeader'))
@@ -1357,6 +1409,66 @@ function submitOrgUnitChange(event) {
         });
 }
 
+let bulkStolenInFlight = false;
+
+/**
+ * Sets or removes the „gestohlen" marker on the marked rows, whole rows only, and reports the
+ * changed and skipped counts.
+ *
+ * @param {Element} el the bulk-bar button carrying the requested marker in data-stolen
+ */
+function submitBulkStolenMark(el) {
+    if (bulkStolenInFlight || !window.krtFetch) return;
+    const ids = getCheckedItemIds();
+    if (ids.length === 0) {
+        showBulkRebookError(stolenMarkI18n.errorEmpty);
+        return;
+    }
+    const button = /** @type {HTMLButtonElement} */ (el);
+    bulkStolenInFlight = true;
+    button.disabled = true;
+    window.krtFetch
+        .write({
+            method: 'POST',
+            url: '/inventory/bulk-stolen',
+            payload: { itemIds: ids, stolen: el.getAttribute('data-stolen') === 'true' },
+            toast: false,
+            errorMessage: stolenMarkI18n.error,
+            conflict: inventoryConflictI18n,
+            onSuccess(body) {
+                reportBulkStolenOutcome(body);
+                clearBulkSelection();
+                filterMyInventory();
+                broadcastInventoryChanged();
+                myLager.broadcastBoardChanged();
+            },
+        })
+        .then(function () {
+            bulkStolenInFlight = false;
+            updateBulkCheckoutState();
+        });
+}
+
+/**
+ * Reports a bulk marker change's counts as a toast.
+ *
+ * @param {{ changed?: number, skipped?: number } | null} body the result counts
+ */
+function reportBulkStolenOutcome(body) {
+    const changed = body && typeof body.changed === 'number' ? body.changed : 0;
+    const skipped = body && typeof body.skipped === 'number' ? body.skipped : 0;
+    if (changed === 0) {
+        showBulkRebookError(stolenMarkI18n.noneChanged);
+        return;
+    }
+    const message = stolenMarkI18n.successBulk
+        .replace('{0}', String(changed))
+        .replace('{1}', String(skipped));
+    if (typeof window.showFrontendSuccessToast === 'function') {
+        window.showFrontendSuccessToast(message);
+    }
+}
+
 if (window.krtEvents && typeof window.krtEvents.on === 'function') {
     window.krtEvents.on('click', 'inv-my-toggle-multi', function (el) {
         myLager.toggleMultiSelect(el.getAttribute('data-multi-target'));
@@ -1424,6 +1536,7 @@ if (window.krtEvents && typeof window.krtEvents.on === 'function') {
     window.krtEvents.on('click', 'inv-my-org-unit', openOrgUnitChangeModal);
     window.krtEvents.on('click', 'inv-my-open-bulk-org-unit', openBulkOrgUnitChangeModal);
     window.krtEvents.on('click', 'inv-my-close-org-unit', closeOrgUnitChangeModal);
+    window.krtEvents.on('click', 'inv-my-bulk-stolen', submitBulkStolenMark);
 }
 
 const umbuchenFormEl = document.getElementById('umbuchenForm');
