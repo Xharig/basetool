@@ -1355,15 +1355,21 @@ Lager row — shared or personal, material or game item — carries a **„gesto
   it; a split never undercuts an offer or the earmarks.
 - [x] The per-material overview and the craftability sum are unchanged by mixed stock.
 - [x] Booking in as stolen and every mark/unmark are refused while the switch is off.
-- [ ] The web shows the chip, the filters and the actions in place (REQ-FE-001), and an E2E flow
-  books in or marks a part, filters and unmarks.
+- [x] The web shows the chip, the filters and the actions in place (REQ-FE-001), and an E2E flow
+  books in or marks a part, filters and unmarks. Mein Lager offers the row and bulk actions, the
+  Org-Lager the row action on the rows its actions column serves (logisticians).
 
 **Enforced by:** `InventoryStolenMarkServiceTest`, `InventoryStolenStockDataTest`,
 `InventoryStackKeyCoverageTest`, `InventoryItemServiceTest`, `InventoryItemServicePersonalRebookTest`,
 `MaterialExchangeRepositoryDataTest`, `JobOrderInventoryOwnerRedactorTest`, `MeControllerTest`,
-`InventoryItemControllerTest`, `ExternalContractTest`, `ApiVhostAnonymousSurfaceTest` · **Code:**
+`InventoryItemControllerTest`, `ExternalContractTest`, `ApiVhostAnonymousSurfaceTest`,
+`InventoryStolenMarkAjaxControllerTest`, `InventoryStolenMarkerRenderTest`,
+`MaterialboersePageControllerMvcTest`, `CapabilityFlagsAdviceTest`,
+`InventoryOperationsE2eTest.markingPartOfARowAsStolenSplitsItIntoItsOwnStackInPlace` · **Code:**
 `InventoryStolenMarkService`, `InventoryItemRepository`, `InventoryAggregationService`,
-`InventoryCheckoutService`, `MaterialExchangeBoardService`, `InventoryProperties` · **Issues:** #2096
+`InventoryCheckoutService`, `MaterialExchangeBoardService`, `InventoryProperties`,
+`InventoryStolenMarkProxyController`, `fragments/inventory-stolen-mark.html`, `inventory-common.js` ·
+**Issues:** #2096
 (epic #2078).
 
 ## Out of scope
