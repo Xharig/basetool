@@ -19,18 +19,11 @@
 
 package de.greluc.krt.profit.basetool.backend.model.dto;
 
-import java.util.UUID;
-
 /**
- * One handed-over line of a job-order handover: the material, quality, amount and origin location
- * snapshot, and whether the stock was marked „gestohlen" (REQ-INV-053).
+ * Outcome of setting or removing the „gestohlen" marker on a selection (REQ-INV-053). The two
+ * counts always sum to the number of distinct requested ids.
+ *
+ * @param changed the number of rows that now carry the requested marker
+ * @param skipped the number of rows that already carried it
  */
-public record JobOrderHandoverItemDto(
-    UUID id,
-    UUID jobOrderHandoverId,
-    MaterialDto material,
-    Integer quality,
-    Double amount,
-    String locationName,
-    Boolean stolen,
-    Long version) {}
+public record BulkStolenMarkResultDto(int changed, int skipped) {}

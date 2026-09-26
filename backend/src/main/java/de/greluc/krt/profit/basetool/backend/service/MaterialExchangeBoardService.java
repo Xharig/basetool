@@ -129,6 +129,7 @@ public class MaterialExchangeBoardService {
    * @param sort the sort key: {@code qual} (default) / {@code menge} / {@code mat} / {@code neu}
    * @param page the zero-based page index
    * @param size the page size (clamped to {@value MaterialExchangeQueryParams#MAX_PAGE_SIZE})
+   * @param excludeStolen whether offers of stock marked „gestohlen" are left out (REQ-INV-053)
    * @return the matching page of board offers
    */
   public PageResponse<MaterialExchangeOfferDto> board(
@@ -138,7 +139,8 @@ public class MaterialExchangeBoardService {
       @Nullable Double minAmount,
       @Nullable String sort,
       @Nullable Integer page,
-      @Nullable Integer size) {
+      @Nullable Integer size,
+      boolean excludeStolen) {
     UUID viewerId = authHelperService.currentUserId().orElse(null);
     boolean onlyMine = "mein".equalsIgnoreCase(tab);
     Pageable pageable =
@@ -153,6 +155,7 @@ public class MaterialExchangeBoardService {
             MaterialExchangeQueryParams.clampQuality(minQuality),
             minAmount,
             MaterialExchangeQueryParams.normalizeSort(sort),
+            excludeStolen,
             pageable);
 
     List<UUID> offerIds = offers.getContent().stream().map(MaterialExchangeOffer::getId).toList();
@@ -275,7 +278,8 @@ public class MaterialExchangeBoardService {
           null,
           item.getAmount(),
           locationName,
-          alreadyReleased);
+          alreadyReleased,
+          Boolean.TRUE.equals(item.getStolen()));
     }
     return new MaterialExchangeReleasableItemDto(
         item.getId(),
@@ -285,7 +289,8 @@ public class MaterialExchangeBoardService {
         item.getQuality(),
         item.getAmount(),
         locationName,
-        alreadyReleased);
+        alreadyReleased,
+        Boolean.TRUE.equals(item.getStolen()));
   }
 
   /**
@@ -376,7 +381,9 @@ public class MaterialExchangeBoardService {
         interestedHandles,
         viewerInterested,
         offer.getStatus(),
-        offer.getVersion());
+        offer.getVersion(),
+        offer.getInventoryItem() != null
+            && Boolean.TRUE.equals(offer.getInventoryItem().getStolen()));
   }
 
   /**

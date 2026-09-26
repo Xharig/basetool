@@ -147,6 +147,7 @@ public class JobOrderInventoryOwnerRedactor {
         item.quality(),
         item.amount(),
         item.personal(),
+        item.stolen(),
         item.jobOrderAllocations(),
         item.jobOrderRest(),
         item.missionAllocations(),

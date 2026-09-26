@@ -19,18 +19,18 @@
 
 package de.greluc.krt.profit.basetool.backend.model.dto;
 
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import java.util.UUID;
 
 /**
- * One handed-over line of a job-order handover: the material, quality, amount and origin location
- * snapshot, and whether the stock was marked „gestohlen" (REQ-INV-053).
+ * Request to set or remove the „gestohlen" marker on a selection of the caller's own Lager rows,
+ * whole rows only (REQ-INV-053). Like the bulk rebooking it carries no versions: the rows are
+ * locked pessimistically.
+ *
+ * @param itemIds the selected rows; every one must be the caller's own
+ * @param stolen the requested marker
  */
-public record JobOrderHandoverItemDto(
-    UUID id,
-    UUID jobOrderHandoverId,
-    MaterialDto material,
-    Integer quality,
-    Double amount,
-    String locationName,
-    Boolean stolen,
-    Long version) {}
+public record BulkStolenMarkRequest(
+    @NotNull @NotEmpty List<@NotNull UUID> itemIds, @NotNull Boolean stolen) {}

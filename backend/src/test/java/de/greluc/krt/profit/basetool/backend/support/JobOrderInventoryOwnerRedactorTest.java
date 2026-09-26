@@ -123,6 +123,7 @@ class JobOrderInventoryOwnerRedactorTest {
             null,
             4.0,
             false,
+            true,
             List.of(),
             0.0,
             List.of(),
@@ -136,6 +137,7 @@ class JobOrderInventoryOwnerRedactorTest {
     List<InventoryItemDto> result = redactor.redactInventoryItems(List.of(item));
 
     InventoryItemDto redacted = result.get(0);
+    assertTrue(redacted.stolen(), "the redaction keeps the stolen marker");
     assertNull(redacted.user(), "user (owner) blanked");
     assertNull(redacted.location(), "location blanked");
     assertNull(redacted.owningSquadron(), "owningSquadron blanked");

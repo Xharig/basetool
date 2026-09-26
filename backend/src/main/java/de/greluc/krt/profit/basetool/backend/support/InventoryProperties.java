@@ -17,20 +17,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.greluc.krt.profit.basetool.backend.model.dto;
+package de.greluc.krt.profit.basetool.backend.support;
 
-import java.util.UUID;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * One handed-over line of a job-order handover: the material, quality, amount and origin location
- * snapshot, and whether the stock was marked „gestohlen" (REQ-INV-053).
+ * Switches of the Lager.
+ *
+ * @param stolenMarkingEnabled whether members may book stock in as „gestohlen" and mark or unmark
+ *     it (REQ-INV-053); off until the app release that shows the marker is enforced. Reading and
+ *     filtering the marker work either way.
  */
-public record JobOrderHandoverItemDto(
-    UUID id,
-    UUID jobOrderHandoverId,
-    MaterialDto material,
-    Integer quality,
-    Double amount,
-    String locationName,
-    Boolean stolen,
-    Long version) {}
+@ConfigurationProperties(prefix = "app.inventory")
+public record InventoryProperties(@DefaultValue("false") boolean stolenMarkingEnabled) {}

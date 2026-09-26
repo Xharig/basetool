@@ -35,6 +35,7 @@ import de.greluc.krt.profit.basetool.backend.service.NotificationService;
 import de.greluc.krt.profit.basetool.backend.service.OrgUnitMembershipQueryService;
 import de.greluc.krt.profit.basetool.backend.service.OwnerScopeService;
 import de.greluc.krt.profit.basetool.backend.service.UserService;
+import de.greluc.krt.profit.basetool.backend.support.InventoryProperties;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import java.util.List;
 import java.util.Optional;
@@ -58,6 +59,8 @@ class MeControllerTest {
   @Mock private UserService userService;
 
   @Mock private NotificationService notificationService;
+
+  @Mock private InventoryProperties inventoryProperties;
 
   @InjectMocks private MeController controller;
 
@@ -112,6 +115,15 @@ class MeControllerTest {
 
     assertTrue(controller.getCapabilities().isAdmin());
     verify(authHelperService).isAdmin();
+  }
+
+  @Test
+  void getCapabilities_canMarkStolenIsTheServerSwitch() {
+    when(inventoryProperties.stolenMarkingEnabled()).thenReturn(true);
+    assertTrue(controller.getCapabilities().canMarkStolen());
+
+    when(inventoryProperties.stolenMarkingEnabled()).thenReturn(false);
+    assertFalse(controller.getCapabilities().canMarkStolen());
   }
 
   @Test

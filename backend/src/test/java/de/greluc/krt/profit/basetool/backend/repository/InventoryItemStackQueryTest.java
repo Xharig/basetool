@@ -50,7 +50,8 @@ class InventoryItemStackQueryTest {
 
     assertThat(
             inventoryItemRepository.findGlobalStacks(
-                false, null, false, null, null, false, null, false, null, true, null, Set.of()))
+                false, null, false, null, null, false, null, false, null, true, null, Set.of(),
+                false, false))
         .isEmpty();
     assertThat(
             inventoryItemRepository.findUserStacks(
@@ -65,6 +66,8 @@ class InventoryItemStackQueryTest {
                 false,
                 null,
                 false,
+                false,
+                false,
                 false))
         .isEmpty();
     assertThat(
@@ -74,6 +77,7 @@ class InventoryItemStackQueryTest {
                     UUID.randomUUID(),
                     UUID.randomUUID(),
                     500,
+                    false,
                     null,
                     true,
                     null,
@@ -88,6 +92,7 @@ class InventoryItemStackQueryTest {
                     UUID.randomUUID(),
                     UUID.randomUUID(),
                     500,
+                    false,
                     false,
                     null,
                     firstPage)

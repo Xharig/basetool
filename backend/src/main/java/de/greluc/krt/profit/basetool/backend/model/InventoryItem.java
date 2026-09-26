@@ -115,6 +115,13 @@ public class InventoryItem extends AbstractEntity<UUID> {
   private Boolean personal = false;
 
   /**
+   * Whether this stock is marked „gestohlen" (stolen cargo); part of the stock identity, so a
+   * stolen and a legitimate row never share a stack or merge (REQ-INV-053).
+   */
+  @Column(nullable = false)
+  private Boolean stolen = false;
+
+  /**
    * The job-order quantity slices of this entry (REQ-INV-027), written and deleted through it.
    * Their sum must stay at or below {@link #amount}; ordered by creation for deterministic
    * projections.

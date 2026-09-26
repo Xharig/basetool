@@ -345,6 +345,7 @@ class JobOrderControllerTest {
         750,
         5.0,
         false,
+        false,
         java.util.List.of(),
         0.0,
         java.util.List.of(),

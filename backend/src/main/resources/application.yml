@@ -89,6 +89,8 @@ logging:
     io.github.resilience4j: INFO
     io.opentelemetry.exporter: WARN
 app:
+  inventory:
+    stolen-marking-enabled: ${APP_INVENTORY_STOLEN_MARKING_ENABLED:false}
   security:
     ingest-gateway:
       client-ids: ${APP_SECURITY_INGEST_GATEWAY_CLIENT_IDS:}

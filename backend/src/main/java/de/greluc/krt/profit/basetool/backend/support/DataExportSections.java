@@ -128,7 +128,7 @@ public final class DataExportSections {
               ART_15_20,
               "Entered by the member; the note is their own free text.",
               """
-              SELECT i.amount, i.quality, i.personal, i.note, m.name AS material,
+              SELECT i.amount, i.quality, i.personal, i.stolen, i.note, m.name AS material,
                      l.name AS location, i.created_at
               FROM inventory_item i
                 LEFT JOIN material m ON m.id = i.material_id
