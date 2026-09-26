@@ -70,6 +70,7 @@ public class JobOrderHandoverItem extends AbstractEntity<UUID> {
   private String locationName;
 
   /** Whether the handed-over stock was marked „gestohlen" when it left the Lager (REQ-INV-053). */
+  @Builder.Default
   @Column(nullable = false)
   private Boolean stolen = false;
 
