@@ -47,7 +47,9 @@ The **stock identity** ("stack key") is the inventory **physical** natural key: 
 ### REQ-INV-001 — Inventory is append-only by default (merge is the scoped exception)
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> A Lager row gains the „gestohlen“ marker, which every append, transfer and split carries (WP 1.3, #2096). Exchange stock writes are book-ins and book-outs through the same services (REQ-XCH-016).
+> Exchange stock writes are book-ins and book-outs through the same services (REQ-XCH-016).
+>
+> *Shipped with WP 1.3: a Lager row carries the „gestohlen“ marker, which every append, transfer and split carries (REQ-INV-053).*
 
 A write path does **not** fold a new or edited `InventoryItem` into a different existing row
 **unless the scoped stock merge of [REQ-INV-026](#req-inv-026--write-time-stock-merge-for-piece-auto-and-scu-per-action-opt-in)
@@ -83,7 +85,9 @@ path (REQ-INV-026).
 ### REQ-INV-002 — Group-on-read display: Material → Stack
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The stack identity gains the „gestohlen“ marker in every place the Lager computes one, so a merge never folds stolen goods into a legitimate stack (WP 1.3, #2096). The exchange's lot is material + location + quality + stolen across org-unit pools (ADR-0218).
+> The exchange's lot is material + location + quality + stolen across org-unit pools (ADR-0218).
+>
+> *Shipped with WP 1.3: the stack identity carries the „gestohlen“ marker in every place the Lager computes one (REQ-INV-053).*
 
 The grouped Lager views (`/inventory/my`, `/inventory/all`) present each material as a group
 whose stacks are computed **in SQL** (a `GROUP BY` over the stock identity) at read time. The
@@ -377,7 +381,7 @@ audit event, consistent with the audit contract that only committed state mutati
 ### REQ-INV-026 — Write-time stock merge for PIECE (auto) and SCU (per-action opt-in)
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The merge keys gain the „gestohlen“ marker (WP 1.3, #2096).
+> *Shipped with WP 1.3: the merge keys carry the „gestohlen“ marker (REQ-INV-053).*
 
 A write that lands a row whose material's quantity type is **`PIECE`** (Stück) is merged into a
 single Lager entry with every existing row that shares its stock identity; a write whose material is
@@ -846,7 +850,7 @@ already known at storage time.
 ### REQ-INV-036 — "Markierte umbuchen": the bulk bar moves the whole selection, skipping already-at-target rows
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The bulk bar also offers „Markierte: Einheit ändern“ since WP 1.2 (REQ-INV-052); its moves carry the „gestohlen“ marker with WP 1.3.
+> The bulk bar also offers „Markierte: Einheit ändern“ since WP 1.2 (REQ-INV-052) and „Als gestohlen markieren“ / „Markierung entfernen“ since WP 1.3 (REQ-INV-053); every bulk move carries the marker.
 
 The "Mein Lager" bulk bar (`/inventory/my`, both the Material and the Items view) offers
 **"Markierte umbuchen"** next to "Markierte ausbuchen", acting on the **same** marked selection
@@ -997,6 +1001,11 @@ filterToggle`), `static/js/krt-filter-panel.js` (collapse, persistence, chip),
 mechanism generalised by REQ-FE-021)
 
 ### REQ-INV-039 — The allocation pickers say what each order still needs
+
+> [!note] „Gestohlen“ — since WP 1.3 (REQ-INV-053)
+> Stolen stock may be allocated to orders and missions (owner decision 2026-09-26); the pickers,
+> an order's allocated stock and handover lines, and a mission's allocated stock label it with the
+> „Gestohlen“ chip.
 
 Splitting a check-in across several orders (REQ-INV-027 R4) means deciding how much each one should
 get, and the picker used to identify a candidate only as `#<displayId> - <handle> (<status>)`. The
@@ -1295,6 +1304,66 @@ and a `TRANSFER` may not change it alone (REQ-INV-025).
 `InventoryOperationsE2eTest.changingAPersonalRowsOrgUnitWorksBothWaysInPlace`,
 `ExternalContractTest`, `ApiVhostAnonymousSurfaceTest` · **Code:** `InventoryOrgUnitChangeService`,
 `InventoryItemController`, `InventoryOrgUnitChangeProxyController`, `inventory-my.js` · **Issues:** #2107
+(epic #2078).
+
+### REQ-INV-053 — Stock can be marked „gestohlen", and the marker is part of its identity
+
+Stolen cargo cannot be sold at ordinary terminals, so it is a property of a stack, not a note. Every
+Lager row — shared or personal, material or game item — carries a **„gestohlen" marker**
+(`inventory_item.stolen`, `V247`).
+
+- **Part of the stock identity everywhere.** Every stack the Lager computes — both grouped views,
+  the lazy stack entries, the select-all entry ids and the write-time merge group (REQ-INV-026) —
+  keys on the marker, so stolen and legitimate stock of one material, location and quality are
+  **two stacks** that never merge and never mix entries. `InventoryStackKeyCoverageTest` fails when
+  a stack-key query leaves it out.
+- **Carried by every move**: a book-out `TRANSFER` (REQ-INV-025), the personal ↔ shared rebooking
+  (REQ-INV-007), the bulk rebooking (REQ-INV-036), the org-unit change (REQ-INV-052) and every split.
+  The refinery store (REQ-INV-035) and item production (REQ-INV-032) write `false`; a job-order
+  handover snapshots it on the handed-over line.
+- **Book in as stolen** (a checkbox in the book-in dialog) and **mark or unmark afterwards** — a
+  whole row, or a **part** that is split off as a new row with the other marker and the rest of the
+  identity unchanged (`POST /api/v1/inventory/{id}/stolen`, optimistic `version`), for **whoever may
+  edit the row** (no new permission). A selection of one's own rows is marked or unmarked whole
+  (`POST /api/v1/inventory/bulk-stolen`, locked in sorted id order like REQ-INV-036). A split may
+  not leave the row below the amount it offers on the Materialbörse (refused with a message naming
+  the offer) or below its earmarks (`422`).
+- **Behind a server switch.** `app.inventory.stolen-marking-enabled`
+  (`APP_INVENTORY_STOLEN_MARKING_ENABLED`, default **off**) gates booking in as stolen and every
+  mark/unmark; it is advertised as `canMarkStolen` in `/api/v1/me/capabilities`, so the column and
+  the routes ship before the Android app can show them. The sequence (#2092): this release with the
+  switch off → the app release of #2097 → the app's minimum version raised → the switch on. Reading,
+  the chip and the filters work either way.
+- **Shown everywhere stock appears**: a danger chip „Gestohlen" on stack and entry rows of both
+  Lager views, in the allocation pickers (REQ-INV-039), on an order's allocated stock and handover
+  lines, on a mission's allocated stock and on the Materialbörse's list, search, detail and release
+  picker (owner decision 2026-09-26: allocation and trading are **allowed, visibly labelled**).
+  Filters: „Alle · Ohne gestohlene · Nur gestohlene" on both Lager views (`stolenOnly` /
+  `nonStolenOnly`), „ohne gestohlene" on the board (`excludeStolen`).
+- **The totals do not change**: the per-material overview (REQ-INV-028, no distinction by owner
+  decision), craftability (REQ-INV-048), the Materialbörse amounts and the order-coverage sums count
+  stolen stock like any other.
+- **Audited** (REQ-AUDIT-001): `INVENTORY_STOLEN_MARKED` / `INVENTORY_STOLEN_UNMARKED` per row or
+  split (amount, whether it split, the new row), `INVENTORY_BULK_STOLEN_CHANGED` as one summary per
+  selection; unchanged rows record nothing. The data export (REQ-SEC-058) lists the marker.
+
+**Acceptance**
+
+- [x] Stolen and legitimate stock of one identity are two stacks, never merge (PIECE auto-merge,
+  SCU opt-in) and expanding a stack lists only its own entries.
+- [x] Every transfer, rebooking and split keeps the marker; refinery store and production never set
+  it; a split never undercuts an offer or the earmarks.
+- [x] The per-material overview and the craftability sum are unchanged by mixed stock.
+- [x] Booking in as stolen and every mark/unmark are refused while the switch is off.
+- [ ] The web shows the chip, the filters and the actions in place (REQ-FE-001), and an E2E flow
+  books in or marks a part, filters and unmarks.
+
+**Enforced by:** `InventoryStolenMarkServiceTest`, `InventoryStolenStockDataTest`,
+`InventoryStackKeyCoverageTest`, `InventoryItemServiceTest`, `InventoryItemServicePersonalRebookTest`,
+`MaterialExchangeRepositoryDataTest`, `JobOrderInventoryOwnerRedactorTest`, `MeControllerTest`,
+`InventoryItemControllerTest`, `ExternalContractTest`, `ApiVhostAnonymousSurfaceTest` · **Code:**
+`InventoryStolenMarkService`, `InventoryItemRepository`, `InventoryAggregationService`,
+`InventoryCheckoutService`, `MaterialExchangeBoardService`, `InventoryProperties` · **Issues:** #2096
 (epic #2078).
 
 ## Out of scope

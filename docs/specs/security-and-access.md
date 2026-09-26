@@ -3939,7 +3939,9 @@ one event type.
 ### REQ-SEC-058 — Art. 15 / Art. 20 data export
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The export gains the exchange's member-linked tables (installations, journal, deny list, external refs, revocations, change sequence), the „gestohlen“ marker of Lager rows and the optional RSI handle. Ships with WP 1.3, 1.4 and 3.1–3.3.
+> The export gains the exchange's member-linked tables (installations, journal, deny list, external refs, revocations, change sequence) and the optional RSI handle. Ships with WP 1.4 and 3.1–3.3.
+>
+> *The „gestohlen“ marker of Lager rows is in since WP 1.3 (REQ-INV-053): the Lager section lists it.*
 
 Every member MUST be able to export their own data from the application, and an admin MUST be able
 to export another account's for a request from somebody who cannot sign in.
