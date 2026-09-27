@@ -68873,7 +68873,9 @@
         "type" : "object",
         "properties" : {
           "amount" : {
-            "type" : "number"
+            "type" : "number",
+            "maximum" : 1000000000,
+            "minimum" : 0
           },
           "unit" : {
             "type" : "string",

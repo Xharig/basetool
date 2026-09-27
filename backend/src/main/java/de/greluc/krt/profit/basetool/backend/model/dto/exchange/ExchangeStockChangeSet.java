@@ -20,6 +20,8 @@
 package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -66,9 +68,11 @@ public record ExchangeStockChangeSet(
   /**
    * An amount with its unit.
    *
-   * @param amount the amount
+   * @param amount the amount, from 0 to 10<sup>9</sup> like the gateway's {@code
+   *     quantity.schema.json}
    * @param unit {@code SCU} or {@code PIECE}
    */
   public record Quantity(
-      @NotNull BigDecimal amount, @NotNull @Pattern(regexp = "^(SCU|PIECE)$") String unit) {}
+      @NotNull @DecimalMin("0") @DecimalMax("1000000000") BigDecimal amount,
+      @NotNull @Pattern(regexp = "^(SCU|PIECE)$") String unit) {}
 }
