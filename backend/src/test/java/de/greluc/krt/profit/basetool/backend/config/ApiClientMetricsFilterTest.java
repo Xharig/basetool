@@ -26,6 +26,7 @@ import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.support.ApiClientMetricsProperties;
 import de.greluc.krt.profit.basetool.backend.support.ClientAttribution;
 import de.greluc.krt.profit.basetool.backend.support.IngestGatewayProperties;
+import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -68,7 +70,9 @@ class ApiClientMetricsFilterTest {
     meterRegistry = new SimpleMeterRegistry();
     filter =
         new ApiClientMetricsFilter(
-            new ClientAttribution(properties, gatewayProperties), meterRegistry);
+            new ClientAttribution(
+                properties, gatewayProperties, Mockito.mock(KnownExchangeClients.class)),
+            meterRegistry);
   }
 
   @AfterEach

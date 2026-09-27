@@ -664,6 +664,26 @@ groups:
           summary: "Ingest gateway is naming a member the backend will not act for"
           description: "The backend has been refusing on-behalf-of requests for a member that is either unknown locally or that the last Keycloak roster sync no longer found. Most likely an offboarded member whose desktop extractor is still running - find them via the correlationId in the backend log and have it uninstalled. If the refused subjects VARY, this is somebody enumerating user ids instead, and the source belongs in the access log."
 
+      - alert: ExchangeRelayHeaderForged
+        expr: >-
+          sum(rate(basetool_on_behalf_of_refused_total{reason="forged_exchange_header"}[15m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exchange relay headers from something other than the gateway"
+          description: "Something other than the ingest gateway acting for a member sent X-Exchange-Client or X-Exchange-Capabilities, or the gateway sent them on an ingest endpoint, repeatedly. A browser session or the app naming an external client is trying to borrow its attribution or capabilities (REQ-XCH-010). Find the source via the correlationId in the backend log."
+
+      - alert: ExchangeGateRefusing
+        expr: >-
+          sum by (reason) (rate(basetool_exchange_gate_refused_total[10m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backend exchange gate refusing ({{ $labels.reason }})"
+          description: "The backend's ExchangeGate has been refusing exchange requests the gateway let through for 15 minutes ({{ $labels.reason }}). The gateway checks the same registry first, so a sustained backend refusal means the two disagree: a stale gateway cache, a mirror that is behind the database (see ExchangeMirrorWriteFailed), or a gateway that no longer relays capabilities. Members' clients get 403 meanwhile."
+
       - alert: OnBehalfOfWithoutAuthenticatedCaller
         expr: >-
           sum(rate(basetool_on_behalf_of_refused_total{reason="no_authenticated_caller"}[15m])) > 0

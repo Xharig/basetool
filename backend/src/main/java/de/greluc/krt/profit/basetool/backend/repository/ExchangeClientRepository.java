@@ -57,4 +57,22 @@ public interface ExchangeClientRepository extends JpaRepository<ExchangeClient, 
    * @return {@code true} when a row carries it
    */
   boolean existsByClientId(String clientId);
+
+  /**
+   * Loads one client by its Keycloak client id, with its capabilities.
+   *
+   * @param clientId the Keycloak client id
+   * @return the client, or empty
+   */
+  @EntityGraph(attributePaths = "capabilities")
+  @Query("SELECT c FROM ExchangeClient c WHERE c.clientId = :clientId")
+  Optional<ExchangeClient> findWithCapabilitiesByClientId(@Param("clientId") String clientId);
+
+  /**
+   * Lists every registered client id, whatever its status.
+   *
+   * @return the client ids
+   */
+  @Query("SELECT c.clientId FROM ExchangeClient c")
+  List<String> findAllClientIds();
 }

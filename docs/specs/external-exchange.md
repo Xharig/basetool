@@ -59,7 +59,9 @@ is ever on the `api.*` allowlist (ADR-0135), and nothing of the exchange lives u
   (`ExchangeRouteBotCompatibilityTest`, every route of the committed OpenAPI document and every schema
   URL); the surface test pins the two anonymous document routes so far and grows with each route.*
 - [ ] A test proves the gateway identity cannot reach `/api/v1/connected-apps/**`, and a browser
-  session cannot reach `/api/v1/exchange/**`.
+  session cannot reach `/api/v1/exchange/**`. *The second half is in (WP 3.1,
+  `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the gateway
+  without an acting member); the first follows with the connected-apps endpoints.*
 - [ ] The `api.*` allowlist test fails if an exchange or connected-apps path is added.
 
 **Status:** planned — WP 3.2 (#2082), WP 3.1 (#2083)
@@ -147,11 +149,19 @@ only by property.
 
 - [ ] Gate tests for a scope missing from the token, a scope not granted in the registry, and a
   wrong audience with the audience property blank.
-- [ ] ArchUnit: every exchange controller method carries the exchange gate.
+- [x] ArchUnit: every exchange controller method carries the exchange gate
+  (`ArchitectureTest.everyExchangeControllerMethodCarriesTheExchangeGate`).
+
+**How the backend checks** (WP 3.1). `@exchangeGate.allows('<scope>', authentication)` — or
+`allowsAny(authentication)` for a route any exchange scope serves — passes only an acting member
+relayed for an external client whose authorities hold `ROLE_EXCHANGE_MEMBER`, while the global
+switch is on, the client is in the registry and `ACTIVE`, and the scope was both relayed (the
+`XCH_CAPABILITY:<scope>` authority) and granted to the client. Every refusal is counted as
+`basetool_exchange_gate_refused_total{reason}`.
 
 **Status:** the scopes (WP 2.2, #2081) and the registry's per-client grants (`ExchangeCapability`,
-WP 3.1) are in; the gateway check (WP 3.2, #2082) and the backend's `ExchangeGate` (WP 3.1, #2083)
-follow
+WP 3.1) and the backend's `ExchangeGate` (WP 3.1, #2083) are in; the gateway check follows with
+WP 3.2 (#2082)
 
 ### REQ-XCH-005 — Every third-party client is a public, consent-gated device-grant client
 
@@ -245,14 +255,24 @@ Lager rows and own ships; they never use the admin all-scope or an admin pin. Th
 pending-approval and terms gates apply unchanged. No exchange response carries personal data of
 anyone.
 
+**How it is built** (WP 3.1). `ActingMemberFilter` keeps an explicit list of exchange routes
+next to the two ingest routes. On an exchange route the member gets
+`ActingMemberAuthorities.exchangeAuthoritiesFor`: `ROLE_EXCHANGE_MEMBER` plus one
+`XCH_CAPABILITY:<scope>` per relayed known scope, and nothing else; a member the approval or role
+gate refuses keeps exactly that gate's marker, so the gates refuse as they do for the web. The
+membership authorities the demand feed needs arrive with the demand feed (WP 3.3).
+
 **Acceptance**
 
 - [ ] An `ADMIN` member reads and writes only own rows and holds no admin authority on exchange
-  paths.
-- [ ] ArchUnit: exchange services never call an admin-gated method; exchange controllers call
-  exchange services only.
+  paths. *The authority half is in (`ExchangeCatalogControllerTest`: an `ADMIN` member's exchange
+  request holds only `ROLE_EXCHANGE_MEMBER` and the relayed capabilities); the own-rows half is
+  proven by each read and write route as it ships (WP 3.3).*
+- [x] ArchUnit: exchange services never call an admin-gated method or the admin scope predicate;
+  exchange controllers call exchange services only; exchange DTOs stay in the exchange layer
+  (`ArchitectureTest`).
 
-**Status:** planned — WP 3.1 (#2083)
+**Status:** relay and reduced authentication built — WP 3.1 (#2083); the data routes with WP 3.3
 
 ### REQ-XCH-010 — The relay names the external client, and only the gateway may
 
@@ -263,12 +283,23 @@ authentication carries the external client, so audit rows and client metrics nam
 `versekit`) instead of `none`; the known-client vocabulary comes from the registry. This attribution
 is live before the first registry entry exists.
 
+**How it is built** (WP 3.1). `X-Exchange-Client` / `X-Exchange-Capabilities` are honoured only
+when the gateway acts for a member on an exchange route; from anyone else — or from the gateway on
+an ingest route — the request is refused with `403 ACTING_MEMBER_REFUSED` and counted as
+`basetool_on_behalf_of_refused_total{reason="forged_exchange_header"}`, and an exchange call without
+a well-formed client as `exchange_client_invalid`. The acting authentication carries the client;
+`ClientAttribution` names it when the registry holds it (else `other`), for the audit row and —
+read from the header before the identity swap, for the gateway only — for
+`basetool_api_client_requests_total`. The audit viewer offers the registry's clients by their
+product names.
+
 **Acceptance**
 
-- [ ] Forged-header tests from a browser session and from the app.
-- [ ] An exchange write's audit row carries the external client id.
+- [x] Forged-header tests from a browser session and from the app (`ActingMemberFilterChainTest`).
+- [ ] An exchange write's audit row carries the external client id. *The attribution is in
+  (`ClientAttributionTest`); the first exchange write arrives with WP 3.3.*
 
-**Status:** planned — WP 3.1 (#2083)
+**Status:** built — WP 3.1 (#2083)
 
 ### REQ-XCH-011 — The v1 data formats are published JSON Schemas
 
@@ -403,12 +434,16 @@ quantity per `minQuality`, `source: material-order|item-order`) and `items[]` (i
 per-order breakdown and no low-count suppression; a client may cache it for up to 7 days.
 `GET /exchange/v1/catalog/locations` lists the non-hidden `location` rows with their UEX link.
 
+The backend serves the location list as `GET /api/v1/exchange/catalog/locations` (any exchange
+scope), one query, a city link winning over a space-station link.
+
 **Acceptance**
 
 - [ ] An overseer who is not a member of a unit does not see its demand.
 - [ ] The response schema admits no name or free-text field.
 
-**Status:** planned — WP 4.3 (#2095), WP 3.3 (#2083)
+**Status:** the backend location list is built — WP 3.1 (#2083); the demand feed with WP 4.3
+(#2095) and WP 3.3
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 

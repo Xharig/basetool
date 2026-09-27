@@ -82,7 +82,7 @@
                 <option value="" th:text="#{admin.audit.filter.allClients}">Alle Clients</option>
                 <option th:each="c : ${clientIds}" th:value="${c}"
                         th:selected="${filterClientId == c}"
-                        th:text="${#messages.msgOrNull('admin.audit.client.' + c) ?: c}">Client</option>
+                        th:text="${clientNames[c] ?: (#messages.msgOrNull('admin.audit.client.' + c) ?: c)}">Client</option>
             </select>
         </div>
         <div class="bank-filter-actions">
@@ -129,7 +129,7 @@
                         </td>
                         <td th:text="${@handles.display(e.subject())}">&mdash;</td>
                         <td data-testid="audit-row-client"
-                            th:text="${e.clientId() != null ? (#messages.msgOrNull('admin.audit.client.' + e.clientId()) ?: e.clientId()) : '—'}">&mdash;</td>
+                            th:text="${e.clientId() != null ? (clientNames[e.clientId()] ?: (#messages.msgOrNull('admin.audit.client.' + e.clientId()) ?: e.clientId())) : '—'}">&mdash;</td>
                         <td class="bank-note-cell" th:text="${e.details()}" th:title="${e.details()}">Details</td>
                     </tr>
                     </tbody>

@@ -30,6 +30,18 @@ public final class ActingMemberHeader {
    */
   public static final String ON_BEHALF_OF_HEADER = "X-Ingest-On-Behalf-Of";
 
+  /**
+   * Names the external client an exchange request comes from; honoured only on an exchange path
+   * from the gateway acting for a member (REQ-XCH-010).
+   */
+  public static final String EXCHANGE_CLIENT_HEADER = "X-Exchange-Client";
+
+  /**
+   * Lists the capabilities the gateway checked for an exchange request, as comma-separated OAuth
+   * scopes; honoured under the same conditions as {@link #EXCHANGE_CLIENT_HEADER}.
+   */
+  public static final String EXCHANGE_CAPABILITIES_HEADER = "X-Exchange-Capabilities";
+
   /** Not instantiable: a constant holder, not a component. */
   private ActingMemberHeader() {}
 }
