@@ -38,7 +38,6 @@ import de.greluc.krt.profit.basetool.backend.model.dto.JobOrderItemHandoverEntry
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderItemHandoverRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderRepository;
-import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.repository.OrgUnitRepository;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
@@ -82,7 +81,7 @@ public class JobOrderItemHandoverService {
   private final JobOrderItemHandoverRepository jobOrderItemHandoverRepository;
   private final JobOrderItemHandoverMapper jobOrderItemHandoverMapper;
   private final InventoryItemRepository inventoryItemRepository;
-  private final MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  private final MaterialExchangeOfferRatchet offerRatchet;
   private final JobOrderService jobOrderService;
   private final UserService userService;
   private final OrgUnitMembershipQueryService orgUnitMembershipQueryService;
@@ -185,8 +184,8 @@ public class JobOrderItemHandoverService {
     final Integer orderDisplayId = jobOrder.getDisplayId();
     for (ConsumedItem consumed : consumedItems) {
       if (!consumed.depleted()) {
-        materialExchangeOfferRepository.clampItemQuantityToStock(
-            consumed.itemId(), (int) Math.floor(consumed.remaining()));
+        offerRatchet.lower(
+            consumed.itemId(), consumed.remaining(), MaterialExchangeOfferRatchet.Reason.HANDOVER);
       }
       auditService.record(
           AuditEventType.INVENTORY_HANDED_OVER,
@@ -261,6 +260,8 @@ public class JobOrderItemHandoverService {
 
         InventoryAllocations.reduceJobOrder(row, jobOrderId, take);
         if (depleted) {
+          offerRatchet.beforeDelete(
+              List.of(row.getId()), MaterialExchangeOfferRatchet.Reason.HANDOVER);
           inventoryItemRepository.delete(row);
         } else {
           row.setAmount(rowRemaining);

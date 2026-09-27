@@ -180,6 +180,19 @@ public enum LiveSyncTopicClass {
   INVENTORY_ALL("inventory", false, Set.of("stock"), false, "inventory_all", null, null),
 
   /**
+   * A member's own hangar room for {@code /hangar}, keyed by the member's id, with the {@code
+   * ships} section; only that member may subscribe ({@link #selfOnly}).
+   */
+  HANGAR_OWN("hangar", true, Set.of("ships"), false, "hangar_own", null, null, null, null, true),
+
+  /**
+   * A member's own blueprints room for „Meine Blueprints", keyed by the member's id, with the
+   * {@code list} section; only that member may subscribe ({@link #selfOnly}).
+   */
+  BLUEPRINTS_OWN(
+      "blueprints", true, Set.of("list"), false, "blueprints_own", null, null, null, null, true),
+
+  /**
    * Global mission-list room for {@code /missions} with the {@code list} section, authorized by the
    * socket's authentication alone; distinct from the per-mission {@link #MISSION} room.
    */
@@ -263,6 +276,49 @@ public enum LiveSyncTopicClass {
    * backend call); {@code null} when the class is not locally role-gated.
    */
   private final @Nullable Set<String> requiredAnyRole;
+
+  /**
+   * Whether only the member whose id the topic carries may subscribe, checked against the socket's
+   * own subject with no backend call and failing closed.
+   */
+  private final boolean selfOnly;
+
+  /**
+   * Defines one topic class that is not a member's personal room.
+   *
+   * @param prefix the wire prefix identifying the class
+   * @param scoped {@code true} if a concrete topic carries a resource UUID
+   * @param allowedSections the section-key whitelist the relay forwards
+   * @param presenceEnabled whether this class carries editor-presence dots
+   * @param metricLabel the bounded {@code topic_class} metric label value
+   * @param authProbePath the backend read that authorizes a subscribe, or {@code null}
+   * @param capabilityField the capability flag of the {@link #authProbePath} response that must be
+   *     {@code true}, or {@code null}
+   * @param fallbackProbePath the second per-resource read, or {@code null}
+   * @param requiredAnyRole the authorities of which the caller must hold one, or {@code null}
+   */
+  LiveSyncTopicClass(
+      @NotNull String prefix,
+      boolean scoped,
+      @NotNull Set<String> allowedSections,
+      boolean presenceEnabled,
+      @NotNull String metricLabel,
+      @Nullable String authProbePath,
+      @Nullable String capabilityField,
+      @Nullable String fallbackProbePath,
+      @Nullable Set<String> requiredAnyRole) {
+    this(
+        prefix,
+        scoped,
+        allowedSections,
+        presenceEnabled,
+        metricLabel,
+        authProbePath,
+        capabilityField,
+        fallbackProbePath,
+        requiredAnyRole,
+        false);
+  }
 
   /**
    * Defines one topic class.
@@ -391,5 +447,14 @@ public enum LiveSyncTopicClass {
   @Nullable
   public Set<String> requiredAnyRole() {
     return requiredAnyRole;
+  }
+
+  /**
+   * Reports whether only the member whose id the topic carries may subscribe.
+   *
+   * @return {@code true} for a member's personal room
+   */
+  public boolean selfOnly() {
+    return selfOnly;
   }
 }

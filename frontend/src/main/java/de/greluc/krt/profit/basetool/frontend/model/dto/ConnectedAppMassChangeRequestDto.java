@@ -17,15 +17,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
+package de.greluc.krt.profit.basetool.frontend.model.dto;
 
 import org.jetbrains.annotations.NotNull;
 
 /**
- * A catalogue entry as the feed names it: the Basetool key a client echoes as {@code bt}, and the
- * display name (REQ-XCH-012).
+ * A staged change set the page hands back to the backend for a preview or a confirmation
+ * (REQ-XCH-021).
  *
- * @param bt the Basetool key, for a blueprint the same opaque key as the feed entry
- * @param name the display name
+ * @param clientId the client that sent it
+ * @param installationKey the installation that sent it
+ * @param resource {@code blueprints}, {@code stock} or {@code ships}
+ * @param changeSet the change set as the client sent it, as JSON
  */
-public record ExchangeProductRefDto(@NotNull String bt, @NotNull String name) {}
+public record ConnectedAppMassChangeRequestDto(
+    @NotNull String clientId,
+    @NotNull String installationKey,
+    @NotNull String resource,
+    @NotNull String changeSet) {}

@@ -41,6 +41,7 @@ import de.greluc.krt.profit.basetool.backend.repository.MissionRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.service.InventoryCheckoutService;
+import de.greluc.krt.profit.basetool.backend.service.MaterialExchangeOfferRatchet;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
@@ -52,6 +53,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -72,6 +74,7 @@ class InventoryItemServiceBulkCheckoutTest {
   @Mock private InventoryItemMapper inventoryItemMapper;
   @Mock private MaterialMapper materialMapper;
 
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private AuditService auditService;
   @InjectMocks private InventoryCheckoutService inventoryItemService;
 
@@ -104,7 +107,11 @@ class InventoryItemServiceBulkCheckoutTest {
 
     inventoryItemService.bulkCheckout(request, userId);
 
-    verify(inventoryItemRepository).deleteAllById(List.of(itemId1, itemId2));
+    InOrder order = inOrder(offerRatchet, inventoryItemRepository);
+    order
+        .verify(offerRatchet)
+        .beforeDelete(List.of(itemId1, itemId2), MaterialExchangeOfferRatchet.Reason.BULK_CHECKOUT);
+    order.verify(inventoryItemRepository).deleteAllById(List.of(itemId1, itemId2));
   }
 
   @Test

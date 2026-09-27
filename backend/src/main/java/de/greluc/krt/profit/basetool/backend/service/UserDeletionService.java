@@ -105,6 +105,7 @@ public class UserDeletionService {
   private final IngestGatewayProperties ingestGatewayProperties;
   private final UserRepository userRepository;
   private final InventoryItemRepository inventoryItemRepository;
+  private final MaterialExchangeOfferRatchet offerRatchet;
   private final ShipRepository shipRepository;
   private final RefineryOrderRepository refineryOrderRepository;
   private final MissionRepository missionRepository;
@@ -228,6 +229,7 @@ public class UserDeletionService {
                             () ->
                                 new IllegalStateException("No admin user found to reassign data")));
 
+    offerRatchet.beforeUserPurge(userId);
     int inventoryDeleted = inventoryItemRepository.deleteByUserId(userId);
     int shipsDeleted = shipRepository.deleteByOwnerId(userId);
 

@@ -21,7 +21,10 @@ package de.greluc.krt.profit.basetool.frontend.controller;
 
 import static de.greluc.krt.profit.basetool.frontend.support.BackendErrorResponses.relay;
 
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeUndoRequestDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeUndoResultDto;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -72,6 +77,46 @@ public class ConnectedAppsRelayController {
           backendApiClient.delete(BACKEND + "/" + clientId, Void.class);
           return ResponseEntity.noContent().build();
         });
+  }
+
+  /**
+   * Marks the member's new connections seen, so their highlight ends on the next load.
+   *
+   * @return {@code 204}, or the relayed backend error
+   */
+  @PostMapping(value = "/seen", headers = "X-Requested-With=XMLHttpRequest")
+  public ResponseEntity<Object> markSeen() {
+    return relay(
+        log,
+        "mark exchange connections seen (ajax)",
+        () -> {
+          backendApiClient.post(BACKEND + "/seen", null, Void.class);
+          return ResponseEntity.noContent().build();
+        });
+  }
+
+  /**
+   * Undoes a client's writes to the member's blueprints, stock and ships since a point in time.
+   *
+   * @param clientId the client id; anything outside the registry's shape is refused here
+   * @param request the point in time
+   * @return the entries restored and skipped, {@code 400} for a malformed id, or the relayed
+   *     backend error
+   */
+  @PostMapping(value = "/{clientId}/undo", headers = "X-Requested-With=XMLHttpRequest")
+  public ResponseEntity<Object> undo(
+      @PathVariable @NotNull String clientId,
+      @Valid @RequestBody @NotNull ExchangeUndoRequestDto request) {
+    if (!CLIENT_ID.matcher(clientId).matches()) {
+      return ResponseEntity.badRequest().build();
+    }
+    return relay(
+        log,
+        "undo exchange client writes (ajax)",
+        () ->
+            ResponseEntity.ok(
+                backendApiClient.post(
+                    BACKEND + "/" + clientId + "/undo", request, ExchangeUndoResultDto.class)));
   }
 
   /**

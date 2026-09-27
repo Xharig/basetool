@@ -79,6 +79,23 @@ class LiveSyncSubscriptionAuthorizerTest {
   }
 
   @Test
+  void aPersonalRoomAdmitsOnlyItsOwnMemberWithoutAskingTheBackend() {
+    UUID member = UUID.randomUUID();
+    LiveSyncTopic hangar = LiveSyncTopic.parse("hangar:" + member);
+    LiveSyncTopic blueprints = LiveSyncTopic.parse("blueprints:" + member);
+
+    assertThat(authorizer.authorize(hangar, TOKEN, PIN, Set.of(), member))
+        .isEqualTo(Decision.ALLOW);
+    assertThat(authorizer.authorize(blueprints, TOKEN, PIN, Set.of(), member))
+        .isEqualTo(Decision.ALLOW);
+    assertThat(authorizer.authorize(hangar, TOKEN, PIN, Set.of(), UUID.randomUUID()))
+        .isEqualTo(Decision.DENY);
+    assertThat(authorizer.authorize(hangar, TOKEN, PIN, Set.of(), null)).isEqualTo(Decision.DENY);
+    assertThat(authorizer.authorize(blueprints, TOKEN, PIN)).isEqualTo(Decision.DENY);
+    assertThat(server.getRequestCount()).isZero();
+  }
+
+  @Test
   void authorize_403_denies() {
     server.enqueue(new MockResponse().setResponseCode(403));
     assertThat(authorizer.authorize(operationTopic, TOKEN, PIN)).isEqualTo(Decision.DENY);
