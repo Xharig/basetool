@@ -38,6 +38,7 @@ import de.greluc.krt.profit.basetool.frontend.service.BackendServiceException;
 import de.greluc.krt.profit.basetool.frontend.service.CachedCatalog;
 import de.greluc.krt.profit.basetool.frontend.service.CachedCatalogListLoader;
 import de.greluc.krt.profit.basetool.frontend.service.ParallelPageLoader;
+import de.greluc.krt.profit.basetool.frontend.support.CurrentUser;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -55,6 +56,8 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -115,6 +118,20 @@ public class HangarPageController {
     }
     String separator = base.indexOf('?') >= 0 ? "&" : "?";
     return backendApiClient.get(base + separator + "search={search}", responseType, search);
+  }
+
+  /**
+   * Names the caller's own hangar live-sync room, which the page subscribes to so a connected
+   * application's change appears without a reload.
+   *
+   * @param principal the caller, or {@code null} when anonymous
+   * @return {@code hangar:<user id>}, or {@code null} without a caller
+   */
+  @ModelAttribute("hangarLiveSyncTopic")
+  public @Nullable String hangarLiveSyncTopic(
+      @AuthenticationPrincipal @Nullable OidcUser principal) {
+    String id = CurrentUser.userIdText(principal);
+    return id == null ? null : "hangar:" + id;
   }
 
   /**

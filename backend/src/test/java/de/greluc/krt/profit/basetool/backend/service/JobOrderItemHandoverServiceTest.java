@@ -22,7 +22,7 @@ package de.greluc.krt.profit.basetool.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
@@ -48,7 +48,6 @@ import de.greluc.krt.profit.basetool.backend.model.dto.JobOrderItemHandoverEntry
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderItemHandoverRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderRepository;
-import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.repository.OrgUnitRepository;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
 import java.time.Instant;
@@ -77,7 +76,7 @@ class JobOrderItemHandoverServiceTest {
   @Mock private JobOrderItemHandoverRepository jobOrderItemHandoverRepository;
   @Mock private JobOrderItemHandoverMapper jobOrderItemHandoverMapper;
   @Mock private InventoryItemRepository inventoryItemRepository;
-  @Mock private MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private JobOrderService jobOrderService;
   @Mock private UserService userService;
   @Mock private OrgUnitMembershipService orgUnitMembershipService;
@@ -402,7 +401,7 @@ class JobOrderItemHandoverServiceTest {
 
     service.createItemHandover(orderId, payload(lineId, 3));
 
-    verify(materialExchangeOfferRepository).clampItemQuantityToStock(rowId, 2);
+    verify(offerRatchet).lower(rowId, 2.0, MaterialExchangeOfferRatchet.Reason.HANDOVER);
   }
 
   @Test
@@ -416,8 +415,9 @@ class JobOrderItemHandoverServiceTest {
     service.createItemHandover(orderId, payload(lineId, 5));
 
     verify(inventoryItemRepository).delete(row);
-    verify(materialExchangeOfferRepository, never())
-        .clampItemQuantityToStock(any(UUID.class), anyInt());
+    verify(offerRatchet)
+        .beforeDelete(List.of(row.getId()), MaterialExchangeOfferRatchet.Reason.HANDOVER);
+    verify(offerRatchet, never()).lower(any(UUID.class), anyDouble(), any());
   }
 
   private static JobOrderItemHandoverCreateDto payload(UUID jobOrderItemId, int amount) {

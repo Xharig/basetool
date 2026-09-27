@@ -108,6 +108,32 @@ public interface JobOrderRepository extends JpaRepository<JobOrder, UUID> {
   List<JobOrder> findAllActiveWithMaterials();
 
   /**
+   * Loads the orders in the given statuses that one of the given org units is responsible for, with
+   * both kinds' requirement branches, for the exchange's org demand (REQ-XCH-018).
+   *
+   * @param statuses the statuses to keep; never empty
+   * @param orgUnitIds the responsible org units; never empty
+   * @return the orders, ordered by {@code displayId}
+   */
+  @EntityGraph(
+      attributePaths = {
+        "materials",
+        "materials.material",
+        "items",
+        "items.gameItem",
+        "items.blueprint",
+        "items.materials",
+        "items.materials.material",
+        "responsibleOrgUnit"
+      })
+  @Query(
+      "SELECT o FROM JobOrder o WHERE o.responsibleOrgUnit.id IN :orgUnitIds"
+          + " AND o.status IN :statuses ORDER BY o.displayId ASC")
+  List<JobOrder> findOpenForExchangeDemand(
+      @Param("statuses") Collection<JobOrderStatus> statuses,
+      @Param("orgUnitIds") Collection<UUID> orgUnitIds);
+
+  /**
    * Scoped, unpaged list of the orders in the given statuses with both kinds' material requirement
    * branches, for the cross-order material-demand overview (REQ-ORDERS-034). Scope is applied in
    * SQL via {@link ScopeSpecifications#JOB_ORDER_SCOPE_PREDICATE}, including the SK-public escape.

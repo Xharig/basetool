@@ -237,7 +237,11 @@ class LiveSyncTopicTest {
   @Test
   void everyScopedClassExposesAnAuthProbePathWithAnIdPlaceholder() {
     for (LiveSyncTopicClass topicClass : LiveSyncTopicClass.values()) {
-      if (topicClass.scoped()) {
+      if (topicClass.selfOnly()) {
+        assertThat(topicClass.authProbePath())
+            .as("personal class %s is authorized locally, never by a probe", topicClass)
+            .isNull();
+      } else if (topicClass.scoped()) {
         assertThat(topicClass.authProbePath())
             .as("scoped class %s has a subscribe-auth probe path", topicClass)
             .isNotBlank();
