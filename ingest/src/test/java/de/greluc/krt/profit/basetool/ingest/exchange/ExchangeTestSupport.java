@@ -226,7 +226,7 @@ public final class ExchangeTestSupport {
    * @param key the DPoP key
    * @param token the access token
    * @param method the method
-   * @param path the path
+   * @param path the path, with a query string the proofs leave out of {@code htu}
    * @param json the JSON body, or {@code null}
    * @param userAgent the {@code User-Agent}, or {@code null}
    * @return the second request's result
@@ -241,19 +241,21 @@ public final class ExchangeTestSupport {
       @Nullable String json,
       @Nullable String userAgent)
       throws Exception {
+    int query = path.indexOf('?');
+    String target = query < 0 ? path : path.substring(0, query);
     String nonce =
         mockMvc
             .perform(
                 MockMvcRequestBuilders.request(method, path)
                     .header(HttpHeaders.AUTHORIZATION, "DPoP " + token)
-                    .header("DPoP", proof(key, token, method.name(), path, null)))
+                    .header("DPoP", proof(key, token, method.name(), target, null)))
             .andReturn()
             .getResponse()
             .getHeader(ExchangeTokenGateFilter.DPOP_NONCE_HEADER);
     MockHttpServletRequestBuilder request =
         MockMvcRequestBuilders.request(method, path)
             .header(HttpHeaders.AUTHORIZATION, "DPoP " + token)
-            .header("DPoP", proof(key, token, method.name(), path, nonce));
+            .header("DPoP", proof(key, token, method.name(), target, nonce));
     if (userAgent != null) {
       request.header(HttpHeaders.USER_AGENT, userAgent);
     }

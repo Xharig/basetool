@@ -30,13 +30,13 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `NO_ROLE` | 403 | backend | The member holds no role. | Stop and tell the member. |
 | `ACTING_MEMBER_REFUSED` | 403 | backend | The relay refused the member (unknown, disabled or deleted). | Stop and tell the member. |
 | `NOT_PERMITTED` | 403 | backend | The member may not do this. | Stop; do not retry. |
-| `SCHEMA_INVALID` | 400 | gateway | The body does not match the v1 schema; `errors[]` points at the fields. | Fix the request. |
+| `SCHEMA_INVALID` | 400 | gateway | The body or a query parameter does not match the v1 contract; `errors[]` points at the fields, a parameter as `/<name>`. | Fix the request. |
 | `BATCH_TOO_LARGE` | 413 | gateway | A change set holds more than 500 ops. | Split the batch. |
 | `PAYLOAD_TOO_LARGE` | 413 | gateway | The body exceeds the size cap. | Split or shrink the request. |
 | `IDEMPOTENCY_KEY_MISSING` | 400 | gateway | A write carries no `Idempotency-Key`. | Send a fresh key per logical write. |
 | `IDEMPOTENCY_KEY_REUSED` | 422 | gateway | The key was used with a different body. | Use a fresh key. |
 | `IDEMPOTENCY_IN_PROGRESS` | 409 | gateway | The same key is still being processed. | Retry the same request after a short wait. |
-| `CURSOR_EXPIRED` | 410 | backend | The cursor is older than the tombstones. | Reconcile a full snapshot against the last baseline — not add-only. |
+| `CURSOR_EXPIRED` | 410 | backend, gateway | The cursor is older than the tombstones, or not one the server issued. | Reconcile a full snapshot against the last baseline — not add-only. |
 | `VERSION_CONFLICT` | 409 | backend | A ship's `version` or a lot's `expectedQuantity` no longer matches. | Pull, merge, retry. |
 | `MASS_CHANGE_CONFIRMATION_REQUIRED` | 409 | backend | The batch exceeds the mass-change guard; it is staged. | Show the member `confirmationUrl`; do not retry the batch. |
 | `RATE_LIMITED` | 429 | gateway | A per-minute limit is exhausted. | Honour `Retry-After`. |

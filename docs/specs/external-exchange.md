@@ -543,8 +543,9 @@ REMOVED_ELSEWHERE` — then asks the mass-change guard, and writes through the w
 delete, so the Blueprints audit names the client; each written entry is journaled. `dryRun` plans
 only. `basetool_exchange_writes_total{resource,outcome}` counts the ops.
 
-**Status:** read and write sides built — WP 4.1 (#2084); the corpus round trip follows with the
-sandbox (WP 2.3)
+**Status:** read and write sides built in the backend, and the gateway's read route (`GET
+/exchange/v1/me/blueprints`) — WP 4.1 (#2084); the gateway's write route and the corpus round trip
+follow with the sandbox (WP 2.3)
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -596,7 +597,8 @@ built on the gateway stack
 `version`. A client links before it creates, so a Fleetview import is never duplicated. Purchase
 data is never sent. Detaching a ship from a mission by removal is reported in
 `detachedFromMissions` and audited (`MISSION_UNIT_UPDATED`). Writes are audited in the Hangar domain
-with the external client.
+with the external client. A ship's `name` is optional and up to 255 characters, as in the web: an
+unnamed ship is sent without it, and an upsert may leave it out (owner decision 2026-09-27).
 
 **Acceptance**
 
