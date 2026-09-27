@@ -683,7 +683,8 @@ public final class MetricNames {
    * Counter {@code basetool_on_behalf_of_refused_total} — tag {@code reason} ({@link
    * #ON_BEHALF_OF_NOT_A_GATEWAY}, {@link #ON_BEHALF_OF_ENDPOINT_NOT_BOUND}, {@link
    * #ON_BEHALF_OF_NO_CALLER}, {@link #ON_BEHALF_OF_MALFORMED}, {@link
-   * #ON_BEHALF_OF_MEMBER_NOT_LIVE}).
+   * #ON_BEHALF_OF_MEMBER_NOT_LIVE}, {@link #ON_BEHALF_OF_FORGED_EXCHANGE_HEADER}, {@link
+   * #ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID}, {@link #ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID}).
    *
    * <p>Counts on-behalf-of headers refused because the presenter is not the ingest gateway or the
    * request is otherwise invalid (ADR-0129).
@@ -713,6 +714,37 @@ public final class MetricNames {
    * no longer found them in the identity provider.
    */
   public static final String ON_BEHALF_OF_MEMBER_NOT_LIVE = "member_not_live";
+
+  /**
+   * {@link #ON_BEHALF_OF_REFUSED} reason: an exchange relay header arrived from anything but the
+   * gateway acting for a member on an exchange path (REQ-XCH-010).
+   */
+  public static final String ON_BEHALF_OF_FORGED_EXCHANGE_HEADER = "forged_exchange_header";
+
+  /**
+   * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path
+   * without a well-formed {@code X-Exchange-Client}.
+   */
+  public static final String ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID = "exchange_client_invalid";
+
+  /**
+   * Counter {@code basetool_exchange_gate_refused_total{reason}} — exchange-layer requests the
+   * backend's {@code ExchangeGate} refused although the gateway had let them through (REQ-XCH-004).
+   */
+  public static final String EXCHANGE_GATE_REFUSED = "basetool.exchange.gate.refused";
+
+  /**
+   * Counter {@code basetool_exchange_disconnects_total{kind}} — a member disconnecting one
+   * installation or a whole client ({@code installation} / {@code client}, REQ-XCH-008).
+   */
+  public static final String EXCHANGE_DISCONNECTS = "basetool.exchange.disconnects";
+
+  /**
+   * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path
+   * without a well-formed {@code X-Exchange-Installation}.
+   */
+  public static final String ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID =
+      "exchange_installation_invalid";
 
   /**
    * Tag: the Terms-of-Use version a measurement belongs to. Bounded by construction — one process

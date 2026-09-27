@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.config;
 
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberAuthorities;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.IngestGatewayProperties;
@@ -31,10 +32,12 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -65,12 +68,18 @@ import tools.jackson.databind.ObjectMapper;
  * <p>The header is honoured only when all of these hold:
  *
  * <ol>
- *   <li>the decoded path matches one of the two ingest endpoints (REQ-SEC-029);
+ *   <li>the decoded path matches one of the ingest endpoints (REQ-SEC-029) or one of the exchange
+ *       endpoints (REQ-XCH-009);
  *   <li>the caller is authenticated with a {@link Jwt} — a header without one is refused;
  *   <li>the caller's {@code azp} is a configured gateway ({@link
  *       IngestGatewayProperties#isGatewayClient(String)}); an empty allowlist admits nobody;
- *   <li>the named member is live (see {@link #actingAuthorities}).
+ *   <li>the named member is live.
  * </ol>
+ *
+ * <p>The exchange relay headers {@code X-Exchange-Client} and {@code X-Exchange-Capabilities} are
+ * honoured only on an exchange endpoint from the gateway acting for a member and refused from
+ * anyone else (REQ-XCH-010). On an exchange endpoint the member holds the reduced exchange
+ * authorities and the authentication carries the external client.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -89,6 +98,21 @@ public class ActingMemberFilter extends OncePerRequestFilter {
       List.of(
           PATH_PARSER.parse("/api/v1/refinery-orders/import-extract"),
           PATH_PARSER.parse("/api/v1/personal-blueprints/import/preview"));
+
+  /**
+   * The exchange endpoints the gateway may call for a member, with the reduced exchange
+   * authentication (REQ-XCH-009); exhaustive for the same reason as {@link #ACTING_PATHS}.
+   */
+  private static final List<PathPattern> EXCHANGE_PATHS =
+      List.of(
+          PATH_PARSER.parse("/api/v1/exchange/catalog/locations"),
+          PATH_PARSER.parse("/api/v1/exchange/me/installation"));
+
+  /** The shape of a registry client id, identical to the database check. */
+  private static final Pattern EXCHANGE_CLIENT_ID = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
+
+  /** The shape of a DPoP key thumbprint: base64url SHA-256 without padding. */
+  private static final Pattern KEY_THUMBPRINT = Pattern.compile("^[A-Za-z0-9_-]{43}$");
 
   /** App-wide correlation-id response header, matching the neighbouring person-gates. */
   static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
@@ -113,12 +137,27 @@ public class ActingMemberFilter extends OncePerRequestFilter {
       @NotNull FilterChain filterChain)
       throws ServletException, IOException {
     String onBehalfOf = request.getHeader(ActingMemberHeader.ON_BEHALF_OF_HEADER);
+    String exchangeClient = request.getHeader(ActingMemberHeader.EXCHANGE_CLIENT_HEADER);
+    String exchangeCapabilities =
+        request.getHeader(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER);
+    String installationKey = request.getHeader(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER);
+    boolean exchangeHeaders =
+        exchangeClient != null || exchangeCapabilities != null || installationKey != null;
     if (isAbsent(onBehalfOf)) {
+      if (exchangeHeaders) {
+        refuse(
+            request,
+            response,
+            "exchange relay header without an acting member",
+            MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
+        return;
+      }
       filterChain.doFilter(request, response);
       return;
     }
 
-    if (!matchesActingPath(request)) {
+    boolean exchangePath = matches(request, EXCHANGE_PATHS);
+    if (!exchangePath && !matches(request, ACTING_PATHS)) {
       refuse(
           request,
           response,
@@ -144,6 +183,32 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           MetricNames.ON_BEHALF_OF_NOT_A_GATEWAY);
       return;
     }
+    if (exchangeHeaders && !exchangePath) {
+      refuse(
+          request,
+          response,
+          "exchange relay header on an ingest endpoint",
+          MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
+      return;
+    }
+    if (exchangePath
+        && (exchangeClient == null || !EXCHANGE_CLIENT_ID.matcher(exchangeClient).matches())) {
+      refuse(
+          request,
+          response,
+          "exchange request without a valid client",
+          MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID);
+      return;
+    }
+    if (exchangePath
+        && (installationKey == null || !KEY_THUMBPRINT.matcher(installationKey).matches())) {
+      refuse(
+          request,
+          response,
+          "exchange request without a valid installation key",
+          MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID);
+      return;
+    }
 
     UUID member;
     try {
@@ -155,7 +220,11 @@ public class ActingMemberFilter extends OncePerRequestFilter {
 
     Collection<GrantedAuthority> authorities;
     try {
-      authorities = actingMemberAuthorities.authoritiesFor(member);
+      authorities =
+          exchangePath
+              ? actingMemberAuthorities.exchangeAuthoritiesFor(
+                  member, knownScopes(exchangeCapabilities))
+              : actingMemberAuthorities.authoritiesFor(member);
     } catch (AccessDeniedException notLive) {
       refuse(
           request,
@@ -168,7 +237,12 @@ public class ActingMemberFilter extends OncePerRequestFilter {
     SecurityContext original = SecurityContextHolder.getContext();
     try {
       SecurityContext acting = SecurityContextHolder.createEmptyContext();
-      acting.setAuthentication(new ActingMemberAuthentication(member, authorities));
+      acting.setAuthentication(
+          new ActingMemberAuthentication(
+              member,
+              authorities,
+              exchangePath ? exchangeClient : null,
+              exchangePath ? installationKey : null));
       SecurityContextHolder.setContext(acting);
       filterChain.doFilter(request, response);
     } finally {
@@ -187,16 +261,35 @@ public class ActingMemberFilter extends OncePerRequestFilter {
   }
 
   /**
-   * Whether this request targets one of the two endpoints that accept an acting member.
+   * Whether this request targets one of the given endpoints.
    *
    * @param request the current request
-   * @return {@code true} when the decoded path matches one of {@link #ACTING_PATHS}
+   * @param patterns the endpoints to match against
+   * @return {@code true} when the decoded path matches one of the patterns
    */
-  private static boolean matchesActingPath(@NotNull HttpServletRequest request) {
+  private static boolean matches(
+      @NotNull HttpServletRequest request, @NotNull List<PathPattern> patterns) {
     PathContainer path =
         PathContainer.parsePath(
             request.getRequestURI().substring(request.getContextPath().length()));
-    return ACTING_PATHS.stream().anyMatch(pattern -> pattern.matches(path));
+    return patterns.stream().anyMatch(pattern -> pattern.matches(path));
+  }
+
+  /**
+   * Parses the relayed capabilities, keeping only the scopes of known capabilities.
+   *
+   * @param header the comma-separated {@code X-Exchange-Capabilities} value, or {@code null}
+   * @return the known scopes, possibly empty
+   */
+  private static @NotNull List<String> knownScopes(@Nullable String header) {
+    if (header == null || header.isBlank()) {
+      return List.of();
+    }
+    return Arrays.stream(header.split(","))
+        .map(String::strip)
+        .filter(scope -> ExchangeCapability.fromScope(scope).isPresent())
+        .distinct()
+        .toList();
   }
 
   /**
@@ -260,17 +353,38 @@ public class ActingMemberFilter extends OncePerRequestFilter {
       implements SubjectAuthentication {
 
     private final UUID member;
+    private final @Nullable String externalClient;
+    private final @Nullable String installationKey;
 
     /**
      * Creates the authentication.
      *
      * @param member the acting member's subject
      * @param authorities the authorities assembled for that member
+     * @param externalClient the external client of an exchange request, or {@code null}
+     * @param installationKey the installation's key thumbprint of an exchange request, or {@code
+     *     null}
      */
-    ActingMemberAuthentication(UUID member, Collection<GrantedAuthority> authorities) {
+    ActingMemberAuthentication(
+        UUID member,
+        Collection<GrantedAuthority> authorities,
+        @Nullable String externalClient,
+        @Nullable String installationKey) {
       super(authorities);
       this.member = member;
+      this.externalClient = externalClient;
+      this.installationKey = installationKey;
       setAuthenticated(true);
+    }
+
+    @Override
+    public @Nullable String exchangeInstallationKey() {
+      return installationKey;
+    }
+
+    @Override
+    public @Nullable String externalClient() {
+      return externalClient;
     }
 
     @NotNull

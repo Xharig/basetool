@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.when;
 import de.greluc.krt.profit.basetool.frontend.model.dto.AuditEventDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.AuditRowView;
 import de.greluc.krt.profit.basetool.frontend.model.dto.BankAuditEventDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.PageResponse;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import java.io.InputStream;
@@ -43,6 +45,7 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -378,16 +381,46 @@ class AdminAuditLogPageControllerTest {
 
     controller.auditLog("ROLE", null, null, null, null, "basetool-android", 0, null, model);
 
-    ArgumentCaptor<String> uri = ArgumentCaptor.forClass(String.class);
-    verify(backendApiClient).get(uri.capture(), anyTypeRef());
+    String auditUri = auditUri();
     assertTrue(
-        uri.getValue().contains("clientId=basetool-android"),
-        "the client filter must reach the backend, not just the page: " + uri.getValue());
+        auditUri.contains("clientId=basetool-android"),
+        "the client filter must reach the backend, not just the page: " + auditUri);
 
     assertEquals("basetool-android", model.getAttribute("filterClientId"));
     PageResponse<AuditRowView> events = (PageResponse<AuditRowView>) model.getAttribute("events");
     assertNotNull(events);
     assertEquals("basetool-android", events.content().getFirst().clientId());
+  }
+
+  @Test
+  void aRegistryClientIsOfferedByNameAndRelayedAsAFilter() {
+    Model model = new ConcurrentModel();
+    when(backendApiClient.get(contains("/api/v1/admin/exchange-clients"), anyTypeRef()))
+        .thenReturn(
+            List.of(
+                new ExchangeClientDto(
+                    UUID.randomUUID(),
+                    "versekit",
+                    "VerseKit",
+                    "ACTIVE",
+                    List.of("exchange.connect"),
+                    null,
+                    null,
+                    null,
+                    null,
+                    Instant.now(),
+                    null,
+                    0L)));
+    when(backendApiClient.get(contains("/api/v1/audit/INVENTORY"), anyTypeRef()))
+        .thenReturn(new PageResponse<>(List.of(), 0, 50, 0, 0, List.of()));
+
+    controller.auditLog("INVENTORY", null, null, null, null, "versekit", 0, null, model);
+
+    assertTrue(auditUri().contains("clientId=versekit"));
+    assertEquals(
+        List.of("basetool-frontend", "basetool-android", "versekit", "other", "none"),
+        model.getAttribute("clientIds"));
+    assertEquals(Map.of("versekit", "VerseKit"), model.getAttribute("clientNames"));
   }
 
   @Test
@@ -398,11 +431,10 @@ class AdminAuditLogPageControllerTest {
 
     controller.auditLog("MISSION", null, null, null, null, "other&size=9999", 0, null, model);
 
-    ArgumentCaptor<String> uri = ArgumentCaptor.forClass(String.class);
-    verify(backendApiClient).get(uri.capture(), anyTypeRef());
+    String auditUri = auditUri();
     assertFalse(
-        uri.getValue().contains("clientId"),
-        "an unknown client filter must not reach the backend: " + uri.getValue());
+        auditUri.contains("clientId"),
+        "an unknown client filter must not reach the backend: " + auditUri);
     assertNull(model.getAttribute("filterClientId"));
   }
 
@@ -414,11 +446,10 @@ class AdminAuditLogPageControllerTest {
 
     controller.auditLog("MISSION", null, null, null, "ACCOUNT_CREATED", null, 0, null, model);
 
-    ArgumentCaptor<String> uri = ArgumentCaptor.forClass(String.class);
-    verify(backendApiClient).get(uri.capture(), anyTypeRef());
+    String auditUri = auditUri();
     assertFalse(
-        uri.getValue().contains("eventType"),
-        "a bank event type must not be relayed on the mission tab: " + uri.getValue());
+        auditUri.contains("eventType"),
+        "a bank event type must not be relayed on the mission tab: " + auditUri);
     assertNull(model.getAttribute("filterEventType"));
   }
 
@@ -433,11 +464,10 @@ class AdminAuditLogPageControllerTest {
 
     controller.auditLog("MISSION", from, to, actor, null, null, 0, null, model);
 
-    ArgumentCaptor<String> uri = ArgumentCaptor.forClass(String.class);
-    verify(backendApiClient).get(uri.capture(), anyTypeRef());
-    assertTrue(uri.getValue().contains("from=2026-01-01T00:00:00Z"), uri.getValue());
-    assertTrue(uri.getValue().contains("to=2026-02-01T00:00:00Z"), uri.getValue());
-    assertTrue(uri.getValue().contains("actorUserId=" + actor), uri.getValue());
+    String auditUri = auditUri();
+    assertTrue(auditUri.contains("from=2026-01-01T00:00:00Z"), auditUri);
+    assertTrue(auditUri.contains("to=2026-02-01T00:00:00Z"), auditUri);
+    assertTrue(auditUri.contains("actorUserId=" + actor), auditUri);
   }
 
   @Test
@@ -465,11 +495,10 @@ class AdminAuditLogPageControllerTest {
 
     assertEquals("basetool-android", model.getAttribute("filterClientId"));
     assertFalse(((List<String>) model.getAttribute("clientIds")).isEmpty());
-    ArgumentCaptor<String> uri = ArgumentCaptor.forClass(String.class);
-    verify(backendApiClient).get(uri.capture(), anyTypeRef());
+    String auditUri = auditUri();
     assertTrue(
-        uri.getValue().contains("clientId=basetool-android"),
-        "the bank endpoint takes a clientId parameter now: " + uri.getValue());
+        auditUri.contains("clientId=basetool-android"),
+        "the bank endpoint takes a clientId parameter now: " + auditUri);
     assertTrue(((String) model.getAttribute("paginationBaseUrl")).contains("clientId="));
   }
 
@@ -527,5 +556,19 @@ class AdminAuditLogPageControllerTest {
     controller.auditLog("JOB_ORDER", null, null, null, null, null, 0, null, model);
 
     assertEquals("admin.audit.error.load", model.getAttribute("error"));
+  }
+
+  /**
+   * Returns the audit-log URI the controller requested, among its backend reads.
+   *
+   * @return the audit path with its query
+   */
+  private String auditUri() {
+    ArgumentCaptor<String> uri = ArgumentCaptor.forClass(String.class);
+    verify(backendApiClient, atLeastOnce()).get(uri.capture(), anyTypeRef());
+    return uri.getAllValues().stream()
+        .filter(u -> !u.startsWith("/api/v1/admin/exchange-clients"))
+        .findFirst()
+        .orElseThrow();
   }
 }

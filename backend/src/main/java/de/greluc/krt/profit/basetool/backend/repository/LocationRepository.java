@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.Location;
 import de.greluc.krt.profit.basetool.backend.model.dto.LocationReferenceDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeLocationRow;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,6 +46,20 @@ public interface LocationRepository extends LookupTableRepository<Location, UUID
       l.name) FROM Location l WHERE l.hidden = false ORDER BY l.name
       """)
   List<LocationReferenceDto> findAllReference();
+
+  /**
+   * Lists the non-hidden locations with the UEX ids of their city or space station, ordered by
+   * name, for the exchange catalogue (REQ-XCH-018).
+   *
+   * @return one row per non-hidden location
+   */
+  @Query(
+      """
+      SELECT new de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeLocationRow(
+      l.name, c.idCity, s.idSpaceStation) FROM Location l LEFT JOIN l.city c
+      LEFT JOIN l.spaceStation s WHERE l.hidden = false ORDER BY l.name
+      """)
+  List<ExchangeLocationRow> findExchangeLocations();
 
   /**
    * Paged live search for the location pickers (REQ-FE-016): non-hidden locations whose name
