@@ -56,6 +56,18 @@ public final class Roles {
   public static final String MISSION_MANAGER = "MISSION_MANAGER";
 
   /**
+   * The only role an acting member holds on the exchange layer, in place of their stored roles
+   * (REQ-XCH-009).
+   */
+  public static final String EXCHANGE_MEMBER = "EXCHANGE_MEMBER";
+
+  /**
+   * Prefix of the authorities that carry the capabilities relayed for an exchange request, followed
+   * by the capability's OAuth scope (REQ-XCH-004).
+   */
+  public static final String EXCHANGE_CAPABILITY_PREFIX = "XCH_CAPABILITY:";
+
+  /**
    * Returns the {@code ROLE_}-prefixed Spring-authority form of a bare role code, for call sites
    * that cannot use the {@code hasRole(...)} shorthand.
    *

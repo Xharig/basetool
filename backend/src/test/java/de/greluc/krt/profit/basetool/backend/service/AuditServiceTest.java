@@ -40,6 +40,7 @@ import de.greluc.krt.profit.basetool.backend.support.ApiClientMetricsProperties;
 import de.greluc.krt.profit.basetool.backend.support.BoundProperties;
 import de.greluc.krt.profit.basetool.backend.support.ClientAttribution;
 import de.greluc.krt.profit.basetool.backend.support.IngestGatewayProperties;
+import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
@@ -50,6 +51,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -77,7 +79,8 @@ class AuditServiceTest {
   private ClientAttribution clientAttribution =
       new ClientAttribution(
           BoundProperties.defaults(ApiClientMetricsProperties.class),
-          BoundProperties.defaults(IngestGatewayProperties.class));
+          BoundProperties.defaults(IngestGatewayProperties.class),
+          Mockito.mock(KnownExchangeClients.class));
 
   @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 

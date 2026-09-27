@@ -117,7 +117,9 @@ public class UserAccountMergeService {
           OwnedRows.of("bank_holder", "user_id"),
           OwnedRows.of("notification", "recipient_user_id"),
           OwnedRows.of("notification_rule_selector", "user_id"),
-          OwnedRows.deduped("member_evaluation", "user_id", "category_id"));
+          OwnedRows.deduped("member_evaluation", "user_id", "category_id"),
+          OwnedRows.deduped(
+              "exchange_installation", "user_id", "exchange_client_id", "key_thumbprint"));
 
   /**
    * Every user column that records an act rather than a belonging, and therefore stays with the
@@ -150,7 +152,8 @@ public class UserAccountMergeService {
           "deletion_request.user_id",
           "deletion_request.decided_by_id",
           "user_roles.user_id",
-          "terms_acceptance.user_id");
+          "terms_acceptance.user_id",
+          "exchange_client_revocation.user_id");
 
   /**
    * The moved tables as {@code table.column}, the form the schema catalogue reports.

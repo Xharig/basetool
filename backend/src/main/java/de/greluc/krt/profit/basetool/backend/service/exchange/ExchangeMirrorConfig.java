@@ -55,6 +55,31 @@ public class ExchangeMirrorConfig {
   }
 
   /**
+   * The Redis revocation mirror, when mirroring is switched on.
+   *
+   * @param redisTemplate the string template
+   * @return the mirror
+   */
+  @NotNull
+  @Bean
+  @ConditionalOnProperty(prefix = "app.exchange.mirror", name = "enabled", havingValue = "true")
+  public ExchangeRevocationMirror redisExchangeRevocationMirror(StringRedisTemplate redisTemplate) {
+    return new RedisExchangeRevocationMirror(redisTemplate, Clock.systemUTC());
+  }
+
+  /**
+   * The revocation mirror used whenever Redis mirroring is off.
+   *
+   * @return a mirror that stores nothing
+   */
+  @NotNull
+  @Bean
+  @ConditionalOnMissingBean(ExchangeRevocationMirror.class)
+  public ExchangeRevocationMirror disabledExchangeRevocationMirror() {
+    return new DisabledExchangeRevocationMirror();
+  }
+
+  /**
    * The mirror used whenever Redis mirroring is off.
    *
    * @return a mirror that stores nothing

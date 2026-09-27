@@ -46,4 +46,19 @@ public interface ActingMemberAuthorities {
    */
   @NotNull
   Collection<GrantedAuthority> authoritiesFor(@NotNull UUID member);
+
+  /**
+   * Assembles the reduced authorities an acting member holds on the exchange layer: {@code
+   * ROLE_EXCHANGE_MEMBER} and one capability authority per relayed scope, never the member's stored
+   * roles, permissions or contextual grants (REQ-XCH-009). A member refused by the approval or role
+   * gate keeps exactly the marker that makes those gates refuse.
+   *
+   * @param member the subject named in the on-behalf-of header
+   * @param capabilityScopes the relayed OAuth scopes, already restricted to known capabilities
+   * @return the reduced authorities
+   * @throws AccessDeniedException when the member is unknown here or no longer live
+   */
+  @NotNull
+  Collection<GrantedAuthority> exchangeAuthoritiesFor(
+      @NotNull UUID member, @NotNull Collection<String> capabilityScopes);
 }
