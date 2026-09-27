@@ -1,0 +1,142 @@
+name: Exchange client application
+description: Apply for a third-party application to use the Basetool's Exchange API.
+title: "[Exchange client] "
+labels:
+  - triage
+  - API
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This application is public: approval is decided in the open, case by case, and recorded
+        in `docs/legal/approved-clients.md`. Read `docs/exchange/onboarding.md` and
+        `docs/exchange/client-security.md` first.
+
+        **Do not put secrets, tokens or personal data of members in this issue.**
+
+  - type: input
+    id: product
+    attributes:
+      label: Product
+      description: The application's name as members will see it.
+    validations:
+      required: true
+
+  - type: input
+    id: client-id
+    attributes:
+      label: Requested client id
+      description: Lower case letters, digits and hyphens, 2 to 63 characters.
+      placeholder: example-client
+    validations:
+      required: true
+
+  - type: input
+    id: publisher
+    attributes:
+      label: Publisher and maintainer contact
+      description: Who publishes the client and how the Basetool reaches its maintainer.
+    validations:
+      required: true
+
+  - type: input
+    id: security-contact
+    attributes:
+      label: Security contact
+      description: Where a token-handling flaw is reported, for example a SECURITY.md or an address.
+    validations:
+      required: true
+
+  - type: input
+    id: privacy-statement
+    attributes:
+      label: Privacy statement
+      description: The published privacy statement that governs Basetool data on the member's device.
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source code
+      description: The repository, or "closed source" — closed-source clients can be approved.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: platforms
+    attributes:
+      label: Platforms
+      options:
+        - label: Windows
+        - label: Linux
+        - label: macOS
+        - label: Android
+        - label: Other (explain below)
+
+  - type: checkboxes
+    id: capabilities
+    attributes:
+      label: Requested capabilities
+      description: Only what the client's features need; exchange.connect is always included.
+      options:
+        - label: exchange.connect
+          required: true
+        - label: exchange.blueprints.read
+        - label: exchange.blueprints.write
+        - label: exchange.stock.read
+        - label: exchange.stock.write
+        - label: exchange.hangar.read
+        - label: exchange.hangar.write
+        - label: exchange.demand.read
+        - label: exchange.drafts.blueprints
+        - label: exchange.drafts.refinery
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What the client does with each capability
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Client security requirements
+      description: Each point of docs/exchange/client-security.md.
+      options:
+        - label: Device grant against the pinned production issuer; another issuer only through a developer environment variable.
+          required: true
+        - label: DPoP (ES256) on the token endpoint and every call, with the nonce retry.
+          required: true
+        - label: Refresh token and DPoP key only in the platform's secret store; the key non-exportable where the platform allows.
+          required: true
+        - label: No token or key in logs, backups, diagnostics or problem reports; Authorization, DPoP and JWT-shaped strings redacted.
+          required: true
+        - label: Installations labelled by the member or the product, never with a host or computer name.
+          required: true
+        - label: Disconnect revokes the refresh token and deletes the stored credential.
+          required: true
+        - label: Only the member's own data is sent; never purchase data, account ids or other members' data.
+          required: true
+        - label: Org demand stored at most 7 days, outside cloud-synced folders, never in backups or diagnostics, never forwarded.
+          required: true
+        - label: A descriptive User-Agent with product, version and URL.
+          required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Terms of the integration
+      options:
+        - label: Basetool data stays on the member's device — no telemetry, no transfer to third parties.
+          required: true
+        - label: A token-handling flaw is fixed in a published release within 7 days, or the client may be suspended.
+          required: true
+        - label: I agree that the Basetool may suspend or revoke the client at any time.
+          required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
