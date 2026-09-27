@@ -300,7 +300,7 @@ a `code` from the [error registry](errors.md).
 | `CLIENT_REVOKED` | 401 | The member disconnected the client after this connection was made | Discard the tokens; start a device login only when the member asks. |
 | `INSTALLATION_REVOKED` | 401 | The member disconnected this installation | Discard the tokens **and** the key; reconnecting needs a new key. |
 | `CLIENT_NOT_ALLOWED` | 403 | The client is not in the registry | Stop; the client is not approved. |
-| `CLIENT_SUSPENDED` | 403 | The client is suspended | Stop and tell the member. |
+| `CLIENT_SUSPENDED` | 403 | The client is suspended | Stop and tell the member; try again at the next start or when the member asks, never on a timer. |
 | `CLIENT_VERSION_UNSUPPORTED` | 403 | The `User-Agent` version is below the client's minimum | Ask the member to update. |
 | `TERMS_NOT_ACCEPTED` | 403 | The member has not accepted the current terms | Ask the member to open the Basetool and accept them. |
 | `PENDING_APPROVAL` | 403 | The member's registration awaits approval | Stop; nothing to sync yet. |
