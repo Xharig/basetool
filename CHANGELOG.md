@@ -9,30 +9,42 @@
   `/exchange/v1/schemas/<name>.schema.json` aus (REQ-XCH-011). Die alten Extractor-Endpunkte lassen
   sich zum Go-live mit `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED=false` abschalten und antworten dann mit
   `410` und einem Update-Hinweis (REQ-XCH-033).
+  
+- **Benachrichtigung „Neue Anwendung verbunden".** Verbindet sich eine neue Installation einer
+  Anwendung mit deinem Konto, bekommst du eine Benachrichtigung mit dem Namen der Anwendung, damit
+  dir eine Verbindung auffällt, die du nicht selbst hergestellt hast (Migration `V251`, REQ-XCH-032).
+  
 - **Administration → Verbundene Anwendungen.** Admins registrieren, bearbeiten, sperren und
   begrenzen die zugelassenen Anwendungen des Datenaustauschs und schalten ihn global ein oder aus;
   Sperren, der Schalter und zusätzliche Berechtigungen fragen vorher nach (REQ-XCH-003).
+  
 - **Verbundene Anwendungen: Trennen einer Installation oder einer ganzen Anwendung.** Mitglieder
   können über `/api/v1/connected-apps` ihre Verbindungen sehen und trennen; gesperrte Schlüssel und
   Widerrufe erreichen das Gateway sofort (Migration `V249`, REQ-XCH-008). Die Seite dazu folgt.
+  
 - **Audit: Änderungen über eine zugelassene Anwendung nennen diese Anwendung.** Der Client-Filter im
   Audit-Log bietet die registrierten Anwendungen unter ihrem Produktnamen an (REQ-XCH-010).
+  
 - **Datenaustausch: Verzeichnis zugelassener Anwendungen.** Admins verwalten zugelassene
   Fremd-Anwendungen samt Fähigkeiten und den globalen Schalter (`/api/v1/admin/exchange-clients`,
   `/api/v1/admin/exchange-settings`, Migration `V248`); jede Änderung steht im neuen Audit-Bereich
   „Verbundene Anwendungen“ und wird für das Gateway ausfallsicher nach Redis gespiegelt
   (`APP_EXCHANGE_MIRROR_ENABLED`, vorerst aus; REQ-XCH-003).
+  
 - **Lager: Markierung „gestohlen“.** Bestand kann als gestohlen eingebucht oder nachträglich — auch
   teilweise — markiert werden; gestohlene und reguläre Ware bilden getrennte Stapel, jede Umbuchung
   behält die Markierung, Lager, Aufträge, Einsätze und Materialbörse zeigen sie an und filtern danach
   (REQ-INV-053, Migration `V247`). Noch hinter dem Schalter `APP_INVENTORY_STOLEN_MARKING_ENABLED`
   (aus), bis die App ihn kennt.
+  
 - **Mein Lager: Einheit eines persönlichen Eintrags ändern.** Pro Eintrag und für eine Auswahl
   lässt sich die Einheit eigener persönlicher Einträge nachträglich wechseln — auf eine eigene
   Mitgliedschaft oder „Keine Einheit"; der Dialog sagt, wer den Eintrag dann sieht (REQ-INV-052).
+  
 - **Profil: optionales RSI-Handle.** Mitglieder können ihr RSI-Handle im Profil hinterlegen; es ist
   nur für sie selbst und Admins sichtbar, eindeutig über alle Konten und dient später verbundenen
   Anwendungen zur Prüfung, ob ein Spiel-Log zum Konto gehört (REQ-SEC-072, Migration `V246`).
+  
 - **Audit-Log: neuer Bereich „Blueprints".** Hinzufügen, Bearbeiten, Entfernen, Import, globale
   Freigabe, Standard-Blueprints und deren Vergabe — auch aus der App und durch Admins — landen im
   Audit-Log; Notizen werden nie mitgeschrieben (REQ-INV-051).

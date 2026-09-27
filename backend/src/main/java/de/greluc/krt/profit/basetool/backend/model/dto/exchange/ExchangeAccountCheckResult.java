@@ -17,19 +17,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.greluc.krt.profit.basetool.backend.model.dto;
+package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
-import java.time.Instant;
-import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonValue;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
 
-/**
- * One installation of a connected client (REQ-XCH-007, REQ-XCH-032).
- *
- * @param id the installation id
- * @param label the client's label for it, or {@code null}
- * @param firstSeenAt when it was first seen
- * @param lastSeenAt when it was last seen
- * @param unseen whether the member has not yet seen the notification announcing it
- */
-public record ConnectedInstallationDto(
-    UUID id, String label, Instant firstSeenAt, Instant lastSeenAt, boolean unseen) {}
+/** The answer of the exchange account check (REQ-XCH-031). */
+@RequiredArgsConstructor
+public enum ExchangeAccountCheckResult {
+  /** The handle is the one on the member's profile, ignoring case. */
+  MATCH("match"),
+
+  /** The member stored a different handle. */
+  MISMATCH("mismatch"),
+
+  /** The member stored no handle. */
+  UNKNOWN("unknown");
+
+  /** The wire value, also the {@code outcome} label of the account-check counter. */
+  @JsonValue @Getter @NotNull private final String value;
+}

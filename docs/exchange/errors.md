@@ -61,5 +61,5 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 ## Warnings
 
 A change result or resolve result may carry `warnings[]` with a JSON Pointer and a code. v1 defines
-`UNKNOWN_FIELD` (the server ignored a field it does not know) and `LOC_KEY_UNRESOLVED` (the
-catalogue carries no name key yet; the name was used instead).
+`UNKNOWN_FIELD` (the server ignored a field it does not know) and `LOC_KEY_UNRESOLVED` (no single
+catalogue entry carries that name key; the name was tried instead).

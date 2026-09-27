@@ -17,19 +17,26 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.greluc.krt.profit.basetool.backend.model.dto;
+package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
-import java.time.Instant;
 import java.util.UUID;
 
 /**
- * One installation of a connected client (REQ-XCH-007, REQ-XCH-032).
+ * The identifiers of one game item, for resolving an item reference (REQ-XCH-012).
  *
- * @param id the installation id
- * @param label the client's label for it, or {@code null}
- * @param firstSeenAt when it was first seen
- * @param lastSeenAt when it was last seen
- * @param unseen whether the member has not yet seen the notification announcing it
+ * @param id the item's id
+ * @param name the item's display name
+ * @param className the item's DataForge class name, or {@code null}
+ * @param externalUuid the item's Wiki UUID, or {@code null}
+ * @param p4kUuid the item's game-file UUID, or {@code null}
+ * @param uexId the item's UEX id, or {@code null}
+ * @param nameKey the item's {@code global.ini} name key, or {@code null}
  */
-public record ConnectedInstallationDto(
-    UUID id, String label, Instant firstSeenAt, Instant lastSeenAt, boolean unseen) {}
+public record ExchangeItemKeyRow(
+    UUID id,
+    String name,
+    String className,
+    UUID externalUuid,
+    UUID p4kUuid,
+    Integer uexId,
+    String nameKey) {}

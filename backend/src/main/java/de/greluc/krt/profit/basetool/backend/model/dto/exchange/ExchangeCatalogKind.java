@@ -17,19 +17,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.greluc.krt.profit.basetool.backend.model.dto;
+package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
-import java.time.Instant;
-import java.util.UUID;
+/** The catalogue a {@code catalog/resolve} request looks its references up in (REQ-XCH-012). */
+public enum ExchangeCatalogKind {
 
-/**
- * One installation of a connected client (REQ-XCH-007, REQ-XCH-032).
- *
- * @param id the installation id
- * @param label the client's label for it, or {@code null}
- * @param firstSeenAt when it was first seen
- * @param lastSeenAt when it was last seen
- * @param unseen whether the member has not yet seen the notification announcing it
- */
-public record ConnectedInstallationDto(
-    UUID id, String label, Instant firstSeenAt, Instant lastSeenAt, boolean unseen) {}
+  /** A blueprint product, keyed by its normalized product key. */
+  BLUEPRINT,
+
+  /** A game item, keyed by its id. */
+  ITEM,
+
+  /** A material, keyed by its id. */
+  MATERIAL,
+
+  /** A ship type, keyed by its id. */
+  SHIP_TYPE
+}

@@ -17,19 +17,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.greluc.krt.profit.basetool.backend.model.dto;
+package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
-import java.time.Instant;
-import java.util.UUID;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 /**
- * One installation of a connected client (REQ-XCH-007, REQ-XCH-032).
+ * An RSI handle a client saw in the game log, to compare with the member's own (REQ-XCH-031).
  *
- * @param id the installation id
- * @param label the client's label for it, or {@code null}
- * @param firstSeenAt when it was first seen
- * @param lastSeenAt when it was last seen
- * @param unseen whether the member has not yet seen the notification announcing it
+ * @param handle 3 to 60 letters, digits, {@code _} and {@code -}; never logged or stored
  */
-public record ConnectedInstallationDto(
-    UUID id, String label, Instant firstSeenAt, Instant lastSeenAt, boolean unseen) {}
+public record ExchangeAccountCheckRequest(
+    @NotNull @Pattern(regexp = "^[A-Za-z0-9_-]{3,60}$") String handle) {}

@@ -17,19 +17,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.greluc.krt.profit.basetool.backend.model.dto;
+package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
-import java.time.Instant;
-import java.util.UUID;
+import org.jetbrains.annotations.NotNull;
 
 /**
- * One installation of a connected client (REQ-XCH-007, REQ-XCH-032).
+ * Whether a handle belongs to the calling member; the stored handle is never part of it
+ * (REQ-XCH-031).
  *
- * @param id the installation id
- * @param label the client's label for it, or {@code null}
- * @param firstSeenAt when it was first seen
- * @param lastSeenAt when it was last seen
- * @param unseen whether the member has not yet seen the notification announcing it
+ * @param result {@code match}, {@code mismatch} or {@code unknown}
  */
-public record ConnectedInstallationDto(
-    UUID id, String label, Instant firstSeenAt, Instant lastSeenAt, boolean unseen) {}
+public record ExchangeAccountCheckDto(@NotNull ExchangeAccountCheckResult result) {}

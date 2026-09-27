@@ -21,7 +21,6 @@ package de.greluc.krt.profit.basetool.backend.controller.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -29,28 +28,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.jayway.jsonpath.JsonPath;
+import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
-import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeSettings;
 import de.greluc.krt.profit.basetool.backend.model.User;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
-import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeSettingsRepository;
 import de.greluc.krt.profit.basetool.backend.repository.RoleRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
-import java.time.Instant;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -73,19 +71,20 @@ import tools.jackson.databind.json.JsonMapper;
 @ActiveProfiles("test")
 @Transactional
 @TestPropertySource(properties = "app.security.ingest-gateway.client-ids=test-ingest-gateway")
-class ExchangeInstallationControllerTest {
+class ExchangeAccountCheckControllerTest {
 
-  private static final String PATH = "/api/v1/exchange/me/installation";
-  private static final UUID MEMBER = UUID.fromString("44444444-4444-4444-4444-4444444440b1");
+  private static final String PATH = "/api/v1/exchange/me/account-check";
+  private static final UUID MEMBER = UUID.fromString("44444444-4444-4444-4444-4444444440c1");
   private static final String GATEWAY = "55555555-5555-5555-5555-555555555555";
-  private static final String KEY = "Kx9_" + "b".repeat(39);
+  private static final String KEY = "Kx9_" + "c".repeat(39);
+  private static final String STORED = "Cutter_Pilot-7";
 
   @Autowired private WebApplicationContext context;
   @Autowired private UserRepository userRepository;
   @Autowired private RoleRepository roleRepository;
   @Autowired private ExchangeClientRepository clientRepository;
   @Autowired private ExchangeSettingsRepository settingsRepository;
-  @Autowired private ExchangeInstallationRepository installationRepository;
+  @Autowired private MeterRegistry meterRegistry;
 
   private MockMvc mockMvc;
 
@@ -97,14 +96,14 @@ class ExchangeInstallationControllerTest {
             .build();
     User member = new User();
     member.setId(MEMBER);
-    member.setUsername("installation-member");
+    member.setUsername("account-check-member");
     member.setApprovalStatus(ApprovalStatus.ACTIVE);
     member.setInKeycloak(true);
     member.setRoles(
         new HashSet<>(Set.of(roleRepository.findByCode(Roles.KRT_MEMBER).orElseThrow())));
     userRepository.saveAndFlush(member);
     ExchangeClient client = new ExchangeClient();
-    client.setClientId("versekit-inst");
+    client.setClientId("versekit-acc");
     client.setDisplayName("VerseKit");
     client.setStatus(ExchangeClientStatus.ACTIVE);
     client.setCapabilities(EnumSet.of(ExchangeCapability.CONNECT));
@@ -116,149 +115,144 @@ class ExchangeInstallationControllerTest {
   }
 
   @Test
-  void theUpsertTellsWhetherItCreatedTheInstallation() {
-    Instant now = Instant.now();
-    List<ExchangeInstallationRepository.Touched> first =
-        installationRepository.touch("versekit-inst", MEMBER, KEY, now, now.minusSeconds(300));
-    assertThat(first).singleElement().satisfies(t -> assertThat(t.getInserted()).isTrue());
-
-    assertThat(
-            installationRepository.touch("versekit-inst", MEMBER, KEY, now, now.minusSeconds(300)))
-        .as("seen again within the interval: nothing written")
-        .isEmpty();
-
-    Instant later = now.plusSeconds(600);
-    assertThat(
-            installationRepository.touch(
-                "versekit-inst", MEMBER, KEY, later, later.minusSeconds(1)))
-        .singleElement()
-        .satisfies(
-            t -> {
-              assertThat(t.getInserted()).as("a later touch updates, it does not create").isFalse();
-              assertThat(t.getId()).isEqualTo(first.getFirst().getId());
-            });
-  }
-
-  @Test
-  void theInstallationIsCreatedOnFirstSightAndKeepsItsIdWhenLabelled() throws Exception {
-    String first =
-        mockMvc
-            .perform(relayed(get(PATH)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.label").doesNotExist())
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
-    String id = JsonPath.read(first, "$.installationId");
-
+  void aMemberWithoutAStoredHandleIsUnknown() throws Exception {
     mockMvc
-        .perform(label("Gaming-PC 2"))
+        .perform(check("Cutter_Pilot-7", "exchange.connect"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.installationId").value(id))
-        .andExpect(jsonPath("$.label").value("Gaming-PC 2"));
-
-    ExchangeInstallation stored =
-        installationRepository.findById(UUID.fromString(id)).orElseThrow();
-    assertThat(stored.getKeyThumbprint()).isEqualTo(KEY);
-    assertThat(id).isNotEqualTo(KEY);
+        .andExpect(jsonPath("$.result").value("unknown"));
   }
 
   @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "tab\tinside",
-        "be\u0007ll",
-        "a\u0000b",
-        "evil\u202Egnp.exe",
-        "zero\u200Bwidth",
-        "slash/inside",
-        "12345678901234567890123456789012345678901"
-      })
-  void aLabelBreakingTheRuleIsRefused(@NotNull String label) throws Exception {
-    mockMvc.perform(label(label)).andExpect(status().isBadRequest());
-  }
+  @ValueSource(strings = {"Cutter_Pilot-7", "cutter_pilot-7", "CUTTER_PILOT-7"})
+  void theStoredHandleMatchesIgnoringCase(@NotNull String handle) throws Exception {
+    storeHandle(STORED);
 
-  @Test
-  void spacesAndControlsAtTheEdgesAreTrimmedAway() throws Exception {
     mockMvc
-        .perform(label("  Laptop\u0007 "))
+        .perform(check(handle, "exchange.connect"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.label").value("Laptop"));
+        .andExpect(jsonPath("$.result").value("match"));
   }
 
   @Test
-  void aHomoglyphOnlyLabelIsAcceptedAndShownAfterTheClientName() throws Exception {
+  void anotherHandleIsAMismatchAndTheStoredOneIsNeverReturned() throws Exception {
+    storeHandle(STORED);
+
+    String body =
+        mockMvc
+            .perform(check("Alt_Account", "exchange.connect"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.result").value("mismatch"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(body).isEqualTo("{\"result\":\"mismatch\"}").doesNotContain(STORED);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"ab", "has space", "semi;colon", "umlautä", ""})
+  void aValueThatIsNoRsiHandleIsRefusedWithoutEchoingIt(@NotNull String handle) throws Exception {
+    String body =
+        mockMvc
+            .perform(check(handle, "exchange.connect"))
+            .andExpect(status().isBadRequest())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    if (!handle.isEmpty()) {
+      assertThat(body).doesNotContain(handle);
+    }
+  }
+
+  @Test
+  void aMissingHandleIsRefused() throws Exception {
+    mockMvc.perform(check(null, "exchange.connect")).andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void aTokenWithoutTheConnectScopeIsRefused() throws Exception {
     mockMvc
-        .perform(label("\u0420\u0430\u0443\u0420\u0430l"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.label").value("\u0420\u0430\u0443\u0420\u0430l"));
+        .perform(check("Cutter_Pilot-7", "exchange.stock.read"))
+        .andExpect(status().isForbidden());
   }
 
   @Test
-  void theLabelNeverReachesALogLine() throws Exception {
+  void neitherHandleEverReachesALogLine() throws Exception {
+    storeHandle(STORED);
     Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
     appender.start();
     root.addAppender(appender);
     try {
-      mockMvc.perform(label("SecretHost-Lucas")).andExpect(status().isOk());
-      mockMvc.perform(label("bad\u202Elabel")).andExpect(status().isBadRequest());
+      mockMvc.perform(check("Other_Pilot", "exchange.connect")).andExpect(status().isOk());
+      mockMvc.perform(check("bad handle!", "exchange.connect")).andExpect(status().isBadRequest());
     } finally {
       root.detachAppender(appender);
     }
     assertThat(appender.list)
-        .noneMatch(e -> e.getFormattedMessage().contains("SecretHost"))
-        .noneMatch(e -> e.getFormattedMessage().contains("bad\u202Elabel"));
+        .noneMatch(e -> e.getFormattedMessage().contains(STORED))
+        .noneMatch(e -> e.getFormattedMessage().contains("Other_Pilot"))
+        .noneMatch(e -> e.getFormattedMessage().contains("bad handle!"));
   }
 
   @Test
-  void aRevokedInstallationIsRefused() throws Exception {
-    mockMvc.perform(relayed(get(PATH))).andExpect(status().isOk());
-    ExchangeInstallation installation =
-        installationRepository.findByKey("versekit-inst", MEMBER, KEY).orElseThrow();
-    installation.setRevokedAt(Instant.now());
-    installationRepository.saveAndFlush(installation);
+  void everyAnswerIsCountedByOutcome() throws Exception {
+    double unknown = count("unknown");
+    mockMvc.perform(check("Cutter_Pilot-7", "exchange.connect")).andExpect(status().isOk());
+    storeHandle(STORED);
+    double match = count("match");
+    double mismatch = count("mismatch");
+    mockMvc.perform(check("cutter_pilot-7", "exchange.connect")).andExpect(status().isOk());
+    mockMvc.perform(check("Alt_Account", "exchange.connect")).andExpect(status().isOk());
 
-    mockMvc.perform(relayed(get(PATH))).andExpect(status().isForbidden());
-  }
-
-  @Test
-  void anExchangeCallWithoutAnInstallationKeyIsRefused() throws Exception {
-    mockMvc
-        .perform(
-            get(PATH)
-                .with(jwt().jwt(t -> t.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit-inst")
-                .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.connect"))
-        .andExpect(status().isForbidden());
+    assertThat(count("unknown")).isEqualTo(unknown + 1);
+    assertThat(count("match")).isEqualTo(match + 1);
+    assertThat(count("mismatch")).isEqualTo(mismatch + 1);
   }
 
   /**
-   * Builds a labelling request.
+   * Stores an RSI handle on the member's profile.
    *
-   * @param label the label
-   * @return the request
+   * @param handle the handle
    */
-  private @NotNull MockHttpServletRequestBuilder label(@NotNull String label) {
-    return relayed(post(PATH))
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(JsonMapper.builder().build().writeValueAsString(java.util.Map.of("label", label)));
+  private void storeHandle(@NotNull String handle) {
+    User member = userRepository.findById(MEMBER).orElseThrow();
+    member.setRsiHandle(handle);
+    userRepository.saveAndFlush(member);
   }
 
   /**
-   * Adds the gateway's identity and the relay headers.
+   * Reads the account-check counter of one outcome.
    *
-   * @param request the request
+   * @param outcome the outcome label
+   * @return the current count
+   */
+  private double count(@NotNull String outcome) {
+    return meterRegistry
+        .get(MetricNames.EXCHANGE_ACCOUNT_CHECKS)
+        .tag(MetricNames.TAG_OUTCOME, outcome)
+        .counter()
+        .count();
+  }
+
+  /**
+   * Builds a relayed account check.
+   *
+   * @param handle the handle, or {@code null} for a body without one
+   * @param capabilities the capabilities the gateway relays
    * @return the request
    */
-  private static @NotNull MockHttpServletRequestBuilder relayed(
-      @NotNull MockHttpServletRequestBuilder request) {
-    return request
+  private static @NotNull MockHttpServletRequestBuilder check(
+      @Nullable String handle, @NotNull String capabilities) {
+    Map<String, String> body = handle == null ? Map.of() : Map.of("handle", handle);
+    return post(PATH)
         .with(jwt().jwt(t -> t.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
         .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-        .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit-inst")
-        .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.connect")
-        .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, KEY);
+        .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit-acc")
+        .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, capabilities)
+        .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, KEY)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(JsonMapper.builder().build().writeValueAsString(body));
   }
 }
