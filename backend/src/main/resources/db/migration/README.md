@@ -154,6 +154,8 @@ something broke once.
     without a leading index (REQ-DATA-017).
   - **Profile** — the optional RSI handle with its shape check and case-insensitive
     unique index (V246, REQ-SEC-072).
+  - **External exchange** — the client registry, its capabilities, the global switch and the
+    mirror's revision sequence (V248, REQ-XCH-003).
 
 This timeline is curated, not exhaustive (checked against the directory on
 2026-09-26, tip V246). `ls | sort -V | tail -1` in this directory is the only reliable

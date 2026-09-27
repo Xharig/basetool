@@ -43,6 +43,9 @@
     "description" : "Operation aggregate: groups multiple missions under one umbrella and exposes aggregated finance and payout views.",
     "name" : "Operations"
   }, {
+    "description" : "Approved third-party exchange clients",
+    "name" : "Admin — Exchange registry"
+  }, {
     "description" : "What the Android client needs before it can be trusted to run.",
     "name" : "App"
   }, {
@@ -669,6 +672,806 @@
         },
         "summary" : "Carry out an account-deletion request",
         "tags" : [ "admin-deletion-request-controller" ]
+      }
+    },
+    "/api/v1/admin/exchange-clients" : {
+      "get" : {
+        "operationId" : "listClients",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ExchangeClientDto"
+                  }
+                }
+              }
+            },
+            "description" : "Every registry client",
+            "headers" : {
+              "Cache-Control" : {
+                "description" : "Caching policy (e.g. no-cache for API responses)",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "ETag" : {
+                "description" : "Entity Tag for conditional requests",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "304" : {
+            "description" : "Not Modified (ETag/If-None-Match)"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "List exchange clients",
+        "tags" : [ "Admin — Exchange registry" ]
+      },
+      "post" : {
+        "description" : "Registers an approved client as ACTIVE; exchange.connect is required.",
+        "operationId" : "createClient",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeClientCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeClientDto"
+                }
+              }
+            },
+            "description" : "The registered client"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Register an exchange client",
+        "tags" : [ "Admin — Exchange registry" ]
+      }
+    },
+    "/api/v1/admin/exchange-clients/{id}" : {
+      "get" : {
+        "operationId" : "getClient",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeClientDto"
+                }
+              }
+            },
+            "description" : "The client",
+            "headers" : {
+              "Cache-Control" : {
+                "description" : "Caching policy (e.g. no-cache for API responses)",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "ETag" : {
+                "description" : "Entity Tag for conditional requests",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "304" : {
+            "description" : "Not Modified (ETag/If-None-Match)"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Get an exchange client",
+        "tags" : [ "Admin — Exchange registry" ]
+      },
+      "put" : {
+        "description" : "Replaces display name, capabilities, version floor, contact and limit overrides. A removed capability is mirrored before the commit; if that fails, nothing changes.",
+        "operationId" : "updateClient",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeClientUpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeClientDto"
+                }
+              }
+            },
+            "description" : "The saved client"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeClientDto"
+                }
+              }
+            },
+            "description" : "The registry mirror could not be written"
+          }
+        },
+        "summary" : "Update an exchange client",
+        "tags" : [ "Admin — Exchange registry" ]
+      }
+    },
+    "/api/v1/admin/exchange-clients/{id}/activate" : {
+      "post" : {
+        "operationId" : "activateClient",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeClientStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeClientDto"
+                }
+              }
+            },
+            "description" : "The active client"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Activate an exchange client",
+        "tags" : [ "Admin — Exchange registry" ]
+      }
+    },
+    "/api/v1/admin/exchange-clients/{id}/suspend" : {
+      "post" : {
+        "description" : "The suspension reaches the gateway's mirror before the commit or not at all.",
+        "operationId" : "suspendClient",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeClientStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeClientDto"
+                }
+              }
+            },
+            "description" : "The suspended client"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeClientDto"
+                }
+              }
+            },
+            "description" : "The registry mirror could not be written"
+          }
+        },
+        "summary" : "Suspend an exchange client",
+        "tags" : [ "Admin — Exchange registry" ]
+      }
+    },
+    "/api/v1/admin/exchange-settings" : {
+      "get" : {
+        "operationId" : "getSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeSettingsDto"
+                }
+              }
+            },
+            "description" : "The switch",
+            "headers" : {
+              "Cache-Control" : {
+                "description" : "Caching policy (e.g. no-cache for API responses)",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "ETag" : {
+                "description" : "Entity Tag for conditional requests",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "304" : {
+            "description" : "Not Modified (ETag/If-None-Match)"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Get the global exchange switch",
+        "tags" : [ "Admin — Exchange registry" ]
+      },
+      "put" : {
+        "description" : "Switching off reaches the gateway's mirror before the commit or not at all.",
+        "operationId" : "updateSettings",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeSettingsUpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeSettingsDto"
+                }
+              }
+            },
+            "description" : "The saved switch"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          },
+          "502" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeSettingsDto"
+                }
+              }
+            },
+            "description" : "The registry mirror could not be written"
+          }
+        },
+        "summary" : "Set the global exchange switch",
+        "tags" : [ "Admin — Exchange registry" ]
       }
     },
     "/api/v1/admin/import/p4k/jobs" : {
@@ -4290,7 +5093,7 @@
           "required" : true,
           "schema" : {
             "type" : "string",
-            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT" ]
+            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT", "CONNECTED_APPS" ]
           }
         }, {
           "in" : "query",
@@ -4384,7 +5187,7 @@
           "required" : true,
           "schema" : {
             "type" : "string",
-            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT" ]
+            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT", "CONNECTED_APPS" ]
           }
         }, {
           "in" : "query",
@@ -4416,7 +5219,7 @@
           "required" : false,
           "schema" : {
             "type" : "string",
-            "enum" : [ "INVENTORY_ITEM_CREATED", "INVENTORY_ITEM_UPDATED", "INVENTORY_ITEM_MERGED", "INVENTORY_ITEM_NOTE_UPDATED", "INVENTORY_ALLOCATION_ADDED", "INVENTORY_ALLOCATION_CHANGED", "INVENTORY_ALLOCATION_REMOVED", "INVENTORY_ITEM_CONSUMED", "INVENTORY_ITEM_TRANSFERRED", "INVENTORY_ITEM_SOLD", "INVENTORY_ITEM_DEPERSONALIZED", "INVENTORY_ITEM_PERSONALIZED", "INVENTORY_ITEM_DELIVERY_TOGGLED", "INVENTORY_BULK_CHECKED_OUT", "INVENTORY_BULK_REBOOKED", "INVENTORY_WIPED", "INVENTORY_RECEIVED_FROM_REFINERY", "INVENTORY_RECEIVED_FROM_PRODUCTION", "INVENTORY_HANDED_OVER", "INVENTORY_CONSUMED_BY_PRODUCTION", "INVENTORY_ORG_RESTAMPED", "INVENTORY_OWNER_REASSIGNED", "INVENTORY_PURGED_ON_USER_DELETION", "INVENTORY_AUDIT_EXPORTED", "INVENTORY_AUDIT_PURGED", "JOB_ORDER_CREATED", "JOB_ORDER_ITEM_CREATED", "JOB_ORDER_UPDATED", "JOB_ORDER_ITEM_UPDATED", "JOB_ORDER_STATUS_CHANGED", "JOB_ORDER_PRIORITY_CHANGED", "JOB_ORDER_BLUEPRINT_COUNTING_CHANGED", "JOB_ORDER_DELETED", "JOB_ORDER_COMPLETED", "JOB_ORDER_REASSIGNED", "JOB_ORDER_ASSIGNEE_ADDED", "JOB_ORDER_ASSIGNEE_REMOVED", "JOB_ORDER_ASSIGNEE_NOTE_SET", "JOB_ORDER_ASSIGNEE_NOTE_CLEARED", "JOB_ORDER_MATERIAL_UNLINKED", "JOB_ORDER_INVENTORY_UNLINKED", "JOB_ORDER_HANDOVER_CREATED", "JOB_ORDER_ITEM_HANDOVER_CREATED", "JOB_ORDER_PRODUCTION_BOOKED", "JOB_ORDER_CLAIM_UPSERTED", "JOB_ORDER_CLAIM_WITHDRAWN", "JOB_ORDER_AUDIT_EXPORTED", "JOB_ORDER_AUDIT_PURGED", "REFINERY_ORDER_CREATED", "REFINERY_ORDER_UPDATED", "REFINERY_ORDER_CANCELED", "REFINERY_ORDER_STORED", "REFINERY_METHOD_CREATED", "REFINERY_METHOD_UPDATED", "REFINERY_METHOD_DELETED", "REFINERY_METHODS_SYNCED", "REFINERY_YIELDS_SYNCED", "REFINERY_ORDERS_REASSIGNED", "REFINERY_AUDIT_EXPORTED", "REFINERY_AUDIT_PURGED", "PERSONAL_INVENTORY_CREATED", "PERSONAL_INVENTORY_UPDATED", "PERSONAL_INVENTORY_DELETED", "PERSONAL_DATA_PURGED_ON_USER_DELETION", "PERSONAL_INVENTORY_AUDIT_EXPORTED", "PERSONAL_INVENTORY_AUDIT_PURGED", "MISSION_CREATED", "MISSION_UPDATED", "MISSION_DELETED", "MISSION_PARTICIPANT_ADDED", "MISSION_PARTICIPANT_REMOVED", "MISSION_PARTICIPANT_UPDATED", "MISSION_PARTICIPANT_CHECKED_IN", "MISSION_PARTICIPANT_CHECKED_OUT", "MISSION_UNIT_ADDED", "MISSION_UNIT_UPDATED", "MISSION_UNIT_REMOVED", "MISSION_CREW_ADDED", "MISSION_CREW_UPDATED", "MISSION_CREW_REMOVED", "MISSION_FREQUENCY_CHANGED", "MISSION_FREQUENCY_REMOVED", "MISSION_OWNER_CHANGED", "MISSION_OWNING_ORG_UNIT_CHANGED", "MISSION_PARTY_LEAD_CHANGED", "MISSION_MANAGER_ADDED", "MISSION_MANAGER_REMOVED", "MISSION_FINANCE_ENTRY_CREATED", "MISSION_FINANCE_ENTRY_UPDATED", "MISSION_FINANCE_ENTRY_DELETED", "MISSION_STEP_ADDED", "MISSION_STEP_UPDATED", "MISSION_STEP_REMOVED", "MISSION_STEP_REORDERED", "MISSION_STEP_DONE_CHANGED", "MISSION_OBJECTIVE_ADDED", "MISSION_OBJECTIVE_UPDATED", "MISSION_OBJECTIVE_REMOVED", "MISSION_OBJECTIVE_REORDERED", "MISSION_AUDIT_EXPORTED", "MISSION_AUDIT_PURGED", "OPERATION_CREATED", "OPERATION_UPDATED", "OPERATION_DELETED", "OPERATION_PAYOUT_TOGGLED", "OPERATION_AUDIT_EXPORTED", "OPERATION_AUDIT_PURGED", "MEMBERSHIP_GRANTED", "MEMBERSHIP_REVOKED", "ROLE_GRANTED", "ROLE_CHANGED", "ROLE_REVOKED", "CAPABILITY_FLAGS_CHANGED", "ROLE_PERMISSIONS_CHANGED", "KOMMANDO_GROUP_CREATED", "KOMMANDO_GROUP_UPDATED", "KOMMANDO_GROUP_DELETED", "USER_DELETED", "USER_MERGED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_WITHDRAWN", "ACCOUNT_DELETION_REQUEST_DECLINED", "ACCOUNT_DELETION_REQUEST_EXECUTED", "ACCOUNT_DELETION_KEYCLOAK_DELETE_FAILED", "HANDLE_SNAPSHOTS_ANONYMISED", "PERSON_SEARCH_PERFORMED", "PERSONAL_DATA_EXPORTED", "ROLE_AUDIT_EXPORTED", "ROLE_AUDIT_PURGED", "PROMOTION_TOPIC_CREATED", "PROMOTION_TOPIC_UPDATED", "PROMOTION_TOPIC_DELETED", "PROMOTION_CATEGORY_CREATED", "PROMOTION_CATEGORY_UPDATED", "PROMOTION_CATEGORY_DELETED", "PROMOTION_LEVEL_CONTENT_CREATED", "PROMOTION_LEVEL_CONTENT_UPDATED", "PROMOTION_LEVEL_CONTENT_DELETED", "PROMOTION_RANK_REQUIREMENT_CREATED", "PROMOTION_RANK_REQUIREMENT_UPDATED", "PROMOTION_RANK_REQUIREMENT_DELETED", "PROMOTION_EVALUATION_CREATED", "PROMOTION_EVALUATION_UPDATED", "PROMOTION_EVALUATION_DELETED", "PROMOTION_AUDIT_EXPORTED", "PROMOTION_AUDIT_PURGED", "MARKET_OFFER_RELEASED", "MARKET_OFFER_DEACTIVATED", "MARKET_REMARK_UPDATED", "MARKET_INTEREST_REGISTERED", "MARKET_INTEREST_WITHDRAWN", "MARKET_REQUEST_CREATED", "MARKET_REQUEST_UPDATED", "MARKET_REQUEST_DEACTIVATED", "MARKET_REQUEST_INTEREST_SIGNALLED", "MARKET_REQUEST_INTEREST_WITHDRAWN", "MARKET_AUDIT_EXPORTED", "MARKET_AUDIT_PURGED", "HANGAR_SHIP_CREATED", "HANGAR_SHIP_UPDATED", "HANGAR_SHIP_DELETED", "HANGAR_EMPTIED", "HANGAR_IMPORTED", "HANGAR_FITTED_RESET", "HANGAR_HOME_LOCATION_SET", "HANGAR_AUDIT_EXPORTED", "HANGAR_AUDIT_PURGED", "BLUEPRINT_ADDED", "BLUEPRINT_BATCH_ADDED", "BLUEPRINT_UPDATED", "BLUEPRINT_REMOVED", "BLUEPRINT_ALL_REMOVED", "BLUEPRINT_IMPORTED", "BLUEPRINT_SHARING_CHANGED", "BLUEPRINT_PURGED_ALL_USERS", "BLUEPRINT_DEFAULT_ADDED", "BLUEPRINT_DEFAULT_REMOVED", "BLUEPRINT_DEFAULTS_GRANTED", "BLUEPRINT_AUDIT_EXPORTED", "BLUEPRINT_AUDIT_PURGED" ]
+            "enum" : [ "INVENTORY_ITEM_CREATED", "INVENTORY_ITEM_UPDATED", "INVENTORY_ITEM_MERGED", "INVENTORY_ITEM_NOTE_UPDATED", "INVENTORY_ALLOCATION_ADDED", "INVENTORY_ALLOCATION_CHANGED", "INVENTORY_ALLOCATION_REMOVED", "INVENTORY_ITEM_CONSUMED", "INVENTORY_ITEM_TRANSFERRED", "INVENTORY_ITEM_SOLD", "INVENTORY_ITEM_DEPERSONALIZED", "INVENTORY_ITEM_PERSONALIZED", "INVENTORY_ITEM_DELIVERY_TOGGLED", "INVENTORY_BULK_CHECKED_OUT", "INVENTORY_BULK_REBOOKED", "INVENTORY_WIPED", "INVENTORY_RECEIVED_FROM_REFINERY", "INVENTORY_RECEIVED_FROM_PRODUCTION", "INVENTORY_HANDED_OVER", "INVENTORY_CONSUMED_BY_PRODUCTION", "INVENTORY_ORG_RESTAMPED", "INVENTORY_OWNER_REASSIGNED", "INVENTORY_PURGED_ON_USER_DELETION", "INVENTORY_AUDIT_EXPORTED", "INVENTORY_AUDIT_PURGED", "JOB_ORDER_CREATED", "JOB_ORDER_ITEM_CREATED", "JOB_ORDER_UPDATED", "JOB_ORDER_ITEM_UPDATED", "JOB_ORDER_STATUS_CHANGED", "JOB_ORDER_PRIORITY_CHANGED", "JOB_ORDER_BLUEPRINT_COUNTING_CHANGED", "JOB_ORDER_DELETED", "JOB_ORDER_COMPLETED", "JOB_ORDER_REASSIGNED", "JOB_ORDER_ASSIGNEE_ADDED", "JOB_ORDER_ASSIGNEE_REMOVED", "JOB_ORDER_ASSIGNEE_NOTE_SET", "JOB_ORDER_ASSIGNEE_NOTE_CLEARED", "JOB_ORDER_MATERIAL_UNLINKED", "JOB_ORDER_INVENTORY_UNLINKED", "JOB_ORDER_HANDOVER_CREATED", "JOB_ORDER_ITEM_HANDOVER_CREATED", "JOB_ORDER_PRODUCTION_BOOKED", "JOB_ORDER_CLAIM_UPSERTED", "JOB_ORDER_CLAIM_WITHDRAWN", "JOB_ORDER_AUDIT_EXPORTED", "JOB_ORDER_AUDIT_PURGED", "REFINERY_ORDER_CREATED", "REFINERY_ORDER_UPDATED", "REFINERY_ORDER_CANCELED", "REFINERY_ORDER_STORED", "REFINERY_METHOD_CREATED", "REFINERY_METHOD_UPDATED", "REFINERY_METHOD_DELETED", "REFINERY_METHODS_SYNCED", "REFINERY_YIELDS_SYNCED", "REFINERY_ORDERS_REASSIGNED", "REFINERY_AUDIT_EXPORTED", "REFINERY_AUDIT_PURGED", "PERSONAL_INVENTORY_CREATED", "PERSONAL_INVENTORY_UPDATED", "PERSONAL_INVENTORY_DELETED", "PERSONAL_DATA_PURGED_ON_USER_DELETION", "PERSONAL_INVENTORY_AUDIT_EXPORTED", "PERSONAL_INVENTORY_AUDIT_PURGED", "MISSION_CREATED", "MISSION_UPDATED", "MISSION_DELETED", "MISSION_PARTICIPANT_ADDED", "MISSION_PARTICIPANT_REMOVED", "MISSION_PARTICIPANT_UPDATED", "MISSION_PARTICIPANT_CHECKED_IN", "MISSION_PARTICIPANT_CHECKED_OUT", "MISSION_UNIT_ADDED", "MISSION_UNIT_UPDATED", "MISSION_UNIT_REMOVED", "MISSION_CREW_ADDED", "MISSION_CREW_UPDATED", "MISSION_CREW_REMOVED", "MISSION_FREQUENCY_CHANGED", "MISSION_FREQUENCY_REMOVED", "MISSION_OWNER_CHANGED", "MISSION_OWNING_ORG_UNIT_CHANGED", "MISSION_PARTY_LEAD_CHANGED", "MISSION_MANAGER_ADDED", "MISSION_MANAGER_REMOVED", "MISSION_FINANCE_ENTRY_CREATED", "MISSION_FINANCE_ENTRY_UPDATED", "MISSION_FINANCE_ENTRY_DELETED", "MISSION_STEP_ADDED", "MISSION_STEP_UPDATED", "MISSION_STEP_REMOVED", "MISSION_STEP_REORDERED", "MISSION_STEP_DONE_CHANGED", "MISSION_OBJECTIVE_ADDED", "MISSION_OBJECTIVE_UPDATED", "MISSION_OBJECTIVE_REMOVED", "MISSION_OBJECTIVE_REORDERED", "MISSION_AUDIT_EXPORTED", "MISSION_AUDIT_PURGED", "OPERATION_CREATED", "OPERATION_UPDATED", "OPERATION_DELETED", "OPERATION_PAYOUT_TOGGLED", "OPERATION_AUDIT_EXPORTED", "OPERATION_AUDIT_PURGED", "MEMBERSHIP_GRANTED", "MEMBERSHIP_REVOKED", "ROLE_GRANTED", "ROLE_CHANGED", "ROLE_REVOKED", "CAPABILITY_FLAGS_CHANGED", "ROLE_PERMISSIONS_CHANGED", "KOMMANDO_GROUP_CREATED", "KOMMANDO_GROUP_UPDATED", "KOMMANDO_GROUP_DELETED", "USER_DELETED", "USER_MERGED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_WITHDRAWN", "ACCOUNT_DELETION_REQUEST_DECLINED", "ACCOUNT_DELETION_REQUEST_EXECUTED", "ACCOUNT_DELETION_KEYCLOAK_DELETE_FAILED", "HANDLE_SNAPSHOTS_ANONYMISED", "PERSON_SEARCH_PERFORMED", "PERSONAL_DATA_EXPORTED", "ROLE_AUDIT_EXPORTED", "ROLE_AUDIT_PURGED", "PROMOTION_TOPIC_CREATED", "PROMOTION_TOPIC_UPDATED", "PROMOTION_TOPIC_DELETED", "PROMOTION_CATEGORY_CREATED", "PROMOTION_CATEGORY_UPDATED", "PROMOTION_CATEGORY_DELETED", "PROMOTION_LEVEL_CONTENT_CREATED", "PROMOTION_LEVEL_CONTENT_UPDATED", "PROMOTION_LEVEL_CONTENT_DELETED", "PROMOTION_RANK_REQUIREMENT_CREATED", "PROMOTION_RANK_REQUIREMENT_UPDATED", "PROMOTION_RANK_REQUIREMENT_DELETED", "PROMOTION_EVALUATION_CREATED", "PROMOTION_EVALUATION_UPDATED", "PROMOTION_EVALUATION_DELETED", "PROMOTION_AUDIT_EXPORTED", "PROMOTION_AUDIT_PURGED", "MARKET_OFFER_RELEASED", "MARKET_OFFER_DEACTIVATED", "MARKET_REMARK_UPDATED", "MARKET_INTEREST_REGISTERED", "MARKET_INTEREST_WITHDRAWN", "MARKET_REQUEST_CREATED", "MARKET_REQUEST_UPDATED", "MARKET_REQUEST_DEACTIVATED", "MARKET_REQUEST_INTEREST_SIGNALLED", "MARKET_REQUEST_INTEREST_WITHDRAWN", "MARKET_AUDIT_EXPORTED", "MARKET_AUDIT_PURGED", "HANGAR_SHIP_CREATED", "HANGAR_SHIP_UPDATED", "HANGAR_SHIP_DELETED", "HANGAR_EMPTIED", "HANGAR_IMPORTED", "HANGAR_FITTED_RESET", "HANGAR_HOME_LOCATION_SET", "HANGAR_AUDIT_EXPORTED", "HANGAR_AUDIT_PURGED", "BLUEPRINT_ADDED", "BLUEPRINT_BATCH_ADDED", "BLUEPRINT_UPDATED", "BLUEPRINT_REMOVED", "BLUEPRINT_ALL_REMOVED", "BLUEPRINT_IMPORTED", "BLUEPRINT_SHARING_CHANGED", "BLUEPRINT_PURGED_ALL_USERS", "BLUEPRINT_DEFAULT_ADDED", "BLUEPRINT_DEFAULT_REMOVED", "BLUEPRINT_DEFAULTS_GRANTED", "BLUEPRINT_AUDIT_EXPORTED", "BLUEPRINT_AUDIT_PURGED", "EXCHANGE_CLIENT_CREATED", "EXCHANGE_CLIENT_UPDATED", "EXCHANGE_CLIENT_SUSPENDED", "EXCHANGE_CLIENT_ACTIVATED", "EXCHANGE_SWITCH_CHANGED", "CONNECTED_APPS_AUDIT_EXPORTED", "CONNECTED_APPS_AUDIT_PURGED" ]
           }
         }, {
           "in" : "query",
@@ -4551,7 +5354,7 @@
           "required" : true,
           "schema" : {
             "type" : "string",
-            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT" ]
+            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT", "CONNECTED_APPS" ]
           }
         }, {
           "in" : "query",
@@ -4679,7 +5482,7 @@
           "required" : true,
           "schema" : {
             "type" : "string",
-            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT" ]
+            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT", "CONNECTED_APPS" ]
           }
         }, {
           "in" : "query",
@@ -55135,11 +55938,11 @@
           },
           "domain" : {
             "type" : "string",
-            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT" ]
+            "enum" : [ "INVENTORY", "JOB_ORDER", "REFINERY", "PERSONAL_INVENTORY", "MISSION", "OPERATION", "ROLE", "PROMOTION", "MARKET", "HANGAR", "BLUEPRINT", "CONNECTED_APPS" ]
           },
           "eventType" : {
             "type" : "string",
-            "enum" : [ "INVENTORY_ITEM_CREATED", "INVENTORY_ITEM_UPDATED", "INVENTORY_ITEM_MERGED", "INVENTORY_ITEM_NOTE_UPDATED", "INVENTORY_ALLOCATION_ADDED", "INVENTORY_ALLOCATION_CHANGED", "INVENTORY_ALLOCATION_REMOVED", "INVENTORY_ITEM_CONSUMED", "INVENTORY_ITEM_TRANSFERRED", "INVENTORY_ITEM_SOLD", "INVENTORY_ITEM_DEPERSONALIZED", "INVENTORY_ITEM_PERSONALIZED", "INVENTORY_ITEM_DELIVERY_TOGGLED", "INVENTORY_BULK_CHECKED_OUT", "INVENTORY_BULK_REBOOKED", "INVENTORY_WIPED", "INVENTORY_RECEIVED_FROM_REFINERY", "INVENTORY_RECEIVED_FROM_PRODUCTION", "INVENTORY_HANDED_OVER", "INVENTORY_CONSUMED_BY_PRODUCTION", "INVENTORY_ORG_RESTAMPED", "INVENTORY_OWNER_REASSIGNED", "INVENTORY_PURGED_ON_USER_DELETION", "INVENTORY_AUDIT_EXPORTED", "INVENTORY_AUDIT_PURGED", "JOB_ORDER_CREATED", "JOB_ORDER_ITEM_CREATED", "JOB_ORDER_UPDATED", "JOB_ORDER_ITEM_UPDATED", "JOB_ORDER_STATUS_CHANGED", "JOB_ORDER_PRIORITY_CHANGED", "JOB_ORDER_BLUEPRINT_COUNTING_CHANGED", "JOB_ORDER_DELETED", "JOB_ORDER_COMPLETED", "JOB_ORDER_REASSIGNED", "JOB_ORDER_ASSIGNEE_ADDED", "JOB_ORDER_ASSIGNEE_REMOVED", "JOB_ORDER_ASSIGNEE_NOTE_SET", "JOB_ORDER_ASSIGNEE_NOTE_CLEARED", "JOB_ORDER_MATERIAL_UNLINKED", "JOB_ORDER_INVENTORY_UNLINKED", "JOB_ORDER_HANDOVER_CREATED", "JOB_ORDER_ITEM_HANDOVER_CREATED", "JOB_ORDER_PRODUCTION_BOOKED", "JOB_ORDER_CLAIM_UPSERTED", "JOB_ORDER_CLAIM_WITHDRAWN", "JOB_ORDER_AUDIT_EXPORTED", "JOB_ORDER_AUDIT_PURGED", "REFINERY_ORDER_CREATED", "REFINERY_ORDER_UPDATED", "REFINERY_ORDER_CANCELED", "REFINERY_ORDER_STORED", "REFINERY_METHOD_CREATED", "REFINERY_METHOD_UPDATED", "REFINERY_METHOD_DELETED", "REFINERY_METHODS_SYNCED", "REFINERY_YIELDS_SYNCED", "REFINERY_ORDERS_REASSIGNED", "REFINERY_AUDIT_EXPORTED", "REFINERY_AUDIT_PURGED", "PERSONAL_INVENTORY_CREATED", "PERSONAL_INVENTORY_UPDATED", "PERSONAL_INVENTORY_DELETED", "PERSONAL_DATA_PURGED_ON_USER_DELETION", "PERSONAL_INVENTORY_AUDIT_EXPORTED", "PERSONAL_INVENTORY_AUDIT_PURGED", "MISSION_CREATED", "MISSION_UPDATED", "MISSION_DELETED", "MISSION_PARTICIPANT_ADDED", "MISSION_PARTICIPANT_REMOVED", "MISSION_PARTICIPANT_UPDATED", "MISSION_PARTICIPANT_CHECKED_IN", "MISSION_PARTICIPANT_CHECKED_OUT", "MISSION_UNIT_ADDED", "MISSION_UNIT_UPDATED", "MISSION_UNIT_REMOVED", "MISSION_CREW_ADDED", "MISSION_CREW_UPDATED", "MISSION_CREW_REMOVED", "MISSION_FREQUENCY_CHANGED", "MISSION_FREQUENCY_REMOVED", "MISSION_OWNER_CHANGED", "MISSION_OWNING_ORG_UNIT_CHANGED", "MISSION_PARTY_LEAD_CHANGED", "MISSION_MANAGER_ADDED", "MISSION_MANAGER_REMOVED", "MISSION_FINANCE_ENTRY_CREATED", "MISSION_FINANCE_ENTRY_UPDATED", "MISSION_FINANCE_ENTRY_DELETED", "MISSION_STEP_ADDED", "MISSION_STEP_UPDATED", "MISSION_STEP_REMOVED", "MISSION_STEP_REORDERED", "MISSION_STEP_DONE_CHANGED", "MISSION_OBJECTIVE_ADDED", "MISSION_OBJECTIVE_UPDATED", "MISSION_OBJECTIVE_REMOVED", "MISSION_OBJECTIVE_REORDERED", "MISSION_AUDIT_EXPORTED", "MISSION_AUDIT_PURGED", "OPERATION_CREATED", "OPERATION_UPDATED", "OPERATION_DELETED", "OPERATION_PAYOUT_TOGGLED", "OPERATION_AUDIT_EXPORTED", "OPERATION_AUDIT_PURGED", "MEMBERSHIP_GRANTED", "MEMBERSHIP_REVOKED", "ROLE_GRANTED", "ROLE_CHANGED", "ROLE_REVOKED", "CAPABILITY_FLAGS_CHANGED", "ROLE_PERMISSIONS_CHANGED", "KOMMANDO_GROUP_CREATED", "KOMMANDO_GROUP_UPDATED", "KOMMANDO_GROUP_DELETED", "USER_DELETED", "USER_MERGED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_WITHDRAWN", "ACCOUNT_DELETION_REQUEST_DECLINED", "ACCOUNT_DELETION_REQUEST_EXECUTED", "ACCOUNT_DELETION_KEYCLOAK_DELETE_FAILED", "HANDLE_SNAPSHOTS_ANONYMISED", "PERSON_SEARCH_PERFORMED", "PERSONAL_DATA_EXPORTED", "ROLE_AUDIT_EXPORTED", "ROLE_AUDIT_PURGED", "PROMOTION_TOPIC_CREATED", "PROMOTION_TOPIC_UPDATED", "PROMOTION_TOPIC_DELETED", "PROMOTION_CATEGORY_CREATED", "PROMOTION_CATEGORY_UPDATED", "PROMOTION_CATEGORY_DELETED", "PROMOTION_LEVEL_CONTENT_CREATED", "PROMOTION_LEVEL_CONTENT_UPDATED", "PROMOTION_LEVEL_CONTENT_DELETED", "PROMOTION_RANK_REQUIREMENT_CREATED", "PROMOTION_RANK_REQUIREMENT_UPDATED", "PROMOTION_RANK_REQUIREMENT_DELETED", "PROMOTION_EVALUATION_CREATED", "PROMOTION_EVALUATION_UPDATED", "PROMOTION_EVALUATION_DELETED", "PROMOTION_AUDIT_EXPORTED", "PROMOTION_AUDIT_PURGED", "MARKET_OFFER_RELEASED", "MARKET_OFFER_DEACTIVATED", "MARKET_REMARK_UPDATED", "MARKET_INTEREST_REGISTERED", "MARKET_INTEREST_WITHDRAWN", "MARKET_REQUEST_CREATED", "MARKET_REQUEST_UPDATED", "MARKET_REQUEST_DEACTIVATED", "MARKET_REQUEST_INTEREST_SIGNALLED", "MARKET_REQUEST_INTEREST_WITHDRAWN", "MARKET_AUDIT_EXPORTED", "MARKET_AUDIT_PURGED", "HANGAR_SHIP_CREATED", "HANGAR_SHIP_UPDATED", "HANGAR_SHIP_DELETED", "HANGAR_EMPTIED", "HANGAR_IMPORTED", "HANGAR_FITTED_RESET", "HANGAR_HOME_LOCATION_SET", "HANGAR_AUDIT_EXPORTED", "HANGAR_AUDIT_PURGED", "BLUEPRINT_ADDED", "BLUEPRINT_BATCH_ADDED", "BLUEPRINT_UPDATED", "BLUEPRINT_REMOVED", "BLUEPRINT_ALL_REMOVED", "BLUEPRINT_IMPORTED", "BLUEPRINT_SHARING_CHANGED", "BLUEPRINT_PURGED_ALL_USERS", "BLUEPRINT_DEFAULT_ADDED", "BLUEPRINT_DEFAULT_REMOVED", "BLUEPRINT_DEFAULTS_GRANTED", "BLUEPRINT_AUDIT_EXPORTED", "BLUEPRINT_AUDIT_PURGED" ]
+            "enum" : [ "INVENTORY_ITEM_CREATED", "INVENTORY_ITEM_UPDATED", "INVENTORY_ITEM_MERGED", "INVENTORY_ITEM_NOTE_UPDATED", "INVENTORY_ALLOCATION_ADDED", "INVENTORY_ALLOCATION_CHANGED", "INVENTORY_ALLOCATION_REMOVED", "INVENTORY_ITEM_CONSUMED", "INVENTORY_ITEM_TRANSFERRED", "INVENTORY_ITEM_SOLD", "INVENTORY_ITEM_DEPERSONALIZED", "INVENTORY_ITEM_PERSONALIZED", "INVENTORY_ITEM_DELIVERY_TOGGLED", "INVENTORY_BULK_CHECKED_OUT", "INVENTORY_BULK_REBOOKED", "INVENTORY_WIPED", "INVENTORY_RECEIVED_FROM_REFINERY", "INVENTORY_RECEIVED_FROM_PRODUCTION", "INVENTORY_HANDED_OVER", "INVENTORY_CONSUMED_BY_PRODUCTION", "INVENTORY_ORG_RESTAMPED", "INVENTORY_OWNER_REASSIGNED", "INVENTORY_PURGED_ON_USER_DELETION", "INVENTORY_AUDIT_EXPORTED", "INVENTORY_AUDIT_PURGED", "JOB_ORDER_CREATED", "JOB_ORDER_ITEM_CREATED", "JOB_ORDER_UPDATED", "JOB_ORDER_ITEM_UPDATED", "JOB_ORDER_STATUS_CHANGED", "JOB_ORDER_PRIORITY_CHANGED", "JOB_ORDER_BLUEPRINT_COUNTING_CHANGED", "JOB_ORDER_DELETED", "JOB_ORDER_COMPLETED", "JOB_ORDER_REASSIGNED", "JOB_ORDER_ASSIGNEE_ADDED", "JOB_ORDER_ASSIGNEE_REMOVED", "JOB_ORDER_ASSIGNEE_NOTE_SET", "JOB_ORDER_ASSIGNEE_NOTE_CLEARED", "JOB_ORDER_MATERIAL_UNLINKED", "JOB_ORDER_INVENTORY_UNLINKED", "JOB_ORDER_HANDOVER_CREATED", "JOB_ORDER_ITEM_HANDOVER_CREATED", "JOB_ORDER_PRODUCTION_BOOKED", "JOB_ORDER_CLAIM_UPSERTED", "JOB_ORDER_CLAIM_WITHDRAWN", "JOB_ORDER_AUDIT_EXPORTED", "JOB_ORDER_AUDIT_PURGED", "REFINERY_ORDER_CREATED", "REFINERY_ORDER_UPDATED", "REFINERY_ORDER_CANCELED", "REFINERY_ORDER_STORED", "REFINERY_METHOD_CREATED", "REFINERY_METHOD_UPDATED", "REFINERY_METHOD_DELETED", "REFINERY_METHODS_SYNCED", "REFINERY_YIELDS_SYNCED", "REFINERY_ORDERS_REASSIGNED", "REFINERY_AUDIT_EXPORTED", "REFINERY_AUDIT_PURGED", "PERSONAL_INVENTORY_CREATED", "PERSONAL_INVENTORY_UPDATED", "PERSONAL_INVENTORY_DELETED", "PERSONAL_DATA_PURGED_ON_USER_DELETION", "PERSONAL_INVENTORY_AUDIT_EXPORTED", "PERSONAL_INVENTORY_AUDIT_PURGED", "MISSION_CREATED", "MISSION_UPDATED", "MISSION_DELETED", "MISSION_PARTICIPANT_ADDED", "MISSION_PARTICIPANT_REMOVED", "MISSION_PARTICIPANT_UPDATED", "MISSION_PARTICIPANT_CHECKED_IN", "MISSION_PARTICIPANT_CHECKED_OUT", "MISSION_UNIT_ADDED", "MISSION_UNIT_UPDATED", "MISSION_UNIT_REMOVED", "MISSION_CREW_ADDED", "MISSION_CREW_UPDATED", "MISSION_CREW_REMOVED", "MISSION_FREQUENCY_CHANGED", "MISSION_FREQUENCY_REMOVED", "MISSION_OWNER_CHANGED", "MISSION_OWNING_ORG_UNIT_CHANGED", "MISSION_PARTY_LEAD_CHANGED", "MISSION_MANAGER_ADDED", "MISSION_MANAGER_REMOVED", "MISSION_FINANCE_ENTRY_CREATED", "MISSION_FINANCE_ENTRY_UPDATED", "MISSION_FINANCE_ENTRY_DELETED", "MISSION_STEP_ADDED", "MISSION_STEP_UPDATED", "MISSION_STEP_REMOVED", "MISSION_STEP_REORDERED", "MISSION_STEP_DONE_CHANGED", "MISSION_OBJECTIVE_ADDED", "MISSION_OBJECTIVE_UPDATED", "MISSION_OBJECTIVE_REMOVED", "MISSION_OBJECTIVE_REORDERED", "MISSION_AUDIT_EXPORTED", "MISSION_AUDIT_PURGED", "OPERATION_CREATED", "OPERATION_UPDATED", "OPERATION_DELETED", "OPERATION_PAYOUT_TOGGLED", "OPERATION_AUDIT_EXPORTED", "OPERATION_AUDIT_PURGED", "MEMBERSHIP_GRANTED", "MEMBERSHIP_REVOKED", "ROLE_GRANTED", "ROLE_CHANGED", "ROLE_REVOKED", "CAPABILITY_FLAGS_CHANGED", "ROLE_PERMISSIONS_CHANGED", "KOMMANDO_GROUP_CREATED", "KOMMANDO_GROUP_UPDATED", "KOMMANDO_GROUP_DELETED", "USER_DELETED", "USER_MERGED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_WITHDRAWN", "ACCOUNT_DELETION_REQUEST_DECLINED", "ACCOUNT_DELETION_REQUEST_EXECUTED", "ACCOUNT_DELETION_KEYCLOAK_DELETE_FAILED", "HANDLE_SNAPSHOTS_ANONYMISED", "PERSON_SEARCH_PERFORMED", "PERSONAL_DATA_EXPORTED", "ROLE_AUDIT_EXPORTED", "ROLE_AUDIT_PURGED", "PROMOTION_TOPIC_CREATED", "PROMOTION_TOPIC_UPDATED", "PROMOTION_TOPIC_DELETED", "PROMOTION_CATEGORY_CREATED", "PROMOTION_CATEGORY_UPDATED", "PROMOTION_CATEGORY_DELETED", "PROMOTION_LEVEL_CONTENT_CREATED", "PROMOTION_LEVEL_CONTENT_UPDATED", "PROMOTION_LEVEL_CONTENT_DELETED", "PROMOTION_RANK_REQUIREMENT_CREATED", "PROMOTION_RANK_REQUIREMENT_UPDATED", "PROMOTION_RANK_REQUIREMENT_DELETED", "PROMOTION_EVALUATION_CREATED", "PROMOTION_EVALUATION_UPDATED", "PROMOTION_EVALUATION_DELETED", "PROMOTION_AUDIT_EXPORTED", "PROMOTION_AUDIT_PURGED", "MARKET_OFFER_RELEASED", "MARKET_OFFER_DEACTIVATED", "MARKET_REMARK_UPDATED", "MARKET_INTEREST_REGISTERED", "MARKET_INTEREST_WITHDRAWN", "MARKET_REQUEST_CREATED", "MARKET_REQUEST_UPDATED", "MARKET_REQUEST_DEACTIVATED", "MARKET_REQUEST_INTEREST_SIGNALLED", "MARKET_REQUEST_INTEREST_WITHDRAWN", "MARKET_AUDIT_EXPORTED", "MARKET_AUDIT_PURGED", "HANGAR_SHIP_CREATED", "HANGAR_SHIP_UPDATED", "HANGAR_SHIP_DELETED", "HANGAR_EMPTIED", "HANGAR_IMPORTED", "HANGAR_FITTED_RESET", "HANGAR_HOME_LOCATION_SET", "HANGAR_AUDIT_EXPORTED", "HANGAR_AUDIT_PURGED", "BLUEPRINT_ADDED", "BLUEPRINT_BATCH_ADDED", "BLUEPRINT_UPDATED", "BLUEPRINT_REMOVED", "BLUEPRINT_ALL_REMOVED", "BLUEPRINT_IMPORTED", "BLUEPRINT_SHARING_CHANGED", "BLUEPRINT_PURGED_ALL_USERS", "BLUEPRINT_DEFAULT_ADDED", "BLUEPRINT_DEFAULT_REMOVED", "BLUEPRINT_DEFAULTS_GRANTED", "BLUEPRINT_AUDIT_EXPORTED", "BLUEPRINT_AUDIT_PURGED", "EXCHANGE_CLIENT_CREATED", "EXCHANGE_CLIENT_UPDATED", "EXCHANGE_CLIENT_SUSPENDED", "EXCHANGE_CLIENT_ACTIVATED", "EXCHANGE_SWITCH_CHANGED", "CONNECTED_APPS_AUDIT_EXPORTED", "CONNECTED_APPS_AUDIT_PURGED" ]
           },
           "id" : {
             "type" : "string",
@@ -57474,6 +58277,191 @@
             "format" : "double"
           }
         }
+      },
+      "ExchangeClientCreateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "capabilities" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "exchange.connect", "exchange.blueprints.read", "exchange.blueprints.write", "exchange.stock.read", "exchange.stock.write", "exchange.hangar.read", "exchange.hangar.write", "exchange.demand.read", "exchange.drafts.blueprints", "exchange.drafts.refinery" ]
+            },
+            "minItems" : 1,
+            "uniqueItems" : true
+          },
+          "clientId" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "^[a-z0-9][a-z0-9-]{1,62}$"
+          },
+          "contactUrl" : {
+            "type" : "string",
+            "maxLength" : 500,
+            "minLength" : 0
+          },
+          "displayName" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 0
+          },
+          "minClientVersion" : {
+            "type" : "string",
+            "maxLength" : 32,
+            "minLength" : 0,
+            "pattern" : "^\\d+\\.\\d+\\.\\d+([-+][0-9A-Za-z.-]+)?$"
+          },
+          "requestsPerMinute" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0
+          },
+          "writesPerDay" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0
+          }
+        },
+        "required" : [ "capabilities", "clientId", "displayName" ]
+      },
+      "ExchangeClientDto" : {
+        "type" : "object",
+        "properties" : {
+          "capabilities" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "exchange.connect", "exchange.blueprints.read", "exchange.blueprints.write", "exchange.stock.read", "exchange.stock.write", "exchange.hangar.read", "exchange.hangar.write", "exchange.demand.read", "exchange.drafts.blueprints", "exchange.drafts.refinery" ]
+            }
+          },
+          "clientId" : {
+            "type" : "string"
+          },
+          "contactUrl" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "minClientVersion" : {
+            "type" : "string"
+          },
+          "requestsPerMinute" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "ACTIVE", "SUSPENDED" ]
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "writesPerDay" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "ExchangeClientStatusRequest" : {
+        "type" : "object",
+        "properties" : {
+          "version" : {
+            "type" : "integer",
+            "format" : "int64",
+            "minimum" : 0
+          }
+        },
+        "required" : [ "version" ]
+      },
+      "ExchangeClientUpdateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "capabilities" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "exchange.connect", "exchange.blueprints.read", "exchange.blueprints.write", "exchange.stock.read", "exchange.stock.write", "exchange.hangar.read", "exchange.hangar.write", "exchange.demand.read", "exchange.drafts.blueprints", "exchange.drafts.refinery" ]
+            },
+            "minItems" : 1,
+            "uniqueItems" : true
+          },
+          "contactUrl" : {
+            "type" : "string",
+            "maxLength" : 500,
+            "minLength" : 0
+          },
+          "displayName" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 0
+          },
+          "minClientVersion" : {
+            "type" : "string",
+            "maxLength" : 32,
+            "minLength" : 0,
+            "pattern" : "^\\d+\\.\\d+\\.\\d+([-+][0-9A-Za-z.-]+)?$"
+          },
+          "requestsPerMinute" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64",
+            "minimum" : 0
+          },
+          "writesPerDay" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0
+          }
+        },
+        "required" : [ "capabilities", "displayName", "version" ]
+      },
+      "ExchangeSettingsDto" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "ExchangeSettingsUpdateRequest" : {
+        "type" : "object",
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64",
+            "minimum" : 0
+          }
+        },
+        "required" : [ "enabled", "version" ]
       },
       "ExportSection" : {
         "type" : "object",

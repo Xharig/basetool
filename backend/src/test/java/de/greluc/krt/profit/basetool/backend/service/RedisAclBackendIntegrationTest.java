@@ -26,13 +26,18 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
+import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeRegistrySnapshot;
+import de.greluc.krt.profit.basetool.backend.service.exchange.RedisExchangeRegistryMirror;
 import de.greluc.krt.profit.basetool.testsupport.containers.TestImages;
 import de.greluc.krt.profit.basetool.testsupport.redis.RedisAclTemplate;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -157,6 +162,32 @@ class RedisAclBackendIntegrationTest {
     try (RedisConnection connection = connectionFactory.getConnection()) {
       assertThat(connection.serverCommands().info("server")).isNotEmpty();
     }
+  }
+
+  @Test
+  void theRegistryMirrorWritesAndReadsUnderTheBackendUser() {
+    RedisExchangeRegistryMirror mirror =
+        new RedisExchangeRegistryMirror(template, "exchange:registry", Clock.systemUTC());
+    ExchangeRegistrySnapshot snapshot =
+        new ExchangeRegistrySnapshot(
+            true,
+            new TreeMap<>(
+                Map.of(
+                    "versekit",
+                    new ExchangeRegistrySnapshot.Client(
+                        "VerseKit",
+                        ExchangeClientStatus.ACTIVE,
+                        List.of("exchange.connect"),
+                        null,
+                        null,
+                        null))));
+
+    mirror.write(snapshot, 7L);
+
+    assertThat(mirror.read()).contains(snapshot);
+    assertThatThrownBy(() -> template.opsForValue().set("ingest:xch:quota:x", "1"))
+        .as("the gateway's own family stays the gateway's")
+        .isInstanceOf(DataAccessException.class);
   }
 
   @Test

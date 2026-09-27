@@ -161,6 +161,10 @@ app:
     redis-fanout:
       enabled: ${APP_LIVE_SYNC_REDIS_FANOUT_ENABLED:false}
       channel: ${APP_LIVE_SYNC_REDIS_FANOUT_CHANNEL:basetool:livesync:changed}
+  exchange:
+    mirror:
+      enabled: ${APP_EXCHANGE_MIRROR_ENABLED:false}
+      reconcile-interval: ${APP_EXCHANGE_MIRROR_RECONCILE_INTERVAL:PT60S}
   android:
     minimum-version-code: ${APP_ANDROID_MINIMUM_VERSION_CODE:0}
     latest-version-code: ${APP_ANDROID_LATEST_VERSION_CODE:0}

@@ -181,6 +181,12 @@ public final class PersonSearchTargets {
       Set.of(
           "audit_event.client_id",
           "bank_audit_event.client_id",
+          "exchange_client.client_id",
+          "exchange_client.contact_url",
+          "exchange_client.display_name",
+          "exchange_client.min_client_version",
+          "exchange_client.status",
+          "exchange_client_capability.capability",
           "notification.params",
           "notification.entity_type",
           "p4k_import_job.error_message",

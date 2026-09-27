@@ -657,7 +657,28 @@ public enum AuditEventType {
   BLUEPRINT_AUDIT_EXPORTED(AuditDomain.BLUEPRINT),
 
   /** Blueprint audit rows older than an admin-chosen cutoff were purged (retention). */
-  BLUEPRINT_AUDIT_PURGED(AuditDomain.BLUEPRINT);
+  BLUEPRINT_AUDIT_PURGED(AuditDomain.BLUEPRINT),
+
+  /** An exchange client was registered (REQ-XCH-003). */
+  EXCHANGE_CLIENT_CREATED(AuditDomain.CONNECTED_APPS),
+
+  /** A registry client's fields or capabilities changed; the details name what changed. */
+  EXCHANGE_CLIENT_UPDATED(AuditDomain.CONNECTED_APPS),
+
+  /** A registry client was suspended. */
+  EXCHANGE_CLIENT_SUSPENDED(AuditDomain.CONNECTED_APPS),
+
+  /** A suspended registry client was activated again. */
+  EXCHANGE_CLIENT_ACTIVATED(AuditDomain.CONNECTED_APPS),
+
+  /** The global exchange switch was turned on or off. */
+  EXCHANGE_SWITCH_CHANGED(AuditDomain.CONNECTED_APPS),
+
+  /** The connected-applications audit log was exported as a PDF or JSON for a period. */
+  CONNECTED_APPS_AUDIT_EXPORTED(AuditDomain.CONNECTED_APPS),
+
+  /** Connected-applications audit rows older than an admin-chosen cutoff were purged. */
+  CONNECTED_APPS_AUDIT_PURGED(AuditDomain.CONNECTED_APPS);
 
   /** The functional area this event type belongs to; pins the persisted {@code domain} column. */
   private final @NotNull AuditDomain domain;

@@ -75,7 +75,13 @@ public enum ScheduledJob {
    * Wrapped so a wedged sampler surfaces (its {@code last_success} freezes) rather than silently
    * feeding every {@code *ApprovalOverdue} alert stale queue gauges.
    */
-  BUSINESS_METRICS("business_metrics");
+  BUSINESS_METRICS("business_metrics"),
+
+  /**
+   * The 60-second reconcile of the exchange registry's Redis mirror ({@code
+   * ExchangeRegistryReconcileTask}, REQ-XCH-003).
+   */
+  EXCHANGE_REGISTRY_RECONCILE("exchange_registry_reconcile");
 
   /** The fixed, snake-case Prometheus tag value for this job. */
   private final @NotNull String label;
