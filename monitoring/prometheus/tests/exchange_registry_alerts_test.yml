@@ -1,0 +1,105 @@
+rule_files:
+  - ../alerts/business.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - a suspension is announced
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_registry_changes_total{job="basetool-backend", instance="backend:11261", action="suspended"}'
+        values: "0x5 1x20"
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: ExchangeRegistryChanged
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              action: suspended
+            exp_annotations:
+              summary: "Exchange client registry changed (suspended)"
+              description: "An admin changed the third-party exchange registry or its global switch (suspended). Every change is expected to be deliberate: check the „Verbundene Anwendungen“ audit log for who did it and whether it was planned (REQ-XCH-003)."
+
+  - name: silent - a registry without changes
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_registry_changes_total{job="basetool-backend", instance="backend:11261", action="created"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: ExchangeRegistryChanged
+        exp_alerts: []
+
+  - name: fires - a failing reconcile
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_mirror_writes_total{job="basetool-backend", instance="backend:11261", phase="reconcile", outcome="failed"}'
+        values: "0+1x20"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ExchangeMirrorWriteFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              phase: reconcile
+            exp_annotations:
+              summary: "Exchange registry mirror write failed (reconcile)"
+              description: "The backend could not write the exchange registry mirror to Redis (reconcile). A failed pre_commit write refused an admin's restriction; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
+
+  - name: silent - writes that succeed
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_mirror_writes_total{job="basetool-backend", instance="backend:11261", phase="reconcile", outcome="failed"}'
+        values: "0x20"
+      - series: 'basetool_exchange_mirror_writes_total{job="basetool-backend", instance="backend:11261", phase="reconcile", outcome="unchanged"}'
+        values: "0+1x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeMirrorWriteFailed
+        exp_alerts: []
+
+  - name: fires - the reconcile stopped succeeding
+    interval: 1m
+    input_series:
+      - series: 'basetool_scheduled_job_last_success_timestamp_seconds{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "60x40"
+      - series: 'basetool_scheduled_job_enabled{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "1x40"
+      - series: 'process_start_time_seconds{job="basetool-backend", instance="backend:11261"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRegistryReconcileStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: basetool-backend
+              instance: backend:11261
+              task: exchange_registry_reconcile
+            exp_annotations:
+              summary: "Exchange registry reconcile stale >10m"
+              description: "The 60-second reconcile of the exchange registry mirror last succeeded more than 10 minutes ago. While it is stale a mirror that fell behind the database is not repaired; the gateway stays fail-closed but may keep refusing a client that was re-activated (REQ-XCH-003)."
+
+  - name: silent - a reconcile that keeps succeeding
+    interval: 1m
+    input_series:
+      - series: 'basetool_scheduled_job_last_success_timestamp_seconds{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "0+60x40"
+      - series: 'basetool_scheduled_job_enabled{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "1x40"
+      - series: 'process_start_time_seconds{job="basetool-backend", instance="backend:11261"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeRegistryReconcileStale
+        exp_alerts: []
+
+  - name: silent - the mirror is switched off
+    interval: 1m
+    input_series:
+      - series: 'process_start_time_seconds{job="basetool-backend", instance="backend:11261"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeRegistryReconcileStale
+        exp_alerts: []
