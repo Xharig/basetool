@@ -449,7 +449,8 @@ Blueprints domain with the external client.
 - [ ] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
   in the feed of another installation.
 
-**Status:** planned — WP 4.1 (#2084)
+**Status:** the gateway's read route (`GET /exchange/v1/me/blueprints`) is built — WP 4.1 (#2084);
+the writes follow
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 

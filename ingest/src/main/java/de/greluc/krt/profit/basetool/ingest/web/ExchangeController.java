@@ -29,6 +29,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -45,6 +46,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -75,7 +77,17 @@ public class ExchangeController {
   /** The warning code of an undeclared field. */
   static final String UNKNOWN_FIELD = "UNKNOWN_FIELD";
 
+  /** The largest page, as the contract fixes it. */
+  static final int PAGE_MAX_LIMIT = 1000;
+
+  /** The code of a cursor the server can no longer serve. */
+  static final String CURSOR_EXPIRED = "CURSOR_EXPIRED";
+
   private static final String BACKEND = "/api/v1/exchange";
+
+  private static final Pattern CURSOR = Pattern.compile("^[A-Za-z0-9._:-]{1,128}$");
+
+  private static final Pattern LIMIT = Pattern.compile("^[0-9]{1,4}$");
 
   private final ExchangeRelay relay;
   private final ExchangeSchemas schemas;
@@ -217,6 +229,94 @@ public class ExchangeController {
             HttpMethod.GET, BACKEND + "/catalog/locations", null, context, acceptLanguage),
         "location-list.schema.json",
         List.of());
+  }
+
+  /**
+   * Returns a snapshot page of the member's blueprints, or with {@code cursor} the changes since
+   * it.
+   *
+   * @param cursor the cursor of the last page, or {@code null} for a new snapshot
+   * @param limit the page size, 1 to 1000, or {@code null} for the default
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the page or a problem
+   */
+  @GetMapping("/me/blueprints")
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> blueprints(
+      @Nullable @RequestParam(required = false) String cursor,
+      @Nullable @RequestParam(required = false) String limit,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return page(
+        "/me/blueprints",
+        "page.schema.json#/$defs/blueprintPage",
+        cursor,
+        limit,
+        request,
+        acceptLanguage);
+  }
+
+  /**
+   * Checks the paging parameters, relays a page request and checks the answer.
+   *
+   * @param path the route below {@code /exchange/v1}
+   * @param responseSchema the page's schema
+   * @param cursor the cursor, or {@code null}
+   * @param limit the page size, or {@code null}
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the page or a problem
+   */
+  private @NotNull ResponseEntity<?> page(
+      @NotNull String path,
+      @NotNull String responseSchema,
+      @Nullable String cursor,
+      @Nullable String limit,
+      @NotNull HttpServletRequest request,
+      @Nullable String acceptLanguage) {
+    ExchangeRequestContext context = ExchangeRequestContext.of(request);
+    if (context == null) {
+      return failed();
+    }
+    if (limit != null && !validLimit(limit)) {
+      return schemaInvalid(
+          List.of(
+              new ExchangeSchemas.Violation(
+                  "/limit", "must be an integer from 1 to " + PAGE_MAX_LIMIT)));
+    }
+    if (cursor != null && !CURSOR.matcher(cursor).matches()) {
+      return problem(
+          HttpStatus.GONE.value(), CURSOR_EXPIRED, "The cursor is not one the server issued.");
+    }
+    StringBuilder target = new StringBuilder(BACKEND).append(path);
+    char separator = '?';
+    if (cursor != null) {
+      target.append(separator).append("cursor=").append(cursor);
+      separator = '&';
+    }
+    if (limit != null) {
+      target.append(separator).append("limit=").append(Integer.parseInt(limit));
+    }
+    return relayed(
+        relay.forward(HttpMethod.GET, target.toString(), null, context, acceptLanguage),
+        responseSchema,
+        List.of());
+  }
+
+  /**
+   * Whether a page size lies within the contract.
+   *
+   * @param limit the raw value
+   * @return {@code true} for an integer from 1 to {@value #PAGE_MAX_LIMIT}
+   */
+  private static boolean validLimit(@NotNull String limit) {
+    if (!LIMIT.matcher(limit).matches()) {
+      return false;
+    }
+    int value = Integer.parseInt(limit);
+    return value >= 1 && value <= PAGE_MAX_LIMIT;
   }
 
   /**
