@@ -80,8 +80,9 @@
   REQ-XCH-013).
   
 - **Verbundene Anwendungen: letzte Änderungen und neue Verbindungen.** Jede Anwendung zeigt ihre zehn
-  letzten Änderungen an deinen Daten (zurückgenommene markiert); eine neue Installation ist bis zum
-  nächsten Aufruf als „Neu" hervorgehoben (REQ-XCH-032).
+  letzten Änderungen an deinen Daten (zurückgenommene markiert); eine neue Installation bleibt mit
+  einem Warnhinweis als „Neu" hervorgehoben, bis du sie in ihrer Zeile mit „Gesehen" bestätigst
+  (REQ-XCH-032).
   
 - **Verbundene Anwendungen: große Änderungen bestätigen.** Will eine Anwendung auf einmal viele
   Einträge entfernen, zeigt der Bestätigungslink, was passieren würde; erst „Bestätigen" wendet es an,

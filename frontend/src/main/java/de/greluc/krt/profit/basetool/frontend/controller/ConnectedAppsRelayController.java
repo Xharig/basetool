@@ -80,17 +80,21 @@ public class ConnectedAppsRelayController {
   }
 
   /**
-   * Marks the member's new connections seen, so their highlight ends on the next load.
+   * Marks one of the member's new installations seen after the member acknowledged it in its row.
    *
+   * @param installationId the installation
    * @return {@code 204}, or the relayed backend error
    */
-  @PostMapping(value = "/seen", headers = "X-Requested-With=XMLHttpRequest")
-  public ResponseEntity<Object> markSeen() {
+  @PostMapping(
+      value = "/installations/{installationId}/seen",
+      headers = "X-Requested-With=XMLHttpRequest")
+  public ResponseEntity<Object> markSeen(@PathVariable @NotNull UUID installationId) {
     return relay(
         log,
-        "mark exchange connections seen (ajax)",
+        "mark exchange installation seen (ajax)",
         () -> {
-          backendApiClient.post(BACKEND + "/seen", null, Void.class);
+          backendApiClient.post(
+              BACKEND + "/installations/" + installationId + "/seen", null, Void.class);
           return ResponseEntity.noContent().build();
         });
   }

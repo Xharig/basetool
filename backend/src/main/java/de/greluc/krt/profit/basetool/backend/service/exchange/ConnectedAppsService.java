@@ -171,16 +171,17 @@ public class ConnectedAppsService {
   }
 
   /**
-   * Marks the member's new-connection notifications read, which ends the highlight of every
-   * installation they announced; nothing else changes, so it is not audited.
+   * Marks the member's new-connection notification for one installation read, which ends that
+   * installation's highlight; nothing else changes, so it is not audited.
    *
    * @param member the member
-   * @return how many notifications were marked
+   * @param installationId the installation the member acknowledged
+   * @return how many notifications were marked; {@code 0} for another member's installation
    */
   @Transactional
-  public int markSeen(@NotNull UUID member) {
-    return notificationRepository.markReadOfType(
-        member, NotificationType.EXCHANGE_INSTALLATION_CONNECTED, clock.instant());
+  public int markSeen(@NotNull UUID member, @NotNull UUID installationId) {
+    return notificationRepository.markReadOfTypeAndEntity(
+        member, NotificationType.EXCHANGE_INSTALLATION_CONNECTED, installationId, clock.instant());
   }
 
   /**

@@ -1168,9 +1168,12 @@ The notification is the rule-engine event `EXCHANGE_INSTALLATION_CONNECTED` (see
 `EVENT_RECIPIENT`), published when the installation upsert reports that it created the row, so two
 concurrent first calls announce one installation once. It names the client by its registry display
 name only: the client-supplied label arrives with a later call and could pose as the Basetool. An
-installation counts as unseen while its notification is unread, `GET /api/v1/connected-apps` says so
-per installation (`unseen`), and `POST /api/v1/connected-apps/seen` marks them read — a notification
-change only, not audited.
+installation counts as unseen while its notification is unread, and `GET /api/v1/connected-apps`
+says so per installation (`unseen`). Opening the page marks nothing: the row stays highlighted, under
+a warning to disconnect a connection the member did not start, until the member acknowledges that
+row with „Gesehen" (`POST /api/v1/connected-apps/installations/{id}/seen`, which marks only that
+installation's notification read) or reads the notification — a notification change only, not
+audited.
 
 - [x] List the clients with their capabilities and installations (label, first and last seen), and
   disconnect one installation or a whole client. *`ConnectedAppsPageControllerMvcTest`.*
@@ -1178,8 +1181,12 @@ change only, not audited.
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
-- [x] The page highlights an unseen installation („Neu") and then reports it seen; the highlight
-  ends with the next load. *`ConnectedAppsPageControllerMvcTest`.*
+- [x] The page highlights an unseen installation („Neu") with a warning and reports it seen only
+  when the member acknowledges its row („Gesehen"), one installation at a time; loading the page
+  marks nothing. *`ConnectedAppsPageControllerMvcTest`, `ConnectedAppsControllerTest`.*
+  *Corrected 2026-09-27:* this item first read „and then reports it seen; the highlight ends with
+  the next load" — the page marked every new connection seen on its first load, which made the
+  highlight a weak phishing signal (security review 2 of #2092).
 - [x] Undo a client's changes since a chosen span, with the skipped entries listed.
   *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
 - [x] Confirm or discard a staged mass change. *`ExchangeMassChangeControllerTest`,

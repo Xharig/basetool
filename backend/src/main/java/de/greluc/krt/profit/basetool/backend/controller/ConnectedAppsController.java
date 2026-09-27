@@ -148,19 +148,22 @@ public class ConnectedAppsController {
   }
 
   /**
-   * Marks the caller's new connections seen, ending their highlight on the page.
+   * Marks one of the caller's new installations seen, ending its highlight on the page.
    *
+   * @param installationId the installation the caller acknowledged
    * @param authentication the caller
-   * @return {@code 204}
+   * @return {@code 204}, also when nothing was unseen
    */
   @NotNull
-  @PostMapping("/seen")
+  @PostMapping("/installations/{installationId}/seen")
   @Operation(
-      summary = "Mark my new connections seen",
-      description = "Marks the new-connection notifications read; changes no connection.")
+      summary = "Mark a new installation seen",
+      description =
+          "Marks the installation's new-connection notification read; changes no connection.")
   @ApiResponse(responseCode = "204", description = "Marked")
-  public ResponseEntity<Void> markSeen(@NotNull Authentication authentication) {
-    connectedAppsService.markSeen(member(authentication));
+  public ResponseEntity<Void> markSeen(
+      @PathVariable @NotNull UUID installationId, @NotNull Authentication authentication) {
+    connectedAppsService.markSeen(member(authentication), installationId);
     return ResponseEntity.noContent().build();
   }
 
