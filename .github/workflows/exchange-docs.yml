@@ -87,6 +87,7 @@ jobs:
           cp -r build/exchange-reference/. build/exchange-site/reference/
           cp ingest/src/main/resources/api/exchange-v1.openapi.json build/exchange-site/reference/
           cp ingest/src/main/resources/exchange/v1/schemas/*.schema.json build/exchange-site/schemas/
+          python3 .github/scripts/prepare_exchange_reference.py --schema-index build/exchange-site/schemas
 
       - name: site / Build with Jekyll
         uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697

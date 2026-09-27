@@ -5,6 +5,9 @@ references point at local copies of the schemas, each without its absolute $id, 
 resolves every reference from the site instead of fetching it. Beside them it writes the page
 itself, which renders the copy with the Redoc bundle placed next to it.
 
+With --schema-index it instead writes the index page of the site's schema directory, a table of
+every schema with its title and description.
+
 A conditional branch that narrows a `number` property to `integer` is rendered as `multipleOf: 1`,
 because Redoc merges the branch into the base schema and cannot merge two different types. The
 committed schemas stay as they are.
@@ -107,8 +110,49 @@ def prepare(openapi: pathlib.Path, schemas: pathlib.Path, out: pathlib.Path) -> 
     return prepared
 
 
+def cell(text: str) -> str:
+    """Returns text safe for one Markdown table cell.
+
+    Args:
+        text: the raw text.
+
+    Returns:
+        The text on one line, with pipes escaped.
+    """
+    return " ".join(text.split()).replace("|", "\\|")
+
+
+def schema_index(schemas: pathlib.Path) -> pathlib.Path:
+    """Writes index.md into a directory of schemas, listing each with its title and description.
+
+    Args:
+        schemas: the directory holding the *.schema.json files.
+
+    Returns:
+        The path of the written page.
+    """
+    rows = []
+    for schema in sorted(schemas.glob("*.schema.json")):
+        document = json.loads(schema.read_text(encoding="utf-8"))
+        rows.append(f"| [{schema.name}]({schema.name}) | {cell(document.get('title', ''))} "
+                    f"| {cell(document.get('description', ''))} |")
+    page = schemas / "index.md"
+    page.write_text("\n".join([
+        "# Schemas",
+        "",
+        "Every JSON Schema 2020-12 document of the Exchange API v1. Each is served at its `$id`,",
+        f"`{BASE}<name>.schema.json`; the files here are copies.",
+        "",
+        "| Schema | Title | Description |",
+        "| --- | --- | --- |",
+        *rows,
+        "",
+    ]), encoding="utf-8")
+    return page
+
+
 def selftest() -> None:
-    """Proves references are rewritten, $id removed, narrowings softened and the page written."""
+    """Proves references are rewritten, $id removed, narrowings softened and the pages written."""
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
         (root / "in").mkdir()
@@ -132,6 +176,11 @@ def selftest() -> None:
         assert conditional["then"]["properties"]["s"] == {"type": "integer"}, conditional
         page = (root / "out" / "index.html").read_text(encoding="utf-8")
         assert 'spec-url="openapi.json"' in page and f'src="{BUNDLE}"' in page, page
+        (root / "in" / "a.schema.json").write_text(
+            json.dumps({"title": "A", "description": "One | two\nthree"}), encoding="utf-8")
+        index = schema_index(root / "in").read_text(encoding="utf-8")
+        assert "| [a.schema.json](a.schema.json) | A | One \\| two three |" in index, index
+        assert "| [q.schema.json](q.schema.json) |  |  |" in index, index
     print("selftest ok")
 
 
@@ -144,9 +193,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--out", default="build/exchange-reference")
+    parser.add_argument("--schema-index", type=pathlib.Path)
     args = parser.parse_args()
     if args.selftest:
         selftest()
+        return 0
+    if args.schema_index:
+        print(schema_index(args.schema_index))
         return 0
     repo = pathlib.Path(__file__).resolve().parents[2]
     prepared = prepare(
