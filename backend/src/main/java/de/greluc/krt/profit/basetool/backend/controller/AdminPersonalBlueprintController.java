@@ -30,6 +30,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintCreateRe
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintResponse;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintUpdateRequest;
 import de.greluc.krt.profit.basetool.backend.service.BlueprintImportService;
+import de.greluc.krt.profit.basetool.backend.service.BlueprintUploadPreviewService;
 import de.greluc.krt.profit.basetool.backend.service.PersonalBlueprintService;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import de.greluc.krt.profit.basetool.backend.web.PaginationUtil;
@@ -77,6 +78,7 @@ public class AdminPersonalBlueprintController {
 
   private final PersonalBlueprintService service;
   private final BlueprintImportService importService;
+  private final BlueprintUploadPreviewService uploadPreviewService;
 
   /**
    * Lists a target user's owned blueprints (paginated, sortable, optional name filter).
@@ -228,7 +230,7 @@ public class AdminPersonalBlueprintController {
   })
   public BlueprintImportPreviewDto previewImportForUser(
       @PathVariable UUID userId, @RequestParam("file") @NotNull MultipartFile file) {
-    return importService.previewImport(userId, file);
+    return uploadPreviewService.preview(userId, file);
   }
 
   /**

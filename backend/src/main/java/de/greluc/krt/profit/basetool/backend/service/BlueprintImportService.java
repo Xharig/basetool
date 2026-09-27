@@ -99,9 +99,20 @@ public class BlueprintImportService {
   @NotNull
   public BlueprintImportPreviewDto previewImport(
       @NotNull UUID ownerUserId, @NotNull MultipartFile file) {
-    List<BlueprintExportParser.ParsedEntry> parsed =
-        BlueprintExportParser.parse(objectMapper, file);
+    return previewEntries(ownerUserId, BlueprintExportParser.parse(objectMapper, file));
+  }
 
+  /**
+   * Previews how each already de-duplicated entry resolves for {@code ownerUserId}, as {@link
+   * #previewImport} does for an uploaded file. Nothing is persisted.
+   *
+   * @param ownerUserId the {@code app_user.id} the preview is for
+   * @param parsed the entries, one per blueprint
+   * @return the preview with per-name rows and per-status counts
+   */
+  @NotNull
+  public BlueprintImportPreviewDto previewEntries(
+      @NotNull UUID ownerUserId, @NotNull List<BlueprintExportParser.ParsedEntry> parsed) {
     Map<String, ResolvedProduct> productByKey = productIndex();
     List<ResolvedProduct> allProducts = new ArrayList<>(productByKey.values());
     Map<String, String> tagIndex =

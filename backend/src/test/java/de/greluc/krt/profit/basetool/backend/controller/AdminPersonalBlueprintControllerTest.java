@@ -36,6 +36,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintCreateRe
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintResponse;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintUpdateRequest;
 import de.greluc.krt.profit.basetool.backend.service.BlueprintImportService;
+import de.greluc.krt.profit.basetool.backend.service.BlueprintUploadPreviewService;
 import de.greluc.krt.profit.basetool.backend.service.PersonalBlueprintService;
 import java.time.Instant;
 import java.util.List;
@@ -58,6 +59,7 @@ class AdminPersonalBlueprintControllerTest {
 
   @Mock private PersonalBlueprintService service;
   @Mock private BlueprintImportService importService;
+  @Mock private BlueprintUploadPreviewService uploadPreviewService;
   @InjectMocks private AdminPersonalBlueprintController controller;
 
   private static PersonalBlueprintResponse sample() {
@@ -136,11 +138,11 @@ class AdminPersonalBlueprintControllerTest {
     MultipartFile file =
         new MockMultipartFile("file", "scmdb.json", "application/json", "{}".getBytes());
     BlueprintImportPreviewDto preview = new BlueprintImportPreviewDto(0, 0, 0, 0, 0, 0, List.of());
-    when(importService.previewImport(TARGET, file)).thenReturn(preview);
+    when(uploadPreviewService.preview(TARGET, file)).thenReturn(preview);
 
     controller.previewImportForUser(TARGET, file);
 
-    verify(importService).previewImport(TARGET, file);
+    verify(uploadPreviewService).preview(TARGET, file);
   }
 
   @Test

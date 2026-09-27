@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.context.support.StaticMessageSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -135,5 +137,82 @@ class ActingMemberFilterPathMatchingTest {
     verify(authorities).authoritiesFor(any());
     verify(chain).doFilter(any(), any());
     assertThat(refusalReason()).isNull();
+  }
+
+  /**
+   * Adds the exchange relay headers of a valid client and installation.
+   *
+   * @param request the request
+   * @return the request
+   */
+  private static MockHttpServletRequest withExchangeHeaders(MockHttpServletRequest request) {
+    request.addHeader(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "vk-test");
+    request.addHeader(
+        ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.drafts.blueprints");
+    request.addHeader(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "Kx9_" + "p".repeat(39));
+    return request;
+  }
+
+  /** Every exchange route of the gateway acts with the reduced exchange authorities. */
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "/api/v1/exchange/catalog/locations",
+        "/api/v1/exchange/catalog/resolve",
+        "/api/v1/exchange/me/account-check",
+        "/api/v1/exchange/me/blueprints",
+        "/api/v1/exchange/me/blueprints/changes",
+        "/api/v1/exchange/me/drafts/blueprints",
+        "/api/v1/exchange/me/drafts/refinery-orders",
+        "/api/v1/exchange/me/installation",
+        "/api/v1/exchange/me/org-demand",
+        "/api/v1/exchange/me/ships",
+        "/api/v1/exchange/me/ships/changes",
+        "/api/v1/exchange/me/stock",
+        "/api/v1/exchange/me/stock/changes"
+      })
+  void actsOnEveryExchangeRouteWithTheExchangeAuthorities(String path) throws Exception {
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+    when(authorities.exchangeAuthoritiesFor(any(), any())).thenReturn(List.of());
+
+    filter().doFilter(withExchangeHeaders(gatewayRequest(path)), response, chain);
+
+    verify(authorities).exchangeAuthoritiesFor(any(), any());
+    verify(authorities, never()).authoritiesFor(any());
+    verify(chain).doFilter(any(), any());
+    assertThat(refusalReason()).isNull();
+  }
+
+  /** A path below the exchange prefix that is not one of its routes is refused. */
+  @Test
+  void refusesAnExchangePathThatIsNotARoute() throws Exception {
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    filter()
+        .doFilter(
+            withExchangeHeaders(gatewayRequest("/api/v1/exchange/me/drafts/anything")),
+            response,
+            chain);
+
+    assertThat(refusalReason()).isEqualTo(MetricNames.ON_BEHALF_OF_ENDPOINT_NOT_BOUND);
+    verify(chain, never()).doFilter(any(), any());
+  }
+
+  /** The exchange relay headers are refused on the extractor's ingest routes. */
+  @Test
+  void refusesTheExchangeHeadersOnAnIngestRoute() throws Exception {
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    filter()
+        .doFilter(
+            withExchangeHeaders(gatewayRequest("/api/v1/personal-blueprints/import/preview")),
+            response,
+            chain);
+
+    assertThat(refusalReason()).isEqualTo(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
+    verify(chain, never()).doFilter(any(), any());
   }
 }

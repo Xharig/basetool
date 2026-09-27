@@ -78,7 +78,13 @@ public class ExchangeRelay {
 
   /** Backend codes that mean the same as a registry code. */
   static final Map<String, String> TRANSLATED =
-      Map.of("ACCESS_DENIED", "NOT_PERMITTED", "VALIDATION_FAILED", "SCHEMA_INVALID");
+      Map.of(
+          "ACCESS_DENIED",
+          "NOT_PERMITTED",
+          "VALIDATION_FAILED",
+          "SCHEMA_INVALID",
+          "BAD_REQUEST",
+          "SCHEMA_INVALID");
 
   /** Backend codes the exchange contract names and a client may see as they are. */
   static final Set<String> PASSED_THROUGH =

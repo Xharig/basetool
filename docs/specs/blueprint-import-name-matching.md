@@ -93,9 +93,14 @@ of known upstream bugs that need the correct name in code review, not a runtime-
 
 ### REQ-INV-014 — Tolerant export-envelope parsing (additive v1 evolution)
 
-The import accepts **four** upload shapes: a bare JSON array of entries, the SCMDB log-watcher
-document, the Basetool Blueprint Extractor `BlueprintExport` document (`schemaVersion` 1), and the
-[scmdb.net](https://scmdb.net) profile / tracking export (`version` 3). In every document form only
+The import accepts **five** upload shapes: a bare JSON array of entries, the SCMDB log-watcher
+document, the Basetool Blueprint Extractor `BlueprintExport` document (`schemaVersion` 1), the
+[scmdb.net](https://scmdb.net) profile / tracking export (`version` 3), and the exchange's
+`basetool.blueprints` envelope (`formatVersion` 1.0, REQ-XCH-019). The envelope is recognised by its
+`format`, previewed as the exchange's blueprint draft is — each `items[].ref` resolved as
+`catalog/resolve` resolves it — and refused with `400` when it breaks its shape (at most 2000 items,
+every item with a `ref`); `generator`, `generatedAt`, `provenance` and `extensions` are ignored
+(owner decision 2026-09-27). In every document form only
 the top-level `blueprints` array is consumed; every other envelope field is tolerated and ignored
 (`@JsonIgnoreProperties(ignoreUnknown = true)` on `BlueprintExportFileDto`). The extractor evolves
 its export contract additively within schema version 1 — the same rule ADR-0008 fixes for the

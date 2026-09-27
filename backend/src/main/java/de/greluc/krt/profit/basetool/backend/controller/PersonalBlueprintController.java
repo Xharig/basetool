@@ -33,6 +33,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintResponse
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintUpdateRequest;
 import de.greluc.krt.profit.basetool.backend.service.BlueprintCraftabilityService;
 import de.greluc.krt.profit.basetool.backend.service.BlueprintImportService;
+import de.greluc.krt.profit.basetool.backend.service.BlueprintUploadPreviewService;
 import de.greluc.krt.profit.basetool.backend.service.PersonalBlueprintService;
 import de.greluc.krt.profit.basetool.backend.web.CurrentUserId;
 import de.greluc.krt.profit.basetool.backend.web.PaginationUtil;
@@ -77,6 +78,7 @@ public class PersonalBlueprintController {
 
   private final PersonalBlueprintService service;
   private final BlueprintImportService importService;
+  private final BlueprintUploadPreviewService uploadPreviewService;
   private final BlueprintCraftabilityService craftabilityService;
 
   /**
@@ -280,7 +282,7 @@ public class PersonalBlueprintController {
   })
   public BlueprintImportPreviewDto previewImport(
       @RequestParam("file") @NotNull MultipartFile file, @CurrentUserId UUID ownerUserId) {
-    return importService.previewImport(ownerUserId, file);
+    return uploadPreviewService.preview(ownerUserId, file);
   }
 
   /**
