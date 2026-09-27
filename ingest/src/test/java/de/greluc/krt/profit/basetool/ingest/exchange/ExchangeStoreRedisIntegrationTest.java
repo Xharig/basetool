@@ -233,6 +233,23 @@ class ExchangeStoreRedisIntegrationTest {
   }
 
   @Test
+  void aQuotaCounterIsBornWithItsExpiryAndCountedOnceInTheBudget() {
+    ExchangeQuotas quotas = new ExchangeQuotas(template, budget, clock);
+    String key = ExchangeQuotas.PREFIX + "a:m1:2026-09-27";
+
+    assertThat(quotas.countWrite("a", "m1")).isEqualTo(1L);
+    assertThat(quotas.countWrite("a", "m1")).isEqualTo(2L);
+
+    assertThat(observer.getExpire(key, TimeUnit.SECONDS))
+        .as("until the end of the following UTC day")
+        .isBetween(Duration.ofHours(36).toSeconds() - 5L, Duration.ofHours(36).toSeconds());
+    assertThat(total(ExchangeBudget.memberScope("a", "m1")))
+        .isEqualTo(ExchangeBudget.charge(key.length() + (long) ExchangeQuotas.VALUE_BYTES));
+    assertThat(template.opsForZSet().range(ExchangeBudget.memberScope("a", "m1"), 0, -1))
+        .hasSize(1);
+  }
+
+  @Test
   void aMissingRunningTotalIsRebuiltFromItsSet() {
     budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 3000L, Duration.ofHours(1));
     template.delete(ExchangeBudget.sum(ExchangeBudget.memberScope("a", "m1")));

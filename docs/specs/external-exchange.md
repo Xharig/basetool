@@ -922,7 +922,9 @@ WP 4.5 (#2087)
 
 Per-minute buckets per (client, member) and per client run in-process; daily write quotas live in
 Redis (`ingest:xch:quota:*`). All gateway-written exchange data in Redis is bounded to 1 MiB per
-client and member, 16 MB per client and 64 MB in total, counted exactly; above a limit the gateway
+client and member, 16 MB per client and 64 MB in total, counted per stored value with a fixed
+per-entry overhead (an estimate of Redis's own bookkeeping, not a measurement of its memory — see
+*The byte budget* below); above a limit the gateway
 answers `503 EXCHANGE_BUDGET_EXHAUSTED`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
 Responses carry `RateLimit` and `Retry-After` headers. The account check has its own tight limit.
 
@@ -933,7 +935,7 @@ Responses carry `RateLimit` and `Retry-After` headers. The account check has its
 | requests per client and member | 120 per minute — a registry client's `requestsPerMinute` overrides it | in-process bucket |
 | requests per client, over all its members | 1200 per minute | in-process bucket |
 | account checks per client and member | 10 per hour | in-process bucket |
-| write requests per client and member | 500 per UTC day — `writesPerDay` overrides it | Redis, `ingest:xch:quota:<client>:<member>:<day>`, `INCR`, kept two days |
+| write requests per client and member | 500 per UTC day — `writesPerDay` overrides it | Redis, `ingest:xch:quota:<client>:<member>:<day>`, created with its expiry by `SET NX EX`, then `INCR`; kept until the end of the following UTC day |
 
 The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
 a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
@@ -958,10 +960,25 @@ would overflow, so a full budget stops writes before they reach the backend. A c
 takes the reservation's place in one step, or is not cached when it does not fit; otherwise the
 reservation is freed. A staged draft or mass change reserves its exact staged size under an
 `ingest:xch:pending:<uuid>` name before it is written and is settled on its handoff key afterwards.
-A quota counter is recorded when its day's first write creates it, without a limit check: it exists
-already, and the write still needs its own reservation.
-`basetool_ingest_exchange_budget_used_ratio`
-reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
+A quota counter is recorded on every write, before the counter is touched and without a limit check
+— the write still needs its own reservation. Its entry has a fixed name and expiry, so recording it
+again counts it once; the counter itself is created with that expiry in one command (`SET NX EX`)
+and only then incremented, so no crash between two commands can leave it without an expiry or
+outside the budget. `basetool_ingest_exchange_budget_used_ratio` reports the total's use;
+`ExchangeBudgetHigh` fires above 80 %.
+
+What the budget counts, and what stays an estimate:
+
+| Counted | How |
+| --- | --- |
+| a write in flight | its 32 KiB reservation plus its lock, recorded (not only checked) under the lock's key |
+| a cached answer | its serialized value and key, replacing the reservation |
+| a staged draft or mass change | the staged value with its handoff wrapper, the same size the cap is checked against |
+| a quota counter | its key plus 20 bytes for the number |
+| the sorted sets and totals themselves | the fixed 512 bytes per entry — an estimate, not measured |
+
+The budget therefore bounds the exchange's data within a known margin of Redis's real memory use;
+it is not a byte-exact measurement of it.
 
 The ingest ACL user runs these scripts with `EVAL`/`EVALSHA`; Redis checks every command a script
 issues against the same user's key patterns and commands (REQ-SEC-068).

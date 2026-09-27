@@ -298,6 +298,9 @@
   `400 BAD_REQUEST`, und diese Antwort wird nicht mehr zwischengespeichert.
 - **Datenaustausch: Redis-Ausfälle.** Jeder Redis-Fehler auf einer Austausch-Route antwortet mit
   `503 SERVICE_UNAVAILABLE` und `Retry-After: 60`, nie mit `500`.
+- **Datenaustausch: Tageszähler ohne Ablauf.** Der Zähler des Schreibkontingents entsteht mit seinem
+  Ablaufdatum in einem Befehl und kann es nicht mehr verlieren; er zählt dabei genau einmal im
+  Redis-Budget.
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.
