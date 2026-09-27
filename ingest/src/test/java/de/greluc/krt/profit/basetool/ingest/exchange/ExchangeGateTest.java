@@ -77,6 +77,7 @@ class ExchangeGateTest {
   @MockitoBean private HandoffStagingService handoffStagingService;
   @MockitoBean private ExchangeRegistryReader registryReader;
   @MockitoBean private ExchangeRevocationReader revocationReader;
+  @MockitoBean private ExchangeQuotas quotas;
 
   private MockMvc mockMvc;
   private ECKey key;

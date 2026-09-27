@@ -759,6 +759,23 @@ client and member, 16 MB per client and 64 MB in total, counted exactly; above a
 answers `503 EXCHANGE_BUDGET_EXHAUSTED`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
 Responses carry `RateLimit` and `Retry-After` headers. The account check has its own tight limit.
 
+**The limits** (owner decision 2026-09-27; `app.exchange.limits.*`):
+
+| Limit | Default | Where |
+| --- | --- | --- |
+| requests per client and member | 120 per minute — a registry client's `requestsPerMinute` overrides it | in-process bucket |
+| requests per client, over all its members | 1200 per minute | in-process bucket |
+| account checks per client and member | 10 per hour | in-process bucket |
+| write requests per client and member | 500 per UTC day — `writesPerDay` overrides it | Redis, `ingest:xch:quota:<client>:<member>:<day>`, `INCR`, kept two days |
+
+The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
+a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
+`Retry-After` (the quota's until the next UTC day); a quota that cannot be counted is `503
+SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted answer carries
+`RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
+bucket. The in-process buckets live per gateway instance and are bounded (least recently used out);
+the Redis byte budget follows with the idempotency cache.
+
 **Acceptance**
 
 - [ ] A load test fills one member's budget, then one client's; sessions and other members keep

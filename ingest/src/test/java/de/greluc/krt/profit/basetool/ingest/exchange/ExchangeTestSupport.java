@@ -70,6 +70,9 @@ public final class ExchangeTestSupport {
   /** The service document, which needs {@code exchange.connect}. */
   public static final String SERVICE_DOCUMENT = "/exchange/v1";
 
+  /** The account check, which needs {@code exchange.connect} and has its own hourly limit. */
+  public static final String ACCOUNT_CHECK = "/exchange/v1/me/account-check";
+
   /** A write route, which needs {@code exchange.blueprints.write}. */
   public static final String BLUEPRINT_CHANGES = "/exchange/v1/me/blueprints/changes";
 
@@ -274,6 +277,7 @@ public final class ExchangeTestSupport {
       return RouterFunctions.route()
           .GET(STOCK, ProbeRoutes::context)
           .POST(BLUEPRINT_CHANGES, ProbeRoutes::context)
+          .POST(ACCOUNT_CHECK, ProbeRoutes::context)
           .build();
     }
 

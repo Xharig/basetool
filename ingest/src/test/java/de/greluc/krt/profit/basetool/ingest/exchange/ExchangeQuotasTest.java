@@ -1,0 +1,96 @@
+/*
+ * Profit Basetool - squadron-management web app.
+ * Copyright (C) 2026 Lucas Greuloch
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package de.greluc.krt.profit.basetool.ingest.exchange;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+
+@ExtendWith(MockitoExtension.class)
+class ExchangeQuotasTest {
+
+  private static final Instant NOW = Instant.parse("2026-09-27T22:00:00Z");
+  private static final String KEY = "ingest:xch:quota:versekit:m-1:2026-09-27";
+
+  @Mock private StringRedisTemplate template;
+  @Mock private ValueOperations<String, String> values;
+
+  private ExchangeQuotas quotas;
+
+  @BeforeEach
+  void setUp() {
+    quotas = new ExchangeQuotas(template, Clock.fixed(NOW, ZoneOffset.UTC));
+  }
+
+  @Test
+  void theFirstWriteOfTheDayStartsATwoDayCounter() {
+    when(template.opsForValue()).thenReturn(values);
+    when(values.increment(KEY)).thenReturn(1L);
+
+    assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(1L);
+    verify(template).expire(KEY, ExchangeQuotas.TTL);
+  }
+
+  @Test
+  void laterWritesOnlyCount() {
+    when(template.opsForValue()).thenReturn(values);
+    when(values.increment(KEY)).thenReturn(7L);
+
+    assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(7L);
+    verify(template, never()).expire(KEY, ExchangeQuotas.TTL);
+  }
+
+  @Test
+  void anUnreachableRedisFailsClosed() {
+    when(template.opsForValue()).thenReturn(values);
+    when(values.increment(KEY)).thenThrow(new RedisConnectionFailureException("down"));
+
+    assertThatThrownBy(() -> quotas.countWrite("versekit", "m-1"))
+        .isInstanceOf(ExchangeUnavailableException.class);
+  }
+
+  @Test
+  void aCounterRedisDoesNotReturnFailsClosed() {
+    when(template.opsForValue()).thenReturn(values);
+    when(values.increment(KEY)).thenReturn(null);
+
+    assertThatThrownBy(() -> quotas.countWrite("versekit", "m-1"))
+        .isInstanceOf(ExchangeUnavailableException.class);
+  }
+
+  @Test
+  void theQuotaStartsOverAtUtcMidnight() {
+    assertThat(quotas.secondsUntilTomorrow()).isEqualTo(2L * 3600L);
+  }
+}

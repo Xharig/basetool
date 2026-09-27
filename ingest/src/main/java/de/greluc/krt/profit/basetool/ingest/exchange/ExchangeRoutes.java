@@ -51,14 +51,14 @@ public final class ExchangeRoutes {
           route(HttpMethod.POST, "/exchange/v1/catalog/resolve", ANY),
           route(HttpMethod.GET, "/exchange/v1/catalog/locations", ANY),
           route(HttpMethod.GET, "/exchange/v1/me/blueprints", "exchange.blueprints.read"),
-          route(HttpMethod.POST, "/exchange/v1/me/blueprints/changes", "exchange.blueprints.write"),
+          write(HttpMethod.POST, "/exchange/v1/me/blueprints/changes", "exchange.blueprints.write"),
           route(HttpMethod.GET, "/exchange/v1/me/stock", "exchange.stock.read"),
-          route(HttpMethod.POST, "/exchange/v1/me/stock/changes", "exchange.stock.write"),
+          write(HttpMethod.POST, "/exchange/v1/me/stock/changes", "exchange.stock.write"),
           route(HttpMethod.GET, "/exchange/v1/me/ships", "exchange.hangar.read"),
-          route(HttpMethod.POST, "/exchange/v1/me/ships/changes", "exchange.hangar.write"),
+          write(HttpMethod.POST, "/exchange/v1/me/ships/changes", "exchange.hangar.write"),
           route(HttpMethod.GET, "/exchange/v1/me/org-demand", "exchange.demand.read"),
-          route(HttpMethod.POST, "/exchange/v1/me/drafts/blueprints", "exchange.drafts.blueprints"),
-          route(
+          write(HttpMethod.POST, "/exchange/v1/me/drafts/blueprints", "exchange.drafts.blueprints"),
+          write(
               HttpMethod.POST,
               "/exchange/v1/me/drafts/refinery-orders",
               "exchange.drafts.refinery"));
@@ -81,7 +81,7 @@ public final class ExchangeRoutes {
   }
 
   /**
-   * Builds one route.
+   * Builds one route that reads.
    *
    * @param method the method
    * @param path the path pattern
@@ -90,7 +90,20 @@ public final class ExchangeRoutes {
    */
   private static @NotNull Route route(
       @NotNull HttpMethod method, @NotNull String path, @NotNull String capability) {
-    return new Route(method, PathPatternParser.defaultInstance.parse(path), capability);
+    return new Route(method, PathPatternParser.defaultInstance.parse(path), capability, false);
+  }
+
+  /**
+   * Builds one route that writes, and so counts against the daily quota.
+   *
+   * @param method the method
+   * @param path the path pattern
+   * @param capability the capability it needs
+   * @return the route
+   */
+  private static @NotNull Route write(
+      @NotNull HttpMethod method, @NotNull String path, @NotNull String capability) {
+    return new Route(method, PathPatternParser.defaultInstance.parse(path), capability, true);
   }
 
   /**
@@ -99,9 +112,25 @@ public final class ExchangeRoutes {
    * @param method the method
    * @param pattern the path pattern
    * @param capability the capability it needs, or {@link #ANY}
+   * @param write whether the route writes, and so counts against the daily quota
    */
   public record Route(
-      @NotNull HttpMethod method, @NotNull PathPattern pattern, @NotNull String capability) {
+      @NotNull HttpMethod method,
+      @NotNull PathPattern pattern,
+      @NotNull String capability,
+      boolean write) {
+
+    /** The account check's path, which has its own hourly limit. */
+    static final String ACCOUNT_CHECK = "/exchange/v1/me/account-check";
+
+    /**
+     * Whether this is the account check.
+     *
+     * @return {@code true} for {@code POST /exchange/v1/me/account-check}
+     */
+    public boolean accountCheck() {
+      return ACCOUNT_CHECK.equals(pattern.getPatternString());
+    }
 
     /**
      * Whether a set of capabilities admits this route.
