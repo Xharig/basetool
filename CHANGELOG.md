@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: lokale Sandbox für Fremd-Anwendungen.** `scripts/sandbox.sh` bzw.
+  `scripts/sandbox.ps1` starten Gateway, Backend, Frontend und einen Keycloak-Realm mit Testclient
+  `sandbox-client`, synthetischen Mitgliedern und Beispieldaten nur auf `127.0.0.1` – ausschließlich
+  mit Wegwerf-Werten, ohne Produktionszugang (`docs/exchange/sandbox.md`, REQ-XCH-029).
 - **Datenaustausch: Anmeldung dokumentiert, DPoP-Referenz.** `docs/exchange/authentication.md`
   beschreibt Geräte-Login, DPoP-Nachweise, Server-Nonce, Refresh und Trennen samt Fehlercodes;
   `docs/exchange/dpop-reference/` ist eine MIT-lizenzierte Python-Referenz (Windows CNG, OpenSSL 3).

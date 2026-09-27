@@ -86,7 +86,9 @@ jobs:
 
       - name: hadolint / Run hadolint
         if: ${{ !cancelled() }}
-        run: hadolint docker/app/Dockerfile docker/config/Dockerfile docker/keycloak-spi/Dockerfile
+        run: >-
+          hadolint docker/app/Dockerfile docker/config/Dockerfile docker/keycloak-spi/Dockerfile
+          docker/sandbox/keycloak/Dockerfile
 
   repo-gates:
     name: Repository gates
@@ -154,6 +156,14 @@ jobs:
       - name: ingest-audience / Check no ingest config pairs expected-audiences with basetool-backend
         if: ${{ !cancelled() }}
         run: python3 scripts/check-ingest-audience.py
+
+      - name: sandbox-realm / Self-test the sandbox realm builder
+        if: ${{ !cancelled() }}
+        run: python3 scripts/build-sandbox-realm.py --selftest
+
+      - name: sandbox-realm / Check the committed sandbox realm against a fresh build
+        if: ${{ !cancelled() }}
+        run: python3 scripts/build-sandbox-realm.py --check
 
       - name: loki-rule-signatures / Self-test the signature matcher
         if: ${{ !cancelled() }}

@@ -133,6 +133,8 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml \
 
 For a fully isolated stack with **throwaway** credentials (never the production `.env`, `keystore.p12` or `realm-export.json`) — used for UI verification in a worktree — see [§ Running the local test stack](#running-the-local-test-stack) below.
 
+For developing an Exchange API client, the **local sandbox** runs that test stack with a provisioned realm, a test client, synthetic members and seed data in one command (`scripts/sandbox.sh up` / `scripts/sandbox.ps1 up`, `reset`, `down`) — see [`docs/exchange/sandbox.md`](docs/exchange/sandbox.md).
+
 ### Tests
 
 Tests force `spring.profiles.active=test`. Both `Test` and `BootRun` set `--enable-native-access=ALL-UNNAMED`; `Test` additionally attaches the Mockito agent.
