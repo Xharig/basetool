@@ -13,6 +13,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **Clarified: the change result's `cursor` is reserved.** `change-result.schema.json` declares an
   optional `cursor`, which the server has never sent. It stays in the schema, since `v1` never
   removes a field, and is marked reserved; read the feed after a push for the new position.
+- **Corrected: `UNAUTHENTICATED` is answered by a refresh.** The error registry said to start a
+  device login again; as the authentication page says, refresh once, and start a device login only
+  after the refresh answers `invalid_grant` and the member asks.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and

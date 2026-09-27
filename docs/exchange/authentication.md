@@ -273,7 +273,7 @@ a `code` from the [error registry](errors.md).
 
 | Code | HTTP | When | Client action |
 | --- | --- | --- | --- |
-| `UNAUTHENTICATED` | 401 | No token; a token that is invalid, expired, or not issued for the gateway | Refresh once, and after `invalid_grant` start a device login when the member asks. |
+| `UNAUTHENTICATED` | 401 | No token; a token that is invalid, expired, or not issued for the gateway | Refresh once and retry; after `invalid_grant` start a device login when the member asks. Do not loop when the refreshed token is refused too. |
 | `DPOP_REQUIRED` | 401 | The `Bearer` scheme, a `DPoP`-scheme request without a `DPoP` header, or a token that is not DPoP-bound | Send `Authorization: DPoP` with a proof; request the token with a DPoP proof so it is bound. |
 | `DPOP_INVALID` with `use_dpop_nonce` | 401 | The proof lacks the current server nonce | Retry once with a new proof carrying the `DPoP-Nonce` of the answer. |
 | `DPOP_INVALID` with `invalid_dpop_proof` | 401 | The proof is malformed, signed by another key than `cnf.jkt`, replayed, outside the `iat` window, for another method or URL, or has the wrong `ath` | Fix the proof; correct the clock once; do not loop. |
