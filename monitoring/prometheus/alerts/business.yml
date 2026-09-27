@@ -233,7 +233,7 @@ groups:
           severity: warning
         annotations:
           summary: "An exchange client removed unusually many entries"
-          description: "One registered client (client_id) removed more than 100 blueprints, stock lots or ships across its members in the last hour. The mass-change guard stops one member losing much at once, but not a faulty release doing it to many members. Follow the vault runbook \"Suspending an exchange client\": suspend the client under Administration - Verbundene Anwendungen, then let the affected members undo its changes (REQ-XCH-021, REQ-XCH-028)."
+          description: "One registered client (client_id) removed more than 100 blueprints, stock lots or ships across its members in the last hour. The mass-change guard stops one member losing much at once, but not a faulty release doing it to many members. Follow the vault runbook \"Suspending an exchange client\": under Administration - Verbundene Anwendungen, undo the client's changes for every member since the faulty release, which suspends it first (REQ-XCH-021, REQ-XCH-028, REQ-XCH-034)."
 
       - alert: ExchangeGuardStorm
         expr: sum by (client_id) (increase(basetool_exchange_writes_total{outcome="held"}[1h])) > 10
@@ -252,6 +252,14 @@ groups:
         annotations:
           summary: "Many new installations of one exchange client"
           description: "More than 20 new installations of one registered client (client_id) connected in the last hour. A release day can explain it; a device-code phishing wave or a leaked client cannot. Check the new-connection notifications and the installations on the admin page, and suspend the client if the connections are not expected (REQ-XCH-007, REQ-XCH-028)."
+
+      - alert: ExchangeBulkUndoFailed
+        expr: sum(increase(basetool_scheduled_job_executions_total{task="exchange_bulk_undo",outcome="failure"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "An admin's bulk undo of an exchange client failed"
+          description: "A bulk undo under Administration - Verbundene Anwendungen ended FAILED: at least one member could not be processed, or the run broke off. The members it did process are undone; the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed - it only touches what is not undone yet (REQ-XCH-034)."
 
       - alert: ExchangeUnknownClient
         expr: sum(increase(basetool_ingest_exchange_refused_total{client_id="unregistered"}[15m])) > 10
