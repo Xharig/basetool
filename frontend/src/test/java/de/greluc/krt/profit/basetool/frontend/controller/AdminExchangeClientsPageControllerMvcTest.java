@@ -38,6 +38,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeBulkUndoPreviewDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeBulkUndoRequest;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeBulkUndoRunDetailDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeBulkUndoRunDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientCreateRequest;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientStatusRequest;
@@ -63,14 +67,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
- * MVC test for {@link AdminExchangeClientsPageController} (REQ-XCH-003): the page and its {@code
- * registry} swap render the switch and the clients, and every write is relayed to the backend's
- * admin registry.
+ * MVC test for {@link AdminExchangeClientsPageController} (REQ-XCH-003, REQ-XCH-034): the page and
+ * its {@code registry} and {@code undoRuns} swaps render the switch, the clients and the bulk undo
+ * runs, and every write is relayed to the backend's admin registry and bulk undo.
  */
 @SpringBootTest
 class AdminExchangeClientsPageControllerMvcTest {
 
   private static final UUID ID = UUID.fromString("7a0c7a0c-0000-4000-8000-00000000c11e");
+  private static final UUID RUN = UUID.fromString("7a0c7a0c-0000-4000-8000-0000000000d0");
 
   private MockMvc mockMvc;
 
@@ -288,6 +293,158 @@ class AdminExchangeClientsPageControllerMvcTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("SUSPENDED"))
         .andExpect(jsonPath("$.version").value(4));
+  }
+
+  /**
+   * Builds a bulk undo run of the stubbed client.
+   *
+   * @param status the run's state
+   * @return the run
+   */
+  private static ExchangeBulkUndoRunDto run(String status) {
+    return new ExchangeBulkUndoRunDto(
+        RUN,
+        ID,
+        "versekit",
+        "VerseKit",
+        status,
+        Instant.parse("2026-09-27T12:00:00Z"),
+        null,
+        "SHIP",
+        "Admin One",
+        3,
+        2,
+        0,
+        5,
+        1,
+        Instant.parse("2026-09-27T18:00:00Z"),
+        null);
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void theUndoRunsFragmentShowsARunningRunAndAsksToBePolled() throws Exception {
+    stubRegistry();
+    when(backendApiClient.get(eq("/api/v1/admin/exchange-undo-runs"), anyTypeRef()))
+        .thenReturn(List.of(run("RUNNING")));
+
+    mockMvc
+        .perform(get("/admin/exchange-clients").param("fragment", "undoRuns"))
+        .andExpect(status().isOk())
+        .andExpect(view().name("admin/exchange-clients :: undoRuns"))
+        .andExpect(content().string(containsString("data-xc-running=\"true\"")))
+        .andExpect(content().string(containsString("data-run-id=\"" + RUN + "\"")))
+        .andExpect(content().string(containsString("27.09.2026 18:00 UTC")))
+        .andExpect(content().string(containsString("chip chip--info")))
+        .andExpect(content().string(not(containsString("id=\"xc-table\""))))
+        .andExpect(content().string(not(containsString("??admin.exchangeClients"))));
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void thePageOffersTheUndoPerClientAndStopsPollingWhenNothingRuns() throws Exception {
+    stubRegistry();
+    when(backendApiClient.get(eq("/api/v1/admin/exchange-undo-runs"), anyTypeRef()))
+        .thenReturn(List.of(run("COMPLETED")));
+
+    mockMvc
+        .perform(get("/admin/exchange-clients"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("data-xc-undo")))
+        .andExpect(content().string(containsString("id=\"xc-undo-modal\"")))
+        .andExpect(content().string(containsString("id=\"xc-undo-run-modal\"")))
+        .andExpect(content().string(containsString("data-xc-running=\"false\"")))
+        .andExpect(content().string(containsString("chip chip--success")))
+        .andExpect(content().string(not(containsString("??admin.exchangeClients"))));
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void aBulkUndoIsPreviewedAndStartedWithItsScope() throws Exception {
+    ExchangeBulkUndoRequest scope =
+        new ExchangeBulkUndoRequest(Instant.parse("2026-09-27T12:00:00Z"), null, "SHIP");
+    when(backendApiClient.post(
+            "/api/v1/admin/exchange-clients/" + ID + "/undo/preview",
+            scope,
+            ExchangeBulkUndoPreviewDto.class))
+        .thenReturn(new ExchangeBulkUndoPreviewDto(scope.since(), 3, 12L, true));
+    when(backendApiClient.post(
+            "/api/v1/admin/exchange-clients/" + ID + "/undo", scope, ExchangeBulkUndoRunDto.class))
+        .thenReturn(run("RUNNING"));
+    String body = "{\"since\":\"2026-09-27T12:00:00Z\",\"resource\":\"SHIP\"}";
+
+    mockMvc
+        .perform(
+            post("/admin/exchange-clients/" + ID + "/undo/preview")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.members").value(3))
+        .andExpect(jsonPath("$.clientActive").value(true));
+    mockMvc
+        .perform(
+            post("/admin/exchange-clients/" + ID + "/undo")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("RUNNING"));
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void aSecondRunIsRelayedAsAConflict() throws Exception {
+    when(backendApiClient.post(
+            eq("/api/v1/admin/exchange-clients/" + ID + "/undo"),
+            any(),
+            eq(ExchangeBulkUndoRunDto.class)))
+        .thenThrow(new BackendServiceException("running", null, 409));
+
+    mockMvc
+        .perform(
+            post("/admin/exchange-clients/" + ID + "/undo")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"since\":\"2026-09-27T12:00:00Z\"}"))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void theInstallationsAndARunsSkippedEntriesAreRelayed() throws Exception {
+    when(backendApiClient.get(
+            eq("/api/v1/admin/exchange-clients/" + ID + "/undo/installations?since={since}"),
+            anyTypeRef(),
+            eq("2026-09-27T12:00:00Z")))
+        .thenReturn(List.of());
+    when(backendApiClient.get(
+            "/api/v1/admin/exchange-undo-runs/" + RUN, ExchangeBulkUndoRunDetailDto.class))
+        .thenReturn(
+            new ExchangeBulkUndoRunDetailDto(
+                run("COMPLETED"),
+                List.of(
+                    new ExchangeBulkUndoRunDetailDto.SkippedEntry(
+                        "Member", "SHIP", "Cutlass", "CHANGED_AFTERWARDS")),
+                1L));
+
+    mockMvc
+        .perform(
+            get("/admin/exchange-clients/" + ID + "/undo/installations")
+                .param("since", "2026-09-27T12:00:00Z")
+                .header("X-Requested-With", "XMLHttpRequest"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(0));
+    mockMvc
+        .perform(
+            get("/admin/exchange-clients/undo-runs/" + RUN)
+                .header("X-Requested-With", "XMLHttpRequest"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.skipped[0].reason").value("CHANGED_AFTERWARDS"))
+        .andExpect(jsonPath("$.skippedTotal").value(1));
   }
 
   @Test

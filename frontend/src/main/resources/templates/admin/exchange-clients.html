@@ -27,6 +27,9 @@
     <span id="xc-i18n" hidden
           th:attr="data-saved=#{admin.exchangeClients.success.saved},data-suspended=#{admin.exchangeClients.success.suspended},data-activated=#{admin.exchangeClients.success.activated},data-switched=#{admin.exchangeClients.success.switched},data-error=#{notification.error.title},data-confirm-ok=#{notifications.confirm.ok},data-confirm-cancel=#{general.cancel},data-confirm-suspend-title=#{admin.exchangeClients.confirmSuspend.title},data-confirm-suspend-body=#{admin.exchangeClients.confirmSuspend.body},data-confirm-widen-title=#{admin.exchangeClients.confirmWiden.title},data-confirm-widen-body=#{admin.exchangeClients.confirmWiden.body},data-confirm-off-title=#{admin.exchangeClients.confirmOff.title},data-confirm-off-body=#{admin.exchangeClients.confirmOff.body},data-confirm-on-title=#{admin.exchangeClients.confirmOn.title},data-confirm-on-body=#{admin.exchangeClients.confirmOn.body},data-form-create=#{admin.exchangeClients.form.create},data-form-edit=#{admin.exchangeClients.form.edit}"></span>
 
+    <span id="xc-undo-i18n" hidden
+          th:attr="data-started=#{admin.exchangeClients.undo.started},data-preview=#{admin.exchangeClients.undo.preview},data-preview-active=#{admin.exchangeClients.undo.preview.active},data-preview-empty=#{admin.exchangeClients.undo.preview.empty},data-confirm-title=#{admin.exchangeClients.undo.confirm.title},data-confirm-body=#{admin.exchangeClients.undo.confirm.body},data-installation-all=#{admin.exchangeClients.undo.installation.all},data-installation-option=#{admin.exchangeClients.undo.installation.option},data-installation-revoked=#{admin.exchangeClients.undo.installation.revoked},data-summary=#{admin.exchangeClients.undo.run.summary},data-skipped-title=#{admin.exchangeClients.undo.run.skippedTitle},data-none=#{admin.exchangeClients.undo.run.none},data-more=#{admin.exchangeClients.undo.run.more},data-unnamed=#{admin.exchangeClients.undo.unnamed},data-reason-changed-afterwards=#{admin.exchangeClients.undo.reason.CHANGED_AFTERWARDS},data-reason-gone=#{admin.exchangeClients.undo.reason.GONE},data-reason-failed=#{admin.exchangeClients.undo.reason.FAILED},data-resource-blueprint=#{admin.exchangeClients.undo.resource.BLUEPRINT},data-resource-stock=#{admin.exchangeClients.undo.resource.STOCK},data-resource-ship=#{admin.exchangeClients.undo.resource.SHIP}"></span>
+
     <div class="greeting hud-box">
         <h1 th:text="#{admin.exchangeClients.title}">Verbundene Anwendungen</h1>
         <p th:text="#{admin.exchangeClients.subtitle}">Welche Anwendungen Daten austauschen d&uuml;rfen.</p>
@@ -104,6 +107,10 @@
                                             th:title="#{admin.exchangeClients.edit}" th:aria-label="#{admin.exchangeClients.edit}">
                                         <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-edit"></use></svg>
                                     </button>
+                                    <button type="button" class="btn btn-ghost" data-xc-undo
+                                            th:attr="data-client-name=${c.displayName}"
+                                            data-testid="xc-undo-open"
+                                            th:text="#{admin.exchangeClients.undo}">Zur&uuml;cknehmen</button>
                                     <button th:if="${c.status == 'ACTIVE'}" type="button" class="btn btn-quiet-danger" data-xc-suspend
                                             th:text="#{admin.exchangeClients.suspend}">Sperren</button>
                                     <button th:unless="${c.status == 'ACTIVE'}" type="button" class="btn btn-secondary" data-xc-activate
@@ -122,6 +129,62 @@
                     <a th:if="${grafanaUrl != null and !#strings.isEmpty(grafanaUrl)}" th:href="${grafanaUrl}" target="_blank" rel="noopener noreferrer"
                        th:text="#{admin.exchangeClients.errorRate.link}">Zum Dashboard</a>
                 </p>
+            </div>
+        </th:block>
+    </div>
+
+    <div id="xc-undo-runs-host">
+        <th:block th:fragment="undoRuns">
+            <div class="hud-box mt-2" id="xc-undo-runs" data-testid="xc-undo-runs"
+                 th:attr="data-xc-running=${undoRunning} ? 'true' : 'false'">
+                <h2 th:text="#{admin.exchangeClients.undo.runs.title}">Zur&uuml;ckgenommene &Auml;nderungen</h2>
+                <p class="form-hint" th:text="#{admin.exchangeClients.undo.runs.hint}">L&auml;uft ein Zur&uuml;cknehmen, aktualisiert sich die Liste von selbst.</p>
+                <div class="table-responsive">
+                    <table id="xc-undo-runs-table">
+                        <thead>
+                        <tr>
+                            <th th:text="#{admin.exchangeClients.undo.column.client}">Anwendung</th>
+                            <th th:text="#{admin.exchangeClients.undo.column.started}">Gestartet</th>
+                            <th th:text="#{admin.exchangeClients.undo.column.by}">Von</th>
+                            <th th:text="#{admin.exchangeClients.undo.column.scope}">Umfang</th>
+                            <th th:text="#{admin.exchangeClients.undo.column.status}">Status</th>
+                            <th th:text="#{admin.exchangeClients.undo.column.members}">Mitglieder</th>
+                            <th th:text="#{admin.exchangeClients.undo.column.restored}">Zur&uuml;ckgesetzt</th>
+                            <th th:text="#{admin.exchangeClients.undo.column.skipped}">&Uuml;bersprungen</th>
+                            <th th:text="#{admin.exchangeClients.undo.column.actions}">Aktion</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="r : ${undoRuns}" th:attr="data-run-id=${r.id}">
+                            <td th:text="${r.clientName}">VerseKit</td>
+                            <td th:text="#{admin.exchangeClients.utc(${#temporals.format(r.startedAt, 'dd.MM.yyyy HH:mm', 'UTC')})}">27.09.2026 18:00 UTC</td>
+                            <td th:text="${r.requestedByName} ?: '–'">Admin</td>
+                            <td>
+                                <span th:text="#{admin.exchangeClients.undo.scope.since(${#temporals.format(r.since, 'dd.MM.yyyy HH:mm', 'UTC')})}">seit 27.09.2026 12:00 UTC</span>
+                                <span class="chip chip--muted"
+                                      th:text="${r.resource != null} ? #{'admin.exchangeClients.undo.resource.' + ${r.resource}} : #{admin.exchangeClients.undo.resource.ALL}">Alles</span>
+                                <span th:if="${r.installationId != null}" class="chip chip--muted"
+                                      th:text="#{admin.exchangeClients.undo.scope.installation}">eine Installation</span>
+                            </td>
+                            <td>
+                                <span th:if="${r.status == 'RUNNING'}" class="chip chip--info" th:text="#{admin.exchangeClients.undo.status.RUNNING}">L&auml;uft</span>
+                                <span th:if="${r.status == 'COMPLETED'}" class="chip chip--success" th:text="#{admin.exchangeClients.undo.status.COMPLETED}">Abgeschlossen</span>
+                                <span th:if="${r.status == 'FAILED'}" class="chip chip--danger" th:text="#{admin.exchangeClients.undo.status.FAILED}">Fehlgeschlagen</span>
+                            </td>
+                            <td th:text="#{admin.exchangeClients.undo.progress(${r.membersDone}, ${r.membersTotal}, ${r.membersFailed})}">2 von 3, 0 fehlgeschlagen</td>
+                            <td th:text="${r.restored}">4</td>
+                            <td th:text="${r.skipped}">1</td>
+                            <td>
+                                <button type="button" class="btn btn-ghost" data-xc-undo-run
+                                        th:text="#{admin.exchangeClients.undo.details}">Details</button>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(undoRuns)}">
+                            <td colspan="9" th:text="#{admin.exchangeClients.undo.runs.empty}">Noch nichts zur&uuml;ckgenommen.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </th:block>
     </div>
@@ -176,6 +239,62 @@
             </div>
         </form>
     </div>
+
+    <th:block th:replace="~{fragments/modal-wrapper :: modal(modalId='xc-undo-modal', titleKey='admin.exchangeClients.undo.title', variant='krt-modal--wide', body=~{::xc-undo-modal-body})}">
+        <th:block th:ref="xc-undo-modal-body">
+            <form id="xc-undo-form" class="no-track" data-client-id="" novalidate>
+                <div class="krt-modal-body">
+                    <p id="xc-undo-client" class="data-value"></p>
+                    <p th:text="#{admin.exchangeClients.undo.body}">Setzt bei allen Mitgliedern zur&uuml;ck, was diese Anwendung ge&auml;ndert hat.</p>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="xc-undo-since" th:text="#{admin.exchangeClients.undo.since}">Seit</label>
+                            <input type="datetime-local" id="xc-undo-since" required step="60">
+                            <p class="form-hint" th:text="#{admin.exchangeClients.undo.since.hint}">In deiner Ortszeit.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="xc-undo-resource" th:text="#{admin.exchangeClients.undo.resource}">Bereich</label>
+                            <select id="xc-undo-resource">
+                                <option value="" th:text="#{admin.exchangeClients.undo.resource.ALL}">Alles</option>
+                                <option value="BLUEPRINT" th:text="#{admin.exchangeClients.undo.resource.BLUEPRINT}">Blueprints</option>
+                                <option value="STOCK" th:text="#{admin.exchangeClients.undo.resource.STOCK}">Lager</option>
+                                <option value="SHIP" th:text="#{admin.exchangeClients.undo.resource.SHIP}">Schiffe</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="xc-undo-installation" th:text="#{admin.exchangeClients.undo.installation}">Installation</label>
+                            <select id="xc-undo-installation">
+                                <option value="" th:text="#{admin.exchangeClients.undo.installation.all}">Alle Installationen</option>
+                            </select>
+                            <p class="form-hint" th:text="#{admin.exchangeClients.undo.installation.hint}">Nur Installationen mit &Auml;nderungen seit dem gew&auml;hlten Zeitpunkt.</p>
+                        </div>
+                    </div>
+                    <p class="alert alert-warning" th:text="#{admin.exchangeClients.undo.warning}">Die Anwendung wird vorher gesperrt.</p>
+                    <p id="xc-undo-preview" class="xc-undo-preview" aria-live="polite" data-testid="xc-undo-preview" hidden></p>
+                </div>
+                <div class="krt-modal-foot">
+                    <button type="button" class="btn btn-ghost" data-trigger="close-modal-display"
+                            data-modal-id="xc-undo-modal" th:text="#{general.cancel}">Abbrechen</button>
+                    <button type="button" class="btn btn-outline" id="xc-undo-check" data-testid="xc-undo-check"
+                            th:text="#{admin.exchangeClients.undo.check}">Pr&uuml;fen</button>
+                    <button type="submit" class="btn btn-danger" id="xc-undo-submit" data-testid="xc-undo-submit" disabled
+                            th:text="#{admin.exchangeClients.undo.submit}">Zur&uuml;cknehmen starten</button>
+                </div>
+            </form>
+        </th:block>
+    </th:block>
+
+    <th:block th:replace="~{fragments/modal-wrapper :: modal(modalId='xc-undo-run-modal', titleKey='admin.exchangeClients.undo.run.title', variant='krt-modal--wide', body=~{::xc-undo-run-modal-body})}">
+        <th:block th:ref="xc-undo-run-modal-body">
+            <div class="krt-modal-body">
+                <div id="xc-undo-run-body" aria-live="polite" data-testid="xc-undo-run-body"></div>
+            </div>
+            <div class="krt-modal-foot">
+                <button type="button" class="btn btn-ghost" data-trigger="close-modal-display"
+                        data-modal-id="xc-undo-run-modal" th:text="#{admin.exchangeClients.undo.close}">Schlie&szlig;en</button>
+            </div>
+        </th:block>
+    </th:block>
 </main>
 
 <script th:src="@{/js/admin-exchange-clients.js}" defer th:attr="nonce=${cspNonce}"></script>

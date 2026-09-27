@@ -9,7 +9,9 @@
     }
     .form-group input[type='text'],
     .form-group input[type='url'],
-    .form-group input[type='number'] {
+    .form-group input[type='number'],
+    .form-group input[type='datetime-local'],
+    .form-group select {
         width: 100%;
         padding: 0.5rem;
         background-color: var(--color-gray-4);
@@ -48,5 +50,12 @@
     .xc-switch-hint {
         margin-left: 0.5rem;
         color: var(--color-gray-2-text);
+    }
+    .xc-undo-preview {
+        margin-top: 0.75rem;
+    }
+    .xc-undo-skipped {
+        margin: 0.5rem 0 0;
+        padding-left: 1rem;
     }
 }

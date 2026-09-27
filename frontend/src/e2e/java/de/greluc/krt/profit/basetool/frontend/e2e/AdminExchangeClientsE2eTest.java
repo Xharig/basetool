@@ -154,6 +154,52 @@ class AdminExchangeClientsE2eTest {
   }
 
   /**
+   * Opens the bulk undo of a freshly registered client, checks a scope that reaches nothing, and
+   * finds the start still disabled and the client still active, all without a reload (REQ-XCH-034).
+   */
+  @Test
+  void theBulkUndoChecksItsScopeBeforeItCanStart() {
+    String baseUrl = STACK.baseUrl();
+    String clientId =
+        "e2e-xu-" + UUID.randomUUID().toString().substring(0, 8).toLowerCase(Locale.ROOT);
+    Path storageState = E2eSupport.authenticatedStorageState(browser, baseUrl, USERNAME, PASSWORD);
+    try (BrowserContext context =
+        browser.newContext(
+            new Browser.NewContextOptions()
+                .setIgnoreHTTPSErrors(true)
+                .setStorageStatePath(storageState))) {
+      Page page = context.newPage();
+      try {
+        E2eSupport.navigate(page, baseUrl + "/admin/exchange-clients");
+        page.waitForLoadState();
+        page.evaluate("() => { window.__krtNoReload = true; }");
+        page.locator("#xc-clientId").fill(clientId);
+        page.locator("#xc-displayName").fill("E2E Undo Client");
+        awaitRegistryRefresh(page, page.locator("#xc-form button[type='submit']")::click);
+
+        rowOf(page, "E2E Undo Client").locator("[data-xc-undo]").click();
+        assertThat(page.locator("#xc-undo-modal")).isVisible();
+        assertThat(page.locator("#xc-undo-client")).hasText("E2E Undo Client");
+        assertThat(page.locator("#xc-undo-submit")).isDisabled();
+        page.locator("#xc-undo-check").click();
+        assertThat(page.locator("#xc-undo-preview")).isVisible();
+        assertThat(page.locator("#xc-undo-submit")).isDisabled();
+        page.keyboard().press("Escape");
+
+        assertThat(rowOf(page, "E2E Undo Client").locator("[data-xc-suspend]")).hasCount(1);
+        assertThat(page.locator(".notification-toast.error-toast")).hasCount(0);
+        assertEquals(
+            Boolean.TRUE,
+            page.evaluate("() => window.__krtNoReload === true"),
+            "the undo dialog works in place — no page reload cleared the marker");
+      } catch (RuntimeException | AssertionError failure) {
+        E2eSupport.dump(page, "admin-exchange-bulk-undo");
+        throw failure;
+      }
+    }
+  }
+
+  /**
    * Flips the global switch through its confirmation.
    *
    * @param page the registry page
