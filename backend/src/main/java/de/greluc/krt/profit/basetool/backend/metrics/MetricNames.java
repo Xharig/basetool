@@ -489,7 +489,10 @@ public final class MetricNames {
    */
   public static final String OUTCOME_SUCCEEDED = "succeeded";
 
-  /** Outcome tag value for a P4K import that reached {@code FAILED} (error or restart orphan). */
+  /**
+   * Outcome tag value for a P4K import that reached {@code FAILED} (error or restart orphan), and
+   * for a mirror write on {@link #EXCHANGE_MIRROR_WRITES} that Redis refused or failed.
+   */
   public static final String OUTCOME_FAILED = "failed";
 
   /** Mail outcome: the SMTP relay accepted the message. */
@@ -880,6 +883,37 @@ public final class MetricNames {
    * Untagged (REQ-OBS-011).
    */
   public static final String TRACING_ENABLED = "basetool.tracing.enabled";
+
+  /**
+   * Counter {@code basetool_exchange_registry_changes_total{action}} — one per committed change of
+   * the exchange client registry or its switch (REQ-XCH-003); feeds {@code
+   * ExchangeRegistryChanged}.
+   */
+  public static final String EXCHANGE_REGISTRY_CHANGES = "basetool.exchange.registry.changes";
+
+  /**
+   * Counter {@code basetool_exchange_mirror_writes_total{phase,outcome}} — every attempt to bring
+   * the registry's Redis mirror in line (REQ-XCH-003).
+   */
+  public static final String EXCHANGE_MIRROR_WRITES = "basetool.exchange.mirror.writes";
+
+  /**
+   * Tag key: the registry change on {@link #EXCHANGE_REGISTRY_CHANGES}, bounded by {@code
+   * ExchangeRegistryAction}.
+   */
+  public static final String TAG_ACTION = "action";
+
+  /**
+   * Tag key: when a mirror write ran, bounded by {@code ExchangeMirrorPhase} on {@link
+   * #EXCHANGE_MIRROR_WRITES}.
+   */
+  public static final String TAG_PHASE = "phase";
+
+  /** {@link #TAG_OUTCOME} value on {@link #EXCHANGE_MIRROR_WRITES}: the document was written. */
+  public static final String OUTCOME_WRITTEN = "written";
+
+  /** {@link #TAG_OUTCOME} value on {@link #EXCHANGE_MIRROR_WRITES}: the mirror already agreed. */
+  public static final String OUTCOME_UNCHANGED = "unchanged";
 
   private MetricNames() {}
 }

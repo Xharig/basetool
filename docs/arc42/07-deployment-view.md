@@ -73,6 +73,9 @@ Consequences worth stating:
 - **Redis's ACL is rendered, not written.** `/var/iri/redis/users.acl` comes from
   `scripts/redis-users.acl.tmpl` through `render-redis-acl.py` (installed by the role), one user per
   service and SHA-256 hashes only, and is applied live with `ACL LOAD` (REQ-SEC-068, ADR-0207).
+  The backend writes the `exchange:*` family (the client registry mirror) and ingest may only read
+  it (ADR-0221); the mirror is written only once `APP_EXCHANGE_MIRROR_ENABLED=true`, which must
+  wait until the rendered ACL carries that grant.
   The unit carries `--notify-keyspace-events Egx` and an unauthenticated `PING` health probe, so
   neither depends on which ACL users exist.
 - **Each service mounts its own keystore and an internal truststore** — `/run/secrets/keystore.p12`

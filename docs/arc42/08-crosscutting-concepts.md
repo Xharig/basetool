@@ -170,8 +170,8 @@ neither observed nor bounded.
 
 ## 8.8 Audit
 
-Twelve audited areas (Bank, Lager, Aufträge, Raffinerie, Mein Inventar, Missionen, Operationen,
-Rollen, Beförderung, Materialbörse, Hangar, Blueprints) log **every** state-mutating activity to an append-only trail. Adding a
+Thirteen audited areas (Bank, Lager, Aufträge, Raffinerie, Mein Inventar, Missionen, Operationen,
+Rollen, Beförderung, Materialbörse, Hangar, Blueprints, Verbundene Anwendungen) log **every** state-mutating activity to an append-only trail. Adding a
 mutation to an audited area without its audit event is an incomplete change — including the event
 type, the recording call, the viewer's per-area filter, the DE/EN labels and the coverage list. No
 user free text and no personal data in the details payload.

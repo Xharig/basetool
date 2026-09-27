@@ -1578,9 +1578,10 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   detection is two-tier: `AuditSilenceAnomaly` (no audited mutation anywhere for 5 d while the
   backend is up) plus, since #1041 item 10, `AuditDomainSilenceAnomaly` (a single domain silent for
   **30 d** while others stay active — the domain-lost-its-wiring failure mode the global sum masks).
-  Six domains are excluded from the per-domain rule and never notify at any horizon: `PROMOTION`,
-  `PERSONAL_INVENTORY`, `MARKET`, — since 2026-08-16 — `ROLE`, and — since 2026-09-26 — `HANGAR` and
-  `BLUEPRINT`. *(Changed 2026-09-26 by owner decision: the window was 14 d and the two new areas were
+  Seven domains are excluded from the per-domain rule and never notify at any horizon: `PROMOTION`,
+  `PERSONAL_INVENTORY`, `MARKET`, — since 2026-08-16 — `ROLE`, — since 2026-09-26 — `HANGAR` and
+  `BLUEPRINT`, and — since 2026-09-27, by owner decision — `CONNECTED_APPS`, whose registry changes
+  are rare admin actions like `ROLE`'s and are announced by `ExchangeRegistryChanged` anyway. *(Changed 2026-09-26 by owner decision: the window was 14 d and the two new areas were
   alerted by default. Production over the preceding 180 days, read-only: ship changes happened on 40
   days with one pause of 15.1 days, blueprint changes on 64 days with a longest pause of 10.9 days —
   a 14-day window would have fired on the hangar once in half a year, on an ordinary quiet stretch.)* `ROLE` covers
@@ -1607,6 +1608,18 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   bookings need no dedicated meter — `JOB_ORDER_PRODUCTION_BOOKED` and
   `INVENTORY_CONSUMED_BY_PRODUCTION` roll into the existing `JOB_ORDER` and `INVENTORY` domain
   counts (REQ-ORDERS-025).
+- `basetool_exchange_registry_changes_total{action}` counter, one per committed registry change
+  (`action` = `created` / `updated` / `suspended` / `activated` / `switch_on` / `switch_off`, the
+  bounded `ExchangeRegistryAction`), registered at zero for every action. It backs
+  `ExchangeRegistryChanged` (warning, any increase in 10 m): every registry change is announced
+  (REQ-XCH-003, REQ-XCH-028).
+- `basetool_exchange_mirror_writes_total{phase,outcome}` counter for every attempt to bring the
+  registry's Redis mirror in line (`phase` = `pre_commit` / `post_commit` / `rollback` / `startup` /
+  `reconcile`, `outcome` = `written` / `unchanged` / `failed`), registered at zero. It backs
+  `ExchangeMirrorWriteFailed` (warning, a failure in 10 m held 5 m). The reconcile runs as the
+  `exchange_registry_reconcile` scheduled job with the usual task metrics and its own
+  `ExchangeRegistryReconcileStale` (no success for 10 m, only while the job's enabled gauge is 1).
+  The operations dashboard shows both counters per hour.
 - `basetool_material_exchange_active_count{status="ACTIVE"}` gauge sampled by
   `BusinessMetricsCollector` — the number of active Materialbörse offers on the board, spanning
   **both** offer kinds (material and item, REQ-MARKET-012), via `countByStatus(ACTIVE)`

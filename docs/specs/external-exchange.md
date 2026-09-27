@@ -95,14 +95,40 @@ the mirror write fails; permissive changes are written **after** the commit. The
 mirror through a cache of at most 5 s and refuses every exchange request when it cannot read it
 (`503 REGISTRY_UNAVAILABLE`) or when the switch is off (`503 EXCHANGE_DISABLED`).
 
+**How the backend keeps the mirror** (WP 3.1). The tables are `exchange_client`,
+`exchange_client_capability` and the single-row `exchange_settings` (`V248`); the switch starts
+**off**. The mirror is **one JSON document** under `exchange:registry`:
+`{schemaVersion: 1, revision, writtenAt, enabled, clients: {<clientId>: {displayName, status,
+capabilities[], minClientVersion, requestsPerMinute, writesPerDay}}}`, the capabilities as their
+scope strings, sorted. `revision` comes from the database sequence `exchange_registry_revision_seq`,
+so it grows across restarts. Every registry change and every mirror write first takes the row lock
+on `exchange_settings`, so a mirror write never overtakes an open change. A change that takes
+access away writes the **restrictive combination** of before and after (switch on only if on in
+both, a client suspended in either is suspended, capabilities intersected, a new client left out)
+before its commit; a failed write fails the change with `502` and changes nothing. After the
+transaction completes — committed or rolled back — the committed state is written again; a failure
+there is counted and left to the reconcile, which compares the content (not `revision` and
+`writtenAt`) at startup and every 60 s (`app.exchange.mirror.reconcile-interval`) and rewrites a
+differing, missing or unreadable document. The mirror is written only while
+`APP_EXCHANGE_MIRROR_ENABLED=true`; while it is off nothing is mirrored and the gateway, which then
+finds no document, refuses every exchange request.
+
 **Acceptance**
 
 - [ ] Tests for both write orders, a failed mirror write, the reconcile healing a divergence, and
-  the gateway's fail-closed read.
-- [ ] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
+  the gateway's fail-closed read. *The backend half is in (WP 3.1, `ExchangeRegistryMirrorIntegrationTest`
+  against a real Redis under the backend's ACL user, and `ExchangeRegistrySnapshotTest`); the
+  gateway's read follows with WP 3.2.*
+- [x] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
   `ExchangeRegistryChanged` alert.
 
-**Status:** planned — WP 3.1 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
+**Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
+`AdminExchangeRegistryControllerTest`, `RedisAclBackendIntegrationTest`,
+`RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
+**Code:** `ExchangeRegistryService`, `ExchangeRegistryMirrorSync`, `RedisExchangeRegistryMirror`,
+`ExchangeRegistryReconcileTask`, `AdminExchangeRegistryController` · **Status:** registry, admin
+API and mirror built — WP 3.1 (#2083); the gateway's read with WP 3.2 (#2082), the admin page with
+WP 4.5 (#2087)
 
 ### REQ-XCH-004 — Capabilities are OAuth scopes, enforced at the gateway and re-checked at the backend
 
@@ -121,7 +147,9 @@ only by property.
   wrong audience with the audience property blank.
 - [ ] ArchUnit: every exchange controller method carries the exchange gate.
 
-**Status:** planned — WP 2.2 (#2081), WP 3.1 (#2083), WP 3.2 (#2082)
+**Status:** the scopes (WP 2.2, #2081) and the registry's per-client grants (`ExchangeCapability`,
+WP 3.1) are in; the gateway check (WP 3.2, #2082) and the backend's `ExchangeGate` (WP 3.1, #2083)
+follow
 
 ### REQ-XCH-005 — Every third-party client is a public, consent-gated device-grant client
 

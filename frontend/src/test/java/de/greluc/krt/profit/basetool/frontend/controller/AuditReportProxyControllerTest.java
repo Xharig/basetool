@@ -112,6 +112,19 @@ class AuditReportProxyControllerTest {
   }
 
   @Test
+  void connectedAppsDomain_passesTheAllowlistGateOnBothPaths() {
+    ResponseStatusException download =
+        assertThrows(
+            ResponseStatusException.class,
+            () -> controller.downloadAuditLog("CONNECTED_APPS", FROM, TO, null));
+    assertNotEquals(HttpStatus.BAD_REQUEST, download.getStatusCode());
+    ResponseStatusException purge =
+        assertThrows(
+            ResponseStatusException.class, () -> controller.purgeAuditLog("CONNECTED_APPS", FROM));
+    assertNotEquals(HttpStatus.BAD_REQUEST, purge.getStatusCode());
+  }
+
+  @Test
   void knownDomain_passesTheAllowlistGate() {
     ResponseStatusException ex =
         assertThrows(
