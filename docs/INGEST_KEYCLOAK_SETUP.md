@@ -668,6 +668,11 @@ Only when both hold, set `IRI_INGEST_CLIENT_AUDIT_ONLY=false` and apply again. T
 > to start with `IRI_INGEST_CLIENT_AUDIT_ONLY=true` or an empty `IRI_INGEST_ALLOWED_CLIENT_IDS`. The
 > dry run above therefore belongs on the testing host or a local stack; production enforces from the
 > first start. The go-live switches the legacy endpoints off, after which the guard no longer applies.
+>
+> **Registering the extractor in the exchange registry does not lock out old builds** as long as
+> `basetool-sc-extractor` stays on `IRI_INGEST_ALLOWED_CLIENT_IDS`: the legacy routes refuse a
+> registry client only when the allowlist does not name it (`exchange_client`). Keep the entry until
+> the legacy endpoints are off, and never add a third-party client id there.
 
 > Multiple client ids are supported (comma-separated), which is what makes a client-id **rotation**
 > possible without downtime: ship the new extractor with a new id, run both, drop the old id once the

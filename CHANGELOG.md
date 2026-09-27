@@ -225,6 +225,10 @@
   Anwendung und Mitglied in eigenen Plätzen (höchstens 10); sie verdrängen keine offenen Uploads des
   SC Extractors und keine Entwürfe anderer Anwendungen mehr.
   
+- **Ingest: verbundene Anwendungen nicht auf den alten Endpunkten.** Die alten `/v1`-Endpunkte
+  lehnen jede Anwendung aus dem Austausch-Register ab, die nicht zusätzlich auf der
+  Client-Allowlist steht; der SC Extractor bleibt erreichbar.
+  
 - **Ingest: Produktion startet nicht ohne Client-Allowlist.** Solange die alten `/v1`-Endpunkte
   aktiv sind, verweigert das Gateway unter `prod` den Start, wenn `IRI_INGEST_ALLOWED_CLIENT_IDS`
   leer ist oder `IRI_INGEST_CLIENT_AUDIT_ONLY` auf `true` steht – sonst erreichte das Token einer

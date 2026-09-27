@@ -1295,7 +1295,8 @@ Behind `app.ingest.legacy-endpoints.enabled` (default `true`), `/v1/refinery-ext
 refuses to start with an empty or audit-only client-id allowlist, so an exchange client's token can
 never reach these relays, which run with the member's stored authorities (REQ-INGEST-011,
 `LegacyClientGateGuard`; production sets the allowlist and enforces it, so the next deploy is
-unaffected).
+unaffected). The routes also refuse every client the exchange registry lists unless the allowlist
+names it too (`exchange_client`, review 2 L1); a registry that cannot be read skips that check.
 
 The switch is `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED` on the host. The refusal runs before the security
 chain, so an outdated extractor sees the hint (*„Diese Schnittstelle wurde abgeschaltet. Bitte

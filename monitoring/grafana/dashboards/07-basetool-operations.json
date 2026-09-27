@@ -2475,7 +2475,7 @@
       },
       "type": "timeseries",
       "title": "Ingest client rejections/hour by reason",
-      "description": "Client-identity gate rejections (REQ-INGEST-011), also counted while audit-only is set. unknown_client / bad_provenance = an unapproved tool is calling the restricted interface. missing_azp / missing_scope = a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Backs the IngestUnknownClient alert.",
+      "description": "Client-identity gate rejections (REQ-INGEST-011), also counted while audit-only is set. unknown_client / bad_provenance = an unapproved tool is calling the restricted interface. exchange_client = an exchange client is calling the legacy /v1 routes. missing_azp / missing_scope = a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Backs the IngestUnknownClient alert.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3803,7 +3803,7 @@
       },
       "type": "timeseries",
       "title": "Legacy extractor endpoints: switch and 410s/hour",
-      "description": "Client-identity gate rejections (REQ-INGEST-011), also counted while audit-only is set. unknown_client / bad_provenance = an unapproved tool is calling the restricted interface. missing_azp / missing_scope = a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Backs the IngestUnknownClient alert.",
+      "description": "Client-identity gate rejections (REQ-INGEST-011), also counted while audit-only is set. unknown_client / bad_provenance = an unapproved tool is calling the restricted interface. exchange_client = an exchange client is calling the legacy /v1 routes. missing_azp / missing_scope = a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Backs the IngestUnknownClient alert.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

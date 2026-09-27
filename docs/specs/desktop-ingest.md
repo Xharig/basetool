@@ -700,6 +700,17 @@ DPoP provider both yield a `JwtAuthenticationToken` — which is exactly why it 
 waved through, under its own `non_jwt_principal` reason, even with nothing configured and even under
 `audit-only`. An anonymous token is not a caller and stays the resource server's `401`.
 
+**A client of the exchange registry is refused on the legacy routes unless the allowlist names it
+too** (security review 2 L1, owner decision 2026-09-27). Every exchange scope stamps
+`aud=basetool-ingest`, so an exchange client's token passes the audience check; the env allowlist
+alone kept it out. `ClientIdentityFilter` therefore reads the exchange registry mirror (through the
+gateway's five-second cache) and refuses any `azp` it lists that `allowed-client-ids` does not,
+`403 CLIENT_NOT_ALLOWED` under its own `exchange_client` reason, whatever `audit-only` says. A
+client on both — `basetool-sc-extractor` once the go-live registers it before `/v1` is switched off
+— keeps working, so builds up to 2.9.1 see the German update hint rather than a `403`. A missing or
+unreadable registry skips the check, because the allowlist, mandatory under `prod`
+(`LegacyClientGateGuard`), still stands behind it; production does not mirror the registry yet.
+
 **The configured posture is a scraped fact** (ING-SEC-03, 2026-09-22). Every gate is switched on by
 the environment alone, so nothing in the code or the deploy said whether production was protected —
 on 2026-08-28 neither control refused anything, found only by reading the host. The gauge
@@ -748,6 +759,9 @@ authentication: the field is client-supplied and the contract that documents it 
 - [x] The rejected `tool` is `LogSafe`-sanitized before logging and is never echoed to the caller.
 - [x] An authenticated non-JWT principal is refused `403 CLIENT_NOT_ALLOWED` under
   `non_jwt_principal`, also when inert and under audit-only; an anonymous token passes to the `401`.
+- [x] A client the exchange registry lists is refused under `exchange_client`, also under
+  audit-only, unless the allowlist names it too; with the registry unreadable the check is skipped,
+  and an allowlisted extractor outside the registry is unaffected.
 - [x] `basetool_ingest_gate_enforcing{gate}` reports each gate's posture with four bounded labels;
   audit-only turns `azp`/`scope`/`tool` to `0` but never `audience`; no configured value reaches the
   log.
@@ -765,8 +779,8 @@ authentication: the field is client-supplied and the contract that documents it 
   path, so an encoded call still required a valid realm token.
 
 **Enforced by:** `ClientIdentityFilterTest` (all four checks, fail-closed on absent claims, audit-only,
-bounded label, unauthenticated pass-through, non-JWT principal refused, percent-encoded path),
-`LegacyClientGateGuardTest` (the production start refused with an empty allowlist),
+bounded label, unauthenticated pass-through, non-JWT principal refused, percent-encoded path,
+exchange-registry clients refused), `LegacyClientGateGuardTest` (the production start refused with an empty allowlist),
 `IngestEndpointSurfaceTest` (the routed surface is exactly the two `/v1` endpoints),
 `IngestGatePostureMetricTest` and `StartupBannerListenerTest` (the posture gauge and log line),
 the promtool test `ingest_audience_gate_off_test.yml`, `IngestPathScopeTest` (decoded

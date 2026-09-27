@@ -21,14 +21,19 @@ package de.greluc.krt.profit.basetool.ingest.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import de.greluc.krt.profit.basetool.ingest.config.ClientIdentityProperties;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistry;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeUnavailableException;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.support.LogCapture;
 import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
@@ -36,6 +41,8 @@ import de.greluc.krt.profit.basetool.ingest.support.TestProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.FilterChain;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,6 +72,7 @@ class ClientIdentityFilterTest {
   private FilterChain chain;
   private MockHttpServletRequest request;
   private MockHttpServletResponse response;
+  private ExchangeRegistryReader registryReader;
 
   @BeforeEach
   void setUp() {
@@ -73,6 +81,9 @@ class ClientIdentityFilterTest {
     request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
     request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer token-value");
     response = new MockHttpServletResponse();
+    registryReader = mock(ExchangeRegistryReader.class);
+    when(registryReader.current())
+        .thenThrow(new ExchangeUnavailableException("The registry mirror is missing.", null));
   }
 
   @AfterEach
@@ -88,7 +99,11 @@ class ClientIdentityFilterTest {
    */
   private ClientIdentityFilter filter(ClientIdentityProperties properties) {
     return new ClientIdentityFilter(
-        properties, registry, JsonMapper.builder().build(), TestLoggingProperties.defaults());
+        properties,
+        registry,
+        JsonMapper.builder().build(),
+        TestLoggingProperties.defaults(),
+        registryReader);
   }
 
   /**
@@ -145,6 +160,79 @@ class ClientIdentityFilterTest {
     var counter =
         registry.find(MetricNames.INGEST_CLIENT).tag(MetricNames.TAG_CLIENT_ID, clientId).counter();
     return counter == null ? 0.0 : counter.count();
+  }
+
+  /**
+   * Makes the registry list the given clients.
+   *
+   * @param clientIds the registry's client ids
+   */
+  private void registryHolds(String... clientIds) {
+    Map<String, ExchangeRegistry.Client> clients = new java.util.HashMap<>();
+    for (String clientId : clientIds) {
+      clients.put(
+          clientId,
+          new ExchangeRegistry.Client(
+              clientId, true, Set.of("exchange.connect"), null, null, null));
+    }
+    doReturn(new ExchangeRegistry(1L, true, clients)).when(registryReader).current();
+  }
+
+  @Test
+  void shouldRefuseAnExchangeClientTheAllowlistDoesNotName() throws Exception {
+    registryHolds("versekit");
+    authenticate("versekit", INGEST_SCOPE);
+
+    filter(TestProperties.clientIdentity()).doFilter(request, response, chain);
+
+    verify(chain, never()).doFilter(any(), any());
+    assertThat(response.getStatus()).isEqualTo(403);
+    assertThat(response.getContentAsString()).contains("CLIENT_NOT_ALLOWED");
+    assertThat(rejected(MetricNames.REASON_EXCHANGE_CLIENT)).isEqualTo(1.0);
+  }
+
+  @Test
+  void shouldRefuseAnExchangeClientEvenUnderAuditOnly() throws Exception {
+    registryHolds("versekit");
+    authenticate("versekit", INGEST_SCOPE);
+
+    filter(new ClientIdentityProperties(List.of(ALLOWED_CLIENT), "", List.of(), true))
+        .doFilter(request, response, chain);
+
+    verify(chain, never()).doFilter(any(), any());
+    assertThat(response.getStatus()).isEqualTo(403);
+  }
+
+  @Test
+  void shouldAdmitARegistryClientTheAllowlistNamesToo() throws Exception {
+    registryHolds(ALLOWED_CLIENT);
+    authenticate(ALLOWED_CLIENT, INGEST_SCOPE);
+
+    filter(enforcing()).doFilter(request, response, chain);
+
+    verify(chain, times(1)).doFilter(request, response);
+    assertThat(rejected(MetricNames.REASON_EXCHANGE_CLIENT)).isZero();
+  }
+
+  @Test
+  void shouldSkipTheRegistryCheckWhileTheRegistryCannotBeRead() throws Exception {
+    authenticate("versekit", INGEST_SCOPE);
+
+    filter(TestProperties.clientIdentity()).doFilter(request, response, chain);
+
+    verify(chain, times(1)).doFilter(request, response);
+    assertThat(rejected(MetricNames.REASON_EXCHANGE_CLIENT)).isZero();
+  }
+
+  @Test
+  void shouldLeaveAnAllowlistedExtractorOutsideTheRegistryUnaffected() throws Exception {
+    registryHolds("versekit");
+    authenticate(ALLOWED_CLIENT, INGEST_SCOPE);
+
+    filter(enforcing()).doFilter(request, response, chain);
+
+    verify(chain, times(1)).doFilter(request, response);
+    assertThat(accepted(ALLOWED_CLIENT)).isEqualTo(1.0);
   }
 
   @Test

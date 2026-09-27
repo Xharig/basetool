@@ -695,7 +695,7 @@ groups:
           severity: warning
         annotations:
           summary: "Ingest client-identity gate rejecting callers ({{ $labels.reason }})"
-          description: "The ingest gateway refused a caller under reason '{{ $labels.reason }}'. unknown_client/bad_provenance means an unapproved tool is calling the restricted ingest interface; missing_azp/missing_scope means a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Check the gateway log for the matching WARN and the allowlist in APP_INGEST_CLIENT_IDENTITY_ALLOWED_CLIENT_IDS."
+          description: "The ingest gateway refused a caller under reason '{{ $labels.reason }}'. unknown_client/bad_provenance means an unapproved tool is calling the restricted ingest interface; exchange_client means an approved exchange client is calling the legacy /v1 routes instead of the exchange API; missing_azp/missing_scope means a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Check the gateway log for the matching WARN and the allowlist in APP_INGEST_CLIENT_IDENTITY_ALLOWED_CLIENT_IDS."
 
       - alert: IngestAudienceGateOff
         expr: max by (application) (basetool_ingest_gate_enforcing{gate="audience", application="basetool-ingest"}) == 0
