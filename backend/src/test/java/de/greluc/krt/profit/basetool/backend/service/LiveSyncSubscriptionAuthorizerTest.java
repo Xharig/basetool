@@ -111,6 +111,20 @@ class LiveSyncSubscriptionAuthorizerTest {
   }
 
   @Test
+  @DisplayName("a personal hangar or blueprints room admits its own member and nobody else")
+  void aPersonalRoomAdmitsOnlyItsMember() {
+    when(authHelperService.currentUserId()).thenReturn(java.util.Optional.of(RESOURCE));
+    assertThat(authorizer.maySubscribe(LiveSyncTopic.parse("hangar:" + RESOURCE))).isTrue();
+    assertThat(authorizer.maySubscribe(LiveSyncTopic.parse("blueprints:" + RESOURCE))).isTrue();
+
+    when(authHelperService.currentUserId()).thenReturn(java.util.Optional.of(UUID.randomUUID()));
+    assertThat(authorizer.maySubscribe(LiveSyncTopic.parse("hangar:" + RESOURCE))).isFalse();
+
+    when(authHelperService.currentUserId()).thenReturn(java.util.Optional.empty());
+    assertThat(authorizer.maySubscribe(LiveSyncTopic.parse("blueprints:" + RESOURCE))).isFalse();
+  }
+
+  @Test
   @DisplayName("the bank room is opened by the member-facing read, not the staff one")
   void theBankRoomUsesTheOrgUnitRead() {
     when(orgUnitBankAccessService.getViewableAccountDetail(RESOURCE)).thenReturn(null);

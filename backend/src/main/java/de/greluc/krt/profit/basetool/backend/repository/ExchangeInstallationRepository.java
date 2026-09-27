@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -120,4 +121,61 @@ public interface ExchangeInstallationRepository extends JpaRepository<ExchangeIn
    */
   @Query("SELECT i FROM ExchangeInstallation i WHERE i.revokedAt > :since")
   List<ExchangeInstallation> findRevokedSince(@Param("since") Instant since);
+
+  /**
+   * Loads a member's installations by their key thumbprints, with their clients.
+   *
+   * @param userId the member
+   * @param keyThumbprints the thumbprints
+   * @return the installations
+   */
+  @EntityGraph(attributePaths = "client")
+  @Query(
+      "SELECT i FROM ExchangeInstallation i WHERE i.user.id = :userId"
+          + " AND i.keyThumbprint IN :keyThumbprints")
+  List<ExchangeInstallation> findAllByUserAndKeys(
+      @Param("userId") UUID userId, @Param("keyThumbprints") Collection<String> keyThumbprints);
+
+  /**
+   * Counts each client's live installations by member: neither revoked on their own nor seen last
+   * before the member disconnected the whole client.
+   *
+   * @return one row per client with at least one live installation
+   */
+  @Query(
+      """
+      SELECT i.client.id AS id, COUNT(DISTINCT i.user.id) AS connectedMembers,
+             MAX(i.lastSeenAt) AS lastSeenAt
+      FROM ExchangeInstallation i
+      LEFT JOIN ExchangeClientRevocation r
+        ON r.key.exchangeClientId = i.client.id AND r.key.userId = i.user.id
+      WHERE i.revokedAt IS NULL AND (r.revokedAt IS NULL OR i.lastSeenAt > r.revokedAt)
+      GROUP BY i.client.id
+      """)
+  List<ClientUsage> countLiveByClient();
+
+  /** One client's live use, from {@link #countLiveByClient}. */
+  interface ClientUsage {
+
+    /**
+     * Returns the client's registry id.
+     *
+     * @return the id
+     */
+    UUID getId();
+
+    /**
+     * Returns how many members have a live installation of the client.
+     *
+     * @return the member count
+     */
+    long getConnectedMembers();
+
+    /**
+     * Returns when a live installation of the client was last seen.
+     *
+     * @return the time
+     */
+    Instant getLastSeenAt();
+  }
 }

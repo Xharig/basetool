@@ -183,6 +183,12 @@ public class LiveSyncWebSocketHandler extends TextWebSocketHandler {
   public static final String ATTR_AUTHORITIES = "livesync.authorities";
 
   /**
+   * Session-attribute key ({@link UUID}) for the caller's own user id captured at handshake, which
+   * alone admits a member's personal room.
+   */
+  public static final String ATTR_SUBJECT = "livesync.subject";
+
+  /**
    * Session-attribute key holding a multiplexed socket's set of subscribed canonical topics (a
    * {@code Set<String>}). Drives the per-session topic cap, idempotent re-subscribe and close-time
    * room cleanup.
@@ -640,8 +646,10 @@ public class LiveSyncWebSocketHandler extends TextWebSocketHandler {
     String token = (String) session.getAttributes().get(ATTR_ACCESS_TOKEN);
     UUID pin = session.getAttributes().get(ATTR_ACTIVE_ORG_UNIT) instanceof UUID u ? u : null;
     Set<String> authorities = capturedAuthorities(session);
+    UUID subject = session.getAttributes().get(ATTR_SUBJECT) instanceof UUID u ? u : null;
     try {
-      authExecutor.execute(() -> authorizeAndRegister(session, topic, token, pin, authorities));
+      authExecutor.execute(
+          () -> authorizeAndRegister(session, topic, token, pin, authorities, subject));
     } catch (RejectedExecutionException e) {
       LiveSyncSubscriptionAuthorizer.Decision verdict =
           LiveSyncSubscriptionAuthorizer.failOpen(topic);
@@ -665,16 +673,18 @@ public class LiveSyncWebSocketHandler extends TextWebSocketHandler {
    * @param token the captured OAuth2 access token (may be {@code null})
    * @param pin the captured active-org-unit pin (may be {@code null})
    * @param authorities the captured authorities for a local role check (may be {@code null})
+   * @param subject the captured user id for a personal room (may be {@code null})
    */
   private void authorizeAndRegister(
       @NotNull WebSocketSession session,
       @NotNull LiveSyncTopic topic,
       String token,
       UUID pin,
-      Set<String> authorities) {
+      Set<String> authorities,
+      UUID subject) {
     LiveSyncSubscriptionAuthorizer.Decision decision;
     try {
-      decision = authorizer.authorize(topic, token, pin, authorities);
+      decision = authorizer.authorize(topic, token, pin, authorities, subject);
       if (decision == LiveSyncSubscriptionAuthorizer.Decision.DENY_INDETERMINATE) {
         log.warn(
             "Live-sync subscribe to topic {} failed closed on an indeterminate authorization"

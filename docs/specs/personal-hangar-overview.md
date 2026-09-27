@@ -85,8 +85,9 @@ audit item 10), #772 (orders/refinery pagination).
 
 Every change to a hangar writes exactly one event to the **Hangar** audit area
 (`AuditDomain.HANGAR`, REQ-AUDIT-001), whichever channel made it — the web, the app, an admin on
-another member's hangar, the file or Fleetview import, the officer's fitted reset — and later the
-exchange API (epic #2078). A run that changed nothing records nothing. The subject is the ship,
+another member's hangar, the file or Fleetview import, the officer's fitted reset, or a connected
+application through the exchange API (REQ-XCH-017), which writes through the same create, update and
+delete and is recorded with its client. A run that changed nothing records nothing. The subject is the ship,
 labelled by its ship type, never by its free-text name; details hold ids, counts and changed field
 names, never values. Deleting a ship first detaches it from mission units and records
 `MISSION_UNIT_UPDATED` in the Missionen area for each.
@@ -97,9 +98,12 @@ names, never values. Deleting a ship first detaches it from mission units and re
   created), fitted reset (only when a flag was cleared) and home location each record one event.
 - [x] A deleted ship's mission units are detached and each detachment is recorded.
 - [x] The Hangar tab in the admin audit viewer lists, filters, exports and purges the area.
+- [x] A connected application's create, update and delete record the same events.
+  *`ExchangeShipWriteControllerTest`.*
 
 **Enforced by:** `HangarServiceTest`, `HangarImportServiceTest`, `AuditReportServiceTest`,
-`AdminAuditLogPageControllerTest`, `AuditReportProxyControllerTest`, `AuditPdfTitleKeysTest` ·
+`AdminAuditLogPageControllerTest`, `AuditReportProxyControllerTest`, `AuditPdfTitleKeysTest`,
+`ExchangeShipWriteControllerTest` ·
 **Code:** `HangarService`, `HangarImportService`, `AuditEventType.HANGAR_*` · **Issues:** #2098
 (epic #2078).
 

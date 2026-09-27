@@ -80,12 +80,16 @@ need no new consent (REQ-SEC-028).
 
 - [ ] `docs/legal/approved-clients.md` exists, is linked from the terms clause (REQ-SEC-027) and
   lists client id, product, maintainer contact, capabilities and the approval issue and PR.
-- [ ] `docs/exchange/onboarding.md` states the criteria, the issue template and the fix deadline.
+  *The list exists with these columns and no client yet; the terms clause links it at the go-live
+  (WP 6). It records the approved capabilities, not the registry's runtime state.*
+- [x] `docs/exchange/onboarding.md` states the criteria, the issue template and the fix deadline.
+  *The template is `.github/ISSUE_TEMPLATE/exchange-client-application.yml`.*
 - [ ] The privacy notice (the frontend's `privacy.*` keys, DE and EN) states which data flows to an
   approved client on the member's own device, that the client's own privacy statement governs it
   there, and how to disconnect and undo; it changes with the go-live.
 
-**Status:** planned — WP 4.6 (#2090), WP 6 (#2092)
+**Status:** the list, the onboarding page and the application template are built — WP 4.6 (#2090);
+the terms link and the privacy notice change with the go-live — WP 6 (#2092)
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 
@@ -131,6 +135,11 @@ finds no document, refuses every exchange request.
   registers, edits, suspends and activates clients and flips the switch in place; suspending, either
   direction of the switch and granting a client more capabilities each ask for confirmation first.
   *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`.*
+- [x] Each client shows its connected members and last activity, counted over live installations
+  only (`GET /api/v1/admin/exchange-clients/usage`: not revoked, and not seen last before the
+  member disconnected the client); the error rate per client is linked in Grafana
+  (`APP_GRAFANA_OPERATIONS_DASHBOARD_URL`, owner decision 2026-09-27). *`AdminExchangeClientUsageTest`,
+  `AdminExchangeClientsPageControllerMvcTest`.*
 
 **Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
 `AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `RedisAclBackendIntegrationTest`,
@@ -453,12 +462,44 @@ change of the default blueprint set — appear in it. Removals leave tombstones 
 (`web`, `app`, `client` with client id and installation id, `system`) and `removedAt`, kept 90 days
 and purged nightly. A cursor older than the tombstones answers `410 CURSOR_EXPIRED`.
 
+The sequence is `exchange_change` (ADR-0224): an `AFTER` row trigger on every synced table records
+`(member, resource, key)` with its writing transaction's id and a sequence number, and the feed reads
+each changed key's current state, or a tombstone when it is gone. A feed position is `(transaction id,
+seq)`, and a reader passes only transactions below the oldest one still running, so an entry committed
+late can never land behind a position a client has already passed. Who wrote it comes from the transaction variable
+`basetool.change_source`, which the backend's transaction manager sets at the start of every writing
+transaction (`web`, `app`, `client|<id>|<installation key>`, otherwise `system`). A nightly job
+(`exchange_change_retention`, 03:30 UTC) purges entries older than 90 days and records the highest
+purged position as the horizon, below which a cursor has expired.
+
 **Acceptance**
 
-- [ ] A test fails for any write path to the synced tables that bypasses the sequence.
-- [ ] A default-set change emits entries for every affected member.
+- [x] A test fails for any write path to the synced tables that bypasses the sequence.
+  *`ExchangeChangeFeedTriggerIntegrationTest` pins the synced tables — `personal_blueprint`,
+  `default_blueprint`, `inventory_item` (the member's personal rows only, keyed by lot) and `ship` —
+  to their triggers and runs bulk deletes, owner reassignment, a rebooking to the shared pool and
+  user deletion through them.*
+- [x] A default-set change emits entries for every affected member.
+  *`ExchangeChangeFeedTriggerIntegrationTest`.*
+- [x] Every writing transaction is attributed to its channel. *`ChangeSourceTransactionManagerIntegrationTest`.*
+- [x] A writer that commits after a later one stays ahead of the readers' watermark.
+  *`ExchangeChangeWatermarkIntegrationTest`.*
 
-**Status:** planned — WP 3.3 (#2083)
+A snapshot pages by row id and ends with the feed cursor it was taken at, so nothing written during
+it is lost. A feed page answers each key changed after the cursor once, with its current state or a
+tombstone whose `installationId` is the removing installation's id. A feed page that reaches the end
+moves the cursor up to the watermark, so an idle client's cursor never falls behind the horizon.
+Cursors are `s1.<tx>.<seq>.<id>` and `f1.<tx>.<seq>` and stay opaque to clients; one the server did not
+issue also answers `CURSOR_EXPIRED`.
+
+Once an exchange write has committed, the backend raises the live-sync frames the member's web
+pages listen on, so they refresh without a reload: `hangar:{member}` after a ship write,
+`blueprints:{member}` after a blueprint write, `inventory` after a stock write and `materialboard`
+when that write lowered or removed an offer (REQ-FE-015). A rolled-back write raises none.
+
+**Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
+(#2083); the backend's blueprint feed (`/api/v1/exchange/me/blueprints`) is built, the gateway route
+and the stock and ship feeds follow with WP 4.1–4.4
 
 ### REQ-XCH-014 — A client never re-adds what the member removed elsewhere
 
@@ -468,10 +509,14 @@ the member; the override is journaled.
 
 **Acceptance**
 
-- [ ] One installation removes, another tries to re-add: refused; with override: applied and
+- [x] One installation removes, another tries to re-add: refused; with override: applied and
   journaled.
 
-**Status:** planned — WP 3.3 (#2083), WP 4.1 (#2084)
+A tombstone is live while the key's latest change-log entry — its removal — is within the
+retention; the same installation may re-add what it removed itself. *`ExchangeBlueprintWriteControllerTest`
+also covers a removal in the web.*
+
+**Status:** built for blueprints — WP 4.1 (#2084); stock and ships follow with their writes
 
 ### REQ-XCH-015 — Blueprints sync as a set
 
@@ -479,12 +524,27 @@ Ops are `add` and `remove` of products. Default-granted blueprints cannot be rem
 (`DEFAULT_NOT_REMOVABLE`). A blueprint's `note` is read-only in v1. Writes are audited in the
 Blueprints domain with the external client.
 
+A blueprint's `key` and its `ref.bt` are the same value: the normalised product key, or `h:` and
+its SHA-256 in hex when that is longer than 128 characters. The display name is cut to 200. The
+resolver (REQ-XCH-012) answers a blueprint with the same `bt` and accepts it back.
+
 **Acceptance**
 
 - [ ] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
   in the feed of another installation.
+- [x] The feed marks default-granted blueprints and follows a change of the default set.
+  *`ExchangeBlueprintControllerTest`.*
 
-**Status:** planned — WP 4.1 (#2084)
+The backend applies a change set at `POST /api/v1/exchange/me/blueprints/changes`
+(`exchange.blueprints.write`) in one transaction: it resolves every reference in one resolver call,
+plans the ops in order — an add of an owned product and a remove of a missing one are `unchanged`, a
+remove of a default `rejected DEFAULT_NOT_REMOVABLE`, an add against another's tombstone `rejected
+REMOVED_ELSEWHERE` — then asks the mass-change guard, and writes through the web's own add and
+delete, so the Blueprints audit names the client; each written entry is journaled. `dryRun` plans
+only. `basetool_exchange_writes_total{resource,outcome}` counts the ops.
+
+**Status:** read and write sides built — WP 4.1 (#2084); the corpus round trip follows with the
+sandbox (WP 2.3)
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -500,9 +560,35 @@ client.
 **Acceptance**
 
 - [ ] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
-- [ ] A book-out below an offered amount lowers the offer and records the audit event.
+- [x] A book-out below an offered amount lowers the offer and records the audit event.
+  *`ExchangeStockWriteControllerTest`.*
+- [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
+  tombstone when its rows are gone or rebooked to the shared pool. *`ExchangeStockControllerTest`.*
 
-**Status:** planned — WP 4.2 (#2085)
+The feed's lot key is the one the change log records, `m:<material>|l:<location>|q:<quality>|s:<0|1>`
+or `i:<item>|…`; a snapshot pages lots by their lowest row id. The material reference carries the
+material's or item's id as `bt`, an item lot has quality 0 and counts whole pieces, and an SCU amount
+is rounded to three decimals.
+
+The backend applies a change set at `POST /api/v1/exchange/me/stock/changes`
+(`exchange.stock.write`) in one transaction. Each op resolves its material — a material first, an
+item otherwise — and its place, the UEX link first, then the exact name of a non-hidden location
+(`LOCATION_UNKNOWN`), checks both units against the material's (`UNIT_MISMATCH`), locks the lot's
+rows and compares `expectedQuantity` (`VERSION_CONFLICT`). A trade good is stored at quality 0. A
+lot emptied by another channel or installation is refilled only with `override`
+(`REMOVED_ELSEWHERE`); stock reserved for a job order or mission is never taken (`STOCK_EARMARKED`,
+owner decision 2026-09-27 — personal rows carry no reservations, so this guards the invariant);
+a stolen lot waits for `APP_INVENTORY_STOLEN_MARKING_ENABLED` (`STOLEN_MARKING_DISABLED`). The
+mass-change guard counts a lot set to 0 or cut to a tenth of what it held when the client's window
+opened, except when another lot of the same material rises in the same batch. A book-in is a new
+personal row without an org unit (`INVENTORY_ITEM_CREATED`); a book-out runs the Lager's own
+`DISCARD` book-out over the rows without an org unit first, then the oldest, and every offer it
+lowers or removes is audited by that book-out (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`,
+`reason=stock`, REQ-MARKET-013) and counted in
+`offersReduced` / `offersRemoved`. Each changed lot is journaled.
+
+**Status:** read and write sides built in the backend — WP 4.2 (#2085); the gateway routes are
+built on the gateway stack
 
 ### REQ-XCH-017 — Ships sync with a link step before the first create
 
@@ -514,9 +600,33 @@ with the external client.
 
 **Acceptance**
 
-- [ ] First sync against a Fleetview-imported hangar creates no duplicate.
+- [x] First sync against a Fleetview-imported hangar creates no duplicate.
+  *`ExchangeShipWriteControllerTest`.*
+- [x] The feed carries the member's own ships only, without purchase data, and answers a ship given
+  to another member as a tombstone. *`ExchangeShipControllerTest`.*
 
-**Status:** planned — WP 4.4 (#2086)
+The ship feed keys a ship by its id and sends its `version`, the ship type's id as `shipType.bt`,
+insurance as `LTI` or a number of months, and the location when it has one. A ship stored without
+insurance, which the web's validation does not allow, reads as zero months.
+
+The backend applies a change set at `POST /api/v1/exchange/me/ships/changes`
+(`exchange.hangar.write`) in one transaction; the feed carries each ship's `externalId` for the
+calling installation. A link belongs to one **installation** (owner decision 2026-09-27): each
+installation links its own ids, so two installations with separate local databases never mistake
+each other's ids, and a server ship is linked at most once per installation (`LINK_TARGET_TAKEN`);
+re-linking an id moves it. `link` needs the member's own ship; `upsert` without `shipId` creates the
+ship through the Hangar's own create and links it, unless the id is already linked, which answers
+`VERSION_CONFLICT` so the client pulls first; `upsert` with `shipId` requires the ship's `version`
+(`VERSION_CONFLICT`), writes through the Hangar's own update and links the id if it is not yet. An
+`upsert` naming a ship the server no longer has brings it back as a new ship only when the calling
+installation removed it or with `override` after asking the member (`REMOVED_ELSEWHERE`, owner
+decision 2026-09-27); a ship the member never had is `unmatched`. `remove` requires the `version`,
+detaches the ship from its mission units through the Hangar's delete (`MISSION_UNIT_UPDATED`) and
+reports the count as `detachedFromMissions`. The ship type resolves through `catalog/resolve`, the
+place like a stock lot's; an absent `fitted` keeps the ship's. Every write is audited in the Hangar
+area with the client and journaled.
+
+**Status:** built in the backend — WP 4.4 (#2086); the gateway route is on the gateway stack
 
 ### REQ-XCH-018 — Org demand is anonymised and membership-scoped; locations are the non-hidden list
 
@@ -530,13 +640,22 @@ per-order breakdown and no low-count suppression; a client may cache it for up t
 The backend serves the location list as `GET /api/v1/exchange/catalog/locations` (any exchange
 scope), one query, a city link winning over a space-station link.
 
+The backend serves the demand as `GET /api/v1/exchange/me/org-demand` (`exchange.demand.read`): the
+open and in-progress orders a unit of the member's memberships is responsible for. A material line
+sums `max(0, required − booked)` per material, quality floor (650 for „gut", else 0) and source, as
+the Materialbedarf computes it; `rawRefs` are the materials whose refined material it is. An item
+line sums `max(0, ordered − delivered − earmarked)` per game item, and `craftableByMe` matches the
+member's blueprints the way the order's blueprint coverage does (variant family when the order counts
+variants). Lines with nothing open are left out; `bt` is the material's or game item's id.
+
 **Acceptance**
 
-- [ ] An overseer who is not a member of a unit does not see its demand.
+- [x] An overseer who is not a member of a unit does not see its demand.
+  *`ExchangeDemandServiceTest` — only the member's own units are asked.*
 - [ ] The response schema admits no name or free-text field.
 
-**Status:** the backend location list is built — WP 3.1 (#2083); the demand feed with WP 4.3
-(#2095) and WP 3.3
+**Status:** the backend location list is built — WP 3.1 (#2083); the backend's demand is built — WP
+4.3 (#2095); the gateway route follows
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 
@@ -587,7 +706,31 @@ within one batch is not a removal. Only the member's browser session can confirm
 
 - [ ] One test per counting rule, including repeated 89 % cuts and a move.
 
-**Status:** planned — WP 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
+The counting rule is `ExchangeMassChangeGuard`: over the journal's live removals of the client,
+member and resource in the last 24 hours plus the batch's, a batch trips above 25, or when that total
+is at least 5 and more than a fifth of the current count plus the window's removals. Each resource's
+write service decides what in its batch is a removal.
+
+A stock lot counts as removed when it is set to 0 or cut to at most a tenth of what it held when the
+client's window opened, taken from the lot's first journal entry in the window; a lot of a material
+that rises elsewhere in the same batch is a move and does not count.
+
+A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
+
+The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
+page consumes nothing: its script strips the id from the address bar and consumes the staged batch
+with an explicit request, after which the batch waits in the member's server session and the
+browser names it only by its handoff id, so it cannot alter the batch or its client. The backend
+checks again what the gateway checked — the global switch, the client active with the write
+capability, the client not disconnected by the member within the staging lifetime (30 minutes),
+the installation not disconnected — then previews the batch as a dry run and, on „Bestätigen",
+applies it without asking the guard again, in one transaction recorded in the change log as the
+installation's own write and audited as `EXCHANGE_MASS_CHANGE_CONFIRMED`
+(`POST /api/v1/connected-apps/mass-changes/preview|confirm`, member session only). „Verwerfen"
+drops it; a batch confirmed or dropped once is gone.
+
+**Status:** built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086), WP 3.2 (#2082),
+WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 
@@ -597,9 +740,27 @@ changed afterwards or a merge removed, and does not restore Materialbörse offer
 
 **Acceptance**
 
-- [ ] Undo after a later web edit skips that row and reports it.
+- [x] Undo after a later web edit skips that row and reports it. *`ExchangeUndoControllerTest`.*
 
-**Status:** planned — WP 3.3 (#2083), WP 4.5 (#2087)
+The journal is `exchange_journal`: one row per written entry with the client, installation, change
+set, resource, key, action, whether it counts as a removal, the entry before and after as JSON, the
+writing transaction's id and the time. It is written in the write's own transaction, purged with the
+change feed after 90 days by `exchange_change_retention`, exported under Art. 15, stays with the
+source account on a merge, and its states are searched by the Personensuche.
+
+The member undoes from „Verbundene Anwendungen" with `POST /api/v1/connected-apps/{clientId}/undo
+{since}` (member session only), reaching back at most 90 days. Each entry the client wrote in the
+span goes back to its state before the client's first write there — a blueprint added or removed, a
+lot set back through the Lager's own book-in and book-out, a ship deleted, updated back or recreated
+under a new id without its mission units — unless the entry's latest change-log entry is not the
+client's last write, then it is skipped as `CHANGED_AFTERWARDS`; one that no longer belongs to the
+member or names something gone is skipped as `GONE`. Links the client made are taken back. The
+restored entries' journal rows are marked undone, the undo is audited as `EXCHANGE_CHANGES_UNDONE`
+(restored and skipped counts) and counted in `basetool_exchange_undo_total{resource,outcome}`, and
+the member's pages refresh live.
+
+**Status:** journal and undo built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086),
+WP 4.5 (#2087)
 
 ### REQ-XCH-023 — Rate limits, quotas and a hard Redis budget
 
@@ -699,7 +860,8 @@ problem-report channel, pins the production issuer and allows another only throu
 environment variable, and sends a descriptive `User-Agent`. The checklist is
 `docs/exchange/client-security.md`.
 
-**Status:** planned — WP 4.6 (#2090), WP 5.1 (#2088), WP 5.2 (#2089)
+**Status:** the checklist `docs/exchange/client-security.md` is written — WP 4.6 (#2090); the
+clients' implementations with WP 5.1 (#2088), WP 5.2 (#2089)
 
 ### REQ-XCH-028 — The exchange is observable per client
 
@@ -772,6 +934,11 @@ installation or a whole client, undo, and confirm a staged mass change. Every ne
 installation raises a notification and stays highlighted until seen. `ADMIN` manages the registry
 on an admin page with a suspend switch. The page is web-only; the app links to it.
 
+The page is `/connected-apps` (sidebar *Persönlich*, every member), over `/api/v1/connected-apps`.
+An installation is always named as `‹client name› – „‹label›"`, the client-supplied label escaped
+and never first, so a label cannot pose as the Basetool. Both disconnects ask first and re-swap the
+`connected-apps :: apps` fragment; the page is the member's own and joins no peer sync.
+
 The notification is the rule-engine event `EXCHANGE_INSTALLATION_CONNECTED` (seed `V251`,
 `EVENT_RECIPIENT`), published when the installation upsert reports that it created the row, so two
 concurrent first calls announce one installation once. It names the client by its registry display
@@ -780,11 +947,28 @@ installation counts as unseen while its notification is unread, `GET /api/v1/con
 per installation (`unseen`), and `POST /api/v1/connected-apps/seen` marks them read — a notification
 change only, not audited.
 
+- [x] List the clients with their capabilities and installations (label, first and last seen), and
+  disconnect one installation or a whole client. *`ConnectedAppsPageControllerMvcTest`.*
+- [x] The admin registry page. *See REQ-XCH-003.*
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
+- [x] The page highlights an unseen installation („Neu") and then reports it seen; the highlight
+  ends with the next load. *`ConnectedAppsPageControllerMvcTest`.*
+- [x] Undo a client's changes since a chosen span, with the skipped entries listed.
+  *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
+- [x] Confirm or discard a staged mass change. *`ExchangeMassChangeControllerTest`,
+  `ConnectedAppsConfirmControllerMvcTest`.*
+- [x] Recent activity: each client's last ten writes to the member's data, newest first, named by
+  blueprint, material or item, or ship type, undone ones marked. *`ConnectedAppsControllerTest`,
+  `ConnectedAppsPageControllerMvcTest`.*
+- [ ] The end-to-end run on the sandbox (WP 2.3, #2099).
 
-**Status:** planned — WP 4.5 (#2087); the new-connection notification and the unseen state are built
+Each client in `GET /api/v1/connected-apps` carries `activity`: its last ten journal rows for the
+member, newest first, each with the time, resource, action, the entry's name (read in one lookup per
+catalogue) and whether it was undone.
+
+**Status:** built — WP 4.5 (#2087); the end-to-end run on the sandbox follows with WP 2.3 (#2099)
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 

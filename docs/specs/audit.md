@@ -173,7 +173,13 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   REQ-MARKET-008) — every trade-board mutation: offer release (`MARKET_OFFER_RELEASED`), offer
   edit — offered amount + remark (`MARKET_REMARK_UPDATED`), offer deactivate
   (`MARKET_OFFER_DEACTIVATED`), interest register (`MARKET_INTEREST_REGISTERED`) and interest withdraw
-  (`MARKET_INTEREST_WITHDRAWN`). Both offer **kinds** reuse these five events (REQ-MARKET-012). The
+  (`MARKET_INTEREST_WITHDRAWN`); and every stock change on any channel that lowers an offer
+  (`MARKET_OFFER_REDUCED`, details `kind`, `from`, `to`, `reason`) or deletes the row it stands
+  on, which cascade-removes it (`MARKET_OFFER_REMOVED`, details `kind`, `reason`), REQ-MARKET-013.
+  `reason` names the path — `checkout` (discard or sale), `bulk-checkout`, `transfer`, `rebook`
+  (single or bulk rebooking), `wipe` (the global wipe), `handover` (material handover or item
+  delivery), `production`, `stock` (a connected application, REQ-XCH-016) or `user-deletion`
+  (the purge of REQ-DATA-008). Both offer **kinds** reuse these events (REQ-MARKET-012). The
   subject is the offer, labelled by the **material name** for a material offer or the **item name** for
   an item offer (both non-personal game-asset values); the anbieter is the target reference. The
   details payload carries only bounded facts — the offer `kind`, plus for a material offer the item id
@@ -222,7 +228,10 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   (`EXCHANGE_CLIENT_DISCONNECTED`) or one installation (`EXCHANGE_INSTALLATION_DISCONNECTED`,
   REQ-XCH-008; the installation's label never enters the row), and the system ending a departed
   member's exchange access (`EXCHANGE_MEMBER_DEPARTED`: the reason, the number of clients, and
-  whether every step succeeded). The subject is the registry client
+  whether every step succeeded), and a member undoing a client's writes (`EXCHANGE_CHANGES_UNDONE`:
+  the restored and skipped counts, REQ-XCH-022; the entries themselves are audited in their own
+  areas) or confirming a change set the mass-change guard held back
+  (`EXCHANGE_MASS_CHANGE_CONFIRMED`: the resource and the applied count, REQ-XCH-021). The subject is the registry client
   or the installation, labelled by the **client id**; a member's disconnect names the member as
   target, a registry change names none. A change that failed because the mirror could not be
   written rolls back and records nothing.
