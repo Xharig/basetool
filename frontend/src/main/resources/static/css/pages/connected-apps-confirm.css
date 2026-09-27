@@ -1,0 +1,9 @@
+@layer base, components, page, migration, utilities;
+
+@layer page {
+    .ca-app-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+}

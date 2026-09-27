@@ -79,6 +79,7 @@ public final class FrontendPageRoutes {
           "/sc-links",
           "/profile",
           "/connected-apps",
+          "/connected-apps/confirm",
           "/promotion/overview",
           "/promotion/my-evaluations",
           "/promotion/manage",
