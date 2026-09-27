@@ -7,8 +7,8 @@
 """Validate the provisioned Grafana dashboards.
 
 Structural checks only: valid UTF-8 JSON, a unique dashboard ``uid`` and a title, unique and
-titled panels (collapsed rows included), and only provisioned datasource uids. Whether a panel's
-metric has series is not checked.
+titled panels (collapsed rows included), no two panels on the same grid cells, and only provisioned
+datasource uids. Whether a panel's metric has series is not checked.
 
 Usage:
     python scripts/check-grafana-dashboards.py [--dashboards DIR] [--datasources FILE]
@@ -43,6 +43,25 @@ def walk_panels(panels, path="panels"):
             yield from walk_panels(panel.get("panels"), where + ".panels")
         else:
             yield where, panel
+
+
+def overlapping(panels):
+    """Yield ``(a, b)`` panel ids for every pair of panels of one grid whose ``gridPos`` intersect.
+
+    The dashboard's own panel list is one grid, rows included; the panels of each collapsed row are
+    another, checked on their own.
+    """
+    placed = []
+    for panel in panels or []:
+        pos = panel.get("gridPos") or {}
+        if all(isinstance(pos.get(k), int) for k in ("x", "y", "w", "h")):
+            placed.append((panel.get("id"), pos["x"], pos["y"], pos["x"] + pos["w"], pos["y"] + pos["h"]))
+        if panel.get("type") == "row" and panel.get("collapsed"):
+            yield from overlapping(panel.get("panels"))
+    for i, (a, ax0, ay0, ax1, ay1) in enumerate(placed):
+        for b, bx0, by0, bx1, by1 in placed[i + 1:]:
+            if ax0 < bx1 and bx0 < ax1 and ay0 < by1 and by0 < ay1:
+                yield a, b
 
 
 def datasource_uids_in(node):
@@ -117,6 +136,12 @@ def main() -> int:
                 panel_ids[pid] = where
             if not (panel.get("title") or "").strip():
                 problems.append("%s: %s (id %s) has no title" % (name, where, pid))
+
+        for a, b in overlapping(doc.get("panels")):
+            problems.append(
+                "%s: panels %s and %s overlap on the grid -- Grafana draws one over the other"
+                % (name, a, b)
+            )
 
         if known_uids:
             for ds_uid in sorted(set(datasource_uids_in(doc))):
