@@ -22,6 +22,7 @@ package de.greluc.krt.profit.basetool.backend.repository;
 import de.greluc.krt.profit.basetool.backend.model.GameItem;
 import de.greluc.krt.profit.basetool.backend.model.dto.BlueprintIdNameRow;
 import de.greluc.krt.profit.basetool.backend.model.dto.BlueprintProductRow;
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintKeyRow;
 import de.greluc.krt.profit.basetool.backend.model.scwiki.Blueprint;
 import java.time.Instant;
 import java.util.Collection;
@@ -233,4 +234,24 @@ public interface BlueprintRepository extends JpaRepository<Blueprint, UUID> {
       NOT NULL ORDER BY b.outputName ASC, b.scwikiKey ASC, b.id ASC
       """)
   List<BlueprintIdNameRow> findActiveIdNameRows();
+
+  /**
+   * Projects the active blueprints whose own UUIDs or whose output item's UUIDs or UEX id match,
+   * for the exchange's catalogue resolution (REQ-XCH-012).
+   *
+   * @param guids the game GUIDs to match; must not be empty
+   * @param uexIds the UEX item ids to match; must not be empty
+   * @return one row per matching active blueprint
+   */
+  @Query(
+      """
+      SELECT new de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintKeyRow(
+      b.outputName, b.scwikiUuid, b.p4kUuid, oi.externalUuid, oi.p4kUuid, oi.uexItemId)
+      FROM Blueprint b LEFT JOIN b.outputItem oi
+      WHERE b.scwikiDeletedAt IS NULL AND b.outputName IS NOT NULL
+      AND (b.scwikiUuid IN :guids OR b.p4kUuid IN :guids OR oi.externalUuid IN :guids
+      OR oi.p4kUuid IN :guids OR oi.uexItemId IN :uexIds)
+      """)
+  List<ExchangeBlueprintKeyRow> findExchangeKeyRows(
+      @Param("guids") Collection<UUID> guids, @Param("uexIds") Collection<Integer> uexIds);
 }

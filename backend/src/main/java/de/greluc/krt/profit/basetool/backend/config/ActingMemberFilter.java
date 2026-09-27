@@ -104,7 +104,9 @@ public class ActingMemberFilter extends OncePerRequestFilter {
    * authentication (REQ-XCH-009); exhaustive for the same reason as {@link #ACTING_PATHS}.
    */
   private static final List<PathPattern> EXCHANGE_PATHS =
-      List.of(PATH_PARSER.parse("/api/v1/exchange/catalog/locations"));
+      List.of(
+          PATH_PARSER.parse("/api/v1/exchange/catalog/locations"),
+          PATH_PARSER.parse("/api/v1/exchange/catalog/resolve"));
 
   /** The shape of a registry client id, identical to the database check. */
   private static final Pattern EXCHANGE_CLIENT_ID = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
