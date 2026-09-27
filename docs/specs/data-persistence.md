@@ -445,9 +445,6 @@ create does not. (`AdminLocationsPageControllerTest`): the visibility / home-loc
 
 ### REQ-DATA-008 — User deletion reassigns or clears every `app_user` FK that lacks an `ON DELETE` clause
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Every exchange table with a user foreign key (installations, journal, deny list, external refs, revocations, change sequence) declares its deletion handling, and `UserDeletionForeignKeyIntegrityTest` serves it. Ships with WP 3.1–3.3 (#2083).
-
 `UserDeletionService.deleteUser(userId)` removes an ex-member (only users already gone from Keycloak).
 **The precondition is verified twice**: against the persisted `in_keycloak` flag *and*, because that
 flag is only a cached mirror that a swallowed sync error can leave stale at `false`, against Keycloak
@@ -506,6 +503,15 @@ Concrete handling, in order:
   `*_user_id` or `*_sub` and requires a foreign key to `app_user(id)`, a recorded exemption, or —
   for `app_user.discord_user_id`, which holds a Discord snowflake — a recorded statement that it is
   not a user id at all.
+- **Purged by the database** (the exchange's member data, REQ-XCH-007/-008/-013/-017/-022): the
+  installations (a revoked one is the deny-list entry for its key), the client revocations, the
+  change sequence, the write journal and the ship links — `exchange_installation`,
+  `exchange_client_revocation`, `exchange_change`, `exchange_journal`, `exchange_ship_link`
+  (`V249`, `V252`–`V254`) — each reference `app_user(id)` with `ON DELETE CASCADE` and go with the
+  account; `UserIdentityColumnForeignKeyTest` holds them to it like every other `user_id` column.
+  *Corrected 2026-09-27: the planned amendment named `UserDeletionForeignKeyIntegrityTest` as their
+  guard; that test exercises named deletion scenarios, and the schema sweep is
+  `UserIdentityColumnForeignKeyTest`.*
 - **Reassigned to the admin** (shared aggregates that must outlive the member):
   `refinery_order.owner_id`, `mission.owner_id`, and — paired with the last — the 1:1 companion
   `mission_ownership.owner_id`. These are not account data: they carry operation finances and

@@ -32,6 +32,10 @@ ship **types** (the grouped rows), the user chooses between 10, 50 and 100 entri
 page, and the optional ship-type filter is evaluated by the backend across every type in
 scope. No fetch cap may silently truncate the fleet.
 
+Ships a connected application writes through the exchange (REQ-XCH-017) are ordinary `Ship` rows
+written by the Hangar's own create, update and delete, so they are counted here exactly like web
+writes; the overview does not tell them apart.
+
 **Acceptance**
 
 - [ ] `GET /api/v1/hangar/squadron-overview` honours `page`/`size` and returns page
@@ -81,6 +85,11 @@ An **active unit pin** still narrows the overview to the pinned unit for every c
 decision) — the cross-unit/OL widening applies only when no unit is pinned, exactly like every other
 scoped surface. The per-ship owner/location/fitted drill-down stays ADMIN/OFFICER-only, so a member /
 BL / OL sees the complete counts but not the per-owner breakdown.
+
+A ship created through the exchange (REQ-XCH-017) belongs to the member's single direct membership,
+or to no unit for a member of none or of several (owner decision 2026-09-27), and a ship without a
+unit is counted only by the OL widening and an admin until the member assigns one. It then enters
+these scopes like a ship created in the web.
 
 **Acceptance**
 

@@ -451,7 +451,7 @@ public class ExchangeShipWriteService {
         yield 0;
       }
       case Create create -> {
-        Ship saved = hangarService.addShip(caller.member(), create.dto());
+        Ship saved = hangarService.addShipForClient(caller.member(), create.dto());
         relink(caller, create.externalId(), saved.getId());
         journalService.record(
             caller,

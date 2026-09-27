@@ -353,6 +353,18 @@ public class OwnerScopeService {
   }
 
   /**
+   * Delegates to {@link OrgUnitStampingService#resolveOrgUnitForClientCreate(User)}: the owning org
+   * unit of an aggregate a connected application creates (REQ-XCH-017).
+   *
+   * @param targetUser the member the aggregate is created for
+   * @return the member's only org unit, or {@code null} for none or several
+   */
+  @Nullable
+  public OrgUnit resolveOrgUnitForClientCreate(@NotNull User targetUser) {
+    return orgUnitStampingService.resolveOrgUnitForClientCreate(targetUser);
+  }
+
+  /**
    * Delegates to {@link OrgUnitStampingService#resolveReassignTargetOrgUnit(UUID)}: validates and
    * resolves an explicit owning-org-unit reassignment (REQ-ORG-018).
    *

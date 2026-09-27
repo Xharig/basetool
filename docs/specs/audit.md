@@ -28,9 +28,6 @@ first). The storage choice and the unified-viewer architecture are recorded in
 
 ### REQ-AUDIT-001 — Immutable, complete, admin-only activity audit log
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> **Hangar** and **Blueprints** are audited since WP 1.1 (#2098), **Verbundene Anwendungen** since WP 3.1 with the registry changes, the global switch, members' disconnects per client and per installation, undo and mass-change confirmations (the coverage list below). An exchange write is audited in its own area — Lager, Blueprints, Hangar — under the client's id. *Corrected 2026-09-27: this note still called the member controls "to come" after they were built.*
-
 Every state-mutating activity in the generic areas writes exactly **one** row to an **append-only**
 audit table (`audit_event`, modeled after `bank_audit_event` — no `@Version`, never updated except
 by the Art. 17 handle anonymisation of REQ-SEC-062, which overwrites the name snapshots in place;
@@ -64,7 +61,10 @@ deletion), the `domain`, the event type, the affected subject's id + a denormali
 snapshot, an optional target-user reference, a compact details payload, and the bounded
 originating-client label of [REQ-AUDIT-005](#req-audit-005--the-trail-records-which-client-a-mutation-came-through).
 
-Coverage is **complete**, including the cross-area writers and the system/automatic mutations:
+Coverage is **complete**, including the cross-area writers and the system/automatic mutations.
+A write a connected application makes through the exchange (REQ-XCH-015…-017) records the same
+events in the Blueprints, Lager, Materialbörse, Hangar and Missionen areas as the same write in the
+web, naming its client (REQ-AUDIT-005):
 
 - **Lager** — create / note / book-out (consume, transfer, sell — a mission-earmarked `SELL`
   books the seller-chosen per-mission `INCOME` attributions, REQ-INV-027) / **quantity-split
@@ -195,7 +195,7 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   details carry only bounded facts — the request `kind`, the material id or blueprint `product` key,
   the `minQuality`, the desired `amt` / `qty`, and the description **length** — never the description
   body, the requester/supplier handle, or any location.
-- **Hangar** (`Ship`, `AuditDomain.HANGAR`, every channel — web, app and later the exchange) — ship
+- **Hangar** (`Ship`, `AuditDomain.HANGAR`, every channel — web, app and the exchange) — ship
   create (`HANGAR_SHIP_CREATED`), edit (`HANGAR_SHIP_UPDATED`, only when a field changed; the
   details name the changed fields, never their values), delete (`HANGAR_SHIP_DELETED`, with the
   number of mission units detached), empty own hangar (`HANGAR_EMPTIED`), import of a hangar or
@@ -469,9 +469,6 @@ sweep"; that was true when written and is no longer.
 
 ### REQ-AUDIT-005 — The trail records which client a mutation came through
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> On the ingest relay hop the audit row names the external client asserted by the gateway (`X-Exchange-Client`) instead of `none`, with the vocabulary taken from the client registry (REQ-XCH-010, ADR-0217). Existing rows keep „Ohne Client (System)“. **Built with WP 3.1 (#2083)**: the viewer's client filter offers the registry's clients by their product names; a relayed client the registry does not hold is recorded as `other`. The extractor's relay hop keeps recording `none`.
-
 Every row **either** audit trail writes carries the **originating client**: which client software
 the request that caused the mutation was made from, stored in `audit_event.client_id` and
 `bank_audit_event.client_id` in the same transaction as the row itself.
@@ -511,6 +508,12 @@ joining two answers that only mean the same thing if one rule produced both. Two
 mapping is exactly how that stops being true. The two are complements, not duplicates — the counter
 finds the window, the column attributes the act; a counter can never say that *this* role grant came
 from the app.
+
+**A connected application is named by the gateway.** On an exchange route the acting member's
+authentication carries the client the gateway asserted in `X-Exchange-Client` (REQ-XCH-010,
+ADR-0217), and the row records that client when the registry holds it, `other` when it does not.
+The viewer's client filter offers the registry's clients by their product names. The extractor's
+relay hop carries no client and keeps recording `none`; rows written before keep theirs.
 
 **`NULL` means different things on the two tables, and the difference matters.** Neither is
 backfilled — the claim was never stored, so there is nothing to backfill *from*, and an audit trail
