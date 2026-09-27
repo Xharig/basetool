@@ -151,6 +151,18 @@ public final class MetricNames {
    */
   public static final String INGEST_CLIENT_REJECTED = "basetool.ingest.client.rejected";
 
+  /**
+   * Counter {@code basetool_ingest_legacy_gone_total}, bumped for every legacy {@code /v1} request
+   * refused with {@code 410 LEGACY_ENDPOINT_GONE} after the switch-off (REQ-XCH-033).
+   */
+  public static final String INGEST_LEGACY_GONE = "basetool.ingest.legacy.gone";
+
+  /**
+   * Gauge {@code basetool_ingest_legacy_endpoints_enabled}: {@code 1} while the legacy {@code /v1}
+   * endpoints answer, {@code 0} once they are switched off (REQ-XCH-033).
+   */
+  public static final String INGEST_LEGACY_ENABLED = "basetool.ingest.legacy.endpoints.enabled";
+
   /** Tag key: the calling client's Keycloak client id, bounded by the configured allowlist. */
   public static final String TAG_CLIENT_ID = "client_id";
 

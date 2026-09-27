@@ -42,6 +42,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `QUOTA_EXCEEDED` | 429 | gateway | The daily write quota is exhausted. | Retry after `Retry-After`, the next day at the latest. |
 | `BACKEND_RELAY_FAILED` | 502 | gateway | The backend did not answer usably. | Back off; retry with the same key. |
 | `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable. | Back off; retry with the same key. |
+| `NOT_FOUND` | 404 | gateway | The requested document, such as a schema name, does not exist. | Check the name. |
 | `LEGACY_ENDPOINT_GONE` | 410 | gateway | A legacy `/v1/*` extractor endpoint after the go-live. | Update the client. |
 
 ## Per-op reasons in a change result
@@ -60,5 +61,5 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 ## Warnings
 
 A change result or resolve result may carry `warnings[]` with a JSON Pointer and a code. v1 defines
-`UNKNOWN_FIELD` (the server ignored a field it does not know) and `LOC_KEY_UNRESOLVED` (the
-catalogue carries no name key yet; the name was used instead).
+`UNKNOWN_FIELD` (the server ignored a field it does not know) and `LOC_KEY_UNRESOLVED` (no single
+catalogue entry carries that name key; the name was tried instead).
