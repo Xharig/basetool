@@ -8,6 +8,9 @@
   Lager und an Schiffen – auch über Sammelaktionen und Standard-Blueprints – wird mit ihrer Quelle
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport aufgenommen; Grundlage für den
   Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224, REQ-XCH-013).
+- **Datenaustausch: Blueprints lesen.** Das Backend liefert dem Gateway die Blueprints eines
+  Mitglieds als Snapshot und als Änderungs-Feed mit Löschmarken samt Quelle; ein abgelaufener Cursor
+  antwortet `410 CURSOR_EXPIRED` (`/api/v1/exchange/me/blueprints`, REQ-XCH-013, REQ-XCH-015).
 
 - **Administration → Verbundene Anwendungen.** Admins registrieren, bearbeiten, sperren und
   begrenzen die zugelassenen Anwendungen des Datenaustauschs und schalten ihn global ein oder aus;

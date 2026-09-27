@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -102,4 +103,18 @@ public interface ExchangeInstallationRepository extends JpaRepository<ExchangeIn
    */
   @Query("SELECT i FROM ExchangeInstallation i WHERE i.revokedAt > :since")
   List<ExchangeInstallation> findRevokedSince(@Param("since") Instant since);
+
+  /**
+   * Loads a member's installations by their key thumbprints, with their clients.
+   *
+   * @param userId the member
+   * @param keyThumbprints the thumbprints
+   * @return the installations
+   */
+  @EntityGraph(attributePaths = "client")
+  @Query(
+      "SELECT i FROM ExchangeInstallation i WHERE i.user.id = :userId"
+          + " AND i.keyThumbprint IN :keyThumbprints")
+  List<ExchangeInstallation> findAllByUserAndKeys(
+      @Param("userId") UUID userId, @Param("keyThumbprints") Collection<String> keyThumbprints);
 }

@@ -20,9 +20,11 @@
 package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.ExchangeChange;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -57,4 +59,52 @@ public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, 
    * @return the entries
    */
   List<ExchangeChange> findAllByUserIdOrderBySeqAsc(UUID userId);
+
+  /**
+   * Returns the highest sequence number, the position a snapshot taken now starts the feed at.
+   *
+   * @return the sequence number, {@code 0} while the log is empty
+   */
+  @Query("SELECT COALESCE(MAX(c.seq), 0) FROM ExchangeChange c")
+  long maxSeq();
+
+  /**
+   * Lists the keys of one member's resource changed after a position, each with its latest change,
+   * in the order of those latest changes.
+   *
+   * @param userId the member
+   * @param resource the resource
+   * @param after the position
+   * @param pageable the page size
+   * @return the changed keys
+   */
+  @Query(
+      """
+      SELECT c.entityKey AS entityKey, MAX(c.seq) AS lastSeq FROM ExchangeChange c
+      WHERE c.userId = :userId AND c.resource = :resource AND c.seq > :after
+      GROUP BY c.entityKey ORDER BY MAX(c.seq)
+      """)
+  List<ChangedKey> findChangedKeys(
+      @Param("userId") UUID userId,
+      @Param("resource") ExchangeResource resource,
+      @Param("after") long after,
+      Pageable pageable);
+
+  /** A changed key and its latest change, from {@link #findChangedKeys}. */
+  interface ChangedKey {
+
+    /**
+     * Returns the entity key.
+     *
+     * @return the key
+     */
+    String getEntityKey();
+
+    /**
+     * Returns the sequence number of the key's latest change.
+     *
+     * @return the sequence number
+     */
+    long getLastSeq();
+  }
 }

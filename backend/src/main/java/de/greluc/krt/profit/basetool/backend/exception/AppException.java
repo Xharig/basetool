@@ -30,8 +30,9 @@ import org.springframework.http.HttpStatus;
  * {@code GlobalExceptionHandler} dispatches on.
  *
  * <p>Subtypes pass a fixed {@link AppExceptionKind} to {@link #AppException(AppExceptionKind,
- * String)} and inherit every accessor; only {@link BankConflictException}, whose identity is per
- * instance, uses the kind-less constructor and overrides every accessor.
+ * String)} and inherit every accessor; only {@link BankConflictException} and {@link
+ * ExchangeProblemException}, whose identity is per instance, use the kind-less constructor and
+ * override every accessor.
  */
 public abstract sealed class AppException extends RuntimeException
     permits BadRequestException,
@@ -39,6 +40,7 @@ public abstract sealed class AppException extends RuntimeException
         BusinessConflictException,
         DuplicateEntityException,
         EntityInUseException,
+        ExchangeProblemException,
         ExternalServiceException,
         MissionParticipantRequiredException,
         NotFoundException,
