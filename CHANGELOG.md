@@ -293,6 +293,9 @@
 - **Datenaustausch: Austritt sperrt erst nach dem Abmelden.** Scheidet ein Mitglied aus, entzieht
   das Backend zuerst Einwilligungen und Sitzungen in Keycloak und schreibt die Sperren danach – auch
   wenn Keycloak scheitert –, damit kein zwischendurch erneuerter Token durchkommt (REQ-XCH-008).
+- **Datenaustausch: Trennen beendet die Anwendung auch in geteilten Sitzungen.** Eine neue
+  Admin-Erweiterung im Keycloak-SPI (`basetool-exchange`) meldet beim Trennen nur diese Anwendung
+  ab; die Web-Anmeldung des Mitglieds bleibt bestehen (REQ-XCH-008, ADR-0226).
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.

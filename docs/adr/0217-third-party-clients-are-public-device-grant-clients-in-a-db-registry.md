@@ -134,3 +134,7 @@ lifetime.
    each disconnect); a Keycloak SPI admin endpoint that ends only the client's sessions (precise,
    but a new privileged surface in Keycloak, left for the owner to decide); refusing tokens without
    `offline_access` outright (a larger contract change than the finding needs).
+
+The owner chose the SPI endpoint the same day: [ADR-0226](0226-a-keycloak-admin-extension-ends-one-client-inside-a-shared-session.md)
+ends the client inside shared sessions too, and the gateway's `auth_time` check of point 2 stays as
+the backstop for a Keycloak without it.

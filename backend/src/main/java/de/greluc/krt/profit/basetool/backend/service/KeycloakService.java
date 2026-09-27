@@ -84,6 +84,9 @@ public class KeycloakService {
    */
   private static final String DISCORD_IDP_ALIAS = "discord";
 
+  /** Path segment of the {@code keycloak-spi} admin extension that ends one client's sessions. */
+  static final String CLIENT_SESSION_EXTENSION = "basetool-exchange";
+
   private final KeycloakSyncProperties properties;
 
   /** Micrometer registry for the {@code basetool_keycloak_sync_fetch_failures_total} counter. */
@@ -701,6 +704,41 @@ public class KeycloakService {
       }
     }
     return shared;
+  }
+
+  /**
+   * Ends the client inside every session it shares with other clients, through the Basetool's
+   * {@code basetool-exchange} admin extension in Keycloak, and revokes its offline sessions; the
+   * member's other clients stay signed in (REQ-XCH-008).
+   *
+   * @param keycloakUserId the member
+   * @param clientId the Keycloak client id
+   * @return {@code false} when Keycloak does not serve the extension, which leaves the shared
+   *     sessions to the gateway's {@code auth_time} check
+   * @throws ExternalServiceException when the admin URL is unconfigured
+   */
+  public boolean endClientInSharedSessions(@NotNull UUID keycloakUserId, @NotNull String clientId) {
+    requireAdminUrl();
+    try {
+      adminClient
+          .delete()
+          .uri(
+              "/admin/realms/{realm}/{extension}/users/{id}/clients/{client}/sessions",
+              properties.realm(),
+              CLIENT_SESSION_EXTENSION,
+              keycloakUserId,
+              clientId)
+          .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + getAccessToken())
+          .retrieve()
+          .toBodilessEntity();
+      return true;
+    } catch (HttpClientErrorException.NotFound absent) {
+      log.warn(
+          "Keycloak serves no '{}' extension; the shared sessions of client {} stay open",
+          CLIENT_SESSION_EXTENSION,
+          clientId);
+      return false;
+    }
   }
 
   /**

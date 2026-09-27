@@ -158,7 +158,17 @@ here instead. The service account MUST hold **all three** `realm-management` cli
 |--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `view-users` | list users (`GET /users`) and read a user's federated identity (Discord back-fill).                                                                                                                 |
 | `view-realm` | list realm roles (`GET /admin/realms/{realm}/roles`) and read their members (`GET /roles/{name}/users`) — the role-indexed resolution added by the 5000-account hardening (ADR-0085 / REQ-SEC-043). |
-| `manage-users` | the admin-side account writes: moving a Discord link during an account merge (`POST`/`DELETE /users/{id}/federated-identity/discord`) and removing the merged-away account (REQ-SEC-026). |
+| `manage-users` | the admin-side account writes: moving a Discord link during an account merge (`POST`/`DELETE /users/{id}/federated-identity/discord`) and removing the merged-away account (REQ-SEC-026); the exchange disconnect's consent removal, session deletion and the `basetool-exchange` extension below (REQ-XCH-008). |
+
+**The `basetool-exchange` admin extension** comes with the `keycloak-spi` jar
+(`ExchangeClientSessionResource`, ADR-0226).
+`DELETE /admin/realms/{realm}/basetool-exchange/users/{id}/clients/{client}/sessions` detaches one
+client from every online session of a member — its refresh tokens then fail with „Session doesn't
+have required client" — and revokes its offline sessions, while the member's other clients (the web
+login among them) stay signed in. It checks `manage-users` over that member, the right
+`backend-service` already holds and that already lets a caller end a whole session, so it needs no
+new grant and the provisioner changes nothing. A Keycloak running an older SPI jar answers `404`;
+the backend then logs a warning and leaves the shared sessions to the gateway's `auth_time` check.
 
 > **Corrected 2026-09-22.** This table listed only the two `view-` roles. `KeycloakService` names
 > `manage-users` for the merge writes, and production's service account holds it (configuration

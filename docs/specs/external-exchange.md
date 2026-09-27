@@ -305,8 +305,10 @@ Disconnecting **one installation** puts its key thumbprint on a persistent deny 
 mirrored to Redis, kept at least as long as a client session can live — 90 days, ADR-0217 amendment); every token bound to that
 key is refused (`401 INSTALLATION_REVOKED`) whatever its `iat`, and reconnecting needs a new key.
 Disconnecting **a whole client** removes the member's Keycloak consent for it — which ends its
-offline sessions and, for a client with consent, its online sessions — ends the member's online
-sessions that hold only that client, and **then** stores a revocation timestamp per (client, member),
+offline sessions and, for a client with consent, its online sessions — deletes the member's online
+sessions that hold only that client, ends the client inside the sessions it shares with other
+clients without signing the member out of those, and **then** stores a revocation timestamp per
+(client, member),
 read after Keycloak answered. A token of an earlier connection is refused (`401 CLIENT_REVOKED`): an
 offline token (scope `offline_access`) issued at or before the timestamp, and any other token whose
 `auth_time` — the sign-in it descends from, which a refresh keeps — is at or before it, or which
@@ -324,9 +326,15 @@ Redis mirror before the commit — `exchange:deny:<thumbprint>` and
 after it — and a failed write fails the disconnect with `502`. Disconnecting a client first removes
 the member's Keycloak consent for it, which revokes its offline tokens (Keycloak does so with or
 without a consent, and ends the client's online sessions only when a consent existed), then deletes
-every online session of the member whose only client it is; a session the client shares with
-another, such as the member's web login, cannot be ended alone through the Admin API and is left to
-the gateway's `auth_time` check. A Keycloak failure fails the disconnect with `502` before anything
+every online session of the member whose only client it is. A session the client shares with
+another, such as the member's web login, cannot be ended alone through the stock Admin API, so the
+`keycloak-spi` adds (ADR-0226) the admin extension `DELETE /admin/realms/{realm}/basetool-exchange/users/{id}/
+clients/{client}/sessions`: it detaches the client from every online session of the member, which
+fails its refresh tokens, and revokes its offline sessions, while the member's other clients stay
+signed in; it needs `manage-users` over the member, which `backend-service` already holds. A
+Keycloak without the extension answers `404`, which the backend logs and passes over, leaving the
+shared sessions to the gateway's `auth_time` check. Any other Keycloak failure fails the disconnect
+with `502` before anything
 is written, and the timestamp is read only after Keycloak answered, so no token refreshed in between
 carries a later `iat`. The 60-second reconcile writes
 back any enforced entry the mirror lacks. The backend's `@exchangeGate` refuses a revoked installation
@@ -345,8 +353,10 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
   offline token issued at or before that second and any other token signed in at or before it or
   without `auth_time` — so a token refreshed after the disconnect from an older sign-in is refused —
   while an offline token issued after it and a token of a later sign-in pass (`ExchangeGateTest`).
-  The backend removes the consent and ends the client's own sessions before it reads the time, and
-  writes nothing when Keycloak fails (`ConnectedAppsServiceTest`, `KeycloakServiceTest`).*
+  The backend removes the consent, deletes the client's own sessions and ends the client inside
+  shared ones before it reads the time, and writes nothing when Keycloak fails
+  (`ConnectedAppsServiceTest`, `KeycloakServiceTest`); the extension leaves the member's other
+  clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).*
 - [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
   sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
   every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's

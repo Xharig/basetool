@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1007,6 +1008,96 @@ class KeycloakServiceTest {
       assertThrows(
           RuntimeException.class,
           () -> service.endSessionsHeldOnlyBy(UUID.randomUUID(), "basetool-sc-extractor"));
+    } finally {
+      server.shutdown();
+    }
+  }
+
+  /**
+   * REQ-XCH-008: {@code endClientInSharedSessions} calls the {@code basetool-exchange} admin
+   * extension for the member and the client.
+   *
+   * @throws Exception if the mock server cannot be started or stopped.
+   */
+  @Test
+  void endClientInSharedSessions_callsTheAdminExtension() throws Exception {
+    when(sslBundles.getBundle("keycloak-trust"))
+        .thenThrow(new NoSuchSslBundleException("keycloak-trust", "no such bundle"));
+    MockWebServer server = new MockWebServer();
+    server.start();
+    try {
+      KeycloakSyncProperties properties = writeProperties(server);
+      UUID member = UUID.fromString("00000000-0000-0000-0000-0000000000f8");
+      server.enqueue(jsonResponse("{\"access_token\":\"test-token\"}"));
+      server.enqueue(new MockResponse().setResponseCode(204));
+
+      KeycloakService service =
+          new KeycloakService(properties, observedBuilder(), sslBundles, meterRegistry);
+
+      assertTrue(service.endClientInSharedSessions(member, "basetool-sc-extractor"));
+      server.takeRequest();
+      RecordedRequest delete = server.takeRequest();
+      assertEquals("DELETE", delete.getMethod());
+      assertTrue(
+          delete
+              .getPath()
+              .endsWith(
+                  "/admin/realms/iri/basetool-exchange/users/"
+                      + member
+                      + "/clients/basetool-sc-extractor/sessions"));
+    } finally {
+      server.shutdown();
+    }
+  }
+
+  /**
+   * A Keycloak without the extension answers {@code 404}; the call reports it instead of failing,
+   * so a disconnect still goes ahead and leaves the shared sessions to the gateway.
+   *
+   * @throws Exception if the mock server cannot be started or stopped.
+   */
+  @Test
+  void endClientInSharedSessions_withoutTheExtension_reportsFalse() throws Exception {
+    when(sslBundles.getBundle("keycloak-trust"))
+        .thenThrow(new NoSuchSslBundleException("keycloak-trust", "no such bundle"));
+    MockWebServer server = new MockWebServer();
+    server.start();
+    try {
+      KeycloakSyncProperties properties = writeProperties(server);
+      server.enqueue(jsonResponse("{\"access_token\":\"test-token\"}"));
+      server.enqueue(errorResponse(404));
+
+      KeycloakService service =
+          new KeycloakService(properties, observedBuilder(), sslBundles, meterRegistry);
+
+      assertFalse(service.endClientInSharedSessions(UUID.randomUUID(), "basetool-sc-extractor"));
+    } finally {
+      server.shutdown();
+    }
+  }
+
+  /**
+   * A forbidden call propagates, so a disconnect fails instead of pretending the sessions ended.
+   *
+   * @throws Exception if the mock server cannot be started or stopped.
+   */
+  @Test
+  void endClientInSharedSessions_forbidden_throws() throws Exception {
+    when(sslBundles.getBundle("keycloak-trust"))
+        .thenThrow(new NoSuchSslBundleException("keycloak-trust", "no such bundle"));
+    MockWebServer server = new MockWebServer();
+    server.start();
+    try {
+      KeycloakSyncProperties properties = writeProperties(server);
+      server.enqueue(jsonResponse("{\"access_token\":\"test-token\"}"));
+      server.enqueue(errorResponse(403));
+
+      KeycloakService service =
+          new KeycloakService(properties, observedBuilder(), sslBundles, meterRegistry);
+
+      assertThrows(
+          RuntimeException.class,
+          () -> service.endClientInSharedSessions(UUID.randomUUID(), "basetool-sc-extractor"));
     } finally {
       server.shutdown();
     }

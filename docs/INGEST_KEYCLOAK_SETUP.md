@@ -263,6 +263,13 @@ and every other scope withheld — **both ingest scopes included**, so no extrac
 stops new tokens being issued. Removing it from the list does **not** delete it — the provisioner
 never deletes and reports it as *only on this realm* from then on.
 
+**A member's disconnect** of a client needs no realm setting: the backend removes the consent,
+deletes the sessions only that client holds, and ends the client inside shared sessions through the
+`basetool-exchange` admin extension of the `keycloak-spi` jar
+([`docs/keycloak/README.md`](keycloak/README.md), REQ-XCH-008). The extension ships with the SPI jar
+of the same release; a Keycloak still on an older jar answers `404`, which the backend logs and
+passes over.
+
 ## What this sets up
 
 The desktop extractor (the Basetool SC Extractor, repository `basetool-sc-extractor`) must obtain a
