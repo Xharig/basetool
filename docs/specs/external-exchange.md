@@ -840,6 +840,10 @@ taken in the batch's order — a single piece added elsewhere does not hide an e
 decision 2026-09-27).
 
 A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
+Nothing compares a ship with its state when the window opened, so a batch that retypes every ship,
+or clears every name and location, counts no removal. The owner kept that rule on 2026-09-27
+(security review 2 of #2092, L2) and accepted the gap: the journal records every such write and the
+member's undo restores it; the threat model lists it as an accepted risk.
 
 When the backend answers `MASS_CHANGE_CONFIRMATION_REQUIRED`, the gateway stages the change set with
 its client, installation, resource and `stagedAt` (the gateway's clock) in the handoff staging
@@ -1238,7 +1242,10 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | Replay and cross-member idempotency replay | idempotency keyed per client and member, gates before cache (REQ-XCH-020) |
 | Enumeration through resolve or account check | resolve returns catalogue data only; account check never returns the handle and is tightly limited (REQ-XCH-012/-031) |
 | DoS against Redis (shared with sessions, `noeviction`) or the backend | hard byte budgets, quotas, batch cap, larger Redis (REQ-XCH-023, ADR-0221) |
-| Guard evasion by batching, near-zero cuts or overwriting updates | window counting rules (REQ-XCH-021) |
+| Guard evasion by batching, near-zero cuts or overwriting stock updates | window counting rules against each lot's state at window start (REQ-XCH-021) |
+| Guard evasion by overwriting ship updates (retyping every ship, clearing names and locations) | counted only when one `upsert` changes both name and type, with no comparison to the window start; journal and undo restore the ships (REQ-XCH-021/-022) — accepted risk (owner decision 2026-09-27) |
+| A malicious release changing many members' data at once | journal and each member's own undo, suspension (REQ-XCH-022) — being addressed (admin bulk undo) |
+| A single open order recognisable in the org demand feed | membership-only scope, catalogue fields only, no requester, title or free text; no low-count suppression, 7-day client cache (REQ-XCH-018) — accepted risk (ADR-0220) |
 | Silent removal of Materialbörse offers by a sync book-out | reported and audited, not undoable — accepted (REQ-XCH-016/-022) |
 | The version gate bypassed by a manipulated client | cooperative by design — accepted (REQ-XCH-024) |
 | Data poisoning of org-wide views | own personal rows only, validated through the domain services (REQ-XCH-009/-016) |

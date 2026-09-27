@@ -269,6 +269,16 @@ and its global switch stays off until the go-live; the risks hold from then on.
   offer change is audited (REQ-XCH-016, -022).
 - **The minimum-version gate is cooperative.** It reads the `User-Agent`, so it stops honest old
   releases, never a client that lies about its version (REQ-XCH-024).
+- **The org demand feed has no low-count suppression.** A unit's single open order is recognisable
+  to anyone who knows the unit; the member could read the same order in the web, and a client may
+  cache the feed for 7 days (REQ-XCH-018, ADR-0220).
+- **Overwriting ship updates pass the mass-change guard.** A ship counts as removed only when one
+  `upsert` changes both its name and its type; nothing compares it with its state at window start,
+  as the stock rule does. A batch that retypes every ship or clears their names and locations is
+  not held back; the journal records it and the member's undo restores it. Accepted by the owner
+  on 2026-09-27 rather than extending the rule (security review 2 of #2092, L2; REQ-XCH-021).
+- **Undo is per member.** A malicious release that changes many members' data has to be undone by
+  each member on their own page. Being addressed: an admin bulk undo is being built.
 
 ## 11.8 Smaller, known, and deliberately left
 
