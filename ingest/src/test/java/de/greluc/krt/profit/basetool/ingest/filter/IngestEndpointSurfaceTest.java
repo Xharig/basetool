@@ -49,7 +49,9 @@ class IngestEndpointSurfaceTest {
   private static final Set<Call> INGEST_SURFACE =
       Set.of(
           new Call(HttpMethod.POST, "/v1/refinery-extract"),
-          new Call(HttpMethod.POST, "/v1/blueprint-preview"));
+          new Call(HttpMethod.POST, "/v1/blueprint-preview"),
+          new Call(HttpMethod.GET, "/exchange/v1/openapi.json"),
+          new Call(HttpMethod.GET, "/exchange/v1/schemas/x"));
 
   /** springdoc's OpenAPI document tree, served in non-prod profiles only. */
   private static final String API_DOCS_ROOT = "/v3/api-docs";
@@ -73,7 +75,7 @@ class IngestEndpointSurfaceTest {
   @MockitoBean private HandoffStagingService handoffStagingService;
 
   @Test
-  void theDispatcherRoutesExactlyTheTwoIngestEndpoints() {
+  void theDispatcherRoutesExactlyTheGatewaySurface() {
     List<Call> routed =
         EndpointEnumeration.mappings(context).stream()
             .filter(call -> !EndpointEnumeration.isUnder(call.path(), API_DOCS_ROOT))
@@ -83,8 +85,8 @@ class IngestEndpointSurfaceTest {
 
     assertThat(routed)
         .as(
-            "every endpoint outside /v1 is served WITHOUT the client gate, payload cap, rate limit"
-                + " and access log — add it under /v1 or extend IngestPathScope first")
+            "every endpoint outside /v1 and /exchange is served WITHOUT the payload cap, rate"
+                + " limit and access log — add it there or extend IngestPathScope first")
         .containsExactlyInAnyOrderElementsOf(INGEST_SURFACE);
   }
 
@@ -95,8 +97,8 @@ class IngestEndpointSurfaceTest {
           new MockHttpServletRequest(call.method().name(), call.path());
       request.setRequestURI(call.path());
 
-      assertThat(IngestPathScope.isIngestRequest(request))
-          .as("%s must be covered by the /v1 filters", call)
+      assertThat(IngestPathScope.isProtectedRequest(request))
+          .as("%s must be covered by the protective filters", call)
           .isTrue();
     }
   }
@@ -105,5 +107,7 @@ class IngestEndpointSurfaceTest {
   void theEnumerationIsNotVacuous() {
     assertThat(EndpointEnumeration.patterns(context, HttpMethod.POST))
         .contains("/v1/refinery-extract", "/v1/blueprint-preview");
+    assertThat(EndpointEnumeration.patterns(context, HttpMethod.GET))
+        .contains("/exchange/v1/openapi.json", "/exchange/v1/schemas/{name}");
   }
 }

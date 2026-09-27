@@ -155,15 +155,15 @@ public class PayloadSizeLimitFilter extends OncePerRequestFilter {
   }
 
   /**
-   * Limits this filter to the ingest endpoints, decided on the decoded path via {@link
+   * Limits this filter to the protected surface, decided on the decoded path via {@link
    * IngestPathScope}.
    *
    * @param request the current request
-   * @return {@code true} for any path that is not under {@code /v1}
+   * @return {@code true} for any path that is under neither {@code /v1} nor {@code /exchange}
    */
   @Override
   protected boolean shouldNotFilter(@NotNull HttpServletRequest request) {
-    return !IngestPathScope.isIngestRequest(request);
+    return !IngestPathScope.isProtectedRequest(request);
   }
 
   /**

@@ -52,6 +52,7 @@ class FilterOrderTest {
           CorrelationIdFilter.class,
           BotProtectionFilter.class,
           RequestLoggingFilter.class,
+          LegacyEndpointGoneFilter.class,
           RateLimitingFilter.class,
           PayloadSizeLimitFilter.class);
 

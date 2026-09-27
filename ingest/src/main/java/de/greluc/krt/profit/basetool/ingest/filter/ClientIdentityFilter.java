@@ -330,15 +330,15 @@ public class ClientIdentityFilter extends OncePerRequestFilter {
   }
 
   /**
-   * Restricts the filter to the two ingest endpoints, decided on the decoded path via {@link
-   * IngestPathScope}.
+   * Restricts the filter to the legacy extractor endpoints under {@code /v1}, decided on the
+   * decoded path via {@link IngestPathScope}; exchange clients are gated by the registry instead.
    *
    * @param request the current request
    * @return {@code true} to bypass the filter
    */
   @Override
   protected boolean shouldNotFilter(@NotNull HttpServletRequest request) {
-    return !IngestPathScope.isIngestRequest(request);
+    return !IngestPathScope.isLegacyRequest(request);
   }
 
   /**

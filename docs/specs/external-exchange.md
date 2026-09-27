@@ -55,7 +55,9 @@ is ever on the `api.*` allowlist (ADR-0135), and nothing of the exchange lives u
 **Acceptance**
 
 - [ ] `IngestEndpointSurfaceTest` pins the exchange routes and methods; a test checks every route
-  against `BotProtectionFilter`'s method, prefix and suffix lists.
+  against `BotProtectionFilter`'s method, prefix and suffix lists. *The second half is in
+  (`ExchangeRouteBotCompatibilityTest`, every route of the committed OpenAPI document and every schema
+  URL); the surface test pins the two anonymous document routes so far and grows with each route.*
 - [x] A test proves the gateway identity cannot reach `/api/v1/connected-apps/**`, and a browser
   session cannot reach `/api/v1/exchange/**` (`ConnectedAppsControllerTest`: the gateway and the app
   are refused; `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the
@@ -354,8 +356,14 @@ offline-file `envelope` (`format`, `formatVersion`, `generator`, `generatedAt`, 
   every schema the OpenAPI document names exists and has valid and invalid fixtures.
 - [ ] A test fails when a served route and the OpenAPI document diverge (with the routes, WP 3.2).
 
-**Enforced by:** `ExchangeContractTest` · **Status:** schemas, OpenAPI document and fixtures
-committed and validated — WP 0.2 (#2080); served by the gateway with WP 3.2 (#2082)
+The gateway serves both anonymously and unchanged, with `Cache-Control: public, max-age=3600`:
+`GET /exchange/v1/openapi.json` and `GET /exchange/v1/schemas/<name>.schema.json` (as
+`application/schema+json`; an unknown name is `404 NOT_FOUND`). The extractor's own OpenAPI document
+does not list them.
+
+**Enforced by:** `ExchangeContractTest`, `ExchangeDocumentsControllerTest` · **Status:** schemas,
+OpenAPI document and fixtures committed and validated — WP 0.2 (#2080); served by the gateway since
+WP 3.2 (#2082)
 
 ### REQ-XCH-012 — Names resolve through the web import's own matching
 
@@ -678,7 +686,20 @@ Behind `app.ingest.legacy-endpoints.enabled` (default `true`), `/v1/refinery-ext
 `/v1/blueprint-preview` answer `410 LEGACY_ENDPOINT_GONE` with a German update hint once the flag is
 `false` at the go-live. While it is `true` their behaviour is unchanged.
 
-**Status:** planned — WP 3.2 (#2082), WP 6 (#2092)
+The switch is `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED` on the host. The refusal runs before the security
+chain, so an outdated extractor sees the hint (*„Diese Schnittstelle wurde abgeschaltet. Bitte
+aktualisiere den SC Extractor auf die neueste Version."*) whether or not its token is still
+accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
+`basetool_ingest_legacy_gone_total` counts the refusals.
+
+**Acceptance**
+
+- [x] With the flag off both legacy routes answer `410 LEGACY_ENDPOINT_GONE` with the German hint,
+  before authentication; with it on they reach the security chain as before
+  (`LegacyEndpointGoneFilterTest`).
+- [ ] The flag is switched off on production at the go-live (a gated write, WP 6).
+
+**Status:** switch built — WP 3.2 (#2082); switched off with WP 6 (#2092)
 
 ## Threat model
 
