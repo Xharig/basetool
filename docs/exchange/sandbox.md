@@ -34,7 +34,9 @@ removes the containers **and the volumes**, so the next start is a clean sandbox
 
 The images are `ghcr.io/krt-profit/basetool-sandbox-{backend,frontend,ingest,keycloak}`, tag
 `edge` unless `BASETOOL_SANDBOX_VERSION` names another. Use a tag that matches your checkout. They
-carry only test values and refuse to start as production.
+carry only test values and refuse to start as production: the application images stop under the
+`prod` profile, and the Keycloak image runs only as `start-dev` — any other command, such as
+`start`, ends at once with exit code 64.
 
 To build the images from your checkout instead, add `--build` (Linux) or `-Build` (Windows). The
 first build takes several minutes.

@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.ingest.config;
 
+import de.greluc.krt.profit.basetool.ingest.exchange.DpopProofReplayStores;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeBudget;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopProofValidation;
@@ -211,6 +212,8 @@ public class SecurityConfig {
     SecurityProblemResponseHandler securityProblems =
         new SecurityProblemResponseHandler(
             objectMapper, meterRegistry, loggingProperties, exchangeNonces, exchangeRefusals);
+    DpopProofReplayStores proofReplay =
+        DpopProofReplayStores.of(exchangeLimitProperties, meterRegistry);
     CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
     csrfRepo.setCookieCustomizer(cookie -> cookie.sameSite("Strict").secure(true));
     http.csrf(
@@ -254,7 +257,7 @@ public class SecurityConfig {
                           @Override
                           public <O extends DPoPAuthenticationProvider> O postProcess(O provider) {
                             provider.setDPoPProofVerifierFactory(
-                                ExchangeDpopProofValidation.factory(exchangeNonces));
+                                ExchangeDpopProofValidation.factory(exchangeNonces, proofReplay));
                             return provider;
                           }
                         })

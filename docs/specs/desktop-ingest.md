@@ -819,7 +819,11 @@ host and port — all rewritten by `RemoteIpValve` from the reverse proxy's forw
 that omits `X-Forwarded-Port` leaves the internal port in the server's value while the client signed
 the public one, and every proof fails. No test can catch that: without a proxy both sides trivially
 agree. `app.ingest.public-base-url` therefore supplies the origin, and only the origin — the path
-still comes from the request, so a proof stays bound to its endpoint.
+still comes from the request, so a proof stays bound to its endpoint. **Under the `prod` profile it is
+required:** `PublicBaseUrlGuard` refuses the gateway's start while it is blank
+(`IRI_INGEST_PUBLIC_BASE_URL`), because the request-derived fallback binds `htu` to whatever `Host`
+and `X-Forwarded-Host` the request carried (security review 2, L10). `dev` and `test` keep the
+fallback.
 
 **Proof failures must be visible.** The stock `DPoPAuthenticationEntryPoint` answers a bodyless
 `401` and bypasses the module's problem handler, so a rejected proof would carry no problem body and
