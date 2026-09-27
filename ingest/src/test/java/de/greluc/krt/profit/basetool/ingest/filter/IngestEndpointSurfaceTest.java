@@ -58,7 +58,9 @@ class IngestEndpointSurfaceTest {
           new Call(HttpMethod.POST, "/exchange/v1/me/account-check"),
           new Call(HttpMethod.POST, "/exchange/v1/catalog/resolve"),
           new Call(HttpMethod.GET, "/exchange/v1/catalog/locations"),
-          new Call(HttpMethod.GET, "/exchange/v1/me/blueprints"));
+          new Call(HttpMethod.GET, "/exchange/v1/me/blueprints"),
+          new Call(HttpMethod.GET, "/exchange/v1/me/stock"),
+          new Call(HttpMethod.GET, "/exchange/v1/me/ships"));
 
   /** springdoc's OpenAPI document tree, served in non-prod profiles only. */
   private static final String API_DOCS_ROOT = "/v3/api-docs";

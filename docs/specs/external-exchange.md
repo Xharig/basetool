@@ -468,7 +468,8 @@ client.
 - [ ] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
 - [ ] A book-out below an offered amount lowers the offer and records the audit event.
 
-**Status:** planned — WP 4.2 (#2085)
+**Status:** the gateway's read route (`GET /exchange/v1/me/stock`) is built — WP 4.2 (#2085); the
+writes follow
 
 ### REQ-XCH-017 — Ships sync with a link step before the first create
 
@@ -483,7 +484,8 @@ unnamed ship is sent without it, and an upsert may leave it out (owner decision 
 
 - [ ] First sync against a Fleetview-imported hangar creates no duplicate.
 
-**Status:** planned — WP 4.4 (#2086)
+**Status:** the gateway's read route (`GET /exchange/v1/me/ships`) is built — WP 4.4 (#2086); the
+link step and the writes follow
 
 ### REQ-XCH-018 — Org demand is anonymised and membership-scoped; locations are the non-hidden list
 
