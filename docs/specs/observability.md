@@ -1679,7 +1679,10 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `jti` was used before), `member_cap` (the member already holds its live-proof cap) or `full` (the
   scope's cache holds its total cap), registered at zero. Each also counts as `invalid_dpop_proof`
   on the auth-failure counter. `IngestDpopReplayCacheFull` (warning) fires on any `full`, because
-  then every proof of that scope is refused (REQ-XCH-006).
+  then every proof of that scope is refused (REQ-XCH-006). Shown per hour by path scope and reason
+  on the Exchange dashboard (under the gateway refusals) and on the operations dashboard (under the
+  ingest auth failures); the metric carries no client, so the Exchange dashboard's `client_id`
+  variable does not filter it.
 - `basetool_ingest_exchange_relay_total{outcome,client_id}` counter — every admitted exchange request the
   gateway relayed: `ok`, `refused` (the backend refused with a code of the exchange error registry,
   passed on to the client) or `failed` (answered `502 BACKEND_RELAY_FAILED` — including a backend

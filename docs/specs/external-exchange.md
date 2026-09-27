@@ -307,7 +307,8 @@ and 600 covers several clients of one member; a member over the cap is refused `
 without affecting anyone else, and filling a store takes more than 160 members at their cap. A
 registry `requestsPerMinute` far above the default may need a larger per-member cap. Refusals are
 counted as `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`,
-`full`); `IngestDpopReplayCacheFull` fires on any `full`.
+`full`) and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on
+any `full`.
 
 **Acceptance**
 

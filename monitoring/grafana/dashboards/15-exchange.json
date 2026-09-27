@@ -244,12 +244,61 @@
       ]
     },
     {
+      "id": 20,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "type": "timeseries",
+      "title": "DPoP replay-cache refusals/hour by path scope and reason",
+      "description": "DPoP proofs the gateway's jti replay cache refused, per path scope (exchange / legacy) and reason: replayed (the jti was used before), member_cap (the member already holds its app.exchange.limits.dpop-proofs-per-member live proofs) or full (the scope's cache holds dpop-proofs-total and refuses every new proof; IngestDpopReplayCacheFull fires). Each also counts as invalid_dpop_proof on the auth-failure counter (REQ-XCH-006). The metric carries no client, so the client_id variable does not filter it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (path_scope, reason) (increase(basetool_ingest_dpop_replay_refused_total[1h]))",
+          "refId": "A",
+          "legendFormat": "{{path_scope}} {{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
       "id": 6,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 25
       },
       "type": "row",
       "title": "Writes to members' data",
@@ -262,7 +311,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "type": "timeseries",
       "title": "Writes/day by resource and outcome",
@@ -311,7 +360,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 26
       },
       "type": "timeseries",
       "title": "Removals/hour per client and resource",
@@ -360,7 +409,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 34
       },
       "type": "timeseries",
       "title": "Mass changes/day: staged and confirmed",
@@ -418,7 +467,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 34
       },
       "type": "timeseries",
       "title": "Undo/day by resource and outcome",
@@ -467,7 +516,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 42
       },
       "type": "row",
       "title": "Connections",
@@ -480,7 +529,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 43
       },
       "type": "timeseries",
       "title": "Installations created/day per client",
@@ -529,7 +578,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 43
       },
       "type": "timeseries",
       "title": "Account checks and disconnects/day",
@@ -587,7 +636,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 51
       },
       "type": "row",
       "title": "Registry and budget",
@@ -600,7 +649,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 44
+        "y": 52
       },
       "type": "timeseries",
       "title": "Registry clients by status",
@@ -649,7 +698,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 44
+        "y": 52
       },
       "type": "timeseries",
       "title": "Registry mirror age at the gateway",
@@ -698,7 +747,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 44
+        "y": 52
       },
       "type": "timeseries",
       "title": "Exchange Redis byte budget in use",
@@ -749,7 +798,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 60
       },
       "type": "row",
       "title": "Gateway log",
@@ -762,7 +811,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 61
       },
       "type": "logs",
       "title": "Gateway log lines of the selected clients",

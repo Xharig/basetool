@@ -2722,12 +2722,61 @@
       ]
     },
     {
+      "id": 81,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 176
+      },
+      "type": "timeseries",
+      "title": "DPoP replay-cache refusals/hour by path scope and reason",
+      "description": "DPoP proofs the gateway's jti replay cache refused, per path scope (exchange / legacy) and reason: replayed (the jti was used before), member_cap (the member already holds its app.exchange.limits.dpop-proofs-per-member live proofs) or full (the scope's cache holds dpop-proofs-total and refuses every new proof; IngestDpopReplayCacheFull fires). Each also counts as invalid_dpop_proof on the auth-failure counter (REQ-XCH-006). The metric carries no client, so the client_id variable does not filter it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (path_scope, reason) (increase(basetool_ingest_dpop_replay_refused_total[1h]))",
+          "refId": "A",
+          "legendFormat": "{{path_scope}} {{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
       "id": 51,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 176
+        "y": 184
       },
       "type": "timeseries",
       "title": "API requests/hour by client",
@@ -2776,7 +2825,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 176
+        "y": 184
       },
       "type": "timeseries",
       "title": "Auth failures/hour by reason",
@@ -2825,7 +2874,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 184
+        "y": 192
       },
       "type": "timeseries",
       "title": "App live-sync streams (open)",
@@ -2901,7 +2950,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 184
+        "y": 192
       },
       "type": "timeseries",
       "title": "App live-sync publish outcomes/hour",
@@ -2968,7 +3017,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 192
+        "y": 200
       },
       "type": "stat",
       "title": "Accounts awaiting local deletion",
@@ -3027,7 +3076,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 192
+        "y": 200
       },
       "type": "stat",
       "title": "Oldest unfinished deletion (days)",
@@ -3086,7 +3135,7 @@
         "h": 8,
         "w": 6,
         "x": 12,
-        "y": 192
+        "y": 200
       },
       "type": "stat",
       "title": "Pending deletion requests",
@@ -3145,7 +3194,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 192
+        "y": 200
       },
       "type": "stat",
       "title": "Oldest deletion request (days)",
@@ -3204,7 +3253,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 200
+        "y": 208
       },
       "type": "stat",
       "title": "Erasures that left a Keycloak account (24h)",
@@ -3263,7 +3312,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 200
+        "y": 208
       },
       "type": "stat",
       "title": "Accounts activated as admin without approval (7d)",
@@ -3322,7 +3371,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 200
+        "y": 208
       },
       "type": "timeseries",
       "title": "Notification retention deleted/day by half",
@@ -3370,7 +3419,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 208
+        "y": 216
       },
       "type": "timeseries",
       "title": "Scheduled jobs enabled",
@@ -3418,7 +3467,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 216
+        "y": 224
       },
       "type": "stat",
       "title": "Ingest client gates enforcing",
@@ -3492,7 +3541,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 224
+        "y": 232
       },
       "type": "timeseries",
       "title": "Exchange registry changes/hour by action",
@@ -3540,7 +3589,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 224
+        "y": 232
       },
       "type": "timeseries",
       "title": "Exchange registry mirror writes/hour by phase and outcome",
@@ -3588,7 +3637,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 232
+        "y": 240
       },
       "type": "timeseries",
       "title": "Exchange relay refusals/hour by reason",
@@ -3636,7 +3685,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 232
+        "y": 240
       },
       "type": "timeseries",
       "title": "Exchange disconnects, departures and account checks/day",
@@ -3702,7 +3751,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 240
+        "y": 248
       },
       "type": "timeseries",
       "title": "Exchange catalogue resolutions/hour by kind and status",
@@ -3750,7 +3799,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 248
+        "y": 256
       },
       "type": "timeseries",
       "title": "Exchange gateway refusals/hour by reason",
@@ -3799,7 +3848,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 248
+        "y": 256
       },
       "type": "timeseries",
       "title": "Legacy extractor endpoints: switch and 410s/hour",
@@ -3857,7 +3906,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 256
+        "y": 264
       },
       "type": "timeseries",
       "title": "Exchange writes/day by resource and outcome",
@@ -3924,7 +3973,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 264
+        "y": 272
       },
       "type": "timeseries",
       "title": "Exchange requests/hour per client: refused and relayed by outcome",
@@ -3982,7 +4031,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 272
+        "y": 280
       },
       "type": "timeseries",
       "title": "Exchange Redis byte budget in use",
@@ -4033,7 +4082,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 264
+        "y": 272
       },
       "type": "timeseries",
       "title": "Exchange mass changes held for confirmation/day per client",
