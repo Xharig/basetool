@@ -220,7 +220,9 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   (`EXCHANGE_CLIENT_SUSPENDED` / `_ACTIVATED`, only on a change) and the global exchange switch
   (`EXCHANGE_SWITCH_CHANGED`, the new state), and a member disconnecting a whole client
   (`EXCHANGE_CLIENT_DISCONNECTED`) or one installation (`EXCHANGE_INSTALLATION_DISCONNECTED`,
-  REQ-XCH-008; the installation's label never enters the row). The subject is the registry client
+  REQ-XCH-008; the installation's label never enters the row), and the system ending a departed
+  member's exchange access (`EXCHANGE_MEMBER_DEPARTED`: the reason, the number of clients, and
+  whether every step succeeded). The subject is the registry client
   or the installation, labelled by the **client id**; a member's disconnect names the member as
   target, a registry change names none. A change that failed because the mirror could not be
   written rolls back and records nothing.

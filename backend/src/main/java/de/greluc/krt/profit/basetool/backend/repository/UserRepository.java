@@ -409,6 +409,16 @@ public interface UserRepository
       String username, String displayName, Pageable pageable);
 
   /**
+   * Lists the users still flagged present that the given ids no longer contain, the ones {@link
+   * #markMissingUsers} is about to flag.
+   *
+   * @param ids the user ids currently present in Keycloak
+   * @return the ids of the users about to be flagged missing
+   */
+  @Query("SELECT u.id FROM User u WHERE u.inKeycloak = true AND u.id NOT IN :ids")
+  java.util.List<UUID> findIdsMissingFrom(@Param("ids") @NotNull Collection<UUID> ids);
+
+  /**
    * Flags every user still marked {@code inKeycloak} whose id is missing from the synced Keycloak
    * roster and stamps {@code keycloakAbsentSince}. Already-flagged rows are untouched, so the stamp
    * records the first observation.
