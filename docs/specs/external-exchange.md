@@ -100,6 +100,20 @@ a pinned `redoc` release, checked against its npm integrity), copies the documen
 beside it and builds the site with Jekyll, whose edit links point at `docs/exchange/` on `main`; a pull request builds, only
 `main` deploys, and only the deploy job holds `pages: write` and `id-token: write`.
 
+The site wears the DAS KARTELL design system (REQ-UI-001, REQ-UI-003, REQ-UI-019), not a stock
+Jekyll theme: its own layouts under `docs/exchange/_layouts/` put every page — the generated schema
+index and the reference included — under one header with the Basetool mark and links to the docs,
+the reference and the repository, a section navigation from `docs/exchange/_data/navigation.yml`
+(a sidebar on wide screens, a „Contents" drawer from 1024 px down), heading anchors and scrollable
+tables, and a footer with „Improve this page" (hidden on generated pages), the licence, the security
+policy and the issue tracker. It is dark-only and loads nothing from another origin: the Lato WOFF2
+files and the `basetool-*` marks are copied from the frontend at build time, so the repository holds
+one copy of each. The reference is a Jekyll page (`layout: reference`) whose Redoc theme is built at
+runtime from the stylesheet's design tokens (`docs/exchange/assets/js/reference.js`).
+`check_exchange_docs_links.py` also fails a navigation entry whose page does not exist, and the
+preparation script's self-test fails when the reference layout stops loading the bundle or the theme
+reads a token the stylesheet does not define.
+
 **Status:** the list, the onboarding page, the application template and the documentation site with
 its overview, formats, errors, versioning, changelog and authentication pages, and the MIT-licensed
 DPoP reference `docs/exchange/dpop-reference/` (stdlib Python, CNG and OpenSSL 3 through `ctypes`,
