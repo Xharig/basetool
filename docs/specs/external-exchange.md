@@ -125,14 +125,18 @@ finds no document, refuses every exchange request.
   gateway's read follows with WP 3.2.*
 - [x] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
   `ExchangeRegistryChanged` alert.
+- [x] The admin page *Administration → Verbundene Anwendungen* (`/admin/exchange-clients`)
+  registers, edits, suspends and activates clients and flips the switch in place; suspending, either
+  direction of the switch and granting a client more capabilities each ask for confirmation first.
+  *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`.*
 
 **Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
-`AdminExchangeRegistryControllerTest`, `RedisAclBackendIntegrationTest`,
+`AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `RedisAclBackendIntegrationTest`,
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
 **Code:** `ExchangeRegistryService`, `ExchangeRegistryMirrorSync`, `RedisExchangeRegistryMirror`,
 `ExchangeRegistryReconcileTask`, `AdminExchangeRegistryController` · **Status:** registry, admin
-API and mirror built — WP 3.1 (#2083); the gateway's read with WP 3.2 (#2082), the admin page with
-WP 4.5 (#2087)
+API and mirror built — WP 3.1 (#2083); the gateway's read with WP 3.2 (#2082); the admin page
+built — WP 4.5 (#2087)
 
 ### REQ-XCH-004 — Capabilities are OAuth scopes, enforced at the gateway and re-checked at the backend
 
