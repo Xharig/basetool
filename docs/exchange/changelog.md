@@ -16,6 +16,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **Corrected: `UNAUTHENTICATED` is answered by a refresh.** The error registry said to start a
   device login again; as the authentication page says, refresh once, and start a device login only
   after the refresh answers `invalid_grant` and the member asks.
+- **Corrected: the `docsUrl` example.** The service document's example and its fixture showed
+  `https://krt-profit.github.io/basetool/exchange/`, which does not exist. The gateway sends the
+  site root, `https://krt-profit.github.io/basetool/`.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and

@@ -28,7 +28,7 @@ No parameters. The answer is a
   "installationId": "inst-7f3c2a9e",
   "limits": {"batchMaxOps": 500, "requestsPerMinute": 60, "writesPerDay": 2000},
   "deprecations": [],
-  "docsUrl": "https://krt-profit.github.io/basetool/exchange/",
+  "docsUrl": "https://krt-profit.github.io/basetool/",
   "minClientVersion": "3.60.0"
 }
 ```
