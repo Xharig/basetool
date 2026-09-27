@@ -25,7 +25,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.nimbusds.jose.jwk.ECKey;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
@@ -48,9 +47,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
- * Pins the refusal a client sees when its member holds too many live DPoP proofs (REQ-XCH-006):
- * the same {@code 401 DPOP_INVALID} with {@code error="invalid_dpop_proof"} as a replayed proof,
- * while another member still passes.
+ * Pins the refusal a client sees when its member holds too many live DPoP proofs (REQ-XCH-006): the
+ * same {@code 401 DPOP_INVALID} with {@code error="invalid_dpop_proof"} as a replayed proof, while
+ * another member still passes.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
