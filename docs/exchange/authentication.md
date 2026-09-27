@@ -173,9 +173,8 @@ its time once with the corrected clock; if that fails too, ask the member to syn
 
 Every exchange call needs the gateway's **server nonce** (RFC 9449 §8).
 
-- Answers that passed the token check carry `DPoP-Nonce`. Keep the latest one per server and put it
-  into the next proof. Answers refused while the token or proof was checked carry none; keep the
-  one you have.
+- Every exchange answer carries `DPoP-Nonce`, refusals included. Keep the latest one per server
+  and put it into the next proof.
 - A proof without a current nonce is answered `401` with the code `DPOP_INVALID`,
   `WWW-Authenticate: DPoP algs="…", error="use_dpop_nonce"` and a fresh `DPoP-Nonce`. **Retry once**
   with a new proof carrying that nonce; a write keeps its `Idempotency-Key`.
@@ -198,8 +197,8 @@ DPoP: eyJ0eXAiOiJkcG9wK2p3dCIsImFsZyI6IkVTMjU2IiwiandrIjp7Imt0eSI6IkVDIiwi...
 User-Agent: ExampleClient/1.2.0 (+https://example.org/client)
 ```
 
-Send exactly one `Authorization` and one `DPoP` header. The `Bearer` scheme is refused
-`401 DPOP_REQUIRED`, whatever the token.
+Send exactly one `Authorization` and one `DPoP` header. The `Bearer` scheme, a `DPoP`-scheme
+request without a `DPoP` header and a token that is not DPoP-bound are refused `401 DPOP_REQUIRED`.
 
 ## Refreshing
 
@@ -264,10 +263,10 @@ a `code` from the [error registry](errors.md).
 
 | Code | HTTP | When | Client action |
 | --- | --- | --- | --- |
-| `UNAUTHENTICATED` | 401 | No token; a token that is invalid, expired, or not issued for the gateway; a DPoP-scheme request without a `DPoP` header | Add the missing header; otherwise refresh once, and after `invalid_grant` start a device login when the member asks. |
-| `DPOP_REQUIRED` | 401 | The `Bearer` scheme | Send `Authorization: DPoP` with a proof. |
+| `UNAUTHENTICATED` | 401 | No token; a token that is invalid, expired, or not issued for the gateway | Refresh once, and after `invalid_grant` start a device login when the member asks. |
+| `DPOP_REQUIRED` | 401 | The `Bearer` scheme, a `DPoP`-scheme request without a `DPoP` header, or a token that is not DPoP-bound | Send `Authorization: DPoP` with a proof; request the token with a DPoP proof so it is bound. |
 | `DPOP_INVALID` with `use_dpop_nonce` | 401 | The proof lacks the current server nonce | Retry once with a new proof carrying the `DPoP-Nonce` of the answer. |
-| `DPOP_INVALID` with `invalid_dpop_proof` | 401 | The proof is malformed, signed by another key than `cnf.jkt`, replayed, outside the `iat` window, for another method or URL, has the wrong `ath`, or the token is not DPoP-bound | Fix the proof; correct the clock once; do not loop. |
+| `DPOP_INVALID` with `invalid_dpop_proof` | 401 | The proof is malformed, signed by another key than `cnf.jkt`, replayed, outside the `iat` window, for another method or URL, or has the wrong `ath` | Fix the proof; correct the clock once; do not loop. |
 | `SCOPE_MISSING` | 403 | The route's capability is not in the token, or not granted to the client | Start a device login with the scope, if the member wants the feature. |
 | `CLIENT_REVOKED` | 401 | The member disconnected the client after the token was issued | Discard the tokens; start a device login only when the member asks. |
 | `INSTALLATION_REVOKED` | 401 | The member disconnected this installation | Discard the tokens **and** the key; reconnecting needs a new key. |
