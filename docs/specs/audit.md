@@ -29,7 +29,7 @@ first). The storage choice and the unified-viewer architecture are recorded in
 ### REQ-AUDIT-001 — Immutable, complete, admin-only activity audit log
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> **Hangar** and **Blueprints** are audited since WP 1.1 (#2098), **Verbundene Anwendungen** since WP 3.1 with the registry changes and the global switch (the coverage list below). Still to come in that area: members' revocations per client and per installation, undo and mass-change confirmations (WP 3.1, #2083).
+> **Hangar** and **Blueprints** are audited since WP 1.1 (#2098), **Verbundene Anwendungen** since WP 3.1 with the registry changes, the global switch, members' disconnects per client and per installation, undo and mass-change confirmations (the coverage list below). An exchange write is audited in its own area — Lager, Blueprints, Hangar — under the client's id. *Corrected 2026-09-27: this note still called the member controls "to come" after they were built.*
 
 Every state-mutating activity in the generic areas writes exactly **one** row to an **append-only**
 audit table (`audit_event`, modeled after `bank_audit_event` — no `@Version`, never updated except
@@ -84,6 +84,8 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   the „gestohlen“ marker (`INVENTORY_STOLEN_MARKED` / `INVENTORY_STOLEN_UNMARKED` per row or split,
   with the amount and whether it split; a selection writes one `INVENTORY_BULK_STOLEN_CHANGED`
   summary; an unchanged row records nothing, REQ-INV-053) /
+  an exchange client's stock write (REQ-XCH-016: a book-in `INVENTORY_ITEM_CREATED`, a book-out the
+  Lager's own `DISCARD` book-out, `INVENTORY_ITEM_CONSUMED`, a stolen flip the marker events above, each under the client's id) /
   global wipe; plus the cross-area writers (refinery store → `INVENTORY_RECEIVED_FROM_REFINERY`,
   job-order handover — material handover **and** item delivery consuming the order's earmarked item
   stock, REQ-ORDERS-030 → `INVENTORY_HANDED_OVER`, job-order item-production consumption →
