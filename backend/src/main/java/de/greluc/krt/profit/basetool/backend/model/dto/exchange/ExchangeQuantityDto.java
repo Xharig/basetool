@@ -19,14 +19,13 @@
 
 package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
+import java.math.BigDecimal;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * A catalogue entry as the feed names it: the Basetool key a client echoes as {@code bt}, and the
- * display name (REQ-XCH-012).
+ * An amount with its unit: SCU with at most three decimals, or whole pieces (REQ-XCH-016).
  *
- * @param bt the Basetool key: for a blueprint the same opaque key as the feed entry, for a material
- *     or item its id
- * @param name the display name
+ * @param amount the amount
+ * @param unit {@code SCU} or {@code PIECE}
  */
-public record ExchangeItemRefDto(@NotNull String bt, @NotNull String name) {}
+public record ExchangeQuantityDto(@NotNull BigDecimal amount, @NotNull String unit) {}

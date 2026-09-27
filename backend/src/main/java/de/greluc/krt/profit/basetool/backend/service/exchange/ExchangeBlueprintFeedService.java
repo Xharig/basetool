@@ -180,8 +180,7 @@ public class ExchangeBlueprintFeedService {
     String name = row.getProductName();
     return new ExchangeBlueprintDto(
         key,
-        new ExchangeItemRefDto(
-            key, name.length() > MAX_NAME ? name.substring(0, MAX_NAME) : name),
+        new ExchangeItemRefDto(key, name.length() > MAX_NAME ? name.substring(0, MAX_NAME) : name),
         row.getAcquiredAt(),
         defaultKeys.isDefault(row.getProductKey()),
         row.getNote());

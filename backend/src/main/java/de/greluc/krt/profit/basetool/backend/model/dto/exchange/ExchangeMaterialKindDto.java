@@ -22,11 +22,10 @@ package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * A catalogue entry as the feed names it: the Basetool key a client echoes as {@code bt}, and the
- * display name (REQ-XCH-012).
+ * A material's read-only classification, which a client uses to route a lot to its own lists
+ * (REQ-XCH-016).
  *
- * @param bt the Basetool key: for a blueprint the same opaque key as the feed entry, for a material
- *     or item its id
- * @param name the display name
+ * @param type {@code RAW}, {@code REFINED} or {@code NO_REFINE}
+ * @param commodity whether the material is a UEX commodity
  */
-public record ExchangeItemRefDto(@NotNull String bt, @NotNull String name) {}
+public record ExchangeMaterialKindDto(@NotNull String type, boolean commodity) {}

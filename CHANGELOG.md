@@ -12,6 +12,10 @@
 - **Datenaustausch: Blueprints lesen.** Das Backend liefert dem Gateway die Blueprints eines
   Mitglieds als Snapshot und als Änderungs-Feed mit Löschmarken samt Quelle; ein abgelaufener Cursor
   antwortet `410 CURSOR_EXPIRED` (`/api/v1/exchange/me/blueprints`, REQ-XCH-013, REQ-XCH-015).
+- **Datenaustausch: persönliches Lager lesen.** Das Backend liefert dem Gateway den persönlichen
+  Bestand eines Mitglieds als Posten (Material oder Item, Ort, Qualität, gestohlen) über alle
+  Einheiten-Pools summiert, als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/stock`,
+  REQ-XCH-016).
 - **Administration → Verbundene Anwendungen.** Admins registrieren, bearbeiten, sperren und
   begrenzen die zugelassenen Anwendungen des Datenaustauschs und schalten ihn global ein oder aus;
   Sperren, der Schalter und zusätzliche Berechtigungen fragen vorher nach (REQ-XCH-003).

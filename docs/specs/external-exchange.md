@@ -465,8 +465,16 @@ client.
 
 - [ ] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
 - [ ] A book-out below an offered amount lowers the offer and records the audit event.
+- [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
+  tombstone when its rows are gone or rebooked to the shared pool. *`ExchangeStockControllerTest`.*
 
-**Status:** planned — WP 4.2 (#2085)
+The feed's lot key is the one the change log records, `m:<material>|l:<location>|q:<quality>|s:<0|1>`
+or `i:<item>|…`; a snapshot pages lots by their lowest row id. The material reference carries the
+material's or item's id as `bt`, an item lot has quality 0 and counts whole pieces, and an SCU amount
+is rounded to three decimals.
+
+**Status:** read side built in the backend (`/api/v1/exchange/me/stock`) — WP 4.2 (#2085); the gateway
+route and the writes follow
 
 ### REQ-XCH-017 — Ships sync with a link step before the first create
 

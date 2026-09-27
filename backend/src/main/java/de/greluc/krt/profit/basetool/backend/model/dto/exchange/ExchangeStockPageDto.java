@@ -19,14 +19,23 @@
 
 package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
 /**
- * A catalogue entry as the feed names it: the Basetool key a client echoes as {@code bt}, and the
- * display name (REQ-XCH-012).
+ * One page of the member's personal stock lots: a snapshot page or a change-feed page (REQ-XCH-013,
+ * REQ-XCH-016).
  *
- * @param bt the Basetool key: for a blueprint the same opaque key as the feed entry, for a material
- *     or item its id
- * @param name the display name
+ * @param items the lots on this page
+ * @param removed the tombstones on this page; always empty on a snapshot page
+ * @param nextCursor where to continue: the next snapshot page, or after the last page the feed
+ *     position the snapshot was taken at
+ * @param hasMore whether a further page is ready now
  */
-public record ExchangeItemRefDto(@NotNull String bt, @NotNull String name) {}
+public record ExchangeStockPageDto(
+    @NotNull @Unmodifiable List<ExchangeStockLotDto> items,
+    @NotNull @Unmodifiable List<ExchangeTombstoneDto> removed,
+    @Nullable String nextCursor,
+    boolean hasMore) {}
