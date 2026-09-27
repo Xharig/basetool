@@ -70,6 +70,7 @@ up() {
   "${compose[@]}" run --rm sandbox-seed
   echo "sandbox: up. Issuer http://host.docker.internal:18080/auth/realms/iri,"
   echo "sandbox: gateway https://localhost:11262/exchange/v1, web https://localhost:18081"
+  echo "sandbox: the gateway answers 503 EXCHANGE_DISABLED for up to about 90 s until it sees the switch"
 }
 
 down() {
