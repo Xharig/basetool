@@ -4709,7 +4709,7 @@ template is the reference) · **Code:** `keycloak-theme/krt-theme/login/login.ft
 ### REQ-SEC-068 — Each service reaches Redis as its own least-privilege ACL user
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Two key families join the ACL (ADR-0221): the backend writes `exchange:*` (registry mirror, global switch, revocations, deny list); ingest reads `exchange:*` and uses `GET`, `SET` with `NX`, `INCR`, `EXPIRE` and the sorted-set commands on `ingest:xch:*`. The mirror never sits under `ingest:*`. Rendering the new ACL on production is a gated write before the first exchange release (WP 2.1, #2092).
+> Two key families join the ACL (ADR-0221). **In since WP 3.1:** the backend reads and writes `exchange:*` (`GET`, `SET`) and ingest reads it (`%R~exchange:*`, `GET`) — the table below. **Still to come:** ingest's `SET` with `NX`, `INCR` and the sorted-set commands on `ingest:xch:*` (WP 3.2, #2082), and the revocation and deny-list keys under `exchange:*` (WP 3.1). The mirror never sits under `ingest:*`. Rendering the new ACL on production is a gated write before the first exchange release (WP 2.1, #2092).
 
 Redis holds the frontend's sessions — OAuth2 access **and refresh** tokens included — the live-sync
 and notification fan-out, and the ingest handoff. Backend, frontend and ingest used to reach it as
@@ -4724,8 +4724,8 @@ its service does:
 | User | Keys | Channels | Commands beyond `@connection` |
 | --- | --- | --- | --- |
 | `basetool-frontend` | `basetool:session:*`, `ingest:handoff:*` | `basetool:session:*`, the created-event pattern, `__keyevent@0__:del` / `:expired`, `basetool:livesync:changed` / `:presence` | read, write, keyspace, hash, set, sorted set, string, pub/sub, transaction, `INFO`; no dangerous command, no `CONFIG` |
-| `basetool-backend` | none | `basetool:livesync:changed`, `basetool:notify:published` | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE`, `INFO` |
-| `basetool-ingest` | `ingest:*` | none | `SET`/`SETEX`/`PSETEX`, `RPUSH`, `LPOP`, `EXPIRE`/`PEXPIRE`, `DEL`/`UNLINK`, `INFO` |
+| `basetool-backend` | `exchange:*` | `basetool:livesync:changed`, `basetool:notify:published` | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE`, `GET`, `SET`, `INFO` |
+| `basetool-ingest` | `ingest:*`, read-only `exchange:*` | none | `GET`, `SET`/`SETEX`/`PSETEX`, `RPUSH`, `LPOP`, `EXPIRE`/`PEXPIRE`, `DEL`/`UNLINK`, `INFO` |
 | `monitoring` | none | none | introspection; **not** `SCAN` or `RANDOMKEY`, which are not key-checked and would list every session id |
 | `admin` | all | all | all — the operator's, never in an application's environment |
 | `default` | — | — | switched **off** at the end of the rollout |

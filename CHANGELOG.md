@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Datenaustausch: Verzeichnis zugelassener Anwendungen.** Admins verwalten zugelassene
+  Fremd-Anwendungen samt Fähigkeiten und den globalen Schalter (`/api/v1/admin/exchange-clients`,
+  `/api/v1/admin/exchange-settings`, Migration `V248`); jede Änderung steht im neuen Audit-Bereich
+  „Verbundene Anwendungen“ und wird für das Gateway ausfallsicher nach Redis gespiegelt
+  (`APP_EXCHANGE_MIRROR_ENABLED`, vorerst aus; REQ-XCH-003).
 - **Profil: optionales RSI-Handle.** Mitglieder können ihr RSI-Handle im Profil hinterlegen; es ist
   nur für sie selbst und Admins sichtbar, eindeutig über alle Konten und dient später verbundenen
   Anwendungen zur Prüfung, ob ein Spiel-Log zum Konto gehört (REQ-SEC-072, Migration `V246`).

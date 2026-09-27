@@ -50,7 +50,7 @@ worth reading even if you know the domain.
 
 | Term | Means |
 | --- | --- |
-| **Audited area** | One of the twelve areas (the bank and eleven `AuditDomain` values) whose every state-mutating activity is written to the append-only trail (`REQ-AUDIT-001`). |
+| **Audited area** | One of the thirteen areas (the bank and twelve `AuditDomain` values) whose every state-mutating activity is written to the append-only trail (`REQ-AUDIT-001`). |
 | **Live update** | A single client's own mutation updating the DOM **in place**, with no full-page reload (`REQ-FE-*`). |
 | **Live sync** | A *peer's* change propagating to other viewers over `/ws/sync` (the app: a backend SSE stream), fanned across replicas by Redis pub/sub. Not the same thing as live update, and both are required. |
 | **Discord-Registrierung / approval queue** | A self-service sign-up through Discord waits here as `PENDING` and sees nothing until an admin approves, rejects or links it to an existing account. |
@@ -66,7 +66,9 @@ worth reading even if you know the domain.
 | **Ingest** | The internet-facing gateway module for the desktop extractor. Owns no database; relays to the backend internally. |
 | **Handoff** | The single-use Redis entry through which ingest passes a matched draft to the member's browser for review. |
 | **Exchange API** *(planned)* | `/exchange/v1/**` on the ingest gateway: the capability-scoped contract through which approved external clients sync the member's own data (`REQ-XCH-*`, ADR-0216). Not the backend API. |
-| **Capability** *(planned)* | An OAuth scope such as `exchange.stock.write` — what an external client is approved for and a member consents to. |
+| **Capability** | An OAuth scope such as `exchange.stock.write` — what an external client is approved for and a member consents to. The registry holds each client's grants. |
+| **Client registry** | The backend's table of approved exchange clients with their status and capabilities, plus the global exchange switch; `ADMIN` only, audited as „Verbundene Anwendungen“ (REQ-XCH-003). |
+| **Registry mirror** | The JSON copy of the client registry under `exchange:registry` in Redis, which the gateway reads. Restrictions reach it before their commit, everything else after, and a 60-second reconcile repairs it. |
 | **Installation** *(planned)* | One external client on one PC, identified by its DPoP key thumbprint; revoked one by one. |
 | **Lot** *(planned)* | The exchange's stock unit: material + location + quality + „gestohlen" over a member's personal Lager rows, across org-unit pools. Not a Lager row and not a Lager stack. |
 | **Tombstone** *(planned)* | The 90-day record of a removal in the exchange's change feed, saying who removed the entry. |
