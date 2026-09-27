@@ -12,7 +12,8 @@ is public, case by case, and for the capabilities a client actually needs.
    is public, the behaviour of a build where it is not. Closed-source clients can be approved.
 3. A pull request adds your client to the [approved-clients list][approved] and to the list the
    Keycloak provisioner reads. **Its merge is the approval.** An administrator then registers the
-   client with the approved capabilities under „Verbundene Anwendungen".
+   client with the approved capabilities under *Connected applications* in the Basetool's
+   administration.
 
 ## Criteria
 

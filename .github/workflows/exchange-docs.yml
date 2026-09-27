@@ -51,7 +51,7 @@ jobs:
       - name: links / Self-test the link checker
         run: python3 .github/scripts/check_exchange_docs_links.py --selftest
 
-      - name: links / Check every relative link stays on the site and resolves
+      - name: links / Check every relative link resolves on the site and no German text is on it
         run: python3 .github/scripts/check_exchange_docs_links.py
 
       - name: markdown / Lint the pages

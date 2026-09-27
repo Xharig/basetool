@@ -45,9 +45,11 @@ An integer from 0 to 1000. Trade goods are always stored at 0, whatever a client
 
 ## Place — `location-ref`
 
-A Lager location, by `uex: {kind: CITY | SPACE_STATION, id}`, by exact `name`, or both; the UEX link
-is tried first. `GET /exchange/v1/catalog/locations` lists the places the Lager knows. A place
-without a Lager location is `LOCATION_UNKNOWN`; it is never created.
+A warehouse location, by `uex: {kind: CITY | SPACE_STATION, id}`, by exact `name`, or both; the
+UEX link is tried first. The **warehouse** is the Basetool's record of the org's stock, the
+*Inventory* area of the web app; its locations are the places stock and ships can be recorded at.
+`GET /exchange/v1/catalog/locations` lists them. A place without a warehouse location is
+`LOCATION_UNKNOWN`; it is never created.
 
 ## Provenance — `provenance`
 

@@ -136,7 +136,7 @@ client, change its capabilities or set a minimum version; the gateway sees a cha
 ## Seeded data
 
 - **Catalogue.** A manufacturer; Sandbox City (UEX city id `990001`) and Sandbox Station (UEX space
-  station id `990002`) with one Lager location each; the ship types Sandbox Hauler and Sandbox
+  station id `990002`) with one warehouse location each; the ship types Sandbox Hauler and Sandbox
   Miner; the materials Sandbox Ore (raw, refines into Sandbox Metal), Sandbox Metal (refined),
   Sandbox Trade Goods (a commodity) and Sandbox Component (counted in pieces); the items Sandbox
   Rifle and Sandbox Helmet; blueprints with the scmdb tags `BP_CRAFT_SBXM_RIFLE_01`,
@@ -147,7 +147,7 @@ client, change its capabilities or set a minimum version; the gateway sees a cha
 - **Personal stock of `sandbox-member`.** Sandbox Metal in the IRIDIUM pool and in the Sandbox
   Squadron pool at the same place and quality, so the two rows form one lot; Sandbox Trade Goods,
   Sandbox Component and Sandbox Ore in no pool; one Sandbox Rifle. Part of the IRIDIUM row is
-  offered on the Materialbörse.
+  offered on the Material Exchange.
 - **Ships.** Two for `sandbox-member`, one for `sandbox-member-2`.
 - **Open orders.** A material order and an item order for IRIDIUM and a material order for Sandbox
   Squadron, with minimum qualities, so `GET /exchange/v1/me/org-demand` answers.

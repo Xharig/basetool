@@ -187,5 +187,5 @@ on a local change and every few minutes while the client is open is plenty.
 
 ## Undo
 
-The member can undo your client's writes from „Verbundene Anwendungen". An undo reaches your feed like
+The member can undo your client's writes from *Connected applications*. An undo reaches your feed like
 any other change made in the web; apply it like one and do not push the undone state back.

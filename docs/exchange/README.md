@@ -56,7 +56,7 @@ the registry grants it to the client.
 
 - [Connect](resources/connect.md) — the service document, labelling the installation, the account
   check.
-- [Catalogue](resources/catalog.md) — resolving item references, the Lager's locations.
+- [Catalogue](resources/catalog.md) — resolving item references, the warehouse locations.
 - [Blueprints](resources/blueprints.md) — the blueprint feed and blueprint changes.
 - [Stock](resources/stock.md) — stock lots, setting quantities, what a book-out does.
 - [Ships](resources/ships.md) — the ship feed, links, upserts and removals.

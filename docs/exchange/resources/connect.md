@@ -41,7 +41,7 @@ store `installationId`, and tell the member to update when your version is below
 
 An installation is one client on one device for one member, identified by the thumbprint of its DPoP
 key. The server creates it the first time that key calls any exchange route; a new key is a new
-installation. The label lets the member tell installations apart in „Verbundene Anwendungen", where
+installation. The label lets the member tell installations apart on *Connected applications*, where
 it is always shown after the registered client name.
 
 The body is an [`installation`](../schemas/) with only `label`: at most 40 characters of letters,

@@ -84,8 +84,8 @@ Only ever show a code this installation created itself, and never relay a code t
 device: a device code typed into someone else's browser hands over that person's account (RFC 8628
 §5.4). The Basetool's code-entry page warns the member about it, and the consent page repeats the
 warning with the code of this sign-in, which must match the one your application shows. Every new
-connection is announced to the member and stays marked „Neu" on „Verbundene Anwendungen" until the
-member acknowledges it.
+connection is announced to the member and stays marked "New" on the member's *Connected
+applications* page in the Basetool until the member acknowledges it.
 
 ### 4. Poll the token endpoint
 
@@ -235,7 +235,7 @@ it in place of the old one.
 
 ## Disconnecting
 
-„Disconnect" in the client does three things, in this order:
+"Disconnect" in the client does three things, in this order:
 
 1. Revoke the refresh token (RFC 7009) at the revocation endpoint with `token`,
    `token_type_hint=refresh_token` and `client_id`, and a proof like at the token endpoint —
@@ -245,7 +245,7 @@ it in place of the old one.
 
 The revocation is best effort: delete locally whatever it answers.
 
-The member can also disconnect in the Basetool, under „Verbundene Anwendungen": one installation,
+The member can also disconnect in the Basetool, under *Connected applications*: one installation,
 or the whole client. The client learns it from the next call — `INSTALLATION_REVOKED` or
 `CLIENT_REVOKED` — or from `invalid_grant` on the next refresh.
 

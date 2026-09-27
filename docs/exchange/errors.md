@@ -62,7 +62,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `STOLEN_MARKING_DISABLED` | The Basetool does not yet keep stolen stock apart. | Keep the lot local until the server supports it. |
 | `REMOVED_ELSEWHERE` | The entry has a live tombstone from another channel or installation; for a ship, the named `shipId` was removed there. | Ask the member; resend with `override: true` only if they agree. |
 | `UNIT_MISMATCH` | The quantity's unit does not match the material's. | Fix the unit. |
-| `LOCATION_UNKNOWN` | The place has no Lager location. | Offer a place from `catalog/locations`. |
+| `LOCATION_UNKNOWN` | The place has no warehouse location. | Offer a place from `catalog/locations`. |
 | `LINK_TARGET_TAKEN` | The server ship is already linked to another external id of this installation. | Pull and re-link. |
 | `VERSION_CONFLICT` | As above, for this op only; also an `upsert` without `shipId` for an id this installation already linked. | Pull, merge, retry this op. |
 

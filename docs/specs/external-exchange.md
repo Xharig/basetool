@@ -91,10 +91,15 @@ need no new consent (REQ-SEC-028).
   approved client on the member's own device, that the client's own privacy statement governs it
   there, and how to disconnect and undo; it changes with the go-live.
 
-The third-party pages are `docs/exchange/`, English, published on GitHub Pages at
-`https://krt-profit.github.io/basetool/` by `.github/workflows/exchange-docs.yml`: on every change to
-the pages, the OpenAPI document or the schemas it checks that each relative link stays on the site
-and resolves (`check_exchange_docs_links.py`), lints the Markdown, renders the OpenAPI document into a
+The third-party pages are `docs/exchange/`, published on GitHub Pages at
+`https://krt-profit.github.io/basetool/` for developers only, and entirely in English — no German at
+all (owner decision 2026-09-27): Basetool pages and controls go by the English web app's names
+(„Verbundene Anwendungen" is *Connected applications*, the Lager the *warehouse*, the Materialbörse
+the *Material Exchange*), and German test data stays only in the conformance fixtures under
+`examples/`. `.github/workflows/exchange-docs.yml`, on every change to the pages, the OpenAPI
+document or the schemas, checks that each relative link stays on the site and resolves and that no
+umlaut, sharp s or German low quotation mark appears in the site's sources, the OpenAPI document or
+the schemas outside those fixtures (`check_exchange_docs_links.py`), lints the Markdown, renders the OpenAPI document into a
 static reference from the committed schemas (`prepare_exchange_reference.py` and the Redoc bundle of
 a pinned `redoc` release, checked against its npm integrity), copies the document and the schemas
 beside it and builds the site with Jekyll, whose edit links point at `docs/exchange/` on `main`; a pull request builds, only
