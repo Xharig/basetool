@@ -81,6 +81,16 @@ blueprint format: each item is `{ref, acquiredAt?, provenance?}`, at most 2000 p
 can upload such a file in the web's blueprint import, and a client can send the same document to
 `POST /exchange/v1/me/drafts/blueprints`; both end in the same review.
 
+- **Size.** The web import refuses a file larger than 8 MiB (8 388 608 bytes) before reading it; the
+  draft route takes a body of at most 2 MiB.
+- **`formatVersion`.** Write `1.0`. The Basetool does not read the field today: a file with any
+  `<major>.<minor>` the schema allows is read as this page describes.
+- **What is checked.** The draft route checks the whole envelope against its schema. The web import
+  checks only `format` and the items — at most 2000, each with a `ref` — and ignores `formatVersion`,
+  `generator`, `generatedAt`, `provenance` and `extensions`. Write files that pass the schema anyway.
+- **Provenance.** A blueprint taken over from the review is recorded with the source `import`,
+  whatever the item's `provenance` says.
+
 ## Extensions — `extensions`
 
 Where a schema allows `extensions`, it is an object of up to ten reverse-DNS keys
