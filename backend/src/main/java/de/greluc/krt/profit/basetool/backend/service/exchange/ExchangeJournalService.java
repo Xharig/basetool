@@ -19,11 +19,15 @@
 
 package de.greluc.krt.profit.basetool.backend.service.exchange;
 
+import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeJournalAction;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeJournalEntry;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeJournalRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -31,6 +35,8 @@ import org.jetbrains.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -43,6 +49,7 @@ public class ExchangeJournalService {
 
   private final ExchangeJournalRepository journalRepository;
   private final ObjectMapper objectMapper;
+  private final MeterRegistry meterRegistry;
 
   /**
    * Records one written entry in the write's own transaction, so the journal and the data commit or
@@ -66,6 +73,9 @@ public class ExchangeJournalService {
       boolean removal,
       @Nullable Object before,
       @Nullable Object after) {
+    if (removal) {
+      countAfterCommit(caller.clientId(), action.getResource());
+    }
     return journalRepository.save(
         ExchangeJournalEntry.builder()
             .id(UUID.randomUUID())
@@ -80,6 +90,33 @@ public class ExchangeJournalService {
             .beforeState(before == null ? null : objectMapper.writeValueAsString(before))
             .afterState(after == null ? null : objectMapper.writeValueAsString(after))
             .build());
+  }
+
+  /**
+   * Counts one removal once the write has committed, for the per-client removal alert.
+   *
+   * @param clientId the client, a registered one
+   * @param resource the resource
+   */
+  private void countAfterCommit(@NotNull String clientId, @NotNull ExchangeResource resource) {
+    Counter counter =
+        meterRegistry.counter(
+            MetricNames.EXCHANGE_REMOVALS,
+            MetricNames.TAG_CLIENT_ID,
+            clientId,
+            MetricNames.TAG_RESOURCE,
+            resource.name().toLowerCase(Locale.ROOT));
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      counter.increment();
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            counter.increment();
+          }
+        });
   }
 
   /**

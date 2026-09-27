@@ -42,12 +42,10 @@ import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import de.greluc.krt.profit.basetool.backend.support.ChangeSource;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.Validator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -90,14 +88,6 @@ public class ExchangeMassChangeService {
   private final Validator validator;
   private final PlatformTransactionManager transactionManager;
   private final Clock clock = Clock.systemUTC();
-
-  /** Registers the confirmation counter at zero for every resource. */
-  @PostConstruct
-  void registerCounters() {
-    for (String resource : List.of(BLUEPRINTS, STOCK, "ships")) {
-      counter(resource);
-    }
-  }
 
   /**
    * Shows what a staged change set would do, writing nothing.
@@ -157,7 +147,7 @@ public class ExchangeMassChangeService {
     if (result == null) {
       throw new IllegalStateException("The confirmed change set returned no result");
     }
-    counter(request.resource()).increment();
+    counter(client.getClientId(), request.resource()).increment();
     return toDto(client, request.resource(), result);
   }
 
@@ -297,12 +287,13 @@ public class ExchangeMassChangeService {
   }
 
   /**
-   * Returns the confirmation counter of a resource.
+   * Returns the confirmation counter of a client and resource.
    *
+   * @param clientId the client, a registered one
    * @param resource {@code blueprints}, {@code stock} or {@code ships}
    * @return the counter
    */
-  private @NotNull Counter counter(@NotNull String resource) {
+  private @NotNull Counter counter(@NotNull String clientId, @NotNull String resource) {
     String tag =
         switch (resource) {
           case BLUEPRINTS -> "blueprint";
@@ -310,6 +301,10 @@ public class ExchangeMassChangeService {
           default -> "ship";
         };
     return meterRegistry.counter(
-        MetricNames.EXCHANGE_MASS_CHANGES_CONFIRMED, MetricNames.TAG_RESOURCE, tag);
+        MetricNames.EXCHANGE_MASS_CHANGES_CONFIRMED,
+        MetricNames.TAG_CLIENT_ID,
+        clientId,
+        MetricNames.TAG_RESOURCE,
+        tag);
   }
 }

@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.backend.service.exchange;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,9 +29,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.greluc.krt.profit.basetool.backend.event.ExchangeInstallationConnectedEvent;
+import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -50,8 +55,9 @@ class ExchangeInstallationServiceTest {
       mock(ExchangeInstallationRepository.class);
   private final ExchangeClientRepository clients = mock(ExchangeClientRepository.class);
   private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+  private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
   private final ExchangeInstallationService service =
-      new ExchangeInstallationService(installations, clients, publisher);
+      new ExchangeInstallationService(installations, clients, publisher, meterRegistry);
 
   @BeforeEach
   void setUp() {
@@ -69,6 +75,7 @@ class ExchangeInstallationServiceTest {
 
     verify(publisher)
         .publishEvent(new ExchangeInstallationConnectedEvent(MEMBER, INSTALLATION, "VerseKit"));
+    assertThat(created("versekit")).isEqualTo(1.0);
   }
 
   @Test
@@ -78,6 +85,7 @@ class ExchangeInstallationServiceTest {
     service.touch("versekit", MEMBER, KEY);
 
     verify(publisher, never()).publishEvent(any(Object.class));
+    assertThat(created("versekit")).isZero();
   }
 
   @Test
@@ -98,6 +106,21 @@ class ExchangeInstallationServiceTest {
 
     verify(publisher)
         .publishEvent(new ExchangeInstallationConnectedEvent(MEMBER, INSTALLATION, "gone"));
+  }
+
+  /**
+   * Reads the installations-created counter of a client.
+   *
+   * @param clientId the client
+   * @return the count, 0 before the first
+   */
+  private double created(@NotNull String clientId) {
+    Counter counter =
+        meterRegistry
+            .find(MetricNames.EXCHANGE_INSTALLATIONS_CREATED)
+            .tag(MetricNames.TAG_CLIENT_ID, clientId)
+            .counter();
+    return counter == null ? 0 : counter.count();
   }
 
   /**
