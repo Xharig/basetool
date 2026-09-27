@@ -171,6 +171,15 @@ public interface ShipRepository extends JpaRepository<Ship, UUID> {
   boolean existsByOwnerIdAndShipTypeId(UUID ownerId, UUID shipTypeId);
 
   /**
+   * Whether a ship exists and belongs to a member.
+   *
+   * @param id the ship's id
+   * @param ownerId the member
+   * @return {@code true} when the member owns that ship
+   */
+  boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
+
+  /**
    * Counts one owner's ships per ship type in a single grouped statement, for the hangar import
    * (REQ-DATA-003). Types the owner has no ship of are absent from the result.
    *
