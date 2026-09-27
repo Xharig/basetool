@@ -731,6 +731,10 @@ assert_eq "$(query "$state" "mappers('versekit')")" "[]" "no protocol mapper on 
 assert_eq "$(query "$state" "sorted(set(scope_names('optional', 'basetool-sc-extractor')) & set(${EXCHANGE}))")" \
   "['exchange.blueprints.read', 'exchange.blueprints.write', 'exchange.connect', 'exchange.drafts.blueprints', 'exchange.drafts.refinery']" \
   "the extractor gets its exchange scopes as optional"
+assert_eq "$(query "$state" "[client('basetool-sc-extractor')['attributes'][k] for k in ('client.offline.session.idle.timeout', 'client.offline.session.max.lifespan')]")" \
+  "['2592000', '7776000']" "the extractor's offline session is 30/90 days, as the template's"
+assert_eq "$(query "$state" "'offline_access' in scope_names('optional', 'basetool-sc-extractor')")" \
+  "True" "the extractor may request offline_access"
 assert_eq "$(query "$state" "'extractor-ingest' in scope_names('default', 'basetool-sc-extractor')")" \
   "True" "the extractor keeps extractor-ingest until its migration"
 assert_eq "$(query "$state" "[d['realm'].get(k) for k in ('oauth2DeviceCodeLifespan', 'oauth2DevicePollingInterval', 'loginTheme')]")" \

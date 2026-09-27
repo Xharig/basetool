@@ -38,6 +38,7 @@ import de.greluc.krt.profit.basetool.backend.repository.ExchangeSettingsReposito
 import de.greluc.krt.profit.basetool.backend.repository.RoleRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
+import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
@@ -93,6 +94,7 @@ class ExchangeStockWriteControllerTest {
   @Autowired private ExchangeJournalRepository journalRepository;
   @Autowired private PlatformTransactionManager transactionManager;
   @Autowired private JdbcTemplate jdbc;
+  @Autowired private KnownExchangeClients knownClients;
   @Autowired private MeterRegistry meterRegistry;
 
   private MockMvc mockMvc;
@@ -125,6 +127,7 @@ class ExchangeStockWriteControllerTest {
     registered.setCapabilities(
         EnumSet.of(ExchangeCapability.CONNECT, ExchangeCapability.STOCK_WRITE));
     clientRepository.saveAndFlush(registered);
+    knownClients.invalidate();
     ExchangeSettings settings =
         settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
     wasEnabled = settings.isEnabled();
@@ -167,6 +170,13 @@ class ExchangeStockWriteControllerTest {
                 Double.class,
                 member))
         .containsExactly(12.5);
+    assertThat(
+            jdbc.queryForList(
+                "SELECT client_id FROM audit_event WHERE actor_user_id = ?"
+                    + " AND event_type = 'INVENTORY_ITEM_CREATED'",
+                String.class,
+                member))
+        .containsExactly(client);
     assertThat(journalRepository.findAllByUserIdOrderByRecordedAtAsc(member))
         .singleElement()
         .satisfies(

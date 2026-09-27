@@ -48,10 +48,10 @@ base's Topology note.
 | **acme** (lego) | Issue and renew the certificates the edge serves | Serve traffic |
 | **frontend** | Render the UI, hold session state, drive live update | Talk to PostgreSQL or the Keycloak Admin API; contain business rules |
 | **backend** | The whole domain: REST API, persistence, authorisation, scheduled work | Serve HTML; be reachable from the internet except through the `api` vhost |
-| **ingest** | Authenticate and relay approved desktop-extractor payloads; stage the returned draft in Redis for a one-time browser pickup | Own a database or save anything itself |
+| **ingest** | Authenticate and relay approved desktop-extractor payloads; stage the returned draft in Redis for a one-time browser pickup; gate, limit and relay the exchange API for approved clients (§5.5) | Own a database or save anything itself |
 | **keycloak** | Identity, OIDC tokens, the Discord provider and guild/role gate, the KRT theme | Store domain data |
 | **db-backend / db-keycloak** | Two separate PostgreSQL instances | Share a cluster — a Keycloak upgrade must not be able to touch domain data |
-| **redis** | Spring Session store, the live-sync and notification pub/sub fanout, and the ingest handoffs — one instance on three separate networks | Be a cache of record for anything that matters |
+| **redis** | Spring Session store, the live-sync and notification pub/sub fanout, the ingest handoffs, the exchange registry mirror and the gateway's byte-bounded exchange partition (ADR-0221) — one instance on three separate networks | Be a cache of record for anything that matters |
 
 ## 5.2 Level 2 — inside `backend`
 
@@ -114,9 +114,33 @@ that has to cross that boundary — the active-OrgUnit pin, the correlation id �
   frontend/backend split deliberately avoids.
 - **`test-support`** — a test-only library, never shipped: endpoint enumeration and the frontend
   page-route inventory behind the backend and frontend anonymous-surface sweeps, and behind ingest's
-  `IngestEndpointSurfaceTest`, which pins the gateway's routed surface to its two `/v1` endpoints.
+  `IngestEndpointSurfaceTest`, which pins the gateway's routed surface to its two legacy `/v1`
+  endpoints and the exchange route table.
 
-## 5.5 The monitoring plane
+## 5.5 Level 2 — the external client exchange
+
+Three modules share it; the contract, the routes and every rule are in
+[`external-exchange.md`](../specs/external-exchange.md) (`REQ-XCH-*`), the decisions in ADR-0216 …
+ADR-0221 and ADR-0224.
+
+| Where | Building block | Responsibility |
+| --- | --- | --- |
+| ingest | `ExchangeTokenGateFilter` | DPoP-bound token with a proof and a server nonce, the `basetool-ingest` audience checked in code |
+| ingest | `ExchangeGateFilter` (`ExchangeRoutes`, `ExchangeRegistryReader`, `ExchangeRevocationReader`) | Deny-by-default route table; global switch, client status, revocations (read uncached), route scope ∩ registry grant, minimum client version; fail-closed on an unreadable mirror |
+| ingest | `ExchangeLimitFilter`, `ExchangeQuotas`, `ExchangeBudget` | Per-minute buckets in-process, the daily write quota and the hard byte budget in Redis (`ingest:xch:*`) |
+| ingest | `ExchangeIdempotencyFilter` | `Idempotency-Key` on every write, answers cached per client, member and key |
+| ingest | `web.ExchangeController`, `ExchangeSchemas`, `ExchangeRelay` | Schema check of request and answer, relay under the gateway's service identity naming member, client, capabilities and installation; staging of drafts and of a held mass change (`HandoffKind.MASS_CHANGE`) for the browser |
+| backend | Registry (`ExchangeRegistryService`, `AdminExchangeRegistryController`, `ExchangeRegistryMirrorSync`, `ExchangeRegistryReconcileTask`) | `exchange_client` and the switch, `ADMIN` only; the Redis mirror written restrictive-first, reconciled every 60 s |
+| backend | `config.ActingMemberFilter`, `ExchangeGate`, `ExchangeInstallationService` | The acting member's reduced authentication, `@exchangeGate` re-checking every capability, installations, revocations and departures |
+| backend | Change feed (`V252`, `ChangeSourceTransactionManager`, `ExchangeFeedReader`) | Trigger-written key log with the writer, tombstones, cursors, the 90-day retention (ADR-0224) |
+| backend | Journal (`V253`, `ExchangeJournalService`) | Every written entry before and after, 90 days |
+| backend | Write services for blueprints, stock and ships (ship links `V254`) | Plan a change set, ask `ExchangeMassChangeGuard`, write through the domain's own services, journal each entry; `ExchangeLiveSync` after commit |
+| backend | `ExchangeUndoService`, `ExchangeMassChangeService` | The member's undo, and the confirmation of a held mass change |
+| backend | `ExchangeResolveService`, `ExchangeDemandService`, `ExchangeDraftService` | Catalogue resolve through the web import's matching, the anonymised org demand, review drafts |
+| frontend | „Verbundene Anwendungen" (`/connected-apps`, `/connected-apps/confirm`) | The member's clients, installations and activity; disconnect, undo, confirm a mass change — over `/api/v1/connected-apps`, member session only |
+| frontend | Admin „Verbundene Anwendungen" (`/admin/exchange-clients`) | The registry and the global switch |
+
+## 5.6 The monitoring plane
 
 Generated from its own compose file (`docker-compose.monitoring.yml`); it reaches the application
 through `net-monitoring-scrape` and the exporters' data-store networks, and is reached from outside

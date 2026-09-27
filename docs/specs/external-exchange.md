@@ -209,7 +209,9 @@ The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
 
 - [x] The provisioner's self-test covers the third-party template (withheld scopes removed from an
   existing client too, 30/90-day offline session, owner decision 2026-09-26) and the SC Extractor's
-  exchange scopes (`scripts/provision-keycloak-realm.test.sh`, sections 13–15).
+  exchange scopes (`scripts/provision-keycloak-realm.test.sh`, sections 13–15). The extractor
+  requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
+  (owner decision 2026-09-27).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
 - [x] The theme renders both pages with the phishing warning (`login-oauth-grant.ftl`,
   `login-oauth2-device-verify-user-code.ftl`).
@@ -376,8 +378,9 @@ product names.
 **Acceptance**
 
 - [x] Forged-header tests from a browser session and from the app (`ActingMemberFilterChainTest`).
-- [ ] An exchange write's audit row carries the external client id. *The attribution is in
-  (`ClientAttributionTest`); the first exchange write arrives with WP 3.3.*
+- [x] An exchange write's audit row carries the external client id. *`ClientAttributionTest`;
+  `ExchangeBlueprintWriteControllerTest`, `ExchangeStockWriteControllerTest` and
+  `ExchangeShipWriteControllerTest` read the client from the written audit rows.*
 
 **Status:** built — WP 3.1 (#2083)
 

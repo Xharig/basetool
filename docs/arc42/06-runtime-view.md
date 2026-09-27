@@ -1,7 +1,7 @@
 # 6. Runtime view
 
-Seven scenarios. They were chosen because each one exercises a rule that is invisible in the static
-view, and because each one has burned somebody at least once.
+Eight scenarios. They were chosen because each one exercises a rule that is invisible in the static
+view, and because each one before the exchange's (§6.8) has burned somebody at least once.
 
 ## 6.1 Sign-in
 
@@ -79,7 +79,8 @@ note has the bounds and what has broken.
    ingest route cannot bypass a validation, a permission check or an audit event.
 
 The backend is never exposed to the extractor directly. That is the entire reason this module is
-its own deployable. Specification: [`desktop-ingest.md`](../specs/desktop-ingest.md).
+its own deployable. Specification: [`desktop-ingest.md`](../specs/desktop-ingest.md). These legacy
+routes end at the exchange's go-live, when the extractor moves to §6.8 (REQ-XCH-033).
 
 ## 6.6 A deploy
 
@@ -125,3 +126,47 @@ The drill inspects **what a restored snapshot contains**, not what the host happ
 distinction is the whole value: a host can be perfectly healthy while its backups have been
 unrestorable for weeks, and only the drill can tell those apart. Procedure:
 [`docs/backup.md`](../backup.md); requirements: [`backup-recovery.md`](../specs/backup-recovery.md).
+
+## 6.8 An approved client syncs through the exchange
+
+The building blocks are in §5.5; every rule is in
+[`external-exchange.md`](../specs/external-exchange.md).
+
+1. **Connect.** The client runs the device grant against its product's public Keycloak client; the
+   member consents per capability, and the tokens are bound to the client's DPoP key. That key's
+   thumbprint is the **installation**; its first request notifies the member.
+2. **Service document.** `GET /exchange/v1` answers the granted capabilities, limits, the minimum
+   client version and the `installationId`. The first proof lacks a server nonce and is retried
+   once with the one the `401` carries.
+3. **The gateway's chain**, on every request: token gate → registry gate (mirror through a 5 s
+   cache, revocations uncached, scope ∩ grant, version) → limits and quota → idempotency for writes
+   → schema check → relay under the gateway's own identity. The backend swaps in the acting
+   member's reduced authentication and re-checks the capability (`@exchangeGate`).
+4. **Pull.** A snapshot pages the resource and ends with a feed cursor; later pulls read the change
+   feed since that cursor — each changed key once, its current state or a tombstone naming who
+   removed it. A cursor older than the 90-day horizon is `410 CURSOR_EXPIRED` and means a new
+   snapshot.
+5. **Push.** A change set of at most 500 ops, with an `Idempotency-Key`. The backend plans every op
+   (`REMOVED_ELSEWHERE`, `VERSION_CONFLICT`, …), asks the mass-change guard, writes through the
+   domain's own services and journals each entry, all in one transaction; the feed triggers record
+   the write as `client|<id>|<installation>`.
+6. **Live sync.** After the commit `ExchangeLiveSync` raises the frames the member's pages listen
+   on — Hangar, Blueprints, Lager, and the Materialbörse when an offer changed (§6.4).
+
+**A mass change held for confirmation.** When a batch would take the rolling 24-hour removals of
+one resource past the guard's limit, the backend writes nothing and answers
+`MASS_CHANGE_CONFIRMATION_REQUIRED`. The gateway stages the batch in Redis and answers `409` with a
+link to `/connected-apps/confirm`. That page consumes the staging only by an explicit request
+(ADR-0110) and keeps the batch in the member's server session. The backend checks switch, client,
+capability and disconnects again, shows a dry run, and on confirmation applies it without the guard
+as the installation's own write; „Verwerfen" drops it.
+
+**An undo.** On „Verbundene Anwendungen" the member undoes a client's writes since a chosen time,
+at most 90 days back. From the journal, each entry goes back to its state before the client's first
+write in that span, through the same domain services; an entry changed afterwards by anything else
+is skipped as `CHANGED_AFTERWARDS`, a vanished one as `GONE`. Materialbörse offers a book-out
+lowered stay lowered (§11.7a). The client sees the undo in its feed, like any web edit.
+
+**A draft.** `drafts/blueprints` and `drafts/refinery-orders` write nothing: the backend builds the
+same preview the extractor's upload builds, the gateway stages it for a one-time browser pickup and
+answers the review URL, and the member saves through the ordinary path — as in §6.5.
