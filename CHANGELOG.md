@@ -209,6 +209,10 @@
   mehr für die Backend-API. Auf Produktion wird das erst nach dem Abschalten der alten
   Extractor-Adressen angewendet, weil Versionen bis 2.9.1 sie noch brauchen.
   
+- **Datenaustausch: feste Fehlertexte.** Lehnt das Backend eine Anfrage einer verbundenen Anwendung
+  ab, erhält die Anwendung nur noch den Fehlercode mit einem festen englischen Text je Code, nie den
+  internen Text des Backends (REQ-XCH-025).
+  
 - **Datenaustausch: Entwürfe in eigenen Plätzen.** Entwürfe einer verbundenen Anwendung liegen je
   Anwendung und Mitglied in eigenen Plätzen (höchstens 10); sie verdrängen keine offenen Uploads des
   SC Extractors und keine Entwürfe anderer Anwendungen mehr.

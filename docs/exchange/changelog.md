@@ -18,6 +18,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **Overlong unknown field names.** A request whose undeclared field has a JSON Pointer longer than
   200 characters is refused with `400 SCHEMA_INVALID` (`errors[]` names its parent) instead of being
   written and answered `502 BACKEND_RELAY_FAILED`.
+- **Fixed `detail` texts.** A refusal the Basetool raises behind the gateway arrives with its code
+  and a fixed English `detail` per code, no longer with the Basetool's own, possibly localised text
+  ([errors](errors.md)).
 - **OpenAPI document matches the gateway.** The `Idempotency-Key` takes 8 to 128 characters of
   `[A-Za-z0-9._~-]`; `POST /exchange/v1/me/installation` needs none; `catalog/resolve` and
   `catalog/locations` accept any exchange scope, `exchange.connect` included.

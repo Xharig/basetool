@@ -1033,9 +1033,25 @@ Every error is RFC 9457 problem+json with a `code` from the registry in `docs/ex
 each with its HTTP status and the client action it requires. Codes are never reused or repurposed;
 the gateway-side codes are the `reason` labels of the exchange metrics.
 
+A backend refusal reaches a client with its registry code and a **fixed English detail per code**
+(`ExchangeRelay.DETAILS`); the backend's own `detail` is never relayed. The security review of
+2026-09-27 audited what the backend puts there on the passed-through codes. The gate filters
+(`TERMS_NOT_ACCEPTED`, `PENDING_APPROVAL`, `NO_ROLE`, `ACTING_MEMBER_REFUSED`), `ACCESS_DENIED`,
+`VALIDATION_FAILED`, `OPTIMISTIC_LOCK` and the exchange layer's own `ExchangeProblemException` codes
+write fixed or bundle texts, and every exchange-reachable throw site found wrote a fixed text or a
+message key. But nothing makes that hold: `GlobalExceptionHandler` answers an `AppException` of
+kind `BAD_REQUEST` — which relays as `SCHEMA_INVALID` — with the exception's message verbatim
+whenever it is no bundle key, a `ResponseStatusException` with its reason, and a Spring
+`ErrorResponseException` with a body that names request parameters and headers. The exchange writes
+run through the Hangar, Lager and Blueprint services, whose messages can grow a name, an id or a
+value at any time, so the gateway replaces the detail rather than trusting every present and future
+message. `ExchangeRelayTest` feeds each passed-through and translated code a detail with a name,
+another member's id, SQL and a class name and checks none of it arrives.
+
 **Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error
-statuses) · **Status:** registry published — WP 0.2 (#2080); the gateway's refusal metrics carry
-the codes as `reason` labels (`ExchangeRefusals`) — WP 3.2 (#2082)
+statuses), `ExchangeRelayTest` (no backend detail reaches a client) · **Status:** registry published
+— WP 0.2 (#2080); the gateway's refusal metrics carry the codes as `reason` labels
+(`ExchangeRefusals`) — WP 3.2 (#2082)
 
 ### REQ-XCH-026 — The contract grows additively under `/exchange/v1`
 

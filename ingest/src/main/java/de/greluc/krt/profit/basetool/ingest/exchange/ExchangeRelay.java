@@ -54,8 +54,9 @@ import tools.jackson.databind.ObjectMapper;
  * member, the client, the relayed capabilities and the installation key (REQ-XCH-009, REQ-XCH-010),
  * and turns the backend's answer into what the exchange contract allows.
  *
- * <p>A backend refusal passes through only with a code of the exchange error registry; the
- * backend's generic codes are translated, everything else becomes {@code 502 BACKEND_RELAY_FAILED}.
+ * <p>A backend refusal passes through only with a code of the exchange error registry and that
+ * code's fixed detail, never the backend's own detail text (REQ-XCH-025); the backend's generic
+ * codes are translated, everything else becomes {@code 502 BACKEND_RELAY_FAILED}.
  */
 @Slf4j
 @Service
@@ -88,18 +89,33 @@ public class ExchangeRelay {
           "OPTIMISTIC_LOCK",
           "VERSION_CONFLICT");
 
-  /** Backend codes the exchange contract names and a client may see as they are. */
-  static final Set<String> PASSED_THROUGH =
-      Set.of(
+  /**
+   * The registry codes a backend refusal may reach a client with, each with the fixed detail the
+   * client sees in place of the backend's.
+   */
+  static final Map<String, String> DETAILS =
+      Map.of(
           "TERMS_NOT_ACCEPTED",
+          "The member has not accepted the current terms of use; they accept them in the Basetool.",
           "PENDING_APPROVAL",
+          "The member's registration is still awaiting approval.",
           "NO_ROLE",
+          "The member holds no role in the Basetool.",
           "ACTING_MEMBER_REFUSED",
+          "The Basetool refused the member this request acts for.",
           "NOT_PERMITTED",
+          "The member may not do this.",
           "SCHEMA_INVALID",
+          "The Basetool refused the request's content as malformed.",
           "VERSION_CONFLICT",
+          "The entry changed since it was read; pull, merge and retry.",
           "CURSOR_EXPIRED",
-          "MASS_CHANGE_CONFIRMATION_REQUIRED");
+          "The cursor is older than the retained changes; reconcile against a full snapshot.",
+          "MASS_CHANGE_CONFIRMATION_REQUIRED",
+          "The change set removes more than the mass-change guard allows without confirmation.");
+
+  /** Backend codes the exchange contract names and a client may see as they are. */
+  static final Set<String> PASSED_THROUGH = DETAILS.keySet();
 
   /** Outcome: the backend answered 2xx and the answer was usable. */
   static final String OUTCOME_OK = "ok";
@@ -109,9 +125,6 @@ public class ExchangeRelay {
 
   /** Outcome: the relay failed, answered {@code 502}. */
   static final String OUTCOME_FAILED = "failed";
-
-  /** The most detail text relayed from a backend problem. */
-  private static final int MAX_DETAIL = 500;
 
   private final RestClient backendRestClient;
   private final ServiceAccountTokenProvider tokenProvider;
@@ -265,13 +278,10 @@ public class ExchangeRelay {
       String backendCode = code != null && code.isString() ? code.stringValue() : null;
       String exchangeCode =
           backendCode == null ? null : TRANSLATED.getOrDefault(backendCode, backendCode);
-      if (exchangeCode != null && PASSED_THROUGH.contains(exchangeCode)) {
+      String detail = exchangeCode == null ? null : DETAILS.get(exchangeCode);
+      if (detail != null) {
         count(OUTCOME_REFUSED, client);
-        JsonNode detail = node.get("detail");
-        return Result.refused(
-            raw.status(),
-            exchangeCode,
-            detail != null && detail.isString() ? truncate(detail.stringValue()) : "");
+        return Result.refused(raw.status(), exchangeCode, detail);
       }
     }
     log.warn(
@@ -333,16 +343,6 @@ public class ExchangeRelay {
   }
 
   /**
-   * Truncates a relayed detail.
-   *
-   * @param detail the detail
-   * @return at most {@value #MAX_DETAIL} characters
-   */
-  private static @NotNull String truncate(@NotNull String detail) {
-    return detail.length() <= MAX_DETAIL ? detail : detail.substring(0, MAX_DETAIL);
-  }
-
-  /**
    * The backend's raw answer.
    *
    * @param status the status
@@ -376,7 +376,7 @@ public class ExchangeRelay {
      *
      * @param status the backend's status
      * @param code the registry code
-     * @param detail the detail
+     * @param detail the code's fixed detail
      * @return the result
      */
     static @NotNull Result refused(int status, @NotNull String code, @NotNull String detail) {

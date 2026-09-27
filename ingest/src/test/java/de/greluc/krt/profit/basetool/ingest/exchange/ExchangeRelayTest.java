@@ -100,7 +100,7 @@ class ExchangeRelayTest {
             r -> {
               assertThat(r.status()).isEqualTo(403);
               assertThat(r.code()).isEqualTo("NOT_PERMITTED");
-              assertThat(r.detail()).isEqualTo("no");
+              assertThat(r.detail()).isEqualTo(ExchangeRelay.DETAILS.get("NOT_PERMITTED"));
             });
     assertThat(interpret(400, "{\"code\":\"VALIDATION_FAILED\"}").code())
         .isEqualTo("SCHEMA_INVALID");
@@ -135,17 +135,32 @@ class ExchangeRelayTest {
     assertThat(interpret(403, "{\"detail\":\"no code\"}").code()).isEqualTo("BACKEND_RELAY_FAILED");
     assertThat(interpret(302, "{\"code\":\"NOT_PERMITTED\"}").code())
         .isEqualTo("BACKEND_RELAY_FAILED");
-    assertThat(interpret(403, "{\"code\":\"NOT_PERMITTED\",\"detail\":7}").detail()).isEmpty();
+    assertThat(interpret(403, "{\"code\":\"NOT_PERMITTED\",\"detail\":7}").detail())
+        .isEqualTo(ExchangeRelay.DETAILS.get("NOT_PERMITTED"));
   }
 
   @Test
-  void aLongDetailIsTruncated() {
-    String detail = "x".repeat(900);
+  void theBackendsDetailNeverReachesTheClient() {
+    String leaky =
+        "Blueprint 'Secret Name' of member 5f1d2c3b-0000-0000-0000-0000000000b2 not found:"
+            + " SELECT * FROM personal_blueprint at de.greluc.krt.Internal";
 
-    assertThat(
-            interpret(409, "{\"code\":\"VERSION_CONFLICT\",\"detail\":\"" + detail + "\"}")
-                .detail())
-        .hasSize(500);
+    for (String code :
+        new String[] {"BAD_REQUEST", "VALIDATION_FAILED", "ACCESS_DENIED", "OPTIMISTIC_LOCK"}) {
+      ExchangeRelay.Result result =
+          interpret(400, "{\"code\":\"" + code + "\",\"detail\":\"" + leaky + "\"}");
+
+      assertThat(result.detail())
+          .isEqualTo(ExchangeRelay.DETAILS.get(result.code()))
+          .doesNotContain("Secret", "5f1d2c3b", "SELECT", "de.greluc");
+    }
+    for (String code : ExchangeRelay.PASSED_THROUGH) {
+      assertThat(
+              interpret(409, "{\"code\":\"" + code + "\",\"detail\":\"" + leaky + "\"}").detail())
+          .isEqualTo(ExchangeRelay.DETAILS.get(code))
+          .isNotBlank()
+          .doesNotContain("Secret");
+    }
   }
 
   @Test
