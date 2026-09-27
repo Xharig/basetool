@@ -33,6 +33,9 @@ import org.springframework.validation.annotation.Validated;
  * @param writesPerDay write requests per UTC day per client and member
  * @param accountChecksPerHour account checks per hour per client and member
  * @param trackedBuckets the most in-process buckets kept, least recently used first out
+ * @param dpopProofsPerMember the most live DPoP proofs one member may hold in the replay cache of
+ *     one path scope
+ * @param dpopProofsTotal the most live DPoP proofs the replay cache of one path scope holds
  */
 @Validated
 @ConfigurationProperties(prefix = "app.exchange.limits")
@@ -41,4 +44,6 @@ public record ExchangeLimitProperties(
     @Min(1) @DefaultValue("1200") int clientPerMinute,
     @Min(1) @DefaultValue("500") int writesPerDay,
     @Min(1) @DefaultValue("10") int accountChecksPerHour,
-    @Min(100) @DefaultValue("50000") int trackedBuckets) {}
+    @Min(100) @DefaultValue("50000") int trackedBuckets,
+    @Min(1) @DefaultValue("600") int dpopProofsPerMember,
+    @Min(1000) @DefaultValue("100000") int dpopProofsTotal) {}

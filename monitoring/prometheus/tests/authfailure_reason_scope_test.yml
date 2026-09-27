@@ -154,3 +154,31 @@ tests:
       - eval_time: 30m
         alertname: IngestAuthFailureSpike
         exp_alerts: []
+
+  - name: fires - the exchange replay cache is full
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_dpop_replay_refused_total{reason="full", application="basetool-ingest", path_scope="exchange"}'
+        values: "0 0 0 3 3 3 3 3 3 3"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: IngestDpopReplayCacheFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              path_scope: exchange
+            exp_annotations:
+              summary: "The ingest DPoP replay cache is full"
+              description: "The DPoP jti replay cache of exchange holds its total cap of live proofs and refuses every new proof there with 401 DPOP_INVALID (REQ-XCH-006). Each member is capped on its own, so this takes many members at their cap: look at basetool_ingest_dpop_replay_refused_total{reason=\"member_cap\"} and the per-IP rate limiter, and raise app.exchange.limits.dpop-proofs-total only for real load."
+
+  - name: silent - one member at its cap does not fill the cache
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_dpop_replay_refused_total{reason="member_cap", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+50x30"
+      - series: 'basetool_ingest_dpop_replay_refused_total{reason="full", application="basetool-ingest", path_scope="exchange"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: IngestDpopReplayCacheFull
+        exp_alerts: []

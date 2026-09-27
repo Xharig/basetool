@@ -218,6 +218,26 @@ public final class MetricNames {
       "basetool.ingest.exchange.budget.used.ratio";
 
   /**
+   * Counter {@code basetool_ingest_dpop_replay_refused_total{path_scope,reason}}: DPoP proofs the
+   * {@code jti} replay cache refused — {@link #DPOP_REPLAY_REPLAYED}, {@link
+   * #DPOP_REPLAY_MEMBER_CAP} or {@link #DPOP_REPLAY_FULL} — registered at zero (REQ-XCH-006).
+   */
+  public static final String DPOP_REPLAY_REFUSED = "basetool.ingest.dpop.replay.refused";
+
+  /**
+   * {@link #TAG_REASON} value on {@link #DPOP_REPLAY_REFUSED}: a proof whose {@code jti} was used.
+   */
+  public static final String DPOP_REPLAY_REPLAYED = "replayed";
+
+  /**
+   * {@link #TAG_REASON} value on {@link #DPOP_REPLAY_REFUSED}: the member holds too many proofs.
+   */
+  public static final String DPOP_REPLAY_MEMBER_CAP = "member_cap";
+
+  /** {@link #TAG_REASON} value on {@link #DPOP_REPLAY_REFUSED}: the whole cache is full. */
+  public static final String DPOP_REPLAY_FULL = "full";
+
+  /**
    * Tag key on {@link #INGEST_AUTH_FAILURES}: the surface the request targeted — {@link
    * #PATH_SCOPE_LEGACY}, {@link #PATH_SCOPE_EXCHANGE} or {@link #PATH_SCOPE_OTHER}.
    */

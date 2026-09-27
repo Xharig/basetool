@@ -21,20 +21,25 @@ package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import java.net.URI;
 import java.util.List;
-import java.util.function.Function;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.springframework.security.oauth2.core.ClaimAccessor;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.DPoPProofContext;
 import org.springframework.security.oauth2.jwt.DPoPProofJwtDecoderFactory;
+import org.springframework.security.oauth2.jwt.DPoPProofReplayValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
 
 /**
  * Builds the DPoP proof verifier: Spring's checks ({@code htm}, {@code htu}, {@code iat}, key
  * binding, {@code ath}, {@code jti} replay) everywhere, plus the server nonce on exchange routes
- * (REQ-XCH-006). The legacy {@code /v1} routes keep their behaviour.
+ * (REQ-XCH-006). The {@code jti} replay cache is one {@link DpopProofReplayStore} per path scope,
+ * partitioned by the access token's member, so neither one member nor the legacy {@code /v1} routes
+ * can fill the cache the exchange relies on.
  */
 public final class ExchangeDpopProofValidation {
 
@@ -44,8 +49,8 @@ public final class ExchangeDpopProofValidation {
   /** The proof claim carrying the server nonce. */
   static final String NONCE_CLAIM = "nonce";
 
-  /** The path prefix of the exchange routes. */
-  private static final String EXCHANGE_PREFIX = "/exchange/";
+  /** The root path of the exchange routes. */
+  private static final String EXCHANGE_ROOT = "/exchange";
 
   /** Not instantiable. */
   private ExchangeDpopProofValidation() {}
@@ -54,18 +59,30 @@ public final class ExchangeDpopProofValidation {
    * Creates the proof verifier factory.
    *
    * @param nonces the server nonces
+   * @param proofs the replay caches of the exchange and of every other route
    * @return the factory
    */
-  public static @NotNull DPoPProofJwtDecoderFactory factory(@NotNull ExchangeDpopNonces nonces) {
-    Function<DPoPProofContext, OAuth2TokenValidator<Jwt>> defaults =
-        DPoPProofJwtDecoderFactory.createDefaultJwtValidatorFactory(List.of());
+  public static @NotNull DPoPProofJwtDecoderFactory factory(
+      @NotNull ExchangeDpopNonces nonces, @NotNull DpopProofReplayStores proofs) {
     OAuth2TokenValidator<Jwt> nonce = nonceValidator(nonces);
     DPoPProofJwtDecoderFactory factory = new DPoPProofJwtDecoderFactory();
     factory.setJwtValidatorFactory(
-        context ->
-            isExchange(context)
-                ? new DelegatingOAuth2TokenValidator<>(nonce, defaults.apply(context))
-                : defaults.apply(context));
+        context -> {
+          boolean exchange = isExchange(context);
+          DPoPProofReplayValidator replay =
+              new DPoPProofReplayValidator(
+                  (exchange ? proofs.exchange() : proofs.legacy()).forMember(subjectOf(context)));
+          OAuth2TokenValidator<Jwt> defaults =
+              DPoPProofJwtDecoderFactory.createDefaultJwtValidatorFactory(List.of(replay))
+                  .apply(context);
+          if (!exchange) {
+            return defaults;
+          }
+          DelegatingOAuth2TokenValidator<Jwt> withNonce =
+              new DelegatingOAuth2TokenValidator<>(nonce, defaults);
+          withNonce.setFailOnError(true);
+          return withNonce;
+        });
     return factory;
   }
 
@@ -86,17 +103,43 @@ public final class ExchangeDpopProofValidation {
   }
 
   /**
-   * Whether a proof targets an exchange route.
+   * Whether a proof must meet the exchange rules; fails closed, so a target whose path cannot be
+   * read counts as an exchange route and needs the nonce.
    *
    * @param context the proof's context
-   * @return {@code true} when the target path lies under {@code /exchange/}
+   * @return {@code false} only for a readable target path outside {@code /exchange}
    */
   static boolean isExchange(@NotNull DPoPProofContext context) {
+    return isExchangeTarget(context.getTargetUri());
+  }
+
+  /**
+   * Whether a target URI must meet the exchange rules, failing closed like {@link
+   * #isExchange(DPoPProofContext)}.
+   *
+   * @param targetUri the request's target URI as the proof must name it
+   * @return {@code false} only for a readable target path outside {@code /exchange}
+   */
+  static boolean isExchangeTarget(@NotNull String targetUri) {
     try {
-      String path = URI.create(context.getTargetUri()).getPath();
-      return path != null && path.startsWith(EXCHANGE_PREFIX);
-    } catch (IllegalArgumentException ignored) {
-      return false;
+      String path = URI.create(targetUri).getPath();
+      return path == null
+          || path.isEmpty()
+          || path.equals(EXCHANGE_ROOT)
+          || path.startsWith(EXCHANGE_ROOT + "/");
+    } catch (IllegalArgumentException unreadable) {
+      return true;
     }
+  }
+
+  /**
+   * Reads the member the proof's access token was issued to.
+   *
+   * @param context the proof's context
+   * @return the token's {@code sub}, or {@code null} when there is no token or no subject
+   */
+  static @Nullable String subjectOf(@NotNull DPoPProofContext context) {
+    ClaimAccessor token = context.getAccessToken();
+    return token == null ? null : token.getClaimAsString(JwtClaimNames.SUB);
   }
 }

@@ -57,6 +57,14 @@ groups:
           summary: "Exchange DPoP proofs keep failing on ingest"
           description: "Exchange clients keep presenting DPoP proofs the gateway refuses - invalid, replayed, or signed by another key than the token is bound to (REQ-XCH-006). A misimplemented client or a replay attempt; a missing server nonce is the normal first round trip and does not count here. Split by client in the gateway's access log."
 
+      - alert: IngestDpopReplayCacheFull
+        expr: sum by (path_scope) (increase(basetool_ingest_dpop_replay_refused_total{application="basetool-ingest",reason="full"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "The ingest DPoP replay cache is full"
+          description: "The DPoP jti replay cache of {{ $labels.path_scope }} holds its total cap of live proofs and refuses every new proof there with 401 DPOP_INVALID (REQ-XCH-006). Each member is capped on its own, so this takes many members at their cap: look at basetool_ingest_dpop_replay_refused_total{reason=\"member_cap\"} and the per-IP rate limiter, and raise app.exchange.limits.dpop-proofs-total only for real load."
+
       - alert: JvmHeapHigh
         expr: |
           sum by (application) (jvm_memory_used_bytes{area="heap"})
