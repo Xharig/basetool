@@ -55,8 +55,17 @@ public class HandoffStagingService {
    */
   static final String INDEX_PREFIX = "ingest:handoff-index:";
 
-  /** Prefix of the per-subject index of staged mass changes, a slot apart from the drafts. */
+  /**
+   * Prefix of the index of a client's staged mass change, {@code
+   * ingest:handoff-index:mass:<client>:<sub>}, a slot apart from the drafts and from other clients.
+   */
   static final String MASS_CHANGE_INDEX_PREFIX = "ingest:handoff-index:mass:";
+
+  /**
+   * Prefix of the index of an exchange client's drafts, {@code
+   * ingest:handoff-index:drafts:<client>:<sub>}, apart from the extractor's uploads.
+   */
+  static final String DRAFT_INDEX_PREFIX = "ingest:handoff-index:drafts:";
 
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
@@ -87,31 +96,39 @@ public class HandoffStagingService {
   }
 
   /**
-   * Stages an exchange client's draft for one-time pickup in the same per-subject slots as the
-   * extractor's uploads, and says how large it is so the exchange's byte budget can count it
-   * (REQ-XCH-019).
+   * Stages an exchange client's draft for one-time pickup in slots of its own per client and
+   * member, so no client evicts the extractor's uploads or another client's drafts, and says how
+   * large it is so the exchange's byte budget can count it (REQ-XCH-019).
    *
+   * @param clientId the registry client that sent the draft
    * @param sub the member's subject
    * @param kind which draft is being staged
    * @param draftJson the backend draft response, stored verbatim
+   * @param cap the most live drafts of this client for this member; the oldest are evicted
    * @return where it is staged and how large it is
    * @throws BadRequestException if the draft exceeds the handoff size cap
    */
   public @NotNull Staged stageDraft(
-      @NotNull String sub, @NotNull HandoffKind kind, @NotNull String draftJson) {
+      @NotNull String clientId,
+      @NotNull String sub,
+      @NotNull HandoffKind kind,
+      @NotNull String draftJson,
+      int cap) {
     return store(
         sub,
         kind,
         draftJson,
         ingestProperties.maxHandoffBytes(),
-        INDEX_PREFIX + sub,
-        ingestProperties.maxHandoffsPerSubject());
+        DRAFT_INDEX_PREFIX + clientId + ":" + sub,
+        cap);
   }
 
   /**
-   * Stages a client's change set the mass-change guard held back, in a slot of its own per subject,
-   * so it never evicts an extractor draft and a newer one replaces it (REQ-XCH-021).
+   * Stages a client's change set the mass-change guard held back, in a slot of one per client and
+   * member, so it never evicts an extractor draft or another client's pending change set, and the
+   * same client's newer one replaces it (REQ-XCH-021).
    *
+   * @param clientId the registry client that sent the change set
    * @param sub the member's subject
    * @param changeJson the staged change set with its client, installation, resource and staging
    *     time
@@ -120,9 +137,14 @@ public class HandoffStagingService {
    * @throws BadRequestException if the document exceeds {@code maxBytes}
    */
   public @NotNull Staged stageMassChange(
-      @NotNull String sub, @NotNull String changeJson, long maxBytes) {
+      @NotNull String clientId, @NotNull String sub, @NotNull String changeJson, long maxBytes) {
     return store(
-        sub, HandoffKind.MASS_CHANGE, changeJson, maxBytes, MASS_CHANGE_INDEX_PREFIX + sub, 1);
+        sub,
+        HandoffKind.MASS_CHANGE,
+        changeJson,
+        maxBytes,
+        MASS_CHANGE_INDEX_PREFIX + clientId + ":" + sub,
+        1);
   }
 
   /**

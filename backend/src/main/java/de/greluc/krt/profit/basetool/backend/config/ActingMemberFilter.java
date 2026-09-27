@@ -125,6 +125,9 @@ public class ActingMemberFilter extends OncePerRequestFilter {
   /** The shape of a DPoP key thumbprint: base64url SHA-256 without padding. */
   private static final Pattern KEY_THUMBPRINT = Pattern.compile("^[A-Za-z0-9_-]{43}$");
 
+  /** The shape of a relayed connection time: an epoch second. */
+  private static final Pattern EPOCH_SECOND = Pattern.compile("^[0-9]{1,12}$");
+
   /** App-wide correlation-id response header, matching the neighbouring person-gates. */
   static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
 
@@ -152,8 +155,12 @@ public class ActingMemberFilter extends OncePerRequestFilter {
     String exchangeCapabilities =
         request.getHeader(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER);
     String installationKey = request.getHeader(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER);
+    String connectedAt = request.getHeader(ActingMemberHeader.EXCHANGE_CONNECTED_AT_HEADER);
     boolean exchangeHeaders =
-        exchangeClient != null || exchangeCapabilities != null || installationKey != null;
+        exchangeClient != null
+            || exchangeCapabilities != null
+            || installationKey != null
+            || connectedAt != null;
     if (isAbsent(onBehalfOf)) {
       if (exchangeHeaders) {
         refuse(
@@ -253,7 +260,8 @@ public class ActingMemberFilter extends OncePerRequestFilter {
               member,
               authorities,
               exchangePath ? exchangeClient : null,
-              exchangePath ? installationKey : null));
+              exchangePath ? installationKey : null,
+              exchangePath ? epochSecond(connectedAt) : null));
       SecurityContextHolder.setContext(acting);
       filterChain.doFilter(request, response);
     } finally {
@@ -284,6 +292,20 @@ public class ActingMemberFilter extends OncePerRequestFilter {
         PathContainer.parsePath(
             request.getRequestURI().substring(request.getContextPath().length()));
     return patterns.stream().anyMatch(pattern -> pattern.matches(path));
+  }
+
+  /**
+   * Parses the relayed connection time; anything but a plain epoch second counts as absent, which
+   * the exchange gate treats as a connection made before any disconnect.
+   *
+   * @param header the {@code X-Exchange-Connected-At} value, or {@code null}
+   * @return the epoch second, or {@code null}
+   */
+  private static @Nullable Long epochSecond(@Nullable String header) {
+    if (header == null || !EPOCH_SECOND.matcher(header).matches()) {
+      return null;
+    }
+    return Long.parseLong(header);
   }
 
   /**
@@ -366,6 +388,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
     private final UUID member;
     private final @Nullable String externalClient;
     private final @Nullable String installationKey;
+    private final @Nullable Long connectedAt;
 
     /**
      * Creates the authentication.
@@ -375,22 +398,31 @@ public class ActingMemberFilter extends OncePerRequestFilter {
      * @param externalClient the external client of an exchange request, or {@code null}
      * @param installationKey the installation's key thumbprint of an exchange request, or {@code
      *     null}
+     * @param connectedAt the connection time the gateway compared for an exchange request, in epoch
+     *     seconds, or {@code null}
      */
     ActingMemberAuthentication(
         UUID member,
         Collection<GrantedAuthority> authorities,
         @Nullable String externalClient,
-        @Nullable String installationKey) {
+        @Nullable String installationKey,
+        @Nullable Long connectedAt) {
       super(authorities);
       this.member = member;
       this.externalClient = externalClient;
       this.installationKey = installationKey;
+      this.connectedAt = connectedAt;
       setAuthenticated(true);
     }
 
     @Override
     public @Nullable String exchangeInstallationKey() {
       return installationKey;
+    }
+
+    @Override
+    public @Nullable Long exchangeConnectedAt() {
+      return connectedAt;
     }
 
     @Override

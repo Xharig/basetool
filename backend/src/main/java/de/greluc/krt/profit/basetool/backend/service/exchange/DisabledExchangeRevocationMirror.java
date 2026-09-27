@@ -22,6 +22,7 @@ package de.greluc.krt.profit.basetool.backend.service.exchange;
 import java.time.Instant;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /** The revocation mirror used while Redis mirroring is off: it stores nothing. */
 final class DisabledExchangeRevocationMirror implements ExchangeRevocationMirror {
@@ -65,5 +66,18 @@ final class DisabledExchangeRevocationMirror implements ExchangeRevocationMirror
   public boolean isRevoked(
       @NotNull String clientId, @NotNull UUID member, @NotNull Instant revokedAt) {
     return true;
+  }
+
+  /**
+   * Always {@code null}: nothing is mirrored, and the gateway, which then finds no registry,
+   * refuses every exchange request before it reaches the backend.
+   *
+   * @param clientId ignored
+   * @param member ignored
+   * @return {@code null}
+   */
+  @Override
+  public @Nullable Instant revokedAt(@NotNull String clientId, @NotNull UUID member) {
+    return null;
   }
 }

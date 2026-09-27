@@ -2310,7 +2310,8 @@ the access log by path, so a second producer appearing alongside the extractor u
 The `client_id` value is bounded **by construction**: it is the matched allowlist entry or the literal
 `other`, never the raw `azp`, because deriving a label from a token claim is the shape of an
 unbounded-cardinality bug (REQ-OBS-011). The reject counter's `reason` (`unknown_client` /
-`missing_azp` / `missing_scope` / `bad_provenance` / `non_jwt_principal` — an authenticated principal
+`missing_azp` / `missing_scope` / `bad_provenance` / `exchange_client` — a client of the exchange
+registry the allowlist does not name, since 2026-09-27 / `non_jwt_principal` — an authenticated principal
 that is not a JWT, refused fail-closed since 2026-09-22; corrected the same day: the `dpop_required`
 this list used to name was never implemented, REQ-INGEST-011) is kept as a label because it
 splits into two operationally **opposite** causes: `unknown_client` / `bad_provenance` mean a foreign

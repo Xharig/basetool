@@ -199,8 +199,9 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
       return null;
     }
     Set<String> granted = scopes(jwt);
+    Instant connectedAt = connectionTime(jwt, granted);
     Long revokedAt = revocationReader.revokedAt(clientId, member);
-    if (revokedAt != null && !connectedAfter(jwt, granted, revokedAt)) {
+    if (revokedAt != null && !connectedAfter(connectedAt, revokedAt)) {
       refuse(
           label,
           response,
@@ -229,7 +230,13 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           "This client version is no longer supported; please update.");
       return null;
     }
-    return new ExchangeRequestContext(clientId, member, thumbprint, granted, client);
+    return new ExchangeRequestContext(
+        clientId,
+        member,
+        thumbprint,
+        granted,
+        client,
+        connectedAt == null ? null : connectedAt.getEpochSecond());
   }
 
   /**
@@ -291,19 +298,29 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
   }
 
   /**
-   * Tells whether the token belongs to a connection made after the member disconnected the client
-   * (REQ-XCH-008). An offline token is judged by its {@code iat}, because the disconnect ended
-   * every offline session of the client; any other token by its {@code auth_time}, which a refresh
-   * keeps and only a new sign-in renews. A token lacking the claim it is judged by is refused.
+   * Returns when the token's connection was made, the time a client revocation is compared with
+   * (REQ-XCH-008): an offline token's {@code iat}, because the disconnect ended every offline
+   * session of the client; any other token's {@code auth_time}, which a refresh keeps and only a
+   * new sign-in renews.
    *
    * @param jwt the token
    * @param scopes the token's scopes
-   * @param revokedAt the revocation's epoch second
-   * @return {@code true} when the token was issued to a later connection
+   * @return the connection time, or {@code null} when the token lacks the claim it is judged by
    */
-  static boolean connectedAfter(@NotNull Jwt jwt, @NotNull Set<String> scopes, long revokedAt) {
-    Instant moment = scopes.contains(OFFLINE_ACCESS) ? jwt.getIssuedAt() : authTime(jwt);
-    return moment != null && moment.getEpochSecond() > revokedAt;
+  static @Nullable Instant connectionTime(@NotNull Jwt jwt, @NotNull Set<String> scopes) {
+    return scopes.contains(OFFLINE_ACCESS) ? jwt.getIssuedAt() : authTime(jwt);
+  }
+
+  /**
+   * Tells whether a connection was made after the member disconnected the client; one without a
+   * connection time is refused.
+   *
+   * @param connectedAt the connection time, or {@code null}
+   * @param revokedAt the revocation's epoch second
+   * @return {@code true} when the connection is later than the revocation
+   */
+  static boolean connectedAfter(@Nullable Instant connectedAt, long revokedAt) {
+    return connectedAt != null && connectedAt.getEpochSecond() > revokedAt;
   }
 
   /**

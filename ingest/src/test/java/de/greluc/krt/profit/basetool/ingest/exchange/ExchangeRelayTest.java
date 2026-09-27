@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -80,6 +81,7 @@ class ExchangeRelayTest {
         .andExpect(
             header(ExchangeRelay.CAPABILITIES_HEADER, "exchange.connect,exchange.stock.read"))
         .andExpect(header(ExchangeRelay.INSTALLATION_HEADER, "jkt-1"))
+        .andExpect(header(ExchangeRelay.CONNECTED_AT_HEADER, "1790000000"))
         .andExpect(header("Accept-Language", "de-DE"))
         .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
 
@@ -94,13 +96,35 @@ class ExchangeRelayTest {
   }
 
   @Test
+  void aTokenWithoutIssuedAtIsRelayedWithoutTheHeader() {
+    backend
+        .expect(requestTo("https://backend/api/v1/exchange/catalog/locations"))
+        .andExpect(headerDoesNotExist(ExchangeRelay.CONNECTED_AT_HEADER))
+        .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
+    ExchangeRequestContext admitted = context();
+    ExchangeRequestContext withoutIssuedAt =
+        new ExchangeRequestContext(
+            admitted.clientId(),
+            admitted.member(),
+            admitted.keyThumbprint(),
+            admitted.capabilities(),
+            admitted.client(),
+            null);
+
+    relay.forward(
+        HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, withoutIssuedAt, null);
+
+    backend.verify();
+  }
+
+  @Test
   void theBackendsGenericRefusalBecomesNotPermitted() {
     assertThat(interpret(403, "{\"code\":\"ACCESS_DENIED\",\"detail\":\"no\"}"))
         .satisfies(
             r -> {
               assertThat(r.status()).isEqualTo(403);
               assertThat(r.code()).isEqualTo("NOT_PERMITTED");
-              assertThat(r.detail()).isEqualTo("no");
+              assertThat(r.detail()).isEqualTo(ExchangeRelay.DETAILS.get("NOT_PERMITTED"));
             });
     assertThat(interpret(400, "{\"code\":\"VALIDATION_FAILED\"}").code())
         .isEqualTo("SCHEMA_INVALID");
@@ -135,17 +159,32 @@ class ExchangeRelayTest {
     assertThat(interpret(403, "{\"detail\":\"no code\"}").code()).isEqualTo("BACKEND_RELAY_FAILED");
     assertThat(interpret(302, "{\"code\":\"NOT_PERMITTED\"}").code())
         .isEqualTo("BACKEND_RELAY_FAILED");
-    assertThat(interpret(403, "{\"code\":\"NOT_PERMITTED\",\"detail\":7}").detail()).isEmpty();
+    assertThat(interpret(403, "{\"code\":\"NOT_PERMITTED\",\"detail\":7}").detail())
+        .isEqualTo(ExchangeRelay.DETAILS.get("NOT_PERMITTED"));
   }
 
   @Test
-  void aLongDetailIsTruncated() {
-    String detail = "x".repeat(900);
+  void theBackendsDetailNeverReachesTheClient() {
+    String leaky =
+        "Blueprint 'Secret Name' of member 5f1d2c3b-0000-0000-0000-0000000000b2 not found:"
+            + " SELECT * FROM personal_blueprint at de.greluc.krt.Internal";
 
-    assertThat(
-            interpret(409, "{\"code\":\"VERSION_CONFLICT\",\"detail\":\"" + detail + "\"}")
-                .detail())
-        .hasSize(500);
+    for (String code :
+        new String[] {"BAD_REQUEST", "VALIDATION_FAILED", "ACCESS_DENIED", "OPTIMISTIC_LOCK"}) {
+      ExchangeRelay.Result result =
+          interpret(400, "{\"code\":\"" + code + "\",\"detail\":\"" + leaky + "\"}");
+
+      assertThat(result.detail())
+          .isEqualTo(ExchangeRelay.DETAILS.get(result.code()))
+          .doesNotContain("Secret", "5f1d2c3b", "SELECT", "de.greluc");
+    }
+    for (String code : ExchangeRelay.PASSED_THROUGH) {
+      assertThat(
+              interpret(409, "{\"code\":\"" + code + "\",\"detail\":\"" + leaky + "\"}").detail())
+          .isEqualTo(ExchangeRelay.DETAILS.get(code))
+          .isNotBlank()
+          .doesNotContain("Secret");
+    }
   }
 
   @Test
@@ -256,7 +295,8 @@ class ExchangeRelayTest {
         "jkt-1",
         Set.of("exchange.stock.read", "exchange.connect"),
         new ExchangeRegistry.Client(
-            "VerseKit", true, Set.of("exchange.connect", "exchange.stock.read"), null, null, null));
+            "VerseKit", true, Set.of("exchange.connect", "exchange.stock.read"), null, null, null),
+        1_790_000_000L);
   }
 
   /**

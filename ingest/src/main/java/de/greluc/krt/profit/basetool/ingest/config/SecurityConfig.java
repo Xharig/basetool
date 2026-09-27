@@ -278,7 +278,11 @@ public class SecurityConfig {
             org.springframework.security.web.authentication.AuthenticationFilter.class)
         .addFilterAfter(
             new ClientIdentityFilter(
-                clientIdentityProperties, meterRegistry, objectMapper, loggingProperties),
+                clientIdentityProperties,
+                meterRegistry,
+                objectMapper,
+                loggingProperties,
+                exchangeRegistryReader),
             UserIdMdcFilter.class)
         .addFilterAfter(
             new ExchangeTokenGateFilter(

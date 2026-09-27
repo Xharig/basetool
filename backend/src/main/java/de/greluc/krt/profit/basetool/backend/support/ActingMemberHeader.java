@@ -49,6 +49,13 @@ public final class ActingMemberHeader {
    */
   public static final String EXCHANGE_INSTALLATION_HEADER = "X-Exchange-Installation";
 
+  /**
+   * Carries, in epoch seconds, the connection time the gateway compared with the member's
+   * disconnect of the client — an offline token's {@code iat}, any other token's {@code auth_time}
+   * (REQ-XCH-008); honoured under the same conditions as {@link #EXCHANGE_CLIENT_HEADER}.
+   */
+  public static final String EXCHANGE_CONNECTED_AT_HEADER = "X-Exchange-Connected-At";
+
   /** Not instantiable: a constant holder, not a component. */
   private ActingMemberHeader() {}
 }
