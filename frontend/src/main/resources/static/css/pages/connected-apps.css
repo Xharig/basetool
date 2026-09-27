@@ -1,0 +1,42 @@
+@layer base, components, page, migration, utilities;
+
+@layer page {
+    .ca-app-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .ca-app-head h2 {
+        margin: 0;
+    }
+    .ca-app-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .ca-unseen td {
+        box-shadow: inset 0 0 0 1px var(--color-accent-light);
+    }
+    .ca-new-badge {
+        margin-left: 0.5rem;
+        padding: 0 0.4rem;
+        border: 1px solid var(--color-accent-light);
+        border-radius: 0.25rem;
+        color: var(--color-accent-light);
+        font-size: 0.8em;
+        text-transform: uppercase;
+    }
+    .ca-undone td {
+        opacity: 0.6;
+    }
+    .ca-undo-skipped {
+        margin: 0.5rem 0 0;
+        padding-left: 1rem;
+    }
+    .ca-capabilities {
+        margin: 0 0 1rem;
+        padding-left: 1rem;
+    }
+}

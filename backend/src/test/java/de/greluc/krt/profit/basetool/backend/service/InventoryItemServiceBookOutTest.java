@@ -95,6 +95,7 @@ class InventoryItemServiceBookOutTest {
   @Mock private MissionFinanceEntryRepository missionFinanceEntryRepository;
   @Mock private MissionParticipantRepository missionParticipantRepository;
   @Mock private MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private InventoryItemMapper inventoryItemMapper;
   @Mock private MaterialMapper materialMapper;
   @Mock private OwnerScopeService ownerScopeService;
@@ -280,7 +281,7 @@ class InventoryItemServiceBookOutTest {
 
       verify(inventoryItemRepository, org.mockito.Mockito.times(1))
           .saveAndFlush(any(InventoryItem.class));
-      verify(materialExchangeOfferRepository).clampOfferedAmountToStock(eq(ITEM_ID), eq(9.0));
+      verify(offerRatchet).lower(ITEM_ID, 9.0, MaterialExchangeOfferRatchet.Reason.CHECKOUT);
     }
   }
 
@@ -454,7 +455,7 @@ class InventoryItemServiceBookOutTest {
       assertSame(item, source, "the flushed row is the original source");
       assertSame(targetUser, newItem.getUser());
       verify(inventoryItemRepository, never()).delete(any());
-      verify(materialExchangeOfferRepository).clampOfferedAmountToStock(eq(ITEM_ID), eq(7.0));
+      verify(offerRatchet).lower(ITEM_ID, 7.0, MaterialExchangeOfferRatchet.Reason.TRANSFER);
     }
 
     @Test
@@ -475,6 +476,8 @@ class InventoryItemServiceBookOutTest {
           OWNER_ID,
           false);
 
+      verify(offerRatchet)
+          .beforeDelete(List.of(ITEM_ID), MaterialExchangeOfferRatchet.Reason.TRANSFER);
       verify(inventoryItemRepository).delete(item);
       verify(inventoryItemRepository, org.mockito.Mockito.times(1)).save(any(InventoryItem.class));
     }
@@ -899,6 +902,8 @@ class InventoryItemServiceBookOutTest {
               false);
 
       assertNull(result, "full discard returns null");
+      verify(offerRatchet)
+          .beforeDelete(List.of(ITEM_ID), MaterialExchangeOfferRatchet.Reason.CHECKOUT);
       verify(inventoryItemRepository).delete(item);
       verify(inventoryItemRepository, never()).save(any());
     }

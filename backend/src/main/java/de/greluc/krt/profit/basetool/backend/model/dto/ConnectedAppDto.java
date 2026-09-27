@@ -28,9 +28,11 @@ import java.util.List;
  * @param displayName the product name, always shown before an installation's label
  * @param capabilities the scopes the registry grants the client
  * @param installations the live installations, newest first
+ * @param activity the client's latest writes to the member's data, newest first
  */
 public record ConnectedAppDto(
     String clientId,
     String displayName,
     List<String> capabilities,
-    List<ConnectedInstallationDto> installations) {}
+    List<ConnectedInstallationDto> installations,
+    List<ConnectedAppActivityDto> activity) {}
