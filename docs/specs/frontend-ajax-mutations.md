@@ -1281,7 +1281,12 @@ operation forwards nothing.
 **Authorization is asymmetric by design (ADR-0094).** *Subscribing* to a topic requires the same
 authenticated read the page itself performs (table above), checked asynchronously off the WS
 container thread; an explicit 403/404 denies, transient failures and authorizer saturation fail
-open (safe: no data rides the socket, every fragment re-fetch re-authorizes per viewer).
+open (safe: no data rides the socket, every fragment re-fetch re-authorizes per viewer) — except for
+the presence-enabled `mission` class, which fails **closed** because its snapshot names the editors.
+The probes carry the bearer captured at the handshake, and the handshake obtains it through the
+single-flight authorized-client manager (REQ-SEC-012), which **refreshes a lapsed access token**
+first: a tab that reconnects after sitting idle past the token's lifespan would otherwise probe with
+an expired token, get a `401`, and lose the mission room to the fail-closed rule.
 *Publishing* a `changed` frame requires only an authenticated socket, a known topic, the topic
 class's section whitelist and the per-session token bucket — **no subscription**: a requester
 creating an order must be able to signal the staff queue it may not read, and an org-unit owner
@@ -1391,6 +1396,8 @@ because an ordinary navigation also ends a socket after seconds and no threshold
   reconnect, no re-subscribe and no background resync while nothing changes.
 - [ ] Raising the keepalive interval past half the edge's `proxy_read_timeout`, or lowering that
   timeout below twice the interval, fails `:frontend:test`.
+- [ ] A mission tab that reconnects after its access token lapsed is subscribed again, not refused:
+  the handshake refreshes the token before the subscribe probe uses it.
 
 **Enforced by:** `LiveSyncWebSocketHandlerTest` (topic parsing, cross-room isolation, per-topic
 whitelists, publish-without-subscription, per-session rate limit, topic cap, close cleanup, plus the
@@ -1399,7 +1406,9 @@ throttle across publishers, idle-bucket reaping, the keepalive sweep and the soc
 `LiveSyncTopicTest` + `LiveSyncSectionMapParityTest` (topic-class parsing/exhaustiveness + seam-map
 parity) · `LiveSyncKeepaliveEdgeTimeoutParityTest` (the keepalive interval against the edge's
 `proxy_read_timeout`) · `LiveSyncSubscriptionAuthorizerTest` (per-topic allow/deny/fail-open incl.
-requester-refused queue + bank dual-auth matrix) · `RedisLiveSyncFanoutTest` +
+requester-refused queue + bank dual-auth matrix) · `LiveSyncSyncHandshakeInterceptorTest` (the
+token comes from the authorized-client manager with the handshake's request and response) ·
+`RedisLiveSyncFanoutTest` +
 `RedisLiveSyncFanoutIntegrationTest` (publish-once, origin skip, Redis-down degradation, plus the
 presence channel: snapshot serialisation, channel-based dispatch, empty-snapshot forwarding,
 separate error series) · `LiveSyncPresenceServiceTest` (the ADR-0126 mirror: local+remote merge,

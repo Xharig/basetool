@@ -22,6 +22,8 @@ package de.greluc.krt.profit.basetool.frontend.websocket;
 import de.greluc.krt.profit.basetool.frontend.logging.ActiveSquadronContext;
 import de.greluc.krt.profit.basetool.frontend.support.CurrentUser;
 import de.greluc.krt.profit.basetool.frontend.support.TermsGateHandoff;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -32,11 +34,13 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
+import org.springframework.http.server.ServletServerHttpResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
@@ -46,9 +50,11 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
  *
  * <p>Marks the future session {@linkplain LiveSyncWebSocketHandler#ATTR_MULTIPLEXED multiplexed}
  * and captures, on the servlet thread, what later subscribe authorization needs: the OAuth2 access
- * token (read-only, never refreshed), the active-org-unit pin ({@link ActiveSquadronContext}) and
- * the caller's authorities. It also relays the consent gate's mark via {@link #relayTermsGate}. A
- * missing token or pin never blocks the handshake; the affected subscribes fail open.
+ * token, the active-org-unit pin ({@link ActiveSquadronContext}) and the caller's authorities. The
+ * token is obtained through the single-flight authorized-client manager, so an expired one is
+ * refreshed before it is captured (REQ-SEC-012). It also relays the consent gate's mark via {@link
+ * #relayTermsGate}. A missing token or pin never blocks the handshake; the affected subscribes fail
+ * open, or closed for a presence-enabled class.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -57,7 +63,8 @@ public class LiveSyncSyncHandshakeInterceptor implements HandshakeInterceptor {
   /** OAuth2 client registration id whose token authorizes the backend reads. */
   private static final String REGISTRATION_ID = "keycloak";
 
-  private final OAuth2AuthorizedClientRepository authorizedClientRepository;
+  /** Single-flight manager that loads the session's client and refreshes an expired token. */
+  private final OAuth2AuthorizedClientManager authorizedClientManager;
 
   /**
    * Marks the future session multiplexed and captures the token, pin and authorities for later
@@ -96,17 +103,28 @@ public class LiveSyncSyncHandshakeInterceptor implements HandshakeInterceptor {
           }
         }
       }
-      if (authentication != null && request instanceof ServletServerHttpRequest servletRequest) {
+      if (authentication != null
+          && request instanceof ServletServerHttpRequest servletRequest
+          && response instanceof ServletServerHttpResponse servletResponse) {
         OAuth2AuthorizedClient client =
-            authorizedClientRepository.loadAuthorizedClient(
-                REGISTRATION_ID, authentication, servletRequest.getServletRequest());
+            authorizedClientManager.authorize(
+                OAuth2AuthorizeRequest.withClientRegistrationId(REGISTRATION_ID)
+                    .principal(authentication)
+                    .attribute(
+                        HttpServletRequest.class.getName(), servletRequest.getServletRequest())
+                    .attribute(
+                        HttpServletResponse.class.getName(), servletResponse.getServletResponse())
+                    .build());
         if (client != null && client.getAccessToken() != null) {
           attributes.put(
               LiveSyncWebSocketHandler.ATTR_ACCESS_TOKEN, client.getAccessToken().getTokenValue());
         }
       }
     } catch (RuntimeException e) {
-      log.debug("Live-sync /ws/sync token capture failed; subscribes will fail open", e);
+      log.debug(
+          "Live-sync /ws/sync handshake could not obtain an access token; subscribes resolve"
+              + " by class",
+          e);
     }
     return true;
   }
