@@ -9,3 +9,7 @@ relative_links:
   collections: false
 exclude:
   - .markdownlint.json
+github:
+  source:
+    branch: main
+    path: docs/exchange
