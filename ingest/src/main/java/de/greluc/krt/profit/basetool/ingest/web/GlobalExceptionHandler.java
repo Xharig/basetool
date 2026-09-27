@@ -66,6 +66,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   private static final String CODE_VALIDATION = "VALIDATION_FAILED";
 
   private static final String CODE_BAD_REQUEST = "BAD_REQUEST";
+
+  private static final String CODE_NOT_FOUND = "NOT_FOUND";
   private static final String CODE_UPSTREAM = "BACKEND_RELAY_FAILED";
   private static final String CODE_INTERNAL = "INTERNAL_ERROR";
 
@@ -159,6 +161,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(BadRequestException.class)
   public @NotNull ProblemDetail handleBadRequest(@NotNull BadRequestException ex) {
     return problem(HttpStatus.BAD_REQUEST, "Bad request", CODE_BAD_REQUEST, ex.getMessage());
+  }
+
+  /**
+   * Answers a request for a document that does not exist with a {@code 404} and the code {@code
+   * NOT_FOUND}.
+   *
+   * @param ex the exception, its message a safe detail
+   * @return a 404 problem
+   */
+  @ExceptionHandler(NotFoundException.class)
+  public @NotNull ProblemDetail handleNotFound(@NotNull NotFoundException ex) {
+    return problem(HttpStatus.NOT_FOUND, "Not found", CODE_NOT_FOUND, ex.getMessage());
   }
 
   /**

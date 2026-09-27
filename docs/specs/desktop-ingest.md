@@ -126,12 +126,16 @@ network only.
   header naming the caller (ADR-0129), and no backend write.
 - [x] The gateway declares no `DataSource`/JPA and runs no schema migration (architecture
   test / startup assertion).
-- [x] The routed surface is **exactly** `POST /v1/refinery-extract` and `POST /v1/blueprint-preview`
-  (plus springdoc's non-prod `/v3/api-docs` tree and Boot's `/error` dispatch target). Every
-  protective filter — client identity, payload cap, per-IP rate limit, access log — scopes itself to
-  `/v1/**` through `IngestPathScope`, so a controller mapped anywhere else would be served with none
-  of them; `IngestEndpointSurfaceTest` asks the dispatcher for every mapping through the shared
-  `test-support` enumeration engine and fails on any other one (ING-SEC-05, 2026-09-22).
+- [x] The routed surface is **exactly** `POST /v1/refinery-extract`, `POST /v1/blueprint-preview`
+  and the exchange routes of REQ-XCH-001 built so far — `GET /exchange/v1/openapi.json` and
+  `GET /exchange/v1/schemas/{name}` (plus springdoc's non-prod `/v3/api-docs` tree and Boot's `/error`
+  dispatch target). `IngestPathScope` splits the scope in two: the **protected** surface
+  (`/v1/**` and `/exchange/**`) gets the payload cap, the per-IP rate limit and the access log; only
+  the **legacy** surface (`/v1/**`) gets the extractor client gate, because exchange clients are
+  gated by the registry instead and would otherwise be refused as unknown extractors. A controller
+  mapped anywhere else would be served with none of them; `IngestEndpointSurfaceTest` asks the
+  dispatcher for every mapping through the shared `test-support` enumeration engine and fails on
+  any other one (ING-SEC-05, 2026-09-22).
 - [x] A backend `401`/`403` on the relay refuses the **gateway's own** service-account identity, not
   the member's (ADR-0129), so it is answered `502 BACKEND_RELAY_FAILED` (logged at `WARN`, counted
   under `basetool_ingest_handoff_errors_total{reason="backend_auth"}`) and the cached gateway token is
@@ -537,8 +541,10 @@ self-inflicted false positive if a future legit route matches a blocked prefix.
   answered 405.
 - [x] A query string with an empty-named chunk (`/?=phpinfo()`) is answered with a bare 400 — no
   body, no error dispatch — and wins over the path/extension/method rules when several apply.
-- [x] The gateway's real surface (`/v1/**`, `/actuator/health*`, `/actuator/prometheus`,
-  `/v3/api-docs*`) passes the filter unchanged.
+- [x] The gateway's real surface (`/v1/**`, `/exchange/**`, `/actuator/health*`,
+  `/actuator/prometheus`, `/v3/api-docs*`) passes the filter unchanged; every route of the
+  committed exchange OpenAPI document and every schema URL is checked against the method, prefix and
+  suffix lists (`ExchangeRouteBotCompatibilityTest`).
 - [x] Every reject increments `basetool_bot_blocked_total` under its bounded `rule` tag and nothing
   else (no URI/method label).
 
@@ -692,8 +698,8 @@ authentication: the field is client-supplied and the contract that documents it 
 - [x] `basetool_ingest_gate_enforcing{gate}` reports each gate's posture with four bounded labels;
   audit-only turns `azp`/`scope`/`tool` to `0` but never `audience`; no configured value reaches the
   log.
-- [x] Every endpoint the dispatcher routes lies inside the `/v1` scope these filters guard
-  (`IngestEndpointSurfaceTest`).
+- [x] Every endpoint the dispatcher routes lies inside the protected scope these filters guard
+  (`IngestEndpointSurfaceTest`); the client gate stays on `/v1` alone (`IngestPathScopeTest`).
 - [x] The gate cannot be shed by percent-encoding the path. Every filter that limits itself to the
   ingest surface — client identity, payload cap, rate limit and the access log — decides that
   through the shared `IngestPathScope`, which matches a parsed `PathPattern` against the **decoded**

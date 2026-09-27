@@ -121,6 +121,9 @@
     "description" : "Manage promotion system topic groups.",
     "name" : "Promotion Topics"
   }, {
+    "description" : "Whether an RSI handle is the member's",
+    "name" : "Exchange — account check"
+  }, {
     "description" : "Admin-managed notification recipient rules.",
     "name" : "Notification Rules"
   } ],
@@ -876,6 +879,106 @@
           }
         },
         "summary" : "Register an exchange client",
+        "tags" : [ "Admin — Exchange registry" ]
+      }
+    },
+    "/api/v1/admin/exchange-clients/usage" : {
+      "get" : {
+        "description" : "Connected members and last activity per client, over live installations.",
+        "operationId" : "usage",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ExchangeClientUsageDto"
+                  }
+                }
+              }
+            },
+            "description" : "One row per client in use",
+            "headers" : {
+              "Cache-Control" : {
+                "description" : "Caching policy (e.g. no-cache for API responses)",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "ETag" : {
+                "description" : "Entity Tag for conditional requests",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "304" : {
+            "description" : "Not Modified (ETag/If-None-Match)"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Exchange client usage",
         "tags" : [ "Admin — Exchange registry" ]
       }
     },
@@ -10248,6 +10351,79 @@
         "tags" : [ "Connected apps" ]
       }
     },
+    "/api/v1/connected-apps/seen" : {
+      "post" : {
+        "description" : "Marks the new-connection notifications read; changes no connection.",
+        "operationId" : "markSeen",
+        "responses" : {
+          "204" : {
+            "description" : "Marked"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Mark my new connections seen",
+        "tags" : [ "Connected apps" ]
+      }
+    },
     "/api/v1/connected-apps/{clientId}" : {
       "delete" : {
         "description" : "Refuses every token the client holds for me from the next request on and removes my consent; a new connection works at once.",
@@ -10427,6 +10603,186 @@
         },
         "summary" : "Exchange: the Lager's locations",
         "tags" : [ "Exchange — catalogue" ]
+      }
+    },
+    "/api/v1/exchange/catalog/resolve" : {
+      "post" : {
+        "description" : "Gateway-only. Resolves each reference to one blueprint product, item, material or ship type, to several candidates, or to nothing; blueprint names go through the web import's matching.",
+        "operationId" : "resolve",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeResolveRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeResolveResponse"
+                }
+              }
+            },
+            "description" : "One result per reference"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Exchange: resolve item references",
+        "tags" : [ "Exchange — catalogue" ]
+      }
+    },
+    "/api/v1/exchange/me/account-check" : {
+      "post" : {
+        "description" : "Gateway-only. The handle is compared, never returned, logged or stored.",
+        "operationId" : "check",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeAccountCheckRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeAccountCheckDto"
+                }
+              }
+            },
+            "description" : "The answer"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Exchange: does this RSI handle belong to the member",
+        "tags" : [ "Exchange — account check" ]
       }
     },
     "/api/v1/exchange/me/blueprints" : {
@@ -59171,6 +59527,9 @@
           "lastSeenAt" : {
             "type" : "string",
             "format" : "date-time"
+          },
+          "unseen" : {
+            "type" : "boolean"
           }
         }
       },
@@ -59788,6 +60147,36 @@
           }
         }
       },
+      "Entry" : {
+        "type" : "object",
+        "properties" : {
+          "bt" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ExchangeAccountCheckDto" : {
+        "type" : "object",
+        "properties" : {
+          "result" : {
+            "type" : "string",
+            "enum" : [ "match", "mismatch", "unknown" ]
+          }
+        }
+      },
+      "ExchangeAccountCheckRequest" : {
+        "type" : "object",
+        "properties" : {
+          "handle" : {
+            "type" : "string",
+            "pattern" : "^[A-Za-z0-9_-]{3,60}$"
+          }
+        },
+        "required" : [ "handle" ]
+      },
       "ExchangeBlueprintDto" : {
         "type" : "object",
         "properties" : {
@@ -59987,6 +60376,23 @@
         },
         "required" : [ "capabilities", "displayName", "version" ]
       },
+      "ExchangeClientUsageDto" : {
+        "type" : "object",
+        "properties" : {
+          "connectedMembers" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "lastSeenAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
       "ExchangeInstallationDto" : {
         "type" : "object",
         "properties" : {
@@ -60026,6 +60432,45 @@
           "months" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "ExchangeItemRef" : {
+        "type" : "object",
+        "properties" : {
+          "bt" : {
+            "type" : "string",
+            "maxLength" : 128,
+            "minLength" : 1
+          },
+          "locKey" : {
+            "type" : "string",
+            "maxLength" : 200,
+            "minLength" : 1,
+            "pattern" : "^[^@\\s]+$"
+          },
+          "name" : {
+            "type" : "string",
+            "maxLength" : 200,
+            "minLength" : 1
+          },
+          "nameLocale" : {
+            "type" : "string",
+            "pattern" : "^[a-z]{2}(-[A-Z]{2})?$"
+          },
+          "scGuid" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "scRecord" : {
+            "type" : "string",
+            "maxLength" : 200,
+            "minLength" : 1
+          },
+          "uexId" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0
           }
         }
       },
@@ -60095,6 +60540,41 @@
           },
           "installationId" : {
             "type" : "string"
+          }
+        }
+      },
+      "ExchangeResolveRequest" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "BLUEPRINT", "ITEM", "MATERIAL", "SHIP_TYPE" ]
+          },
+          "refs" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExchangeItemRef"
+            },
+            "maxItems" : 500,
+            "minItems" : 1
+          }
+        },
+        "required" : [ "kind", "refs" ]
+      },
+      "ExchangeResolveResponse" : {
+        "type" : "object",
+        "properties" : {
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Result"
+            }
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Warning"
+            }
           }
         }
       },
@@ -63583,7 +64063,7 @@
           },
           "eventType" : {
             "type" : "string",
-            "enum" : [ "JOB_ORDER_CREATED", "JOB_ORDER_UPDATED_BY_REQUESTER", "BANK_BOOKING_REQUEST_CREATED", "BANK_BOOKING_REQUEST_CONFIRMED", "BANK_BOOKING_REQUEST_REJECTED", "BANK_BOOKING_REQUEST_CANCELLED", "DISCORD_REGISTRATION_PENDING", "MATERIAL_EXCHANGE_INTEREST_REGISTERED", "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_DECLINED", "ACCOUNT_DELETION_REQUEST_RESOLVED" ]
+            "enum" : [ "JOB_ORDER_CREATED", "JOB_ORDER_UPDATED_BY_REQUESTER", "BANK_BOOKING_REQUEST_CREATED", "BANK_BOOKING_REQUEST_CONFIRMED", "BANK_BOOKING_REQUEST_REJECTED", "BANK_BOOKING_REQUEST_CANCELLED", "DISCORD_REGISTRATION_PENDING", "MATERIAL_EXCHANGE_INTEREST_REGISTERED", "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_DECLINED", "ACCOUNT_DELETION_REQUEST_RESOLVED", "EXCHANGE_INSTALLATION_CONNECTED" ]
           },
           "excludeActor" : {
             "type" : "boolean"
@@ -63594,7 +64074,7 @@
           },
           "notificationType" : {
             "type" : "string",
-            "enum" : [ "JOB_ORDER_CREATED", "JOB_ORDER_UPDATED_BY_REQUESTER", "BANK_BOOKING_REQUEST_CREATED", "BANK_BOOKING_REQUEST_CONFIRMED", "BANK_BOOKING_REQUEST_REJECTED", "BANK_BOOKING_REQUEST_RESPONSIBLE_CONFIRMED", "BANK_BOOKING_REQUEST_RESPONSIBLE_REJECTED", "DISCORD_REGISTRATION_PENDING", "MATERIAL_EXCHANGE_INTEREST_REGISTERED", "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_DECLINED" ]
+            "enum" : [ "JOB_ORDER_CREATED", "JOB_ORDER_UPDATED_BY_REQUESTER", "BANK_BOOKING_REQUEST_CREATED", "BANK_BOOKING_REQUEST_CONFIRMED", "BANK_BOOKING_REQUEST_REJECTED", "BANK_BOOKING_REQUEST_RESPONSIBLE_CONFIRMED", "BANK_BOOKING_REQUEST_RESPONSIBLE_REJECTED", "DISCORD_REGISTRATION_PENDING", "MATERIAL_EXCHANGE_INTEREST_REGISTERED", "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_DECLINED", "EXCHANGE_INSTALLATION_CONNECTED" ]
           },
           "selectors" : {
             "type" : "array",
@@ -63678,14 +64158,14 @@
           },
           "eventType" : {
             "type" : "string",
-            "enum" : [ "JOB_ORDER_CREATED", "JOB_ORDER_UPDATED_BY_REQUESTER", "BANK_BOOKING_REQUEST_CREATED", "BANK_BOOKING_REQUEST_CONFIRMED", "BANK_BOOKING_REQUEST_REJECTED", "BANK_BOOKING_REQUEST_CANCELLED", "DISCORD_REGISTRATION_PENDING", "MATERIAL_EXCHANGE_INTEREST_REGISTERED", "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_DECLINED", "ACCOUNT_DELETION_REQUEST_RESOLVED" ]
+            "enum" : [ "JOB_ORDER_CREATED", "JOB_ORDER_UPDATED_BY_REQUESTER", "BANK_BOOKING_REQUEST_CREATED", "BANK_BOOKING_REQUEST_CONFIRMED", "BANK_BOOKING_REQUEST_REJECTED", "BANK_BOOKING_REQUEST_CANCELLED", "DISCORD_REGISTRATION_PENDING", "MATERIAL_EXCHANGE_INTEREST_REGISTERED", "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_DECLINED", "ACCOUNT_DELETION_REQUEST_RESOLVED", "EXCHANGE_INSTALLATION_CONNECTED" ]
           },
           "excludeActor" : {
             "type" : "boolean"
           },
           "notificationType" : {
             "type" : "string",
-            "enum" : [ "JOB_ORDER_CREATED", "JOB_ORDER_UPDATED_BY_REQUESTER", "BANK_BOOKING_REQUEST_CREATED", "BANK_BOOKING_REQUEST_CONFIRMED", "BANK_BOOKING_REQUEST_REJECTED", "BANK_BOOKING_REQUEST_RESPONSIBLE_CONFIRMED", "BANK_BOOKING_REQUEST_RESPONSIBLE_REJECTED", "DISCORD_REGISTRATION_PENDING", "MATERIAL_EXCHANGE_INTEREST_REGISTERED", "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_DECLINED" ]
+            "enum" : [ "JOB_ORDER_CREATED", "JOB_ORDER_UPDATED_BY_REQUESTER", "BANK_BOOKING_REQUEST_CREATED", "BANK_BOOKING_REQUEST_CONFIRMED", "BANK_BOOKING_REQUEST_REJECTED", "BANK_BOOKING_REQUEST_RESPONSIBLE_CONFIRMED", "BANK_BOOKING_REQUEST_RESPONSIBLE_REJECTED", "DISCORD_REGISTRATION_PENDING", "MATERIAL_EXCHANGE_INTEREST_REGISTERED", "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED", "ACCOUNT_DELETION_REQUESTED", "ACCOUNT_DELETION_REQUEST_DECLINED", "EXCHANGE_INSTALLATION_CONNECTED" ]
           },
           "selectors" : {
             "type" : "array",
@@ -67855,6 +68335,28 @@
         },
         "required" : [ "stepIds", "stepsVersion" ]
       },
+      "Result" : {
+        "type" : "object",
+        "properties" : {
+          "candidates" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Entry"
+            }
+          },
+          "index" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ref" : {
+            "$ref" : "#/components/schemas/Entry"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "resolved", "ambiguous", "unmatched" ]
+          }
+        }
+      },
       "ReverseBankTransactionRequest" : {
         "type" : "object",
         "properties" : {
@@ -69210,6 +69712,17 @@
           "syncedCount" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "Warning" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "pointer" : {
+            "type" : "string"
           }
         }
       }

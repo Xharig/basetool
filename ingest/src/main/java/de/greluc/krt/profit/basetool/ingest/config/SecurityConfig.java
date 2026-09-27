@@ -35,6 +35,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.ssl.SslBundles;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -192,7 +193,7 @@ public class SecurityConfig {
             csrf ->
                 csrf.csrfTokenRepository(csrfRepo)
                     .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                    .ignoringRequestMatchers("/v1/**"))
+                    .ignoringRequestMatchers("/v1/**", "/exchange/**"))
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .headers(
             headers -> {
@@ -210,6 +211,9 @@ public class SecurityConfig {
                 auth.requestMatchers("/actuator/health", "/actuator/health/**")
                     .permitAll()
                     .requestMatchers("/v3/api-docs/**")
+                    .permitAll()
+                    .requestMatchers(
+                        HttpMethod.GET, "/exchange/v1/openapi.json", "/exchange/v1/schemas/*")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
