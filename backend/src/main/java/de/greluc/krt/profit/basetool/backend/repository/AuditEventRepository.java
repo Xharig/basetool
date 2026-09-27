@@ -130,6 +130,19 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
   boolean existsByDomainAndOccurredAtBefore(AuditDomain domain, Instant before);
 
   /**
+   * Whether an event of one type was recorded about one subject at or after a time; the mass-change
+   * confirmation reads a client's suspension from it (REQ-XCH-021).
+   *
+   * @param domain the event type's area
+   * @param eventType the event type
+   * @param subjectId the subject's id
+   * @param since the inclusive lower bound
+   * @return {@code true} when such an event exists
+   */
+  boolean existsByDomainAndEventTypeAndSubjectIdAndOccurredAtGreaterThanEqual(
+      AuditDomain domain, AuditEventType eventType, UUID subjectId, Instant since);
+
+  /**
    * Replaces this member's actor handle snapshot with the erasure sentinel for a granted Art. 17
    * request (REQ-SEC-062).
    *

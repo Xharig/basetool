@@ -246,6 +246,13 @@
 
 ### Fixed
 
+- **Datenaustausch: Massenänderung nach dem Trennen nicht mehr bestätigbar.** Eine
+  zurückgehaltene Massenänderung gilt nur 30 Minuten ab dem Zurückhalten, auch in der Sitzung;
+  wurde die Anwendung oder Installation seitdem getrennt oder die Anwendung gesperrt, lehnt das
+  Backend die Bestätigung ab.
+- **Datenaustausch: fremde Schiffe werden nicht mehr gesperrt.** Nennt eine Anwendung das Schiff
+  eines anderen Mitglieds, sperrt das Backend dessen Zeile nicht mehr und blockiert so keine
+  Bearbeitung im Hangar.
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.

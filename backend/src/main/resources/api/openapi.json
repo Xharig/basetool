@@ -60390,9 +60390,13 @@
             "type" : "string",
             "minLength" : 1,
             "pattern" : "^(blueprints|stock|ships)$"
+          },
+          "stagedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           }
         },
-        "required" : [ "changeSet", "clientId", "installationKey", "resource" ]
+        "required" : [ "changeSet", "clientId", "installationKey", "resource", "stagedAt" ]
       },
       "ConnectedAppMassChangeResultDto" : {
         "type" : "object",

@@ -109,6 +109,21 @@ public class AuditService {
   }
 
   /**
+   * Whether an event of one type was recorded about one subject at or after a time.
+   *
+   * @param eventType the event type; its domain narrows the lookup
+   * @param subjectId the subject's id
+   * @param since the inclusive lower bound
+   * @return {@code true} when such an event exists
+   */
+  @Transactional(readOnly = true)
+  public boolean recordedSince(
+      @NotNull AuditEventType eventType, @NotNull UUID subjectId, @NotNull Instant since) {
+    return auditEventRepository.existsByDomainAndEventTypeAndSubjectIdAndOccurredAtGreaterThanEqual(
+        eventType.domain(), eventType, subjectId, since);
+  }
+
+  /**
    * Returns one filtered page of a single area's audit log for the admin viewer (REQ-AUDIT-001).
    *
    * @param domain the area to read

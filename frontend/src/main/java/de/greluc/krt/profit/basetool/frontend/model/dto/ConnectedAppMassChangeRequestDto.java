@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.frontend.model.dto;
 
+import java.time.Instant;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -29,9 +30,11 @@ import org.jetbrains.annotations.NotNull;
  * @param installationKey the installation that sent it
  * @param resource {@code blueprints}, {@code stock} or {@code ships}
  * @param changeSet the change set as the client sent it, as JSON
+ * @param stagedAt when the gateway staged it
  */
 public record ConnectedAppMassChangeRequestDto(
     @NotNull String clientId,
     @NotNull String installationKey,
     @NotNull String resource,
-    @NotNull String changeSet) {}
+    @NotNull String changeSet,
+    @NotNull Instant stagedAt) {}

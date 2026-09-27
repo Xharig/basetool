@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.controller.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,12 +44,15 @@ import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.jetbrains.annotations.NotNull;
@@ -67,6 +71,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
@@ -94,6 +100,7 @@ class ExchangeShipWriteControllerTest {
   @Autowired private JdbcTemplate jdbc;
   @Autowired private MeterRegistry meterRegistry;
   @Autowired private KnownExchangeClients knownClients;
+  @Autowired private PlatformTransactionManager transactionManager;
 
   private MockMvc mockMvc;
   private UUID member;
@@ -410,6 +417,53 @@ class ExchangeShipWriteControllerTest {
 
     assertThat(ships(other)).isEqualTo(1);
     assertThat(ships(member)).isZero();
+  }
+
+  @Test
+  void anotherMembersShipIsNeverLockedSoItsOwnersConcurrentEditDoesNotHoldUpTheBatch()
+      throws Exception {
+    UUID cutlass = shipType("Cutlass Black");
+    UUID theirs = ship(other, "Theirs", cutlass, "LTI");
+    CountDownLatch locked = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    Thread owner =
+        new Thread(
+            () ->
+                new TransactionTemplate(transactionManager)
+                    .executeWithoutResult(
+                        status -> {
+                          jdbc.queryForList("SELECT id FROM ship WHERE id = ? FOR UPDATE", theirs);
+                          locked.countDown();
+                          try {
+                            release.await(30, TimeUnit.SECONDS);
+                          } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                          }
+                        }));
+    owner.start();
+    try {
+      assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
+      assertTimeoutPreemptively(
+          Duration.ofSeconds(10),
+          () ->
+              change(
+                      ops(
+                          link("vk-1", theirs),
+                          upsert(
+                              "vk-2", theirs, 0L, cutlass, "Mine now", "{\"kind\":\"LTI\"}", null),
+                          remove(theirs, 0L)))
+                  .andExpect(status().isOk())
+                  .andExpect(jsonPath("$.applied").value(0))
+                  .andExpect(jsonPath("$.results[0].result").value("unmatched"))
+                  .andExpect(jsonPath("$.results[1].result").value("unmatched"))
+                  .andExpect(jsonPath("$.results[2].result").value("unmatched")));
+    } finally {
+      release.countDown();
+      owner.join(30_000);
+    }
+
+    assertThat(jdbc.queryForObject("SELECT name FROM ship WHERE id = ?", String.class, theirs))
+        .isEqualTo("Theirs");
   }
 
   @Test

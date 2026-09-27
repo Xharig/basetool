@@ -644,6 +644,8 @@ later in the web, as a stock book-in (owner decision 2026-09-27, `HangarService.
 
 - [x] First sync against a Fleetview-imported hangar creates no duplicate.
   *`ExchangeShipWriteControllerTest`.*
+- [x] A batch naming another member's ship never locks its row: the owner's concurrent edit does not
+  hold it up. *`ExchangeShipWriteControllerTest`.*
 - [x] The feed carries the member's own ships only, without purchase data, and answers a ship given
   to another member as a tombstone. *`ExchangeShipControllerTest`.*
 
@@ -666,7 +668,11 @@ decision 2026-09-27); a ship the member never had is `unmatched`. `remove` requi
 detaches the ship from its mission units through the Hangar's delete (`MISSION_UNIT_UPDATED`) and
 reports the count as `detachedFromMissions`. The ship type resolves through `catalog/resolve`, the
 place like a stock lot's; an absent `fitted` keeps the ship's. Every write is audited in the Hangar
-area with the client and journaled.
+area with the client and journaled. Only the member's own ships are row-locked
+(`ShipRepository.lockOwnedById`, owner in the `WHERE`): a ship id of another member, like an
+unknown one, is `unmatched` and its row is never locked, so a batch cannot hold up other members'
+web edits. *Corrected 2026-09-27 (security review L6): the ship was locked before the owner check,
+so a batch could keep up to 500 foreign rows locked for its transaction.*
 
 **Status:** built in the backend, and the gateway's read route (`GET /exchange/v1/me/ships`) —
 WP 4.4 (#2086), and its write route (`POST …/changes`)
@@ -779,6 +785,9 @@ within one batch is not a removal. Only the member's browser session can confirm
 **Acceptance**
 
 - [ ] One test per counting rule, including repeated 89 % cuts and a move.
+- [x] A batch is not confirmed after the client or installation was disconnected, or the client
+  suspended, since its staging, nor past its 30-minute staging lifetime, and a kept session entry
+  expires with it. *`ExchangeMassChangeControllerTest`, `ConnectedAppsConfirmControllerMvcTest`.*
 
 The counting rule is `ExchangeMassChangeGuard`: over the journal's live removals of the client,
 member and resource in the last 24 hours plus the batch's, a batch trips above 25, or when that total
@@ -794,7 +803,8 @@ decision 2026-09-27).
 A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
 
 When the backend answers `MASS_CHANGE_CONFIRMATION_REQUIRED`, the gateway stages the change set with
-its client, installation and resource in the handoff staging (`HandoffKind.MASS_CHANGE`, one slot
+its client, installation, resource and `stagedAt` (the gateway's clock) in the handoff staging
+(`HandoffKind.MASS_CHANGE`, one slot
 per member apart from the extractor drafts, at most `app.exchange.store.max-mass-change-bytes`,
 512 KiB, counted against the exchange's Redis budget) and answers `409` with a `confirmationUrl` to
 `/connected-apps/confirm?handoff=<id>`. A change set too large to hold is `413 BATCH_TOO_LARGE`.
@@ -802,14 +812,21 @@ per member apart from the extractor drafts, at most `app.exchange.store.max-mass
 The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
 page consumes nothing: its script strips the id from the address bar and consumes the staged batch
 with an explicit request, after which the batch waits in the member's server session and the
-browser names it only by its handoff id, so it cannot alter the batch or its client. The backend
-checks again what the gateway checked — the global switch, the client active with the write
-capability, the client not disconnected by the member within the staging lifetime (30 minutes),
-the installation not disconnected — then previews the batch as a dry run and, on „Bestätigen",
-applies it without asking the guard again, in one transaction recorded in the change log as the
-installation's own write and audited as `EXCHANGE_MASS_CHANGE_CONFIRMED`
-(`POST /api/v1/connected-apps/mass-changes/preview|confirm`, member session only). „Verwerfen"
-drops it; a batch confirmed or dropped once is gone.
+browser names it only by its handoff id, so it cannot alter the batch or its client. The batch
+carries its `stagedAt` through the frontend to the backend, and the staging lifetime of 30 minutes
+counts from it everywhere: the frontend neither loads nor applies a batch older than that (`404`)
+and drops expired session entries, and the backend refuses it (`403`; a `stagedAt` more than a
+minute ahead of its clock is `400`). The backend re-checks what the gateway checked — the global
+switch, the client active with the write capability, the client not suspended since `stagedAt`
+(an `EXCHANGE_CLIENT_SUSPENDED` audit event at or after it refuses even a client active again), the
+client not disconnected by the member at or after `stagedAt`, the installation not disconnected —
+then previews the batch as a dry run and, on „Bestätigen", applies it without asking the guard
+again, in one transaction recorded in the change log as the installation's own write and audited as
+`EXCHANGE_MASS_CHANGE_CONFIRMED` (`POST /api/v1/connected-apps/mass-changes/preview|confirm`,
+member session only). „Verwerfen" drops it; a batch confirmed or dropped once is gone.
+*Corrected 2026-09-27 (security review L3): the session kept a loaded batch as long as the session
+lived and the backend only looked for disconnects in the 30 minutes before the confirmation, so a
+batch loaded before a disconnect could still be confirmed hours later.*
 
 **Status:** built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086), WP 3.2 (#2082),
 WP 4.5 (#2087)
@@ -836,10 +853,11 @@ span goes back to its state before the client's first write there — a blueprin
 lot set back through the Lager's own book-in and book-out, a ship deleted, updated back or recreated
 under a new id without its mission units — unless the entry's latest change-log entry is not the
 client's last write, then it is skipped as `CHANGED_AFTERWARDS`; one that no longer belongs to the
-member or names something gone is skipped as `GONE`. Links the client made are taken back. The
-restored entries' journal rows are marked undone, the undo is audited as `EXCHANGE_CHANGES_UNDONE`
-(restored and skipped counts) and counted in `basetool_exchange_undo_total{resource,outcome}`, and
-the member's pages refresh live.
+member or names something gone is skipped as `GONE`. A ship is locked only when it is still the
+member's; one given to another member is skipped without locking its row. Links the client made
+are taken back. The restored entries' journal rows are marked undone, the undo is audited as
+`EXCHANGE_CHANGES_UNDONE` (restored and skipped counts) and counted in
+`basetool_exchange_undo_total{resource,outcome}`, and the member's pages refresh live.
 
 **Status:** journal and undo built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086),
 WP 4.5 (#2087)

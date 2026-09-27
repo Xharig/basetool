@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.frontend.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -43,8 +44,13 @@ import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedAppMassChangeRe
 import de.greluc.krt.profit.basetool.frontend.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import de.greluc.krt.profit.basetool.frontend.service.IngestHandoffService;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,8 +69,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * MVC test for {@link ConnectedAppsConfirmController} and {@link
  * ConnectedAppsConfirmRelayController} (REQ-XCH-021, ADR-0110): the page load never consumes the
- * handoff, the script's load consumes it once and keeps the change set in the session, and the
- * confirmation applies exactly that change set once.
+ * handoff, the script's load consumes it once and keeps the change set in the session until its
+ * staging lifetime runs out, and the confirmation applies exactly that change set once.
  */
 @SpringBootTest
 class ConnectedAppsConfirmControllerMvcTest {
@@ -117,10 +123,9 @@ class ConnectedAppsConfirmControllerMvcTest {
 
   @Test
   void theLoadConsumesOncePreviewsAndTheConfirmationAppliesThatChangeSetOnce() throws Exception {
-    stubStaged();
-    ConnectedAppMassChangeRequestDto expected =
-        new ConnectedAppMassChangeRequestDto(
-            "versekit", "key-1", "blueprints", "{\"ops\":[{\"op\":\"remove\",\"key\":\"k\"}]}");
+    Instant stagedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+    stubStaged(stagedAt);
+    ConnectedAppMassChangeRequestDto expected = request(stagedAt);
     when(backendApiClient.post(
             eq("/api/v1/connected-apps/mass-changes/preview"),
             eq(expected),
@@ -152,7 +157,7 @@ class ConnectedAppsConfirmControllerMvcTest {
     MockHttpSession session = new MockHttpSession();
     step("apply", session).andExpect(status().isNotFound());
 
-    stubStaged();
+    stubStaged(Instant.now());
     step("load", session);
     step("discard", session).andExpect(status().isNoContent());
     step("apply", session).andExpect(status().isNotFound());
@@ -169,8 +174,73 @@ class ConnectedAppsConfirmControllerMvcTest {
     step("load", new MockHttpSession()).andExpect(status().isNotFound());
   }
 
-  /** Stubs the gateway's staged change set for the test member. */
-  private void stubStaged() {
+  @Test
+  void aHandoffStagedLongerAgoThanTheLifetimeOrWithoutAStagingTimeIsNotLoaded() throws Exception {
+    stubStaged(Instant.now().minus(ConnectedAppsConfirmRelayController.STAGING_LIFETIME));
+    step("load", new MockHttpSession()).andExpect(status().isNotFound());
+
+    stubStaged(null);
+    step("load", new MockHttpSession()).andExpect(status().isNotFound());
+
+    verify(backendApiClient, never()).post(anyString(), any(), any());
+  }
+
+  @Test
+  void aKeptChangeSetExpiresWithItsStagingLifetime() throws Exception {
+    MockHttpSession session = new MockHttpSession();
+    Instant stale =
+        Instant.now().minus(ConnectedAppsConfirmRelayController.STAGING_LIFETIME).minusSeconds(1);
+    session.setAttribute(
+        ConnectedAppsConfirmRelayController.SESSION_KEY,
+        new HashMap<>(
+            Map.of(HANDOFF, JsonMapper.builder().build().writeValueAsString(request(stale)))));
+
+    step("apply", session).andExpect(status().isNotFound());
+
+    verify(backendApiClient, never()).post(anyString(), any(), any());
+    assertThat((Map<?, ?>) session.getAttribute(ConnectedAppsConfirmRelayController.SESSION_KEY))
+        .isEmpty();
+  }
+
+  @Test
+  void loadingAnotherBatchDropsTheExpiredOnesKept() throws Exception {
+    MockHttpSession session = new MockHttpSession();
+    Instant stale =
+        Instant.now().minus(ConnectedAppsConfirmRelayController.STAGING_LIFETIME).minusSeconds(1);
+    session.setAttribute(
+        ConnectedAppsConfirmRelayController.SESSION_KEY,
+        new HashMap<>(
+            Map.of("older", JsonMapper.builder().build().writeValueAsString(request(stale)))));
+    stubStaged(Instant.now());
+
+    step("load", session);
+
+    Map<?, ?> kept =
+        (Map<?, ?>) session.getAttribute(ConnectedAppsConfirmRelayController.SESSION_KEY);
+    assertThat(kept.keySet().stream().map(String::valueOf).toList()).containsExactly(HANDOFF);
+  }
+
+  /**
+   * Builds the change set the page hands to the backend for the stubbed handoff.
+   *
+   * @param stagedAt when the gateway staged it
+   * @return the request
+   */
+  private static @NotNull ConnectedAppMassChangeRequestDto request(@NotNull Instant stagedAt) {
+    return new ConnectedAppMassChangeRequestDto(
+        "versekit",
+        "key-1",
+        "blueprints",
+        "{\"ops\":[{\"op\":\"remove\",\"key\":\"k\"}]}",
+        stagedAt);
+  }
+
+  /**
+   * Stubs the gateway's staged change set for the test member.
+   *
+   * @param stagedAt when the gateway staged it, or {@code null} for a document without the time
+   */
+  private void stubStaged(@Nullable Instant stagedAt) {
     when(handoffService.consume(
             eq(SUB),
             eq(HANDOFF),
@@ -184,7 +254,8 @@ class ConnectedAppsConfirmControllerMvcTest {
                     "blueprints",
                     JsonMapper.builder()
                         .build()
-                        .readTree("{\"ops\":[{\"op\":\"remove\",\"key\":\"k\"}]}"))));
+                        .readTree("{\"ops\":[{\"op\":\"remove\",\"key\":\"k\"}]}"),
+                    stagedAt)));
   }
 
   private ResultActions step(@NotNull String step, @NotNull MockHttpSession session)

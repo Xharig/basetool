@@ -177,6 +177,7 @@ class ExchangeChangeRouteTest {
     when(stagingService.stageMassChange(eq(member), anyString(), anyLong()))
         .thenReturn(new HandoffStagingService.Staged("hid-1", "ingest:handoff:x:hid-1", 321L));
     double before = staged();
+    Instant start = Instant.now();
 
     post("/exchange/v1/me/blueprints/changes", ADD)
         .andExpect(status().isConflict())
@@ -194,6 +195,8 @@ class ExchangeChangeRouteTest {
         .isEqualTo("blueprints");
     assertThat(MAPPER.readTree(staged.getValue()).at("/changeSet/ops/0/op").stringValue())
         .isEqualTo("add");
+    assertThat(Instant.parse(MAPPER.readTree(staged.getValue()).get("stagedAt").stringValue()))
+        .isBetween(start, Instant.now());
     verify(budget)
         .record(eq("versekit"), eq(member), eq("ingest:handoff:x:hid-1"), eq(321L), any());
     assertThat(staged() - before).isEqualTo(1.0);

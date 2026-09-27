@@ -28,6 +28,9 @@ import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import de.greluc.krt.profit.basetool.frontend.service.IngestHandoffService;
 import de.greluc.krt.profit.basetool.frontend.support.CurrentUser;
 import jakarta.servlet.http.HttpSession;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -50,8 +53,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The confirmation page's requests (REQ-XCH-021, ADR-0110): the script consumes the handoff once,
- * the change set then waits in the member's server session, and the browser only ever names it by
- * its handoff id.
+ * the change set then waits in the member's server session until the staging lifetime counted from
+ * the gateway's staging runs out, and the browser only ever names it by its handoff id.
  */
 @Slf4j
 @RestController
@@ -63,6 +66,9 @@ public class ConnectedAppsConfirmRelayController {
   /** The session attribute holding the consumed change sets by handoff id. */
   static final String SESSION_KEY = "connectedApps.massChanges";
 
+  /** How long after the gateway staged a change set it can still be previewed or confirmed. */
+  static final Duration STAGING_LIFETIME = Duration.ofMinutes(30);
+
   /** The backend's mass-change endpoints. */
   private static final String BACKEND = "/api/v1/connected-apps/mass-changes/";
 
@@ -70,6 +76,7 @@ public class ConnectedAppsConfirmRelayController {
 
   private final IngestHandoffService handoffService;
   private final BackendApiClient backendApiClient;
+  private final Clock clock = Clock.systemUTC();
 
   /**
    * Consumes the staged change set, keeps it in the session and previews it.
@@ -77,8 +84,8 @@ public class ConnectedAppsConfirmRelayController {
    * @param ref the handoff id
    * @param principal the member
    * @param session the member's session
-   * @return the preview, {@code 404} when the handoff is unknown, expired or already consumed, or
-   *     the relayed backend error
+   * @return the preview, {@code 404} when the handoff is unknown, expired, already consumed or
+   *     carries no staging time, or the relayed backend error
    */
   @PostMapping(value = "/load", headers = "X-Requested-With=XMLHttpRequest")
   public ResponseEntity<Object> load(
@@ -91,7 +98,10 @@ public class ConnectedAppsConfirmRelayController {
             ref.handoffId(),
             HandoffKind.MASS_CHANGE,
             StagedMassChange.class);
-    if (staged.isEmpty() || staged.get().changeSet() == null) {
+    if (staged.isEmpty()
+        || staged.get().changeSet() == null
+        || staged.get().stagedAt() == null
+        || expired(staged.get().stagedAt())) {
       return ResponseEntity.notFound().build();
     }
     ConnectedAppMassChangeRequestDto request =
@@ -99,7 +109,8 @@ public class ConnectedAppsConfirmRelayController {
             staged.get().clientId(),
             staged.get().installationKey(),
             staged.get().resource(),
-            staged.get().changeSet().toString());
+            staged.get().changeSet().toString(),
+            staged.get().stagedAt());
     keep(session, ref.handoffId(), request);
     return relay(
         log,
@@ -111,12 +122,12 @@ public class ConnectedAppsConfirmRelayController {
   }
 
   /**
-   * Applies the change set kept for the handoff, once.
+   * Applies the change set kept for the handoff, once, while its staging lifetime lasts.
    *
    * @param ref the handoff id
    * @param session the member's session
-   * @return what was applied, {@code 404} when nothing is kept for the id, or the relayed backend
-   *     error
+   * @return what was applied, {@code 404} when nothing live is kept for the id, or the relayed
+   *     backend error
    */
   @PostMapping(value = "/apply", headers = "X-Requested-With=XMLHttpRequest")
   public ResponseEntity<Object> apply(
@@ -149,17 +160,24 @@ public class ConnectedAppsConfirmRelayController {
   }
 
   /**
-   * Keeps a consumed change set in the session.
+   * Keeps a consumed change set in the session and drops the kept ones whose lifetime ran out.
    *
    * @param session the session
    * @param handoffId the handoff id
    * @param request the change set
    */
-  private static void keep(
+  private void keep(
       @NotNull HttpSession session,
       @NotNull String handoffId,
       @NotNull ConnectedAppMassChangeRequestDto request) {
-    Map<String, String> kept = new HashMap<>(kept(session));
+    Map<String, String> kept = new HashMap<>();
+    kept(session)
+        .forEach(
+            (id, json) -> {
+              if (live(json) != null) {
+                kept.put(id, json);
+              }
+            });
     kept.put(handoffId, MAPPER.writeValueAsString(request));
     session.setAttribute(SESSION_KEY, kept);
   }
@@ -169,9 +187,9 @@ public class ConnectedAppsConfirmRelayController {
    *
    * @param session the session
    * @param handoffId the handoff id
-   * @return the change set, or {@code null} when none is kept for the id
+   * @return the change set, or {@code null} when none is kept for the id or its lifetime ran out
    */
-  private static @Nullable ConnectedAppMassChangeRequestDto take(
+  private @Nullable ConnectedAppMassChangeRequestDto take(
       @NotNull HttpSession session, @Nullable String handoffId) {
     if (handoffId == null) {
       return null;
@@ -179,14 +197,35 @@ public class ConnectedAppsConfirmRelayController {
     Map<String, String> kept = new HashMap<>(kept(session));
     String json = kept.remove(handoffId);
     session.setAttribute(SESSION_KEY, kept);
-    if (json == null) {
-      return null;
-    }
+    return json == null ? null : live(json);
+  }
+
+  /**
+   * Reads a kept change set if its staging lifetime still lasts.
+   *
+   * @param json the kept change set
+   * @return the change set, or {@code null} when it does not read or has expired
+   */
+  private @Nullable ConnectedAppMassChangeRequestDto live(@NotNull String json) {
     try {
-      return MAPPER.readValue(json, ConnectedAppMassChangeRequestDto.class);
+      ConnectedAppMassChangeRequestDto request =
+          MAPPER.readValue(json, ConnectedAppMassChangeRequestDto.class);
+      return request == null || request.stagedAt() == null || expired(request.stagedAt())
+          ? null
+          : request;
     } catch (JacksonException ignored) {
       return null;
     }
+  }
+
+  /**
+   * Whether a change set staged at the given time is past its staging lifetime.
+   *
+   * @param stagedAt when the gateway staged it
+   * @return whether it can no longer be previewed or confirmed
+   */
+  private boolean expired(@NotNull Instant stagedAt) {
+    return !stagedAt.plus(STAGING_LIFETIME).isAfter(clock.instant());
   }
 
   /**
@@ -216,10 +255,12 @@ public class ConnectedAppsConfirmRelayController {
    * @param installationKey the installation that sent it
    * @param resource {@code blueprints}, {@code stock} or {@code ships}
    * @param changeSet the change set as the client sent it
+   * @param stagedAt when the gateway staged it
    */
   public record StagedMassChange(
       @Nullable String clientId,
       @Nullable String installationKey,
       @Nullable String resource,
-      @Nullable JsonNode changeSet) {}
+      @Nullable JsonNode changeSet,
+      @Nullable Instant stagedAt) {}
 }
