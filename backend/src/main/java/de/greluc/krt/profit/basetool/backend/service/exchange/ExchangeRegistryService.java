@@ -74,6 +74,9 @@ public class ExchangeRegistryService {
   /** Counts each client's live installations for the admin page. */
   private final ExchangeInstallationRepository installationRepository;
 
+  /** The Basetool's own client ids, which the registry refuses. */
+  private final FirstPartyClientIds firstPartyClientIds;
+
   /**
    * Registers {@code basetool_exchange_registry_changes_total} for every action at zero, so the
    * first change of each kind shows up as an increase.
@@ -142,20 +145,25 @@ public class ExchangeRegistryService {
    * @param request the new client
    * @return the saved client
    * @throws DuplicateEntityException when the client id is already registered
-   * @throws BadRequestException when {@code exchange.connect} is missing
+   * @throws BadRequestException when {@code exchange.connect} is missing, the client id is one of
+   *     the Basetool's own, or the display name breaks {@link ExchangeDisplayNames}
    */
   @NotNull
   @Transactional
   public ExchangeClient createClient(@NotNull ExchangeClientCreateRequest request) {
     mirrorSync.lockSettings();
     requireConnect(request.capabilities());
+    if (firstPartyClientIds.contains(request.clientId())) {
+      throw new BadRequestException("error.exchange.client.reserved");
+    }
+    String displayName = requireDisplayName(request.displayName());
     if (clientRepository.existsByClientId(request.clientId())) {
       throw new DuplicateEntityException("error.exchange.client.taken");
     }
     final ExchangeRegistrySnapshot before = mirrorSync.load();
     ExchangeClient client = new ExchangeClient();
     client.setClientId(request.clientId());
-    client.setDisplayName(request.displayName().strip());
+    client.setDisplayName(displayName);
     client.setStatus(ExchangeClientStatus.ACTIVE);
     client.setCapabilities(EnumSet.copyOf(request.capabilities()));
     client.setMinClientVersion(blankToNull(request.minClientVersion()));
@@ -180,7 +188,8 @@ public class ExchangeRegistryService {
    * @param id the registry id
    * @param request the new values and the version last seen
    * @return the saved client
-   * @throws BadRequestException when {@code exchange.connect} is missing
+   * @throws BadRequestException when {@code exchange.connect} is missing or the display name breaks
+   *     {@link ExchangeDisplayNames}
    */
   @NotNull
   @Transactional
@@ -188,6 +197,7 @@ public class ExchangeRegistryService {
       @NotNull UUID id, @NotNull ExchangeClientUpdateRequest request) {
     mirrorSync.lockSettings();
     requireConnect(request.capabilities());
+    String displayName = requireDisplayName(request.displayName());
     ExchangeClient client = getClient(id);
     OptimisticLock.check(client.getVersion(), request.version(), ExchangeClient.class, id);
     final ExchangeRegistrySnapshot before = mirrorSync.load();
@@ -195,7 +205,6 @@ public class ExchangeRegistryService {
     oldCapabilities.addAll(client.getCapabilities());
     Set<ExchangeCapability> newCapabilities = EnumSet.copyOf(request.capabilities());
     List<String> changed = new ArrayList<>();
-    String displayName = request.displayName().strip();
     if (!displayName.equals(client.getDisplayName())) {
       client.setDisplayName(displayName);
       changed.add("displayName");
@@ -362,6 +371,23 @@ public class ExchangeRegistryService {
     if (!capabilities.contains(ExchangeCapability.CONNECT)) {
       throw new BadRequestException("error.exchange.client.connectRequired");
     }
+  }
+
+  /**
+   * Strips a display name and refuses one that breaks {@link ExchangeDisplayNames}.
+   *
+   * @param displayName the requested name
+   * @return the stripped name
+   * @throws BadRequestException naming the broken rule
+   */
+  private static @NotNull String requireDisplayName(@NotNull String displayName) {
+    String stripped = displayName.strip();
+    ExchangeDisplayNames.violation(stripped)
+        .ifPresent(
+            key -> {
+              throw new BadRequestException(key);
+            });
+    return stripped;
   }
 
   /**

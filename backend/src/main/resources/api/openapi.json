@@ -61256,12 +61256,14 @@
           "requestsPerMinute" : {
             "type" : "integer",
             "format" : "int32",
-            "exclusiveMinimum" : 0
+            "exclusiveMinimum" : 0,
+            "maximum" : 1200
           },
           "writesPerDay" : {
             "type" : "integer",
             "format" : "int32",
-            "exclusiveMinimum" : 0
+            "exclusiveMinimum" : 0,
+            "maximum" : 5000
           }
         },
         "required" : [ "capabilities", "clientId", "displayName" ]
@@ -61360,7 +61362,8 @@
           "requestsPerMinute" : {
             "type" : "integer",
             "format" : "int32",
-            "exclusiveMinimum" : 0
+            "exclusiveMinimum" : 0,
+            "maximum" : 1200
           },
           "version" : {
             "type" : "integer",
@@ -61370,7 +61373,8 @@
           "writesPerDay" : {
             "type" : "integer",
             "format" : "int32",
-            "exclusiveMinimum" : 0
+            "exclusiveMinimum" : 0,
+            "maximum" : 5000
           }
         },
         "required" : [ "capabilities", "displayName", "version" ]

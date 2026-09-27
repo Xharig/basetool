@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.model.dto;
 
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -34,13 +35,15 @@ import org.hibernate.validator.constraints.URL;
  * Replaces a registry client's editable fields (REQ-XCH-003); the client id and the status are
  * changed elsewhere, and a stale {@code version} yields 409.
  *
- * @param displayName the product name
+ * @param displayName the product name, under the same rules as on registration
  * @param capabilities the capabilities to grant, including {@code exchange.connect}
  * @param minClientVersion the oldest served release, or {@code null}
  * @param contactUrl an {@code https} URL of the privacy statement and security contact, or {@code
  *     null}
- * @param requestsPerMinute the per-minute limit override, or {@code null}
- * @param writesPerDay the daily write quota override, or {@code null}
+ * @param requestsPerMinute the per-minute limit override, at most {@value
+ *     ExchangeClientCreateRequest#MAX_REQUESTS_PER_MINUTE}, or {@code null}
+ * @param writesPerDay the daily write quota override, at most {@value
+ *     ExchangeClientCreateRequest#MAX_WRITES_PER_DAY}, or {@code null}
  * @param version the optimistic-lock version the admin last saw
  */
 public record ExchangeClientUpdateRequest(
@@ -49,6 +52,14 @@ public record ExchangeClientUpdateRequest(
     @Size(max = 32) @Pattern(regexp = ExchangeClientCreateRequest.VERSION_PATTERN)
         String minClientVersion,
     @Size(max = 500) @URL(protocol = "https") String contactUrl,
-    @Positive Integer requestsPerMinute,
-    @Positive Integer writesPerDay,
+    @Positive
+        @Max(
+            value = ExchangeClientCreateRequest.MAX_REQUESTS_PER_MINUTE,
+            message = "{error.exchange.client.requestsPerMinuteMax}")
+        Integer requestsPerMinute,
+    @Positive
+        @Max(
+            value = ExchangeClientCreateRequest.MAX_WRITES_PER_DAY,
+            message = "{error.exchange.client.writesPerDayMax}")
+        Integer writesPerDay,
     @NotNull @Min(0) Long version) {}

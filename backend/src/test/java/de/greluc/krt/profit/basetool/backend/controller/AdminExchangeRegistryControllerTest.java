@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.backend.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -154,6 +155,97 @@ class AdminExchangeRegistryControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(VALID.replace("exchange.blueprints.read", "exchange.everything")))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void aFirstPartyClientIdIsRefused() throws Exception {
+    for (String firstParty :
+        new String[] {"basetool-frontend", "basetool-android", "test-client"}) {
+      mockMvc
+          .perform(
+              post(CLIENTS)
+                  .with(admin())
+                  .header("Accept-Language", "en")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(VALID.replace("\"versekit\"", "\"" + firstParty + "\"")))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.detail").value(containsString("Basetool's own software")));
+    }
+  }
+
+  @Test
+  void aDisplayNameWithBidiControlsOrPosingAsTheBasetoolIsRefused() throws Exception {
+    mockMvc
+        .perform(
+            post(CLIENTS)
+                .with(admin())
+                .header("Accept-Language", "en")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID.replace("\"VerseKit\"", "\"Verse\\u202eKit\"")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value(containsString("Latin letters")));
+    mockMvc
+        .perform(
+            post(CLIENTS)
+                .with(admin())
+                .header("Accept-Language", "de")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID.replace("\"VerseKit\"", "\"Profit Basetool\"")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value(containsString("nicht als das Basetool")));
+  }
+
+  @Test
+  void anEditCannotRenameAClientIntoTheBasetool() throws Exception {
+    String created =
+        mockMvc
+            .perform(
+                post(CLIENTS).with(admin()).contentType(MediaType.APPLICATION_JSON).content(VALID))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String id = JsonPath.read(created, "$.id");
+    Number version = JsonPath.read(created, "$.version");
+
+    mockMvc
+        .perform(
+            put(CLIENTS + "/" + id)
+                .with(admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"displayName\":\"Base-Tool Sync\",\"capabilities\":[\"exchange.connect\"],"
+                        + "\"version\":"
+                        + version
+                        + "}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void limitOverridesAboveTheirBoundsAreRefused() throws Exception {
+    String withLimits = VALID.replace("\"minClientVersion\"", "%s,\"minClientVersion\"");
+    mockMvc
+        .perform(
+            post(CLIENTS)
+                .with(admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(withLimits.formatted("\"requestsPerMinute\":1201")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.requestsPerMinute").exists());
+    mockMvc
+        .perform(
+            post(CLIENTS)
+                .with(admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(withLimits.formatted("\"writesPerDay\":5001")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.writesPerDay").exists());
+    mockMvc
+        .perform(
+            post(CLIENTS)
+                .with(admin())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(withLimits.formatted("\"requestsPerMinute\":1200,\"writesPerDay\":5000")))
+        .andExpect(status().isCreated());
   }
 
   @Test
