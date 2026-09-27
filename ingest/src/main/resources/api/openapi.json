@@ -209,7 +209,7 @@
           "kind" : {
             "type" : "string",
             "description" : "Which draft was staged; selects the frontend pre-fill surface.",
-            "enum" : [ "REFINERY", "BLUEPRINT" ]
+            "enum" : [ "REFINERY", "BLUEPRINT", "MASS_CHANGE" ]
           }
         }
       },

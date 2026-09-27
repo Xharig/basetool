@@ -20,12 +20,22 @@
 package de.greluc.krt.profit.basetool.ingest.web;
 
 import de.greluc.krt.profit.basetool.ingest.config.ExchangeGatewayProperties;
+import de.greluc.krt.profit.basetool.ingest.config.ExchangeStoreProperties;
+import de.greluc.krt.profit.basetool.ingest.config.IngestProperties;
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeBudget;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRelay;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRequestContext;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeSchemas;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeUnavailableException;
+import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.swagger.v3.oas.annotations.Hidden;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -34,6 +44,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -83,6 +94,18 @@ public class ExchangeController {
   /** The code of a cursor the server can no longer serve. */
   static final String CURSOR_EXPIRED = "CURSOR_EXPIRED";
 
+  /** The code of a change set above the contract's size. */
+  static final String BATCH_TOO_LARGE = "BATCH_TOO_LARGE";
+
+  /** The code of a change set the mass-change guard held back for the member's confirmation. */
+  static final String MASS_CHANGE_CONFIRMATION_REQUIRED = "MASS_CHANGE_CONFIRMATION_REQUIRED";
+
+  /** The frontend page where the member confirms a staged mass change. */
+  static final String CONFIRMATION_PATH = "/connected-apps/confirm";
+
+  /** Seconds a client waits after the budget or the staging store refused. */
+  private static final String RETRY_AFTER_SECONDS = "60";
+
   private static final String BACKEND = "/api/v1/exchange";
 
   private static final Pattern CURSOR = Pattern.compile("^[A-Za-z0-9._:-]{1,128}$");
@@ -94,6 +117,20 @@ public class ExchangeController {
   private final ExchangeGatewayProperties properties;
   private final ObjectMapper objectMapper;
   private final LoggingProperties loggingProperties;
+  private final HandoffStagingService stagingService;
+  private final ExchangeBudget budget;
+  private final ExchangeStoreProperties storeProperties;
+  private final IngestProperties ingestProperties;
+  private final MeterRegistry meterRegistry;
+
+  /** Registers the staged mass-change counter at zero. */
+  @PostConstruct
+  void registerCounters() {
+    meterRegistry.counter(
+        MetricNames.EXCHANGE_MASS_CHANGES_STAGED,
+        MetricNames.TAG_CLIENT_ID,
+        MetricNames.EXCHANGE_CLIENT_NONE);
+  }
 
   /**
    * Returns the service document: what this token may do and what the server expects.
@@ -299,6 +336,219 @@ public class ExchangeController {
           String acceptLanguage) {
     return page(
         "/me/ships", "page.schema.json#/$defs/shipPage", cursor, limit, request, acceptLanguage);
+  }
+
+  /**
+   * Returns the anonymised open demand of the units the member belongs to.
+   *
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the demand or a problem
+   */
+  @GetMapping("/me/org-demand")
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> orgDemand(
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    ExchangeRequestContext context = ExchangeRequestContext.of(request);
+    if (context == null) {
+      return failed();
+    }
+    return relayed(
+        relay.forward(HttpMethod.GET, BACKEND + "/me/org-demand", null, context, acceptLanguage),
+        "org-demand.schema.json",
+        List.of());
+  }
+
+  /**
+   * Adds or removes blueprints.
+   *
+   * @param body the change set
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the change result or a problem
+   */
+  @PostMapping(value = "/me/blueprints/changes", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> blueprintChanges(
+      @NotNull @RequestBody JsonNode body,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return changes("blueprints", "blueprintChangeSet", body, request, acceptLanguage);
+  }
+
+  /**
+   * Sets the quantities of stock lots.
+   *
+   * @param body the change set
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the change result or a problem
+   */
+  @PostMapping(value = "/me/stock/changes", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> stockChanges(
+      @NotNull @RequestBody JsonNode body,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return changes("stock", "stockChangeSet", body, request, acceptLanguage);
+  }
+
+  /**
+   * Links, creates, updates or removes ships.
+   *
+   * @param body the change set
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the change result or a problem
+   */
+  @PostMapping(value = "/me/ships/changes", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> shipChanges(
+      @NotNull @RequestBody JsonNode body,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return changes("ships", "shipChangeSet", body, request, acceptLanguage);
+  }
+
+  /**
+   * Checks a change set, relays it and checks the answer; a change set the backend's mass-change
+   * guard held back is staged for the member's confirmation.
+   *
+   * @param resource the resource's path segment
+   * @param definition the change set's schema definition
+   * @param body the change set
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the change result or a problem
+   */
+  private @NotNull ResponseEntity<?> changes(
+      @NotNull String resource,
+      @NotNull String definition,
+      @NotNull JsonNode body,
+      @NotNull HttpServletRequest request,
+      @Nullable String acceptLanguage) {
+    ExchangeRequestContext context = ExchangeRequestContext.of(request);
+    if (context == null) {
+      return failed();
+    }
+    if (body.get("ops") instanceof ArrayNode ops && ops.size() > BATCH_MAX_OPS) {
+      return problem(
+          HttpStatus.CONTENT_TOO_LARGE.value(),
+          BATCH_TOO_LARGE,
+          "A change set holds at most " + BATCH_MAX_OPS + " ops.");
+    }
+    String schema = "change-set.schema.json#/$defs/" + definition;
+    List<ExchangeSchemas.Violation> violations = schemas.validate(schema, body);
+    if (!violations.isEmpty()) {
+      return schemaInvalid(violations);
+    }
+    List<String> unknown = schemas.unknownFields(schema, body);
+    ExchangeRelay.Result result =
+        relay.forward(
+            HttpMethod.POST,
+            BACKEND + "/me/" + resource + "/changes",
+            body,
+            context,
+            acceptLanguage);
+    if (!result.isOk() && MASS_CHANGE_CONFIRMATION_REQUIRED.equals(result.code())) {
+      return staged(context, resource, body, result);
+    }
+    return relayed(result, "change-result.schema.json", unknown);
+  }
+
+  /**
+   * Stages a change set the mass-change guard held back and answers where the member confirms it.
+   *
+   * @param context the admitted request
+   * @param resource the resource's path segment
+   * @param body the change set
+   * @param result the backend's refusal
+   * @return {@code 409 MASS_CHANGE_CONFIRMATION_REQUIRED} with the {@code confirmationUrl}, or a
+   *     problem when the change set cannot be staged
+   */
+  private @NotNull ResponseEntity<?> staged(
+      @NotNull ExchangeRequestContext context,
+      @NotNull String resource,
+      @NotNull JsonNode body,
+      @NotNull ExchangeRelay.Result result) {
+    ObjectNode document = objectMapper.createObjectNode();
+    document.put("clientId", context.clientId());
+    document.put("installationKey", context.keyThumbprint());
+    document.put("resource", resource);
+    document.set("changeSet", body);
+    String json = objectMapper.writeValueAsString(document);
+    long bytes = json.getBytes(StandardCharsets.UTF_8).length;
+    if (bytes > storeProperties.maxMassChangeBytes()) {
+      return problem(
+          HttpStatus.CONTENT_TOO_LARGE.value(),
+          BATCH_TOO_LARGE,
+          "The change set is too large to hold for confirmation; send smaller batches.");
+    }
+    HandoffStagingService.Staged staged;
+    try {
+      if (!budget.fits(context.clientId(), context.member(), bytes)) {
+        return unavailable(
+            ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
+            "The exchange's storage budget is full; try again later.");
+      }
+      staged =
+          stagingService.stageMassChange(
+              context.member(), json, storeProperties.maxMassChangeBytes());
+      budget.record(
+          context.clientId(),
+          context.member(),
+          staged.key(),
+          staged.bytes(),
+          ingestProperties.handoffTtl());
+    } catch (ExchangeUnavailableException | RedisSystemException e) {
+      log.warn("A mass change could not be staged: {}", e.getClass().getSimpleName());
+      return unavailable(
+          ExchangeRefusals.SERVICE_UNAVAILABLE,
+          "The confirmation cannot be prepared; try again later.");
+    }
+    meterRegistry
+        .counter(
+            MetricNames.EXCHANGE_MASS_CHANGES_STAGED, MetricNames.TAG_CLIENT_ID, context.clientId())
+        .increment();
+    ProblemDetail problem =
+        Problems.of(
+            loggingProperties,
+            HttpStatus.CONFLICT,
+            HttpStatus.CONFLICT.getReasonPhrase(),
+            MASS_CHANGE_CONFIRMATION_REQUIRED,
+            result.detail());
+    problem.setProperty(
+        "confirmationUrl",
+        ingestProperties.frontendBaseUrl() + CONFIRMATION_PATH + "?handoff=" + staged.handoffId());
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        .body(problem);
+  }
+
+  /**
+   * Answers that a store the exchange needs is full or unreachable.
+   *
+   * @param code the code
+   * @param detail the detail
+   * @return {@code 503} with {@code Retry-After}
+   */
+  private @NotNull ResponseEntity<?> unavailable(@NotNull String code, @NotNull String detail) {
+    ProblemDetail problem =
+        Problems.of(
+            loggingProperties,
+            HttpStatus.SERVICE_UNAVAILABLE,
+            HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase(),
+            code,
+            detail);
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS)
+        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        .body(problem);
   }
 
   /**

@@ -178,6 +178,14 @@ public final class MetricNames {
   public static final String EXCHANGE_RELAY = "basetool.ingest.exchange.relay";
 
   /**
+   * Counter {@code basetool_ingest_exchange_mass_changes_staged_total{client_id}}: change sets the
+   * backend's mass-change guard held back and the gateway staged for the member's confirmation, by
+   * registry client (REQ-XCH-021).
+   */
+  public static final String EXCHANGE_MASS_CHANGES_STAGED =
+      "basetool.ingest.exchange.mass.changes.staged";
+
+  /**
    * {@link #TAG_CLIENT_ID} value on the exchange counters before a token names a client, and on the
    * zero registrations.
    */
