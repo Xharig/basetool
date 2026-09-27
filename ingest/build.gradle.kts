@@ -30,6 +30,9 @@ dependencies {
   implementation("org.springframework.boot:spring-boot-starter-data-redis")
   implementation(libs.resilience4j.spring.boot3)
   implementation(libs.bucket4j.core)
+  implementation(libs.json.schema.validator) {
+    exclude(group = "tools.jackson.dataformat", module = "jackson-dataformat-yaml")
+  }
   implementation(libs.springdoc.openapi.starter.webmvc.api)
   implementation(libs.logstash.logback.encoder)
   implementation(project(":logging-support"))
@@ -47,7 +50,6 @@ dependencies {
   testImplementation(libs.okhttp3.tls)
   testImplementation(libs.testcontainers.junit)
   testImplementation(libs.archunit.core)
-  testImplementation(libs.json.schema.validator)
   testImplementation(project(":test-support"))
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
