@@ -22,7 +22,7 @@ entry:
 | `scGuid` | The game entity GUID. |
 | `uexId` | The UEX id. |
 | `locKey` | The `global.ini` name key without its `@`, case-insensitive. |
-| `name` + `nameLocale` | The name as the game shows it; `nameLocale` defaults to English. |
+| `name` + `nameLocale` | The name as the game shows it. `nameLocale` is accepted; names are matched regardless of it, so prefer `locKey` for a non-English name. |
 
 When no field resolves to exactly one entry, the first that resolved to several decides: the answer
 is `ambiguous` with at most ten candidates `{bt, name}`. Fuzzy suggestions are always `ambiguous`,
@@ -36,7 +36,8 @@ name and adds a `LOC_KEY_UNRESOLVED` warning at `/refs/<i>/locKey`.
 ## Quantity — `quantity`
 
 `{amount, unit}`. `unit` is `SCU` or `PIECE` and must match the material's own unit
-(`UNIT_MISMATCH` otherwise). An SCU amount carries at most three decimals; a PIECE amount is whole.
+(`UNIT_MISMATCH` otherwise). The server rounds an SCU amount half-up to three decimals; a PIECE
+amount is whole.
 
 ## Quality — `quality`
 

@@ -84,7 +84,9 @@ public class ExchangeRelay {
           "VALIDATION_FAILED",
           "SCHEMA_INVALID",
           "BAD_REQUEST",
-          "SCHEMA_INVALID");
+          "SCHEMA_INVALID",
+          "OPTIMISTIC_LOCK",
+          "VERSION_CONFLICT");
 
   /** Backend codes the exchange contract names and a client may see as they are. */
   static final Set<String> PASSED_THROUGH =
