@@ -76,6 +76,7 @@ class InventoryStockMergeTest {
   @Mock private MaterialExchangeOfferRepository materialExchangeOfferRepository;
   @Mock private InventoryItemMapper inventoryItemMapper;
   @Mock private OwnerScopeService ownerScopeService;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private AuditService auditService;
   @InjectMocks private InventoryCheckoutService service;
 
