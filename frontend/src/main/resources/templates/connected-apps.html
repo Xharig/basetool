@@ -41,6 +41,9 @@
                 <p class="text-danger" th:text="#{${error}}">Fehler beim Laden.</p>
             </div>
 
+            <div class="alert alert-warning mt-2" role="status" id="ca-unseen-notice" th:if="${anyUnseen}"
+                 th:text="#{connectedApps.unseen.notice}">Neue Verbindung.</div>
+
             <div class="hud-box mt-2" th:if="${error == null and #lists.isEmpty(apps)}" id="ca-empty">
                 <p th:text="#{connectedApps.empty}">Du hast noch keine Anwendung verbunden.</p>
             </div>
@@ -82,7 +85,10 @@
                             </td>
                             <td th:text="${inst.firstSeenAt != null} ? #{connectedApps.utc(${#temporals.format(inst.firstSeenAt, 'dd.MM.yyyy HH:mm', 'UTC')})} : '–'">27.09.2026 08:00 UTC</td>
                             <td th:text="${inst.lastSeenAt != null} ? #{connectedApps.utc(${#temporals.format(inst.lastSeenAt, 'dd.MM.yyyy HH:mm', 'UTC')})} : '–'">27.09.2026 09:00 UTC</td>
-                            <td>
+                            <td class="ca-row-actions">
+                                <button type="button" class="btn btn-ghost" th:if="${inst.unseen}" data-ca-mark-seen
+                                        data-testid="ca-mark-seen" th:title="#{connectedApps.installation.markSeen.title}"
+                                        th:text="#{connectedApps.installation.markSeen}">Gesehen</button>
                                 <button type="button" class="btn btn-quiet-danger" data-ca-disconnect-installation
                                         th:text="#{connectedApps.disconnectInstallation}">Trennen</button>
                             </td>

@@ -137,19 +137,26 @@
         });
     }
 
-    /** Reports the highlighted new connections as seen; the highlight stays until the next load. */
-    function markSeen() {
-        if (!window.krtFetch || !host || !host.querySelector('[data-ca-unseen]')) {
+    /**
+     * Reports one new installation as seen after the member acknowledged it, then re-renders the list.
+     * @param {string} id
+     * @param {Element} submitter
+     */
+    function markSeen(id, submitter) {
+        if (!window.krtFetch) {
             return;
         }
         window.krtFetch.write({
             method: 'POST',
-            url: BASE + '/seen',
+            url: BASE + '/installations/' + encodeURIComponent(id) + '/seen',
             toast: false,
             errorMessage: i18n.error,
+            submitter,
+            onSuccess() {
+                return refreshApps();
+            },
         });
     }
-    markSeen();
 
     /** Re-renders the list in place from the `apps` fragment. */
     function refreshApps() {
@@ -222,6 +229,15 @@
                     BASE + '/' + encodeURIComponent(clientId),
                     clientBtn,
                 );
+            }
+            return;
+        }
+        const seenBtn = target.closest('[data-ca-mark-seen]');
+        if (seenBtn) {
+            const row = seenBtn.closest('[data-installation-id]');
+            const id = row ? row.getAttribute('data-installation-id') : null;
+            if (id) {
+                markSeen(id, seenBtn);
             }
             return;
         }

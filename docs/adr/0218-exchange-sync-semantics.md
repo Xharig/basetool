@@ -84,3 +84,14 @@ visible, bounded and reversible.
 - **Protect the offered amount from a sync book-out.** Recommended, rejected by the owner: the
   exchange follows the web.
 - **Infer deletes from an absent entry.** Rejected: an incomplete client snapshot would wipe data.
+
+## Amendment — 2026-09-27: the ship rule stays per operation
+
+The second security review of the go-live (#2092, L2) found that the ship half of decision 6 never
+compares a ship with its state when the window opened, as the stock rule compares a lot: a batch
+that retypes every ship, or clears every name and location, counts no removal. Offered: count an
+`upsert` that changes the type, or clears the name, against the ship's first journal state in the
+window. **Owner decision: the rule stays as decided** — a ship counts as removed only by `remove`
+and by one `upsert` that changes both name and type — and the gap is an accepted risk, recorded in
+REQ-XCH-021, the spec's threat model and arc42 §11.7a. The journal records every such write and the
+member's undo restores it.

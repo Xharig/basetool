@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -85,6 +86,8 @@ class ConnectedAppsControllerTest {
   private static final String PATH = "/api/v1/connected-apps";
   private static final UUID MEMBER = UUID.fromString("44444444-4444-4444-4444-4444444440c1");
   private static final UUID OTHER = UUID.fromString("44444444-4444-4444-4444-4444444440c2");
+  private static final String DESKTOP_UNSEEN = "$[0].installations[?(@.label == 'Desktop')].unseen";
+  private static final String LAPTOP_UNSEEN = "$[0].installations[?(@.label == 'Laptop')].unseen";
 
   @Autowired private WebApplicationContext context;
   @Autowired private UserRepository userRepository;
@@ -160,19 +163,29 @@ class ConnectedAppsControllerTest {
   }
 
   @Test
-  void aNewInstallationStaysUnseenUntilTheMemberMarksItSeen() throws Exception {
+  void aNewInstallationStaysUnseenUntilTheMemberMarksThatInstallationSeen() throws Exception {
+    ExchangeInstallation second =
+        installation(userRepository.findById(MEMBER).orElseThrow(), "n".repeat(43), "Laptop");
     notificationRepository.saveAndFlush(connected(MEMBER, mine.getId()));
+    notificationRepository.saveAndFlush(connected(MEMBER, second.getId()));
     Notification others = notificationRepository.saveAndFlush(connected(OTHER, theirs.getId()));
 
     mockMvc
         .perform(get(PATH).with(browser(MEMBER)))
-        .andExpect(jsonPath("$[0].installations[0].unseen").value(true));
+        .andExpect(jsonPath(DESKTOP_UNSEEN).value(contains(true)))
+        .andExpect(jsonPath(LAPTOP_UNSEEN).value(contains(true)));
 
-    mockMvc.perform(post(PATH + "/seen").with(browser(MEMBER))).andExpect(status().isNoContent());
+    mockMvc
+        .perform(post(PATH + "/installations/" + mine.getId() + "/seen").with(browser(MEMBER)))
+        .andExpect(status().isNoContent());
+    mockMvc
+        .perform(post(PATH + "/installations/" + theirs.getId() + "/seen").with(browser(MEMBER)))
+        .andExpect(status().isNoContent());
 
     mockMvc
         .perform(get(PATH).with(browser(MEMBER)))
-        .andExpect(jsonPath("$[0].installations[0].unseen").value(false));
+        .andExpect(jsonPath(DESKTOP_UNSEEN).value(contains(false)))
+        .andExpect(jsonPath(LAPTOP_UNSEEN).value(contains(true)));
     assertThat(notificationRepository.findById(others.getId()).orElseThrow().isRead())
         .as("marking seen touches only the caller's own notifications")
         .isFalse();

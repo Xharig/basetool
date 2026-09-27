@@ -28,6 +28,9 @@
         font-size: 0.8em;
         text-transform: uppercase;
     }
+    .ca-row-actions .btn {
+        margin: 0.125rem 0.5rem 0.125rem 0;
+    }
     .ca-undone td {
         opacity: 0.6;
     }

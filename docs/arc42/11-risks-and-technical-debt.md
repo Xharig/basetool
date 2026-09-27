@@ -263,7 +263,10 @@ and its global switch stays off until the go-live; the risks hold from then on.
   not prevention: the „Verbundene Anwendungen" audit area, the `ExchangeRegistryChanged` alert on
   every registry change, the journal and the member's undo, and suspending the client (ADR-0217).
 - **Unsigned client releases.** Code signing is recommended, not required.
-- **Device-code phishing** is countered, not prevented (RFC 8628 §5.4).
+- **Device-code phishing** is countered, not prevented (RFC 8628 §5.4). The counter is partial
+  until the consent page carries the warning and the user code: an attacker's
+  `verification_uri_complete` link skips the device page that warns (security review 2 of #2092,
+  M1; REQ-XCH-005).
 - **A sync book-out can lower or remove Materialbörse offers**, as a web book-out does, and undo
   does not restore them. The change result reports `offersReduced` / `offersRemoved` and each
   offer change is audited (REQ-XCH-016, -022).
@@ -273,6 +276,16 @@ and its global switch stays off until the go-live; the risks hold from then on.
   each detachment is audited as `MISSION_UNIT_UPDATED` (REQ-XCH-017, -022).
 - **The minimum-version gate is cooperative.** It reads the `User-Agent`, so it stops honest old
   releases, never a client that lies about its version (REQ-XCH-024).
+- **The org demand feed has no low-count suppression.** A unit's single open order is recognisable
+  to anyone who knows the unit; the member could read the same order in the web, and a client may
+  cache the feed for 7 days (REQ-XCH-018, ADR-0220).
+- **Overwriting ship updates pass the mass-change guard.** A ship counts as removed only when one
+  `upsert` changes both its name and its type; nothing compares it with its state at window start,
+  as the stock rule does. A batch that retypes every ship or clears their names and locations is
+  not held back; the journal records it and the member's undo restores it. Accepted by the owner
+  on 2026-09-27 rather than extending the rule (security review 2 of #2092, L2; REQ-XCH-021).
+- **Undo is per member.** A malicious release that changes many members' data has to be undone by
+  each member on their own page. Being addressed: an admin bulk undo is being built.
 
 ## 11.8 Smaller, known, and deliberately left
 
