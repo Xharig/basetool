@@ -153,6 +153,10 @@ public final class HandleErasureCoverage {
               "exchange_installation.label",
               "The member's exchange installations cascade away with the account."),
           removed(
+              "exchange_journal.before_state",
+              "The member's exchange write journal cascades away with the account."),
+          removed("exchange_journal.after_state", "See exchange_journal.before_state."),
+          removed(
               "inventory_item.note",
               "The departing member's warehouse rows are purged, with the job-order and mission"
                   + " allocations the database cascades off them."),
