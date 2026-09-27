@@ -222,6 +222,77 @@ class ExchangeGateTest {
   }
 
   @Test
+  void aTokenRefreshedAfterTheDisconnectFromAnOldSignInIsRefused() throws Exception {
+    long revokedAt = issuedAt.getEpochSecond() - 30;
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(revokedAt);
+    token(
+        "exchange.connect exchange.stock.read",
+        issuedAt,
+        Instant.ofEpochSecond(revokedAt).minusSeconds(3600));
+
+    call(HttpMethod.GET, STOCK)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+  }
+
+  @Test
+  void aNewSignInAfterTheDisconnectIsAdmitted() throws Exception {
+    long revokedAt = issuedAt.getEpochSecond() - 30;
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(revokedAt);
+    token(
+        "exchange.connect exchange.stock.read",
+        issuedAt,
+        Instant.ofEpochSecond(revokedAt).plusSeconds(5));
+
+    call(HttpMethod.GET, STOCK).andExpect(status().isOk());
+  }
+
+  @Test
+  void aSignInInTheSecondOfTheDisconnectIsRefused() throws Exception {
+    long revokedAt = issuedAt.getEpochSecond() - 30;
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(revokedAt);
+    token("exchange.connect exchange.stock.read", issuedAt, Instant.ofEpochSecond(revokedAt));
+
+    call(HttpMethod.GET, STOCK)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+  }
+
+  @Test
+  void anOnlineTokenWithoutAuthTimeIsRefusedOnceTheClientWasDisconnected() throws Exception {
+    token("exchange.connect exchange.stock.read", issuedAt, null);
+
+    call(HttpMethod.GET, STOCK).andExpect(status().isOk());
+
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(issuedAt.getEpochSecond() - 30);
+    call(HttpMethod.GET, STOCK)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+  }
+
+  @Test
+  void anOfflineTokenIssuedAfterTheDisconnectIsAdmittedWhateverItsSignIn() throws Exception {
+    long revokedAt = issuedAt.getEpochSecond() - 30;
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(revokedAt);
+    token(
+        "exchange.connect exchange.stock.read offline_access",
+        issuedAt,
+        Instant.ofEpochSecond(revokedAt).minusSeconds(3600));
+
+    call(HttpMethod.GET, STOCK).andExpect(status().isOk());
+  }
+
+  @Test
+  void anOfflineTokenIssuedBeforeTheDisconnectIsRefused() throws Exception {
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(issuedAt.getEpochSecond());
+    token("exchange.connect exchange.stock.read offline_access", issuedAt, issuedAt);
+
+    call(HttpMethod.GET, STOCK)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+  }
+
+  @Test
   void aCapabilityMissingFromTheTokenIsRefused() throws Exception {
     tokenScopes("exchange.connect");
     registry(true, true, Set.of("exchange.connect", "exchange.blueprints.write"), null);
@@ -297,6 +368,20 @@ class ExchangeGateTest {
         .thenReturn(
             ExchangeTestSupport.token(
                 TOKEN, "basetool-ingest", thumbprint, member, scopes, issuedAt));
+  }
+
+  /**
+   * Stubs the decoded token with the given scopes, issue time and sign-in time.
+   *
+   * @param scopes the space-separated scopes
+   * @param issued the issue time
+   * @param authTime the sign-in's time, or {@code null} for no {@code auth_time} claim
+   */
+  private void token(@NotNull String scopes, @NotNull Instant issued, @Nullable Instant authTime) {
+    when(jwtDecoder.decode(TOKEN))
+        .thenReturn(
+            ExchangeTestSupport.token(
+                TOKEN, "basetool-ingest", thumbprint, member, scopes, issued, authTime));
   }
 
   /**

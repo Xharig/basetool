@@ -246,6 +246,10 @@
 
 ### Fixed
 
+- **Datenaustausch: Trennen einer Anwendung wirkt auch ohne Einwilligung.** Das Trennen beendet
+  jetzt die Keycloak-Sitzungen, die nur dieser Anwendung gehören, und stempelt die Trennung erst
+  danach; der Gateway verweigert Tokens ohne `offline_access` nach ihrer Anmeldezeit (`auth_time`).
+  Ein nach der Trennung erneuerter Token kommt so nicht mehr durch (REQ-XCH-008).
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.

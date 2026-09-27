@@ -104,7 +104,7 @@ public final class ExchangeTestSupport {
   }
 
   /**
-   * Builds a decoded access token.
+   * Builds a decoded access token of a sign-in made when it was issued.
    *
    * @param value the token value
    * @param audience the audience
@@ -121,6 +121,30 @@ public final class ExchangeTestSupport {
       @NotNull String member,
       @NotNull String scope,
       @NotNull Instant issuedAt) {
+    return token(value, audience, thumbprint, member, scope, issuedAt, issuedAt);
+  }
+
+  /**
+   * Builds a decoded access token.
+   *
+   * @param value the token value
+   * @param audience the audience
+   * @param thumbprint the bound key's thumbprint, or {@code null} for an unbound token
+   * @param member the subject
+   * @param scope the space-separated scopes
+   * @param issuedAt the issue time
+   * @param authTime the sign-in's time as Keycloak writes it, or {@code null} for no {@code
+   *     auth_time} claim
+   * @return the token
+   */
+  public static @NotNull Jwt token(
+      @NotNull String value,
+      @NotNull String audience,
+      @Nullable String thumbprint,
+      @NotNull String member,
+      @NotNull String scope,
+      @NotNull Instant issuedAt,
+      @Nullable Instant authTime) {
     Jwt.Builder builder =
         Jwt.withTokenValue(value)
             .header("alg", "ES256")
@@ -132,6 +156,9 @@ public final class ExchangeTestSupport {
             .expiresAt(issuedAt.plusSeconds(300));
     if (thumbprint != null) {
       builder.claim("cnf", Map.of("jkt", thumbprint));
+    }
+    if (authTime != null) {
+      builder.claim("auth_time", authTime.getEpochSecond());
     }
     return builder.build();
   }

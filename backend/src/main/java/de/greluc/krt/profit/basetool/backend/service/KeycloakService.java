@@ -651,6 +651,59 @@ public class KeycloakService {
   }
 
   /**
+   * Ends every online session of a member that holds the client and no other, so its refresh token
+   * stops working (REQ-XCH-008). A session the client shares with another client, such as the
+   * member's web login, is left alone: the Admin API can only end it whole.
+   *
+   * @param keycloakUserId the member
+   * @param clientId the Keycloak client id
+   * @return how many sessions holding the client were left because another client shares them
+   * @throws ExternalServiceException when the admin URL is unconfigured
+   */
+  public int endSessionsHeldOnlyBy(@NotNull UUID keycloakUserId, @NotNull String clientId) {
+    requireAdminUrl();
+    String token = getAccessToken();
+    List<Map<String, Object>> sessions;
+    try {
+      sessions =
+          adminClient
+              .get()
+              .uri("/admin/realms/{realm}/users/{id}/sessions", properties.realm(), keycloakUserId)
+              .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + token)
+              .retrieve()
+              .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+    } catch (HttpClientErrorException.NotFound absent) {
+      return 0;
+    }
+    if (sessions == null) {
+      return 0;
+    }
+    int shared = 0;
+    for (Map<String, Object> userSession : sessions) {
+      if (!(userSession.get("clients") instanceof Map<?, ?> clients)
+          || !clients.containsValue(clientId)
+          || !(userSession.get("id") instanceof String sessionId)) {
+        continue;
+      }
+      if (clients.size() > 1) {
+        shared++;
+        continue;
+      }
+      try {
+        adminClient
+            .delete()
+            .uri("/admin/realms/{realm}/sessions/{session}", properties.realm(), sessionId)
+            .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + token)
+            .retrieve()
+            .toBodilessEntity();
+      } catch (HttpClientErrorException.NotFound ended) {
+        log.debug("A session of client {} had already ended", clientId);
+      }
+    }
+    return shared;
+  }
+
+  /**
    * Live check whether a Keycloak user still exists. Fail-closed: only a {@code 404} reports
    * absence; every other failure propagates.
    *

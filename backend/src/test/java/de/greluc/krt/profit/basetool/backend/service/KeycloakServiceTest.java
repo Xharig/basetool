@@ -917,6 +917,102 @@ class KeycloakServiceTest {
   }
 
   /**
+   * REQ-XCH-008: {@code endSessionsHeldOnlyBy} deletes the member's online sessions that hold the
+   * client alone, and leaves a session the client shares with the web login, reporting it.
+   *
+   * @throws Exception if the mock server cannot be started or stopped.
+   */
+  @Test
+  void endSessionsHeldOnlyBy_endsTheClientsOwnSessionsAndCountsTheShared() throws Exception {
+    when(sslBundles.getBundle("keycloak-trust"))
+        .thenThrow(new NoSuchSslBundleException("keycloak-trust", "no such bundle"));
+    MockWebServer server = new MockWebServer();
+    server.start();
+    try {
+      KeycloakSyncProperties properties = writeProperties(server);
+      UUID member = UUID.fromString("00000000-0000-0000-0000-0000000000f7");
+      server.enqueue(jsonResponse("{\"access_token\":\"test-token\"}"));
+      server.enqueue(
+          jsonResponse(
+              "[{\"id\":\"own\",\"clients\":{\"u1\":\"basetool-sc-extractor\"}},"
+                  + "{\"id\":\"shared\",\"clients\":{\"u1\":\"basetool-sc-extractor\","
+                  + "\"u2\":\"basetool-frontend\"}},"
+                  + "{\"id\":\"web\",\"clients\":{\"u2\":\"basetool-frontend\"}}]"));
+      server.enqueue(new MockResponse().setResponseCode(204));
+
+      KeycloakService service =
+          new KeycloakService(properties, observedBuilder(), sslBundles, meterRegistry);
+      int shared = service.endSessionsHeldOnlyBy(member, "basetool-sc-extractor");
+
+      server.takeRequest();
+      RecordedRequest list = server.takeRequest();
+      assertEquals("GET", list.getMethod());
+      assertTrue(list.getPath().endsWith("/users/" + member + "/sessions"));
+      RecordedRequest delete = server.takeRequest();
+      assertEquals("DELETE", delete.getMethod());
+      assertTrue(delete.getPath().endsWith("/admin/realms/iri/sessions/own"));
+      assertEquals(1, shared);
+      assertEquals(3, server.getRequestCount(), "the shared and the web session stay");
+    } finally {
+      server.shutdown();
+    }
+  }
+
+  /**
+   * A member Keycloak no longer knows has no sessions to end.
+   *
+   * @throws Exception if the mock server cannot be started or stopped.
+   */
+  @Test
+  void endSessionsHeldOnlyBy_unknownMember_endsNothing() throws Exception {
+    when(sslBundles.getBundle("keycloak-trust"))
+        .thenThrow(new NoSuchSslBundleException("keycloak-trust", "no such bundle"));
+    MockWebServer server = new MockWebServer();
+    server.start();
+    try {
+      KeycloakSyncProperties properties = writeProperties(server);
+      server.enqueue(jsonResponse("{\"access_token\":\"test-token\"}"));
+      server.enqueue(errorResponse(404));
+
+      KeycloakService service =
+          new KeycloakService(properties, observedBuilder(), sslBundles, meterRegistry);
+
+      assertEquals(0, service.endSessionsHeldOnlyBy(UUID.randomUUID(), "basetool-sc-extractor"));
+      assertEquals(2, server.getRequestCount());
+    } finally {
+      server.shutdown();
+    }
+  }
+
+  /**
+   * A server error on the session list fails the call, so the disconnect does not go ahead as if
+   * the sessions had ended.
+   *
+   * @throws Exception if the mock server cannot be started or stopped.
+   */
+  @Test
+  void endSessionsHeldOnlyBy_serverError_throws() throws Exception {
+    when(sslBundles.getBundle("keycloak-trust"))
+        .thenThrow(new NoSuchSslBundleException("keycloak-trust", "no such bundle"));
+    MockWebServer server = new MockWebServer();
+    server.start();
+    try {
+      KeycloakSyncProperties properties = writeProperties(server);
+      server.enqueue(jsonResponse("{\"access_token\":\"test-token\"}"));
+      server.enqueue(errorResponse(500));
+
+      KeycloakService service =
+          new KeycloakService(properties, observedBuilder(), sslBundles, meterRegistry);
+
+      assertThrows(
+          RuntimeException.class,
+          () -> service.endSessionsHeldOnlyBy(UUID.randomUUID(), "basetool-sc-extractor"));
+    } finally {
+      server.shutdown();
+    }
+  }
+
+  /**
    * {@code readDiscordLink} returns the target's {@code discord} snowflake and stored username —
    * the authoritative source of the incoming snowflake for the link flow, working even when the
    * {@code discord_user_id} claim mapper never persisted it locally.
