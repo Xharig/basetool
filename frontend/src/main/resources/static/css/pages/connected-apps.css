@@ -11,6 +11,15 @@
     .ca-app-head h2 {
         margin: 0;
     }
+    .ca-app-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .ca-undo-skipped {
+        margin: 0.5rem 0 0;
+        padding-left: 1rem;
+    }
     .ca-capabilities {
         margin: 0 0 1rem;
         padding-left: 1rem;
