@@ -208,6 +208,15 @@ groups:
           summary: "The ingest gateway cannot read the exchange registry"
           description: "The ingest gateway cannot read the exchange registry mirror or the revocations in Redis and refuses exchange requests with 503 REGISTRY_UNAVAILABLE (fail-closed, REQ-XCH-003). Check that the backend writes exchange:registry (APP_EXCHANGE_MIRROR_ENABLED, ExchangeMirrorWriteFailed), that Redis is up, and that the ingest ACL user still reads ~exchange:*."
 
+      - alert: ExchangeRegistryMirrorStaleAtGateway
+        expr: ((basetool_exchange_registry_mirror_age_seconds > 300) or ((basetool_exchange_registry_mirror_age_seconds != basetool_exchange_registry_mirror_age_seconds) and on() (time() - max(process_start_time_seconds{job="basetool-ingest"})) > 300)) and on() (max(basetool_scheduled_job_enabled{task="exchange_registry_reconcile"}) == 1)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The ingest gateway has not read the exchange registry for over 5 minutes"
+          description: "The ingest gateway reads the exchange registry mirror every 30 seconds, and its last successful read is more than 5 minutes old - or it has not read it once since it started - while the backend's mirror is enabled. Exchange requests are refused 503 REGISTRY_UNAVAILABLE meanwhile, even when no client happens to call. Check that exchange:registry exists in Redis (ExchangeMirrorWriteFailed, ExchangeRegistryReconcileStale), that Redis is up, and that the ingest ACL user still reads ~exchange:* (REQ-XCH-003, REQ-XCH-028)."
+
       - alert: ExchangeRegistryReconcileStale
         expr: (time() - (basetool_scheduled_job_last_success_timestamp_seconds{task="exchange_registry_reconcile"} > 0)) > 600 or (absent(basetool_scheduled_job_last_success_timestamp_seconds{task="exchange_registry_reconcile"}) and on() (time() - max(process_start_time_seconds{job="basetool-backend"})) > 600 and on() (basetool_scheduled_job_enabled{task="exchange_registry_reconcile"} == 1))
         for: 5m

@@ -26,19 +26,21 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 /**
  * The hard byte budget of the exchange data the gateway writes to Redis: per client and member, per
- * client and in total (REQ-XCH-023, ADR-0221). Every stored value registers its size and expiry in
- * a sorted set per scope, as {@code <key>|<bytes>} scored by its expiry; expired entries are pruned
- * before each check, so the count goes down when keys expire, which a plain counter would not.
+ * client and in total (REQ-XCH-023, ADR-0221). Every stored value registers {@code <key>|<charge>}
+ * in a sorted set per scope, scored by its expiry, and each scope keeps its running total beside
+ * it. One Lua script prunes expired entries, checks all three limits and records the entry
+ * atomically, so parallel writes cannot overshoot and no call reads a whole set.
  */
 @Slf4j
 @Component
@@ -47,8 +49,109 @@ public class ExchangeBudget {
   /** The key prefix of the budget sets. */
   static final String PREFIX = "ingest:xch:budget:";
 
-  /** A budget set outlives every entry it counts; each write moves its expiry this far out. */
+  /** The key prefix of the running totals, one per budget set. */
+  static final String SUM_PREFIX = "ingest:xch:budget-sum:";
+
+  /** The key prefix of a reservation made before the value's own key is known. */
+  public static final String PENDING_PREFIX = "ingest:xch:pending:";
+
+  /** A budget set outlives every entry it counts; each call moves its expiry at least this far. */
   static final Duration SET_TTL = Duration.ofDays(3);
+
+  /**
+   * The bytes charged per entry on top of its value: its member in the three sets and the key's own
+   * bookkeeping in Redis.
+   */
+  static final int ENTRY_OVERHEAD_BYTES = 512;
+
+  /** The most expired entries one call prunes per set, so a call stays short. */
+  static final int PRUNE_BATCH = 1000;
+
+  /** Marks a limit that is not checked. */
+  private static final String UNCHECKED = "-1";
+
+  /** The check-and-record script; its result is the total in use, or {@code -1 - total}. */
+  private static final RedisScript<Long> SCRIPT =
+      new DefaultRedisScript<>(
+          """
+          local release = ARGV[3]
+          local add = ARGV[4]
+          local expiry = ARGV[5]
+          local ttl = ARGV[6]
+          local function size(entry)
+            return tonumber(string.match(entry, '|(%d+)$')) or 0
+          end
+          local function empty(set)
+            return #redis.call('ZRANGE', set, 0, 0) == 0
+          end
+          local used = {}
+          local present = {}
+          for i = 1, 3 do
+            local set = KEYS[i]
+            local raw = redis.call('GET', KEYS[i + 3])
+            local total = nil
+            if raw then
+              total = tonumber(raw)
+            end
+            if total == nil then
+              total = 0
+              for _, entry in ipairs(redis.call('ZRANGE', set, 0, -1)) do
+                total = total + size(entry)
+              end
+            end
+            local expired = redis.call('ZRANGEBYSCORE', set, '-inf', ARGV[1], 'LIMIT', 0, ARGV[2])
+            if #expired > 0 then
+              for _, entry in ipairs(expired) do
+                total = total - size(entry)
+              end
+              redis.call('ZREM', set, unpack(expired))
+            end
+            if empty(set) or total < 0 then
+              total = 0
+            end
+            used[i] = total
+            present[i] = release ~= '' and redis.call('ZSCORE', set, release) ~= false
+          end
+          local fits = 1
+          if add ~= '' then
+            local bytes = size(add)
+            for i = 1, 3 do
+              local limit = tonumber(ARGV[6 + i])
+              local freed = present[i] and size(release) or 0
+              if limit >= 0 and used[i] - freed + bytes > limit then
+                fits = 0
+              end
+            end
+          end
+          if fits == 1 then
+            for i = 1, 3 do
+              if present[i] then
+                redis.call('ZREM', KEYS[i], release)
+                used[i] = math.max(0, used[i] - size(release))
+              end
+              if add ~= '' and redis.call('ZADD', KEYS[i], 'GT', expiry, add) == 1 then
+                used[i] = used[i] + size(add)
+              end
+            end
+          end
+          for i = 1, 3 do
+            if empty(KEYS[i]) then
+              redis.call('DEL', KEYS[i + 3])
+              used[i] = 0
+            else
+              redis.call('SET', KEYS[i + 3], string.format('%d', used[i]), 'KEEPTTL')
+              for _, key in ipairs({KEYS[i], KEYS[i + 3]}) do
+                redis.call('PEXPIRE', key, ttl, 'NX')
+                redis.call('PEXPIRE', key, ttl, 'GT')
+              end
+            end
+          end
+          if fits == 1 then
+            return used[3]
+          end
+          return -1 - used[3]
+          """,
+          Long.class);
 
   private final StringRedisTemplate redisTemplate;
   private final ExchangeStoreProperties properties;
@@ -95,39 +198,71 @@ public class ExchangeBudget {
   }
 
   /**
-   * Whether a value of the given size still fits every scope of a client and member.
+   * Returns what an entry of a value's size is charged: the value plus {@link
+   * #ENTRY_OVERHEAD_BYTES}.
    *
-   * @param clientId the client
-   * @param member the member
    * @param bytes the value's size
-   * @return {@code true} when it fits all three budgets
-   * @throws ExchangeUnavailableException if Redis cannot be read
+   * @return the bytes counted against every scope
    */
-  public boolean fits(@NotNull String clientId, @NotNull String member, long bytes) {
-    try {
-      long now = clock.millis();
-      long memberUsed = used(memberScope(clientId, member), now);
-      long clientUsed = used(clientScope(clientId), now);
-      long total = used(totalScope(), now);
-      totalUsed.set(total);
-      return memberUsed + bytes <= properties.memberBytes()
-          && clientUsed + bytes <= properties.clientBytes()
-          && total + bytes <= properties.totalBytes();
-    } catch (RuntimeException e) {
-      log.warn("Exchange budget read failed: {}", e.getClass().getSimpleName());
-      throw new ExchangeUnavailableException("The exchange budget cannot be read.", e);
-    }
+  public static long charge(long bytes) {
+    return bytes + ENTRY_OVERHEAD_BYTES;
   }
 
   /**
-   * Registers a stored value in every scope of its client and member.
+   * Records a value in every scope of its client and member only if it fits all three budgets, as
+   * one atomic step.
+   *
+   * @param clientId the client
+   * @param member the member
+   * @param key the value's Redis key, or a {@link #PENDING_PREFIX} name for a reservation
+   * @param bytes the value's size
+   * @param ttl the value's lifetime
+   * @return {@code true} when it fitted and is recorded; {@code false} when nothing was recorded
+   * @throws ExchangeUnavailableException if Redis cannot be reached
+   */
+  public boolean reserve(
+      @NotNull String clientId,
+      @NotNull String member,
+      @NotNull String key,
+      long bytes,
+      @NotNull Duration ttl) {
+    return run(clientId, member, "", entry(key, bytes), ttl, true);
+  }
+
+  /**
+   * Replaces a reservation with the value it was made for, atomically; when the value does not fit
+   * even with the reservation freed, the reservation stays and nothing else changes.
+   *
+   * @param clientId the client
+   * @param member the member
+   * @param reservedKey the reservation's key
+   * @param reservedBytes the reservation's size
+   * @param key the value's Redis key
+   * @param bytes the value's size
+   * @param ttl the value's lifetime
+   * @return {@code true} when the value is recorded in place of the reservation
+   * @throws ExchangeUnavailableException if Redis cannot be reached
+   */
+  public boolean settle(
+      @NotNull String clientId,
+      @NotNull String member,
+      @NotNull String reservedKey,
+      long reservedBytes,
+      @NotNull String key,
+      long bytes,
+      @NotNull Duration ttl) {
+    return run(clientId, member, entry(reservedKey, reservedBytes), entry(key, bytes), ttl, true);
+  }
+
+  /**
+   * Records a value that already exists in every scope, without a limit check.
    *
    * @param clientId the client
    * @param member the member
    * @param key the value's Redis key
    * @param bytes the value's size
    * @param ttl the value's lifetime
-   * @throws ExchangeUnavailableException if Redis cannot be written
+   * @throws ExchangeUnavailableException if Redis cannot be reached
    */
   public void record(
       @NotNull String clientId,
@@ -135,44 +270,101 @@ public class ExchangeBudget {
       @NotNull String key,
       long bytes,
       @NotNull Duration ttl) {
-    long expiry = clock.millis() + ttl.toMillis();
-    String entry = key + "|" + bytes;
+    run(clientId, member, "", entry(key, bytes), ttl, false);
+  }
+
+  /**
+   * Removes an entry from every scope; a failure is logged, since the entry expires on its own.
+   *
+   * @param clientId the client
+   * @param member the member
+   * @param key the entry's key
+   * @param bytes the entry's size
+   */
+  public void release(
+      @NotNull String clientId, @NotNull String member, @NotNull String key, long bytes) {
     try {
-      for (String scope :
-          List.of(memberScope(clientId, member), clientScope(clientId), totalScope())) {
-        redisTemplate.opsForZSet().add(scope, entry, expiry);
-        redisTemplate.expire(scope, ttl.compareTo(SET_TTL) > 0 ? ttl : SET_TTL);
-      }
-      totalUsed.addAndGet(bytes);
-    } catch (RuntimeException e) {
-      log.warn("Exchange budget write failed: {}", e.getClass().getSimpleName());
-      throw new ExchangeUnavailableException("The exchange budget cannot be written.", e);
+      run(clientId, member, entry(key, bytes), "", SET_TTL, false);
+    } catch (ExchangeUnavailableException e) {
+      log.warn("An exchange budget entry could not be released");
     }
   }
 
   /**
-   * Prunes the expired entries of one scope and sums the rest.
+   * Runs the script for one client and member and keeps the gauge current.
    *
-   * @param scope the scope's sorted set
-   * @param now the current epoch millisecond
-   * @return the bytes in use
+   * @param clientId the client
+   * @param member the member
+   * @param release the entry to remove, or empty
+   * @param add the entry to add, or empty
+   * @param ttl the added entry's lifetime
+   * @param checked whether the limits are checked
+   * @return {@code true} when the step was applied
+   * @throws ExchangeUnavailableException if Redis cannot be reached
    */
-  private long used(@NotNull String scope, long now) {
-    redisTemplate.opsForZSet().removeRangeByScore(scope, Double.NEGATIVE_INFINITY, now);
-    Set<String> entries =
-        redisTemplate.opsForZSet().rangeByScore(scope, now, Double.POSITIVE_INFINITY);
-    long used = 0L;
-    if (entries != null) {
-      for (String entry : entries) {
-        int bar = entry.lastIndexOf('|');
-        try {
-          used += bar < 0 ? 0L : Long.parseLong(entry.substring(bar + 1));
-        } catch (NumberFormatException ignored) {
-          used += 0L;
-        }
-      }
+  private boolean run(
+      @NotNull String clientId,
+      @NotNull String member,
+      @NotNull String release,
+      @NotNull String add,
+      @NotNull Duration ttl,
+      boolean checked) {
+    long now = clock.millis();
+    Duration setTtl = ttl.compareTo(SET_TTL) > 0 ? ttl : SET_TTL;
+    List<String> sets = List.of(memberScope(clientId, member), clientScope(clientId), totalScope());
+    List<String> keys =
+        List.of(
+            sets.get(0),
+            sets.get(1),
+            sets.get(2),
+            sum(sets.get(0)),
+            sum(sets.get(1)),
+            sum(sets.get(2)));
+    Long result;
+    try {
+      result =
+          redisTemplate.execute(
+              SCRIPT,
+              keys,
+              Long.toString(now),
+              Integer.toString(PRUNE_BATCH),
+              release,
+              add,
+              Long.toString(now + ttl.toMillis()),
+              Long.toString(setTtl.toMillis()),
+              checked ? Long.toString(properties.memberBytes()) : UNCHECKED,
+              checked ? Long.toString(properties.clientBytes()) : UNCHECKED,
+              checked ? Long.toString(properties.totalBytes()) : UNCHECKED);
+    } catch (RuntimeException e) {
+      log.warn("Exchange budget update failed: {}", e.getClass().getSimpleName());
+      throw new ExchangeUnavailableException("The exchange budget cannot be reached.", e);
     }
-    return used;
+    if (result == null) {
+      throw new ExchangeUnavailableException("The exchange budget answered nothing.", null);
+    }
+    totalUsed.set(result >= 0 ? result : -1L - result);
+    return result >= 0;
+  }
+
+  /**
+   * Returns the set member of an entry.
+   *
+   * @param key the entry's key
+   * @param bytes the value's size
+   * @return {@code <key>|<charge>}
+   */
+  static @NotNull String entry(@NotNull String key, long bytes) {
+    return key + "|" + charge(bytes);
+  }
+
+  /**
+   * Returns the running total's key of a budget set.
+   *
+   * @param scope the budget set's key
+   * @return the total's key
+   */
+  static @NotNull String sum(@NotNull String scope) {
+    return SUM_PREFIX + scope.substring(PREFIX.length());
   }
 
   /**

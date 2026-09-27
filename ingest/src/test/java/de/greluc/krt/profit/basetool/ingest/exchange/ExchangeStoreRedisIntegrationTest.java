@@ -20,25 +20,43 @@
 package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.greluc.krt.profit.basetool.ingest.config.ExchangeStoreProperties;
+import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
 import de.greluc.krt.profit.basetool.testsupport.containers.TestImages;
 import de.greluc.krt.profit.basetool.testsupport.redis.RedisAclTemplate;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.servlet.FilterChain;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.junit.jupiter.Container;
@@ -49,7 +67,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * The byte budget and the idempotency cache against a real Redis under the ingest ACL user
  * (REQ-XCH-020, REQ-XCH-023): filling one member's budget and then one client's leaves every other
- * member and client working.
+ * member and client working, parallel writes never overshoot a budget, a duplicate that raced the
+ * first request replays its answer, and a lock is released only by the request holding it.
  */
 @Testcontainers
 class ExchangeStoreRedisIntegrationTest {
@@ -64,30 +83,42 @@ class ExchangeStoreRedisIntegrationTest {
 
   private static final ExchangeStoreProperties SMALL =
       new ExchangeStoreProperties(
-          1024L, 3072L, 5120L, 1024, Duration.ofHours(24), Duration.ofMinutes(2), 1024L);
+          4096L, 8192L, 12288L, 1024, Duration.ofHours(24), Duration.ofMinutes(2), 1024L);
+
+  private static final ExchangeStoreProperties DEFAULTS =
+      new ExchangeStoreProperties(
+          1_048_576L,
+          16_777_216L,
+          67_108_864L,
+          32768,
+          Duration.ofHours(24),
+          Duration.ofMinutes(2),
+          524_288L);
+
+  private static final int THREADS = 16;
 
   private final AtomicReference<Instant> now =
       new AtomicReference<>(Instant.parse("2026-09-27T12:00:00Z"));
   private LettuceConnectionFactory ingest;
+  private LettuceConnectionFactory admin;
   private StringRedisTemplate template;
+  private StringRedisTemplate observer;
+  private Clock clock;
   private ExchangeBudget budget;
   private ExchangeIdempotency idempotency;
 
   @BeforeEach
   void setUp() {
+    admin = connect(RedisAclTemplate.ADMIN_USER, "REDIS_PASSWORD");
+    try (RedisConnection connection = admin.getConnection()) {
+      connection.serverCommands().flushAll();
+    }
+    observer = new StringRedisTemplate(admin);
+    observer.afterPropertiesSet();
     ingest = connect(RedisAclTemplate.INGEST_USER, "REDIS_INGEST_PASSWORD");
     template = new StringRedisTemplate(ingest);
     template.afterPropertiesSet();
-    template.delete(
-        List.of(
-            ExchangeBudget.memberScope("a", "m1"),
-            ExchangeBudget.memberScope("a", "m2"),
-            ExchangeBudget.memberScope("a", "m3"),
-            ExchangeBudget.memberScope("b", "m1"),
-            ExchangeBudget.clientScope("a"),
-            ExchangeBudget.clientScope("b"),
-            ExchangeBudget.totalScope()));
-    Clock clock =
+    clock =
         new Clock() {
           @Override
           public ZoneId getZone() {
@@ -111,35 +142,155 @@ class ExchangeStoreRedisIntegrationTest {
   @AfterEach
   void tearDown() {
     ingest.destroy();
+    admin.destroy();
   }
 
   @Test
   void aFullMemberBudgetStopsOnlyThatMember() {
-    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 900L, Duration.ofHours(1));
+    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 3000L, Duration.ofHours(1));
 
-    assertThat(budget.fits("a", "m1", 200L)).isFalse();
-    assertThat(budget.fits("a", "m2", 200L)).isTrue();
-    assertThat(budget.fits("b", "m1", 200L)).isTrue();
+    assertThat(budget.reserve("a", "m1", "ingest:xch:idem:a:m1:2", 100L, Duration.ofHours(1)))
+        .isFalse();
+    assertThat(budget.reserve("a", "m2", "ingest:xch:idem:a:m2:1", 100L, Duration.ofHours(1)))
+        .isTrue();
+    assertThat(budget.reserve("b", "m1", "ingest:xch:idem:b:m1:1", 100L, Duration.ofHours(1)))
+        .isTrue();
+    assertThat(total(ExchangeBudget.memberScope("a", "m1"))).isEqualTo(3512L);
   }
 
   @Test
   void aFullClientBudgetStopsOnlyThatClient() {
-    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 1000L, Duration.ofHours(1));
-    budget.record("a", "m2", "ingest:xch:idem:a:m2:1", 1000L, Duration.ofHours(1));
-    budget.record("a", "m3", "ingest:xch:idem:a:m3:1", 1000L, Duration.ofHours(1));
+    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 3500L, Duration.ofHours(1));
+    budget.record("a", "m2", "ingest:xch:idem:a:m2:1", 3500L, Duration.ofHours(1));
 
-    assertThat(budget.fits("a", "m4", 200L)).isFalse();
-    assertThat(budget.fits("b", "m1", 200L)).isTrue();
+    assertThat(budget.reserve("a", "m3", "ingest:xch:idem:a:m3:1", 100L, Duration.ofHours(1)))
+        .isFalse();
+    assertThat(budget.reserve("b", "m1", "ingest:xch:idem:b:m1:1", 100L, Duration.ofHours(1)))
+        .isTrue();
+    assertThat(total(ExchangeBudget.clientScope("a"))).isEqualTo(8024L);
+    assertThat(total(ExchangeBudget.totalScope())).isEqualTo(8636L);
   }
 
   @Test
   void expiredEntriesFreeTheirBytes() {
-    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 1000L, Duration.ofMinutes(5));
-    assertThat(budget.fits("a", "m1", 100L)).isFalse();
+    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 3000L, Duration.ofMinutes(5));
+    assertThat(budget.reserve("a", "m1", "ingest:xch:idem:a:m1:2", 100L, Duration.ofHours(1)))
+        .isFalse();
 
     now.set(now.get().plus(Duration.ofMinutes(6)));
 
-    assertThat(budget.fits("a", "m1", 100L)).isTrue();
+    assertThat(budget.reserve("a", "m1", "ingest:xch:idem:a:m1:2", 100L, Duration.ofHours(1)))
+        .isTrue();
+    assertThat(total(ExchangeBudget.memberScope("a", "m1"))).isEqualTo(612L);
+    assertThat(template.opsForZSet().range(ExchangeBudget.memberScope("a", "m1"), 0, -1))
+        .containsExactly(ExchangeBudget.entry("ingest:xch:idem:a:m1:2", 100L));
+  }
+
+  @Test
+  void aReservationSettlesOnItsValueAndAReleaseFreesIt() {
+    assertThat(
+            budget.reserve("a", "m1", "ingest:xch:idem-lock:a:m1:x", 2000L, Duration.ofMinutes(2)))
+        .isTrue();
+    assertThat(
+            budget.settle(
+                "a",
+                "m1",
+                "ingest:xch:idem-lock:a:m1:x",
+                2000L,
+                "ingest:xch:idem:a:m1:x",
+                1000L,
+                Duration.ofHours(24)))
+        .isTrue();
+
+    assertThat(total(ExchangeBudget.memberScope("a", "m1"))).isEqualTo(1512L);
+    assertThat(template.opsForZSet().range(ExchangeBudget.memberScope("a", "m1"), 0, -1))
+        .containsExactly(ExchangeBudget.entry("ingest:xch:idem:a:m1:x", 1000L));
+
+    budget.release("a", "m1", "ingest:xch:idem:a:m1:x", 1000L);
+
+    assertThat(observer.hasKey(ExchangeBudget.memberScope("a", "m1"))).isFalse();
+    assertThat(observer.hasKey(ExchangeBudget.sum(ExchangeBudget.memberScope("a", "m1"))))
+        .isFalse();
+  }
+
+  @Test
+  void aValueThatDoesNotFitLeavesItsReservationInPlace() {
+    budget.reserve("a", "m1", "ingest:xch:pending:1", 1000L, Duration.ofMinutes(30));
+
+    assertThat(
+            budget.settle(
+                "a",
+                "m1",
+                "ingest:xch:pending:1",
+                1000L,
+                "ingest:handoff:m1:h",
+                4000L,
+                Duration.ofMinutes(30)))
+        .isFalse();
+    assertThat(total(ExchangeBudget.memberScope("a", "m1"))).isEqualTo(1512L);
+    assertThat(template.opsForZSet().range(ExchangeBudget.memberScope("a", "m1"), 0, -1))
+        .containsExactly(ExchangeBudget.entry("ingest:xch:pending:1", 1000L));
+  }
+
+  @Test
+  void aMissingRunningTotalIsRebuiltFromItsSet() {
+    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 3000L, Duration.ofHours(1));
+    template.delete(ExchangeBudget.sum(ExchangeBudget.memberScope("a", "m1")));
+
+    assertThat(budget.reserve("a", "m1", "ingest:xch:idem:a:m1:2", 100L, Duration.ofHours(1)))
+        .as("the rebuilt total still holds the first entry")
+        .isFalse();
+    assertThat(total(ExchangeBudget.memberScope("a", "m1"))).isEqualTo(3512L);
+  }
+
+  @Test
+  void theBudgetKeysExpireWithTheirLongestEntry() {
+    budget.record("a", "m1", "ingest:xch:quota:a:m1:1", 20L, Duration.ofDays(5));
+    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 20L, Duration.ofHours(1));
+
+    Long expiry = observer.getExpire(ExchangeBudget.memberScope("a", "m1"), TimeUnit.SECONDS);
+    Long totalExpiry =
+        observer.getExpire(
+            ExchangeBudget.sum(ExchangeBudget.memberScope("a", "m1")), TimeUnit.SECONDS);
+    assertThat(expiry).isGreaterThan(Duration.ofDays(4).toSeconds());
+    assertThat(totalExpiry).isGreaterThan(Duration.ofDays(4).toSeconds());
+  }
+
+  @Test
+  void parallelReservationsNeverOvershootAMembersBudget() throws Exception {
+    List<Boolean> admitted =
+        parallel(
+            index ->
+                budget.reserve(
+                    "a", "m1", "ingest:xch:pending:" + index, 500L, Duration.ofMinutes(5)));
+
+    assertThat(admitted.stream().filter(Boolean::booleanValue).count())
+        .as("4096 bytes hold four entries of 1012")
+        .isEqualTo(4L);
+    assertThat(total(ExchangeBudget.memberScope("a", "m1"))).isEqualTo(4048L);
+    assertThat(total(ExchangeBudget.clientScope("a"))).isEqualTo(4048L);
+    assertThat(total(ExchangeBudget.totalScope())).isEqualTo(4048L);
+  }
+
+  @Test
+  void parallelReservationsOfManyMembersNeverOvershootTheClientsOrTheTotalBudget()
+      throws Exception {
+    List<Boolean> admitted =
+        parallel(
+            index ->
+                budget.reserve(
+                    index % 2 == 0 ? "a" : "b",
+                    "m" + index,
+                    "ingest:xch:pending:" + index,
+                    1500L,
+                    Duration.ofMinutes(5)));
+
+    assertThat(admitted.stream().filter(Boolean::booleanValue).count())
+        .as("12288 bytes hold six entries of 2012, at most four per 8192-byte client")
+        .isEqualTo(6L);
+    assertThat(total(ExchangeBudget.clientScope("a"))).isLessThanOrEqualTo(8192L);
+    assertThat(total(ExchangeBudget.clientScope("b"))).isLessThanOrEqualTo(8192L);
+    assertThat(total(ExchangeBudget.totalScope())).isEqualTo(12072L);
   }
 
   @Test
@@ -147,31 +298,237 @@ class ExchangeStoreRedisIntegrationTest {
     String namespace = ExchangeIdempotency.namespace("a", "m1", "key-000001");
 
     assertThat(idempotency.find(namespace)).isEmpty();
-    assertThat(idempotency.lock(namespace)).isTrue();
-    assertThat(idempotency.lock(namespace)).isFalse();
+    String token = idempotency.lock(namespace).orElseThrow();
+    assertThat(idempotency.lock(namespace)).isEmpty();
 
-    int size =
-        idempotency.store(
-            namespace, new ExchangeIdempotency.Stored("fp", 200, "application/json", "{\"ok\":1}"));
-    idempotency.unlock(namespace);
+    ExchangeIdempotency.Stored stored =
+        new ExchangeIdempotency.Stored("fp", 200, "application/json", "{\"ok\":1}");
+    idempotency.store(namespace, stored);
+    assertThat(idempotency.unlock(namespace, token)).isTrue();
 
-    assertThat(size).isPositive();
+    assertThat(idempotency.sizeOf(namespace, stored)).isPositive();
     assertThat(idempotency.find(namespace))
         .hasValueSatisfying(
-            stored -> {
-              assertThat(stored.fingerprint()).isEqualTo("fp");
-              assertThat(stored.status()).isEqualTo(200);
-              assertThat(stored.body()).isEqualTo("{\"ok\":1}");
+            found -> {
+              assertThat(found.fingerprint()).isEqualTo("fp");
+              assertThat(found.status()).isEqualTo(200);
+              assertThat(found.body()).isEqualTo("{\"ok\":1}");
             });
-    assertThat(idempotency.lock(namespace)).isTrue();
-    LettuceConnectionFactory admin = connect(RedisAclTemplate.ADMIN_USER, "REDIS_PASSWORD");
+    assertThat(idempotency.lock(namespace)).isPresent();
+    assertThat(observer.getExpire(ExchangeIdempotency.PREFIX + namespace)).isPositive();
+  }
+
+  @Test
+  void aLockIsReleasedOnlyByTheRequestHoldingIt() {
+    String namespace = ExchangeIdempotency.namespace("a", "m1", "key-000002");
+    String first = idempotency.lock(namespace).orElseThrow();
+
+    assertThat(idempotency.unlock(namespace, "not-the-token")).isFalse();
+    assertThat(idempotency.lock(namespace)).isEmpty();
+
+    template.delete(ExchangeIdempotency.LOCK_PREFIX + namespace);
+    String second = idempotency.lock(namespace).orElseThrow();
+
+    assertThat(idempotency.unlock(namespace, first))
+        .as("a request that outlived its lock must not free the next holder's lock")
+        .isFalse();
+    assertThat(idempotency.lock(namespace)).isEmpty();
+    assertThat(idempotency.unlock(namespace, second)).isTrue();
+    assertThat(idempotency.lock(namespace)).isPresent();
+  }
+
+  @Test
+  void aDuplicateThatLookedBeforeTheFirstAnswerWasStoredReplaysItInsteadOfWritingAgain()
+      throws Exception {
+    CountDownLatch looked = new CountDownLatch(1);
+    CountDownLatch firstDone = new CountDownLatch(1);
+    AtomicBoolean pauseNextLookup = new AtomicBoolean(true);
+    ExchangeIdempotency cache =
+        new ExchangeIdempotency(template, JsonMapper.builder().build(), DEFAULTS) {
+          @Override
+          public @NotNull Optional<Stored> find(@NotNull String namespace) {
+            Optional<Stored> found = super.find(namespace);
+            if (pauseNextLookup.compareAndSet(true, false)) {
+              looked.countDown();
+              try {
+                assertThat(firstDone.await(30, TimeUnit.SECONDS)).isTrue();
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+            }
+            return found;
+          }
+        };
+    ExchangeIdempotencyFilter filter = filter(cache);
+    AtomicInteger writes = new AtomicInteger();
+    ExecutorService pool = Executors.newSingleThreadExecutor();
     try {
-      StringRedisTemplate observer = new StringRedisTemplate(admin);
-      observer.afterPropertiesSet();
-      assertThat(observer.getExpire(ExchangeIdempotency.PREFIX + namespace)).isPositive();
+      Future<MockHttpServletResponse> second =
+          pool.submit(() -> send(filter, "late-key-1", writes));
+      assertThat(looked.await(30, TimeUnit.SECONDS)).isTrue();
+
+      MockHttpServletResponse first = send(filter, "late-key-1", writes);
+      firstDone.countDown();
+      MockHttpServletResponse replayed = second.get(30, TimeUnit.SECONDS);
+
+      assertThat(first.getStatus()).isEqualTo(200);
+      assertThat(writes.get()).as("the late duplicate must not run the write again").isEqualTo(1);
+      assertThat(replayed.getStatus()).isEqualTo(200);
+      assertThat(replayed.getHeader(ExchangeIdempotencyFilter.REPLAYED)).isEqualTo("true");
+      assertThat(replayed.getContentAsString()).isEqualTo("{\"written\":true}");
     } finally {
-      admin.destroy();
+      pool.shutdownNow();
     }
+  }
+
+  @Test
+  void parallelDuplicatesOfOneKeyRunTheWriteOnceAndReplayIt() throws Exception {
+    ExchangeIdempotencyFilter filter =
+        filter(new ExchangeIdempotency(template, JsonMapper.builder().build(), DEFAULTS));
+
+    for (int round = 0; round < 20; round++) {
+      String key = "race-key-" + round;
+      AtomicInteger writes = new AtomicInteger();
+      List<MockHttpServletResponse> responses = parallel(index -> send(filter, key, writes));
+
+      assertThat(writes.get()).as("round %d ran the write once", round).isEqualTo(1);
+      for (MockHttpServletResponse response : responses) {
+        if (response.getStatus() == 200) {
+          assertThat(response.getContentAsString()).isEqualTo("{\"written\":true}");
+        } else {
+          assertThat(response.getStatus()).isEqualTo(409);
+          assertThat(response.getContentAsString()).contains("IDEMPOTENCY_IN_PROGRESS");
+        }
+      }
+      assertThat(
+              observer.hasKey(
+                  ExchangeIdempotency.LOCK_PREFIX + ExchangeIdempotency.namespace("a", "m1", key)))
+          .isFalse();
+    }
+    assertThat(total(ExchangeBudget.memberScope("a", "m1")))
+        .as("only the twenty cached answers stay counted, no reservation")
+        .isEqualTo(
+            template.opsForZSet().range(ExchangeBudget.memberScope("a", "m1"), 0, -1).stream()
+                .filter(entry -> entry.startsWith(ExchangeIdempotency.PREFIX))
+                .mapToLong(entry -> Long.parseLong(entry.substring(entry.lastIndexOf('|') + 1)))
+                .sum());
+    assertThat(template.opsForZSet().range(ExchangeBudget.memberScope("a", "m1"), 0, -1))
+        .hasSize(20);
+  }
+
+  /**
+   * Builds the idempotency filter over a cache, with the production default budgets.
+   *
+   * @param cache the idempotency cache
+   * @return the filter
+   */
+  private @NotNull ExchangeIdempotencyFilter filter(@NotNull ExchangeIdempotency cache) {
+    return new ExchangeIdempotencyFilter(
+        cache,
+        new ExchangeBudget(template, DEFAULTS, new SimpleMeterRegistry(), clock),
+        DEFAULTS,
+        mock(ExchangeRefusals.class),
+        JsonMapper.builder().build(),
+        TestLoggingProperties.defaults(),
+        new SimpleMeterRegistry());
+  }
+
+  /**
+   * Sends one write through the filter, whose chain counts the writes it runs.
+   *
+   * @param filter the filter
+   * @param key the idempotency key
+   * @param writes counts the writes that reached the chain
+   * @return the response
+   * @throws Exception if the filter fails
+   */
+  private static @NotNull MockHttpServletResponse send(
+      @NotNull ExchangeIdempotencyFilter filter, @NotNull String key, @NotNull AtomicInteger writes)
+      throws Exception {
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", ExchangeTestSupport.BLUEPRINT_CHANGES);
+    request.setContent("{\"ops\":[]}".getBytes(StandardCharsets.UTF_8));
+    request.setContentType("application/json");
+    request.addHeader(ExchangeIdempotencyFilter.IDEMPOTENCY_KEY, key);
+    request.setAttribute(
+        ExchangeRequestContext.ATTRIBUTE,
+        new ExchangeRequestContext(
+            "a",
+            "m1",
+            "thumbprint",
+            Set.of("exchange.blueprints.write"),
+            new ExchangeRegistry.Client("A", true, Set.of(), null, null, null)));
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain =
+        (req, res) -> {
+          writes.incrementAndGet();
+          res.setContentType("application/json");
+          res.getOutputStream().write("{\"written\":true}".getBytes(StandardCharsets.UTF_8));
+        };
+    filter.doFilter(request, response, chain);
+    return response;
+  }
+
+  /**
+   * Returns a scope's running total.
+   *
+   * @param scope the budget set
+   * @return the bytes it counts, zero when it holds nothing
+   */
+  private long total(@NotNull String scope) {
+    String value = template.opsForValue().get(ExchangeBudget.sum(scope));
+    return value == null ? 0L : Long.parseLong(value);
+  }
+
+  /**
+   * Runs one task on {@link #THREADS} threads released at the same moment.
+   *
+   * @param task the task, given the thread's index
+   * @param <T> the result type
+   * @return the results in thread order
+   * @throws Exception if a task fails
+   */
+  private static <T> @NotNull List<T> parallel(@NotNull Indexed<T> task) throws Exception {
+    ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+    try {
+      CountDownLatch start = new CountDownLatch(1);
+      List<Future<T>> futures = new ArrayList<>();
+      for (int i = 0; i < THREADS; i++) {
+        int index = i;
+        futures.add(
+            pool.submit(
+                () -> {
+                  start.await();
+                  return task.run(index);
+                }));
+      }
+      start.countDown();
+      List<T> results = new ArrayList<>();
+      for (Future<T> future : futures) {
+        results.add(future.get(30, TimeUnit.SECONDS));
+      }
+      return results;
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  /**
+   * A task that knows which of the parallel threads runs it.
+   *
+   * @param <T> the result type
+   */
+  @FunctionalInterface
+  private interface Indexed<T> {
+
+    /**
+     * Runs the task.
+     *
+     * @param index the thread's index
+     * @return the result
+     * @throws Exception if the task fails
+     */
+    T run(int index) throws Exception;
   }
 
   /**

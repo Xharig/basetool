@@ -133,6 +133,15 @@ public final class ExchangeRoutes {
     }
 
     /**
+     * Returns the route's bounded template for logs.
+     *
+     * @return the method and the path pattern, such as {@code GET /exchange/v1/me/stock}
+     */
+    public @NotNull String template() {
+      return method.name() + " " + pattern.getPatternString();
+    }
+
+    /**
      * Whether a set of capabilities admits this route.
      *
      * @param granted the capabilities both the token and the registry hold

@@ -40,6 +40,7 @@ import com.nimbusds.jose.jwk.ECKey;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
@@ -108,8 +109,11 @@ class ExchangeLimitFilterTest {
     when(registryReader.current())
         .thenReturn(ExchangeTestSupport.registry(true, true, GRANTS, null));
     when(revocationReader.isDenied(anyString())).thenReturn(false);
-    when(idempotency.lock(anyString())).thenReturn(true);
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true);
+    when(idempotency.lock(anyString())).thenReturn(Optional.of("lock-token"));
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
+    when(budget.settle(
+            anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
+        .thenReturn(true);
     when(quotas.secondsUntilTomorrow()).thenReturn(3600L);
   }
 

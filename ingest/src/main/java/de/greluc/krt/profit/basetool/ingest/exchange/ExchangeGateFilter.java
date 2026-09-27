@@ -50,7 +50,8 @@ import tools.jackson.databind.ObjectMapper;
  * exchange be switched on, the client be active in the registry, neither the installation key nor
  * the client be revoked for this member, the route's capability be both in the token and granted,
  * and the client's version meet its minimum (REQ-XCH-001, -003, -004, -008, -024). An admitted
- * request carries an {@link ExchangeRequestContext}.
+ * request carries an {@link ExchangeRequestContext}, and every request past the token gate is
+ * tagged in the log with its registry client and route ({@link ExchangeLogContext}).
  *
  * <p>The registry comes through a five-second cache; the revocations are read on every request.
  * Anything unreadable fails closed with {@code 503 REGISTRY_UNAVAILABLE}.
@@ -60,6 +61,12 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
 
   /** What a client should wait before retrying a {@code 503}. */
   static final String RETRY_AFTER_SECONDS = "30";
+
+  /** The scope that marks a token of an offline session. */
+  static final String OFFLINE_ACCESS = "offline_access";
+
+  /** The claim holding the time of the sign-in a token descends from. */
+  static final String AUTH_TIME = "auth_time";
 
   private final ExchangeRegistryReader registryReader;
   private final ExchangeRevocationReader revocationReader;
@@ -99,6 +106,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           "No such exchange route.");
       return;
     }
+    ExchangeLogContext.route(route.get());
     ExchangeRequestContext context;
     try {
       context = admit(jwt, route.get(), request, response);
@@ -115,6 +123,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     if (context == null) {
       return;
     }
+    ExchangeLogContext.client(context.clientId());
     request.setAttribute(ExchangeRequestContext.ATTRIBUTE, context);
     filterChain.doFilter(request, response);
   }
@@ -139,6 +148,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     ExchangeRegistry registry = registryReader.current();
     String clientId = jwt.getClaimAsString("azp");
     String label = ExchangeRefusals.clientLabel(clientId, registry);
+    ExchangeLogContext.client(label);
     if (!registry.enabled()) {
       response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
       refuse(
@@ -188,18 +198,17 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           "This installation was disconnected; connect again with a new key.");
       return null;
     }
+    Set<String> granted = scopes(jwt);
     Long revokedAt = revocationReader.revokedAt(clientId, member);
-    Instant issuedAt = jwt.getIssuedAt();
-    if (revokedAt != null && (issuedAt == null || issuedAt.getEpochSecond() <= revokedAt)) {
+    if (revokedAt != null && !connectedAfter(jwt, granted, revokedAt)) {
       refuse(
           label,
           response,
           HttpStatus.UNAUTHORIZED,
           ExchangeRefusals.CLIENT_REVOKED,
-          "The member disconnected this client after the token was issued.");
+          "The member disconnected this client after this connection was made.");
       return null;
     }
-    Set<String> granted = scopes(jwt);
     granted.retainAll(client.capabilities());
     if (!route.admits(granted)) {
       refuse(
@@ -251,6 +260,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
       @NotNull String code,
       @NotNull String detail)
       throws IOException {
+    ExchangeLogContext.client(client);
     refusals.count(code, client);
     meterRegistry.counter(MetricNames.HTTP_ERROR, MetricNames.TAG_CODE, code).increment();
     ProblemResponseWriter.write(
@@ -278,6 +288,37 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     return confirmation != null && confirmation.get("jkt") instanceof String jkt && !jkt.isBlank()
         ? jkt
         : null;
+  }
+
+  /**
+   * Tells whether the token belongs to a connection made after the member disconnected the client
+   * (REQ-XCH-008). An offline token is judged by its {@code iat}, because the disconnect ended
+   * every offline session of the client; any other token by its {@code auth_time}, which a refresh
+   * keeps and only a new sign-in renews. A token lacking the claim it is judged by is refused.
+   *
+   * @param jwt the token
+   * @param scopes the token's scopes
+   * @param revokedAt the revocation's epoch second
+   * @return {@code true} when the token was issued to a later connection
+   */
+  static boolean connectedAfter(@NotNull Jwt jwt, @NotNull Set<String> scopes, long revokedAt) {
+    Instant moment = scopes.contains(OFFLINE_ACCESS) ? jwt.getIssuedAt() : authTime(jwt);
+    return moment != null && moment.getEpochSecond() > revokedAt;
+  }
+
+  /**
+   * Returns the token's {@code auth_time}.
+   *
+   * @param jwt the token
+   * @return the time of the sign-in the token descends from, or {@code null} when the claim is
+   *     absent or not a time
+   */
+  private static @Nullable Instant authTime(@NotNull Jwt jwt) {
+    try {
+      return jwt.getClaimAsInstant(AUTH_TIME);
+    } catch (IllegalArgumentException ignored) {
+      return null;
+    }
   }
 
   /**

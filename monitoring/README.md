@@ -121,13 +121,18 @@ deliberately not pins opts out with an `image-pin-gate: ignore-file` marker in i
 - **`tempo/tempo.yaml`** — Tempo 3.x, monolithic, 14d trace retention.
 - **`alloy/config.alloy`** — log shipping (file tails, the journal for container stdout), OTLP →
   Tempo forwarding, and the per-stream masks. One file, true for both the container and the host
-  shape (REQ-OBS-019).
+  shape (REQ-OBS-019). The app JSON streams index only `level`; the ingest gateway's exchange
+  lines additionally carry `client_id` and `route` as Loki **structured metadata** (not labels),
+  so `{app="ingest"} | client_id="versekit"` filters by client without parsing (REQ-XCH-028).
 - **`blackbox/blackbox.yml`** — blackbox_exporter modules.
 - **`alertmanager/alertmanager.yml.tmpl`** — **template**, rendered by hand on the host (see
   *Re-rendering the Alertmanager config* below). The rendered file carries secrets and is never
   committed.
-- **`grafana/provisioning/{datasources,dashboards}`** + **`grafana/dashboards/*.json`** — 13
-  dashboards, provisioned **read-only** (see the sandbox-export workflow below).
+- **`grafana/provisioning/{datasources,dashboards}`** + **`grafana/dashboards/*.json`** — 14
+  dashboards, provisioned **read-only** (see the sandbox-export workflow below). `15-exchange.json`
+  („Exchange") is the per-client view of the third-party exchange, with a `client_id` variable
+  that filters its metrics and its gateway log panel; the operations dashboard keeps its
+  cross-client exchange panels.
 
 ### How a config change reaches the running process
 
@@ -228,6 +233,7 @@ section above.
 | **ExchangeRegistryChanged** | An admin changed the third-party exchange registry or its global switch (`action` label). Expected to be rare and deliberate — confirm it in the „Verbundene Anwendungen“ audit tab (REQ-XCH-003). |
 | **ExchangeMirrorWriteFailed** | The backend could not write the registry mirror `exchange:registry` to Redis. `phase=pre_commit` means an admin's restriction was refused; any other phase means the mirror lags until the reconcile succeeds. Check Redis and the `basetool-backend` ACL user's `~exchange:*` grant. |
 | **ExchangeRegistryReconcileStale** | The 60s mirror reconcile has not succeeded for 10 minutes, so a lagging mirror is not repaired. Only armed while `APP_EXCHANGE_MIRROR_ENABLED=true` (the job's enabled gauge). |
+| **ExchangeRegistryMirrorStaleAtGateway** | The ingest gateway's last successful read of `exchange:registry` is more than 5 minutes old (or it has not read it once since it started) for 10 minutes, while the backend's mirror is enabled. The gateway reads it every 30 s on its own, so this fires without any exchange traffic; `basetool_exchange_registry_mirror_age_seconds` on the Exchange dashboard shows the age. Same checks as the next row (REQ-XCH-003, REQ-XCH-028). |
 | **ExchangeRegistryUnreadableAtGateway** | The ingest gateway cannot read `exchange:registry` or the revocation keys and answers every exchange request `503 REGISTRY_UNAVAILABLE` (fail-closed). Check the backend's mirror writes, Redis, and the ingest ACL user's `~exchange:*` read grant (REQ-XCH-003). |
 | **ExchangeBudgetHigh** | The gateway's exchange data in Redis (the idempotency cache) uses more than 80 % of its 64 MiB budget; at 100 % exchange writes are refused `503 EXCHANGE_BUDGET_EXHAUSTED` while sessions keep their room. Look for a client that writes in a loop (`ingest:xch:budget:c:*`) (REQ-XCH-023). |
 | **ExchangeRelayFailing** | Admitted exchange requests keep ending in `502 BACKEND_RELAY_FAILED`: the backend answered 5xx, refused with a code outside the exchange error registry, sent an answer that breaks the v1 schema, or could not be reached at all (circuit open, no gateway token). Check the backend and its exchange layer and the gateway's `Exchange relay to` / `Exchange answer breaks` log lines (REQ-XCH-011). |

@@ -77,6 +77,8 @@
       <encoder class="de.greluc.krt.profit.basetool.logging.PiiMaskingLogstashEncoder">
         <includeMdcKeyName>correlationId</includeMdcKeyName>
         <includeMdcKeyName>userId</includeMdcKeyName>
+        <includeMdcKeyName>exchangeClientId</includeMdcKeyName>
+        <includeMdcKeyName>exchangeRoute</includeMdcKeyName>
         <includeMdcKeyName>traceId</includeMdcKeyName>
         <includeMdcKeyName>spanId</includeMdcKeyName>
         <customFields>{"app":"basetool-ingest"}</customFields>

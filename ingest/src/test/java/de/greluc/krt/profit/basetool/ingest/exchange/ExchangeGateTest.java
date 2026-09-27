@@ -24,6 +24,7 @@ import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.SERVICE_DOCUMENT;
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.STOCK;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -34,19 +35,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.nimbusds.jose.jwk.ECKey;
+import de.greluc.krt.profit.basetool.ingest.filter.CorrelationIdFilter;
+import de.greluc.krt.profit.basetool.ingest.filter.RequestLoggingFilter;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
+import de.greluc.krt.profit.basetool.ingest.support.LogCapture;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -90,7 +100,13 @@ class ExchangeGateTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+    mockMvc =
+        MockMvcBuilders.webAppContextSetup(context)
+            .addFilters(
+                context.getBean(CorrelationIdFilter.class),
+                context.getBean(RequestLoggingFilter.class))
+            .apply(springSecurity())
+            .build();
     key = ExchangeTestSupport.newKey();
     thumbprint = ExchangeTestSupport.thumbprint(key);
     member = UUID.randomUUID().toString();
@@ -98,8 +114,11 @@ class ExchangeGateTest {
     tokenScopes("exchange.connect exchange.stock.read");
     registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), null);
     when(revocationReader.isDenied(anyString())).thenReturn(false);
-    when(idempotency.lock(anyString())).thenReturn(true);
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true);
+    when(idempotency.lock(anyString())).thenReturn(Optional.of("lock-token"));
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
+    when(budget.settle(
+            anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
+        .thenReturn(true);
     when(revocationReader.revokedAt(anyString(), anyString())).thenReturn(null);
   }
 
@@ -115,6 +134,67 @@ class ExchangeGateTest {
     call(HttpMethod.GET, STOCK)
         .andExpect(status().isOk())
         .andExpect(content().string(CLIENT + " exchange.connect exchange.stock.read"));
+  }
+
+  @Test
+  void anAdmittedRequestIsLoggedWithItsClientAndRouteAndUntaggedAfterwards() {
+    List<ILoggingEvent> lines =
+        LogCapture.capture(
+            RequestLoggingFilter.class,
+            Level.INFO,
+            () ->
+                call(HttpMethod.GET, STOCK, ExchangeTestSupport.PROBE_MDC)
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(CLIENT + " | GET " + STOCK)));
+
+    assertThat(lines.getLast().getMDCPropertyMap())
+        .containsEntry(ExchangeLogContext.CLIENT_KEY, CLIENT)
+        .containsEntry(ExchangeLogContext.ROUTE_KEY, "GET " + STOCK);
+    assertThat(MDC.get(ExchangeLogContext.CLIENT_KEY)).isNull();
+    assertThat(MDC.get(ExchangeLogContext.ROUTE_KEY)).isNull();
+  }
+
+  @Test
+  void theGateTagsTheRequestBeforeItsOwnChecksRun() throws Exception {
+    AtomicReference<String> seen = new AtomicReference<>();
+    when(revocationReader.isDenied(anyString()))
+        .thenAnswer(
+            invocation -> {
+              seen.set(
+                  MDC.get(ExchangeLogContext.CLIENT_KEY)
+                      + " | "
+                      + MDC.get(ExchangeLogContext.ROUTE_KEY));
+              return true;
+            });
+
+    call(HttpMethod.GET, STOCK).andExpect(status().isUnauthorized());
+
+    assertThat(seen.get()).isEqualTo(CLIENT + " | GET " + STOCK);
+    assertThat(MDC.get(ExchangeLogContext.CLIENT_KEY)).isNull();
+  }
+
+  @Test
+  void aClientOutsideTheRegistryIsLoggedAsUnregisteredNeverByItsOwnId() {
+    when(registryReader.current())
+        .thenReturn(
+            new ExchangeRegistry(
+                1L,
+                true,
+                Map.of(
+                    "someone-else",
+                    new ExchangeRegistry.Client(
+                        "Else", true, Set.of("exchange.connect"), null, null, null))));
+
+    List<ILoggingEvent> lines =
+        LogCapture.capture(
+            RequestLoggingFilter.class,
+            Level.INFO,
+            () -> call(HttpMethod.GET, STOCK).andExpect(status().isForbidden()));
+
+    assertThat(lines.getLast().getMDCPropertyMap())
+        .containsEntry(ExchangeLogContext.CLIENT_KEY, MetricNames.EXCHANGE_CLIENT_UNREGISTERED)
+        .containsEntry(ExchangeLogContext.ROUTE_KEY, "GET " + STOCK);
+    assertThat(MDC.get(ExchangeLogContext.CLIENT_KEY)).isNull();
   }
 
   @Test
@@ -222,6 +302,77 @@ class ExchangeGateTest {
   }
 
   @Test
+  void aTokenRefreshedAfterTheDisconnectFromAnOldSignInIsRefused() throws Exception {
+    long revokedAt = issuedAt.getEpochSecond() - 30;
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(revokedAt);
+    token(
+        "exchange.connect exchange.stock.read",
+        issuedAt,
+        Instant.ofEpochSecond(revokedAt).minusSeconds(3600));
+
+    call(HttpMethod.GET, STOCK)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+  }
+
+  @Test
+  void aNewSignInAfterTheDisconnectIsAdmitted() throws Exception {
+    long revokedAt = issuedAt.getEpochSecond() - 30;
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(revokedAt);
+    token(
+        "exchange.connect exchange.stock.read",
+        issuedAt,
+        Instant.ofEpochSecond(revokedAt).plusSeconds(5));
+
+    call(HttpMethod.GET, STOCK).andExpect(status().isOk());
+  }
+
+  @Test
+  void aSignInInTheSecondOfTheDisconnectIsRefused() throws Exception {
+    long revokedAt = issuedAt.getEpochSecond() - 30;
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(revokedAt);
+    token("exchange.connect exchange.stock.read", issuedAt, Instant.ofEpochSecond(revokedAt));
+
+    call(HttpMethod.GET, STOCK)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+  }
+
+  @Test
+  void anOnlineTokenWithoutAuthTimeIsRefusedOnceTheClientWasDisconnected() throws Exception {
+    token("exchange.connect exchange.stock.read", issuedAt, null);
+
+    call(HttpMethod.GET, STOCK).andExpect(status().isOk());
+
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(issuedAt.getEpochSecond() - 30);
+    call(HttpMethod.GET, STOCK)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+  }
+
+  @Test
+  void anOfflineTokenIssuedAfterTheDisconnectIsAdmittedWhateverItsSignIn() throws Exception {
+    long revokedAt = issuedAt.getEpochSecond() - 30;
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(revokedAt);
+    token(
+        "exchange.connect exchange.stock.read offline_access",
+        issuedAt,
+        Instant.ofEpochSecond(revokedAt).minusSeconds(3600));
+
+    call(HttpMethod.GET, STOCK).andExpect(status().isOk());
+  }
+
+  @Test
+  void anOfflineTokenIssuedBeforeTheDisconnectIsRefused() throws Exception {
+    when(revocationReader.revokedAt(CLIENT, member)).thenReturn(issuedAt.getEpochSecond());
+    token("exchange.connect exchange.stock.read offline_access", issuedAt, issuedAt);
+
+    call(HttpMethod.GET, STOCK)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+  }
+
+  @Test
   void aCapabilityMissingFromTheTokenIsRefused() throws Exception {
     tokenScopes("exchange.connect");
     registry(true, true, Set.of("exchange.connect", "exchange.blueprints.write"), null);
@@ -300,6 +451,20 @@ class ExchangeGateTest {
   }
 
   /**
+   * Stubs the decoded token with the given scopes, issue time and sign-in time.
+   *
+   * @param scopes the space-separated scopes
+   * @param issued the issue time
+   * @param authTime the sign-in's time, or {@code null} for no {@code auth_time} claim
+   */
+  private void token(@NotNull String scopes, @NotNull Instant issued, @Nullable Instant authTime) {
+    when(jwtDecoder.decode(TOKEN))
+        .thenReturn(
+            ExchangeTestSupport.token(
+                TOKEN, "basetool-ingest", thumbprint, member, scopes, issued, authTime));
+  }
+
+  /**
    * Sends one DPoP-bound request with a valid nonce.
    *
    * @param method the method
@@ -308,6 +473,21 @@ class ExchangeGateTest {
    * @throws Exception if the request fails
    */
   private @NotNull ResultActions call(@NotNull HttpMethod method, @NotNull String path)
+      throws Exception {
+    return call(method, path, "X-Probe-None");
+  }
+
+  /**
+   * Sends one exchange request with an extra probe header set to {@code true}.
+   *
+   * @param method the method
+   * @param path the path
+   * @param probeHeader the extra header's name
+   * @return the result of the second, nonce-carrying attempt
+   * @throws Exception if the request fails
+   */
+  private @NotNull ResultActions call(
+      @NotNull HttpMethod method, @NotNull String path, @NotNull String probeHeader)
       throws Exception {
     String nonce =
         mockMvc
@@ -324,6 +504,7 @@ class ExchangeGateTest {
             .header(HttpHeaders.AUTHORIZATION, "DPoP " + TOKEN)
             .header(HttpHeaders.USER_AGENT, USER_AGENT)
             .header("Idempotency-Key", "gate-" + UUID.randomUUID())
+            .header(probeHeader, "true")
             .header("DPoP", ExchangeTestSupport.proof(key, TOKEN, method.name(), path, nonce)));
   }
 

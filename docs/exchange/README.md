@@ -35,6 +35,8 @@ the registry grants it to the client.
 
 ## Pages
 
+- [Quick start](quickstart.md) — from the sandbox to a first synced blueprint in about fifteen
+  minutes.
 - [Authentication](authentication.md) — the device login, DPoP proofs, the server nonce,
   refreshing, disconnecting, and the [DPoP reference implementation](dpop-reference/README.md).
 - [Formats](formats.md) — item references, quantities, qualities, places, provenance, the offline

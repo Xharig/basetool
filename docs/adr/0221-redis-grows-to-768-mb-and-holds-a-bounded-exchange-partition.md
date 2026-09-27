@@ -54,3 +54,18 @@ and the ingest user has `SET` and `EXPIRE` on `ingest:*` but no `GET` or `INCR`.
   a few megabytes.
 - **Soft limits with eviction.** Rejected: `noeviction` protects the sessions, and an evicted
   revocation would re-open access.
+
+## Amendment 1 (2026-09-27) — the budget is checked and recorded atomically
+
+**Status:** accepted · **Approved by:** @greluc (security-review findings L2 and L4) · **Spec:**
+`REQ-XCH-020`, `REQ-XCH-023`
+
+Decision 2 counted with a separate check and record, which let parallel writes overshoot a limit,
+read a whole sorted set on every write and left the sets' own memory uncounted. Each budget step is
+now one Lua script: it prunes a bounded batch of expired entries, checks all three limits against
+running totals kept beside the sets and records the entry, charging each entry a fixed 512 bytes on
+top of its value. The idempotency lock is taken with a per-request token and released by a
+compare-and-delete script. Decision 3's command list therefore grows by `EVAL`, `EVALSHA`, `ZREM`
+and `ZSCORE` for the ingest user; Redis checks every command a script issues against the same user's
+rules, so the key families stay as decided. The ACL change is rendered and loaded on the host by the
+owner, like every ACL change (ADR-0207).
