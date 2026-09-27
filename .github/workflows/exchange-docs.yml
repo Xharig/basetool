@@ -53,6 +53,11 @@ jobs:
       - name: markdown / Lint the pages
         run: npx --yes markdownlint-cli2@0.23.3 "docs/exchange/**/*.md"
 
+      - name: dpop-reference / Run the reference implementation's tests
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 -m unittest discover -s docs/exchange/dpop-reference -v
+
       - name: reference / Self-test the reference preparation
         run: python3 .github/scripts/prepare_exchange_reference.py --selftest
 
