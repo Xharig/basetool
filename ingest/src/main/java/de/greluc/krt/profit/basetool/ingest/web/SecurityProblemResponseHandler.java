@@ -27,6 +27,7 @@ import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTokenGateFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.IngestPathScope;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.logging.LogSafe;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -74,6 +75,12 @@ public class SecurityProblemResponseHandler
 
   /** The header carrying the DPoP proof. */
   private static final String DPOP_PROOF_HEADER = "DPoP";
+
+  /** How much of a request path a log line keeps. */
+  static final int MAX_LOGGED_PATH = 256;
+
+  /** How much of a request method a log line keeps. */
+  static final int MAX_LOGGED_METHOD = 16;
 
   /** What the proof verifier reports for an access token without {@code cnf.jkt}. */
   static final String UNBOUND_TOKEN_DESCRIPTION = "jkt claim is required.";
@@ -124,8 +131,8 @@ public class SecurityProblemResponseHandler
     bearerEntryPoint.commence(request, response, authException);
     log.debug(
         "Unauthenticated ingest request {} {} ({}, {})",
-        request.getMethod(),
-        request.getRequestURI(),
+        LogSafe.text(request.getMethod(), MAX_LOGGED_METHOD),
+        LogSafe.text(request.getRequestURI(), MAX_LOGGED_PATH),
         authException.getClass().getSimpleName(),
         bearerErrorCode);
     meterRegistry
@@ -279,7 +286,10 @@ public class SecurityProblemResponseHandler
     if (response.isCommitted()) {
       return;
     }
-    log.warn("Access denied on ingest request {} {}", request.getMethod(), request.getRequestURI());
+    log.warn(
+        "Access denied on ingest request {} {}",
+        LogSafe.text(request.getMethod(), MAX_LOGGED_METHOD),
+        LogSafe.text(request.getRequestURI(), MAX_LOGGED_PATH));
     write(
         response,
         HttpStatus.FORBIDDEN,

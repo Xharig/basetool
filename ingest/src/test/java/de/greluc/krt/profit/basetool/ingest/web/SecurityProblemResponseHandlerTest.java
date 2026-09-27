@@ -199,6 +199,39 @@ class SecurityProblemResponseHandlerTest {
   }
 
   @Test
+  void aForgedLineBreakInTheLoggedPathIsNeutralisedAndTheLengthBounded() {
+    String forged = "/v1/x\r\nINFO forged line" + "a".repeat(400);
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", forged);
+    request.setRequestURI(forged);
+
+    List<ILoggingEvent> denied =
+        LogCapture.capture(
+            SecurityProblemResponseHandler.class,
+            Level.DEBUG,
+            () ->
+                handler.handle(
+                    request, new MockHttpServletResponse(), new AccessDeniedException("no")));
+    List<ILoggingEvent> unauthenticated =
+        LogCapture.capture(
+            SecurityProblemResponseHandler.class,
+            Level.DEBUG,
+            () ->
+                handler.commence(
+                    request,
+                    new MockHttpServletResponse(),
+                    new InvalidBearerTokenException("expired")));
+
+    for (ILoggingEvent event : List.of(denied.getFirst(), unauthenticated.getFirst())) {
+      assertThat(event.getFormattedMessage())
+          .contains("/v1/x??INFO forged?line")
+          .doesNotContain("\r")
+          .doesNotContain("\n")
+          .doesNotContain(" ")
+          .doesNotContain("a".repeat(SecurityProblemResponseHandler.MAX_LOGGED_PATH));
+    }
+  }
+
+  @Test
   void theProblemBodyCarriesTheCorrelationIdTheOuterFilterAlreadyMinted() throws Exception {
     MDC.put("correlationId", "cid-991");
     MockHttpServletResponse response = new MockHttpServletResponse();
