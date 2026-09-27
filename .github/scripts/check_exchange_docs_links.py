@@ -1,8 +1,10 @@
 """Checks that every relative link in the exchange documentation works on the published site.
 
 A relative link must stay inside docs/exchange, which is all the site publishes, and point at a file
-that exists; links into the site's generated parts (the OpenAPI reference and the schema copies) are
-checked against their sources in the repository. Anchors and absolute URLs are not followed.
+that exists; a link to a directory needs an index page there (README.md, index.md or index.html),
+or the site answers 404. Links into the site's generated parts (the OpenAPI reference and the
+schema copies, both with generated index pages) are checked against their sources in the
+repository. Anchors and absolute URLs are not followed.
 """
 
 import argparse
@@ -12,6 +14,8 @@ import sys
 import tempfile
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+
+INDEX_PAGES = ("README.md", "index.md", "index.html")
 
 GENERATED = {
     "reference": "ingest/src/main/resources/api/exchange-v1.openapi.json",
@@ -47,6 +51,8 @@ def broken_links(repo: pathlib.Path) -> list[str]:
                     broken.append(f"{where} (source missing)")
             elif not resolved.exists():
                 broken.append(f"{where} (missing)")
+            elif resolved.is_dir() and not any((resolved / name).exists() for name in INDEX_PAGES):
+                broken.append(f"{where} (directory without an index page)")
     return broken
 
 
@@ -59,21 +65,25 @@ def selftest() -> None:
         (repo / "docs" / "other.md").write_text("# other", encoding="utf-8")
         (docs / "a.md").write_text(
             "[ok](b.md#top) [web](https://example.org) [anchor](#x) [gone](missing.md)"
-            " [ref](reference/) [out](../other.md)",
+            " [ref](reference/) [out](../other.md) [bare](bare/) [indexed](indexed/)",
             encoding="utf-8",
         )
         (docs / "b.md").write_text("# b", encoding="utf-8")
+        (docs / "bare").mkdir()
+        (docs / "indexed").mkdir()
+        (docs / "indexed" / "README.md").write_text("# indexed", encoding="utf-8")
         found = broken_links(repo)
         assert found == [
             "docs/exchange/a.md: missing.md (missing)",
             "docs/exchange/a.md: reference/ (source missing)",
             "docs/exchange/a.md: ../other.md (leaves the published site)",
+            "docs/exchange/a.md: bare/ (directory without an index page)",
         ], found
         spec = repo / "ingest/src/main/resources/api"
         spec.mkdir(parents=True)
         (spec / "exchange-v1.openapi.json").write_text("{}", encoding="utf-8")
         found = broken_links(repo)
-        assert len(found) == 2, found
+        assert len(found) == 3, found
     print("selftest ok")
 
 
