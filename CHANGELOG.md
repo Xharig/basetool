@@ -206,7 +206,10 @@
 - **Datenaustausch: zurückgehaltene Massenänderungen je Anwendung.** Jede verbundene Anwendung hat je
   Mitglied einen eigenen Platz für eine zu bestätigende Massenänderung; eine andere Anwendung kann sie
   nicht mehr verdrängen.
-  
+- **Keycloak: die Zustimmungsseite eines Geräte-Logins zeigt Warnung und Code.** Ein neuer
+  Login-Formular-Provider im SPI-Jar (`krt-freemarker`) reicht den Code an die Seite weiter; wer
+  einem fremden Code-Link folgt, sieht vor „Erlauben" die Phishing-Warnung und den Code zum
+  Vergleich (ADR-0228, REQ-XCH-005).
 - **Datenaustausch: Geräte-Login ohne fertigen Code-Link.** Anwendungen zeigen den Code und die
   schlichte Adresse `verification_uri`, in die das Mitglied den Code selbst eintippt; den Link mit
   eingesetztem Code, der die Warnseite überspringt, öffnen sie nicht mehr (`docs/exchange/`,

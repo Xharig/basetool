@@ -5,6 +5,13 @@
     <#elseif section = "form">
         <div class="login-container" id="kc-oauth">
             <h1>${msg("krtOauthGrantTitle", (client.name?has_content)?then(advancedMsg(client.name), client.clientId))}</h1>
+            <#if krtDeviceUserCode??>
+                <div class="krt-warning-box" role="note" id="krt-device-consent-warning">
+                    <strong>${msg("krtDeviceConsentWarningTitle")}</strong>
+                    <p>${msg("krtDeviceConsentWarningText")}</p>
+                    <p class="krt-device-code-line">${msg("krtDeviceConsentCodeLabel")} <span class="krt-monospace-text krt-device-code" id="krt-device-user-code" dir="ltr">${krtDeviceUserCode}</span></p>
+                </div>
+            </#if>
             <p class="krt-info-text">${msg("krtOauthGrantIntro")}</p>
             <ul class="krt-ul krt-consent-list">
                 <#if oauth.clientScopesRequested??>

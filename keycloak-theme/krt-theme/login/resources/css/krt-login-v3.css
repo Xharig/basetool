@@ -593,6 +593,18 @@ select[aria-invalid="true"],
     font-size: 1.1em !important;
 }
 
+.krt-warning-box .krt-device-code-line {
+    margin-top: 8px !important;
+}
+
+.krt-device-code {
+    color: var(--color-warning) !important;
+    font-size: 1.4em !important;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+}
+
 .krt-link {
     color: var(--color-primary) !important;
     text-decoration: underline !important;

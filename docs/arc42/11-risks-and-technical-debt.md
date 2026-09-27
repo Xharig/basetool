@@ -263,10 +263,9 @@ and its global switch stays off until the go-live; the risks hold from then on.
   not prevention: the „Verbundene Anwendungen" audit area, the `ExchangeRegistryChanged` alert on
   every registry change, the journal and the member's undo, and suspending the client (ADR-0217).
 - **Unsigned client releases.** Code signing is recommended, not required.
-- **Device-code phishing** is countered, not prevented (RFC 8628 §5.4). The counter is partial
-  until the consent page carries the warning and the user code: an attacker's
-  `verification_uri_complete` link skips the device page that warns (security review 2 of #2092,
-  M1; REQ-XCH-005).
+- **Device-code phishing** is countered, not prevented (RFC 8628 §5.4). The consent page an
+  attacker's `verification_uri_complete` link leads to carries the warning and the user code to
+  compare (ADR-0228, REQ-XCH-005); a member who ignores both still connects the attacker's client.
 - **A sync book-out can lower or remove Materialbörse offers**, as a web book-out does, and undo
   does not restore them. The change result reports `offersReduced` / `offersRemoved` and each
   offer change is audited (REQ-XCH-016, -022).
@@ -313,3 +312,11 @@ and its global switch stays off until the go-live; the risks hold from then on.
 - **Sessions are not carried across a host move** unless somebody chooses to copy the Redis data.
   Skipping it logs everyone out at the moment of the move — a user-visible choice rather than a
   technical one. The archived cutover runbook has the copy, including the `--numeric-owner` trap.
+- **The SPI jar leans on Keycloak internals, and a Keycloak upgrade can break it without a compile
+  error at deploy time.** The `krt-freemarker` login forms extend `FreeMarkerLoginFormsProvider`
+  and read the device flow's `OAUTH2_DEVICE_VERIFIED_USER_CODE` note (ADR-0228); the admin
+  extension and the Discord providers use other `keycloak-services` classes (ADR-0226). The jar
+  compiles against the pinned version only, so every Keycloak bump rebuilds it against the new
+  version, re-checks those classes and renders one device consent page (the sandbox smoke test
+  asserts the warning and the code). A silently changed default-provider rule would leave the
+  consent page without the code but still working.
