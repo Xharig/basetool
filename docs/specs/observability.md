@@ -1612,6 +1612,9 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `0` once switched off) and `basetool_ingest_legacy_gone_total` counter (legacy requests refused
   with `410 LEGACY_ENDPOINT_GONE`, registered at zero). No alert: after the go-live a trickle of
   refusals is outdated extractors, which the hint tells to update (REQ-XCH-033).
+- `basetool_exchange_departures_total{outcome}` counter — a departed member's exchange access
+  ended in full (`done`) or in part (`failed`), registered at zero; `ExchangeDepartureIncomplete`
+  (warning) fires on any failed one, since the step is not retried (REQ-XCH-008).
 - `basetool_exchange_disconnects_total{kind}` counter — a member disconnecting one installation or
   a whole client (`installation` / `client`, REQ-XCH-008), registered at zero and shown per day on
   the operations dashboard. The relay's `exchange_installation_invalid` refusal joins
