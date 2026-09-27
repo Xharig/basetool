@@ -771,6 +771,13 @@ public final class MetricNames {
   public static final String EXCHANGE_UNDO = "basetool.exchange.undo";
 
   /**
+   * Counter of the held-back change sets members confirmed, tagged by resource ({@code blueprint} /
+   * {@code stock} / {@code ship}) (REQ-XCH-021).
+   */
+  public static final String EXCHANGE_MASS_CHANGES_CONFIRMED =
+      "basetool.exchange.mass.changes.confirmed";
+
+  /**
    * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path
    * without a well-formed {@code X-Exchange-Installation}.
    */

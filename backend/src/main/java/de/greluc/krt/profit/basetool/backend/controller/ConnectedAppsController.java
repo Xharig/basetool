@@ -20,9 +20,12 @@
 package de.greluc.krt.profit.basetool.backend.controller;
 
 import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedAppDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedAppMassChangeRequestDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedAppMassChangeResultDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeUndoRequestDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeUndoResultDto;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ConnectedAppsService;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeMassChangeService;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeUndoService;
 import de.greluc.krt.profit.basetool.backend.support.AuthenticatedSubject;
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,6 +61,53 @@ public class ConnectedAppsController {
 
   private final ConnectedAppsService connectedAppsService;
   private final ExchangeUndoService undoService;
+  private final ExchangeMassChangeService massChangeService;
+
+  /**
+   * Shows what a change set the guard held back would do, writing nothing.
+   *
+   * @param request the staged change set the page consumed
+   * @param authentication the caller
+   * @return what it would apply
+   */
+  @NotNull
+  @PostMapping("/mass-changes/preview")
+  @Operation(
+      summary = "Preview a held-back change set",
+      description =
+          "Checks the client and installation again and plans the staged change set without"
+              + " writing.")
+  @ApiResponse(responseCode = "200", description = "What it would apply")
+  @ApiResponse(responseCode = "403", description = "The client may no longer write it")
+  @ApiResponse(responseCode = "404", description = "The client is not registered")
+  public ResponseEntity<ConnectedAppMassChangeResultDto> previewMassChange(
+      @NotNull @Valid @RequestBody ConnectedAppMassChangeRequestDto request,
+      @NotNull Authentication authentication) {
+    return ResponseEntity.ok(massChangeService.preview(member(authentication), request));
+  }
+
+  /**
+   * Applies a change set the guard held back, which the member confirmed.
+   *
+   * @param request the staged change set the page consumed
+   * @param authentication the caller
+   * @return what it applied
+   */
+  @NotNull
+  @PostMapping("/mass-changes/confirm")
+  @Operation(
+      summary = "Confirm a held-back change set",
+      description =
+          "Checks the client and installation again and applies the staged change set as the"
+              + " client's own write, without asking the mass-change guard again.")
+  @ApiResponse(responseCode = "200", description = "What it applied")
+  @ApiResponse(responseCode = "403", description = "The client may no longer write it")
+  @ApiResponse(responseCode = "404", description = "The client is not registered")
+  public ResponseEntity<ConnectedAppMassChangeResultDto> confirmMassChange(
+      @NotNull @Valid @RequestBody ConnectedAppMassChangeRequestDto request,
+      @NotNull Authentication authentication) {
+    return ResponseEntity.ok(massChangeService.confirm(member(authentication), request));
+  }
 
   /**
    * Undoes a client's writes to the caller's blueprints, stock and ships since a point in time.
