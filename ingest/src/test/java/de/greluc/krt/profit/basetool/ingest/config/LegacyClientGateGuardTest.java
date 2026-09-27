@@ -54,6 +54,37 @@ class LegacyClientGateGuardTest {
   }
 
   @Test
+  void productionRefusesAnAllowlistThatOnlyAudits() {
+    LegacyClientGateGuard guard =
+        new LegacyClientGateGuard(
+            environment("prod"),
+            TestProperties.clientIdentity(
+                "allowed-client-ids", "basetool-sc-extractor", "audit-only", "true"),
+            TestProperties.ingest());
+
+    assertThatThrownBy(guard::afterPropertiesSet)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("IRI_INGEST_CLIENT_AUDIT_ONLY");
+  }
+
+  @Test
+  void auditOnlyIsAllowedOnceTheLegacyEndpointsAreOffAndOutsideProduction() {
+    LegacyClientGateGuard off =
+        new LegacyClientGateGuard(
+            environment("prod"),
+            TestProperties.clientIdentity("audit-only", "true"),
+            TestProperties.ingest("legacy-endpoints.enabled", "false"));
+    LegacyClientGateGuard dev =
+        new LegacyClientGateGuard(
+            environment("dev"),
+            TestProperties.clientIdentity("audit-only", "true"),
+            TestProperties.ingest());
+
+    assertThatCode(off::afterPropertiesSet).doesNotThrowAnyException();
+    assertThatCode(dev::afterPropertiesSet).doesNotThrowAnyException();
+  }
+
+  @Test
   void productionStartsWithoutAnAllowlistOnceTheLegacyEndpointsAreOff() {
     LegacyClientGateGuard guard =
         new LegacyClientGateGuard(

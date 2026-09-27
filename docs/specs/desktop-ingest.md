@@ -665,16 +665,21 @@ done by a PR, so shipping these pre-enabled would reject every real extractor to
 client population (`basetool_ingest_client_rejected_total` staying at zero) before enforcing — the
 same sequencing discipline `REQ-INGEST-008` imposes on the audience validator.
 
-**One exception: production refuses to start with an empty client-id allowlist while the legacy
-endpoints answer** (`LegacyClientGateGuard`, 2026-09-27). Since exchange clients exist, an empty
+**One exception: production refuses to start with an empty or audit-only client-id allowlist while
+the legacy endpoints answer** (`LegacyClientGateGuard`, 2026-09-27). Since exchange clients exist, an empty
 allowlist no longer only admits the extractor: any realm token that passes the audience check — a
 third-party exchange client's included — would reach the legacy draft relays, which run with the
 member's full stored authorities rather than the reduced exchange authentication (REQ-XCH-009). Under
 `prod`, with `app.ingest.legacy-endpoints.enabled` true and `allowed-client-ids` empty, the gateway
-therefore fails its start with a message naming `IRI_INGEST_ALLOWED_CLIENT_IDS`. `dev` and `test` keep
+therefore fails its start with a message naming `IRI_INGEST_ALLOWED_CLIENT_IDS`; with `audit-only`
+true it fails the same way naming `IRI_INGEST_CLIENT_AUDIT_ONLY`, because an allowlist that only counts
+admits the same tokens (owner decision 2026-09-27). The audit-only dry run of a new check therefore
+runs on the testing host or a local stack, not on production. `dev` and `test` keep
 the inert default, and once the legacy endpoints are off (REQ-XCH-033) the allowlist is no longer
 needed, because both routes answer `410` before the security chain. Production already sets the value
-(`basetool-sc-extractor`, read-only check on 2026-09-27), so the next deploy starts as before. The
+(`basetool-sc-extractor`, read-only check on 2026-09-27) and has run with `audit-only` false since
+2026-08-30 (as `INGEST_KEYCLOAK_SETUP.md` and the knowledge base record it), so the next deploy starts
+as before. The
 compose files and the Quadlet `env.d` template keep their empty default on purpose: the value is host
 configuration, and a host that lacks it now fails loudly instead of running open.
 
@@ -728,7 +733,7 @@ authentication: the field is client-supplied and the contract that documents it 
 **Acceptance**
 
 - [x] With nothing configured the gate is a no-op; a build that ships it does not reject any token.
-- [x] Under `prod`, an empty client-id allowlist refuses the start while the legacy endpoints answer;
+- [x] Under `prod`, an empty or audit-only client-id allowlist refuses the start while the legacy endpoints answer;
   with an allowlist, with the legacy endpoints off, or under `dev` / `test` the gateway starts
   (`LegacyClientGateGuardTest`).
 - [x] A token whose `azp` is not on the allowlist is refused `403 CLIENT_NOT_ALLOWED` and never

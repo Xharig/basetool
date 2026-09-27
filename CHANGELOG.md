@@ -223,8 +223,8 @@
   
 - **Ingest: Produktion startet nicht ohne Client-Allowlist.** Solange die alten `/v1`-Endpunkte
   aktiv sind, verweigert das Gateway unter `prod` den Start, wenn `IRI_INGEST_ALLOWED_CLIENT_IDS`
-  leer ist – sonst erreichte das Token einer verbundenen Anwendung die alten Entwurfs-Relays.
-  Produktion setzt den Wert bereits.
+  leer ist oder `IRI_INGEST_CLIENT_AUDIT_ONLY` auf `true` steht – sonst erreichte das Token einer
+  verbundenen Anwendung die alten Entwurfs-Relays. Produktion setzt beides bereits passend.
   
 - **Keycloak: Offline-Sitzung des SC Extractors fest auf 30/90 Tage.** Der Provisioner setzt beim
   Client `basetool-sc-extractor` dieselbe Offline-Sitzung wie bei verbundenen Anwendungen (30 Tage

@@ -64,7 +64,7 @@ this repository cannot see them:
 |----------------------------------|-------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `IRI_BACKEND_EXPECTED_AUDIENCES` | backend                             | `basetool-backend` — enforcing since #1247 (2026-08-28); **required** since 2026-09-22 — blank refuses the prod start (APPSEC-08) |
 | `IRI_INGEST_ALLOWED_CLIENT_IDS`  | ingest                              | `basetool-sc-extractor` (read-only check 2026-09-27); **required** under `prod` while the legacy endpoints answer — blank refuses the start (`LegacyClientGateGuard`) |
-| `IRI_INGEST_CLIENT_AUDIT_ONLY`   | ingest                              | `false` since 2026-08-30 — the `azp` allowlist enforces                                                                            |
+| `IRI_INGEST_CLIENT_AUDIT_ONLY`   | ingest                              | `false` since 2026-08-30 — the `azp` allowlist enforces; **must stay `false`** under `prod` while the legacy endpoints answer — `true` refuses the start (`LegacyClientGateGuard`) |
 | `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED` | ingest                         | not set — the default `true` keeps `/v1/*` answering; set `false` only at the exchange go-live (REQ-XCH-033, WP 6), after which both routes answer `410 LEGACY_ENDPOINT_GONE` |
 | `IRI_INGEST_EXPECTED_AUDIENCES`  | ingest                              | `basetool-ingest` since **2026-09-22 21:37 UTC** (host `.env` set, `env.d` re-rendered, `ingest.service` restarted; the container's environment read back as `APP_SECURITY_JWT_EXPECTED_AUDIENCES=basetool-ingest`, container healthy). **Corrected 2026-09-23:** this row said it was read on 2026-08-28 as the backend's value and was open |
 | `IRI_INGEST_REQUIRED_SCOPE`, `IRI_INGEST_ALLOWED_TOOLS` | ingest       | not present in the environment read on 2026-08-28, so inert — **open** (7b, 7c)                                                    |
@@ -662,6 +662,12 @@ Apply and restart the gateway, then watch for at least one full scrape interval:
 Only when both hold, set `IRI_INGEST_CLIENT_AUDIT_ONLY=false` and apply again. The
 `IngestUnknownClient` alert fires on the same counter afterwards. (Audit-only went to `false` on
 2026-08-30, with only the client-id allowlist configured.)
+
+> **Audit-only is no longer possible on production while the legacy endpoints answer**
+> (`LegacyClientGateGuard`, owner decision 2026-09-27): under the `prod` profile the gateway refuses
+> to start with `IRI_INGEST_CLIENT_AUDIT_ONLY=true` or an empty `IRI_INGEST_ALLOWED_CLIENT_IDS`. The
+> dry run above therefore belongs on the testing host or a local stack; production enforces from the
+> first start. The go-live switches the legacy endpoints off, after which the guard no longer applies.
 
 > Multiple client ids are supported (comma-separated), which is what makes a client-id **rotation**
 > possible without downtime: ship the new extractor with a new id, run both, drop the old id once the
