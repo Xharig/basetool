@@ -95,6 +95,16 @@ public interface ExchangeJournalRepository extends JpaRepository<ExchangeJournal
   List<ExchangeJournalEntry> findAllByUserIdOrderByRecordedAtAsc(UUID userId);
 
   /**
+   * Lists a client's latest writes to a member's entries.
+   *
+   * @param userId the member
+   * @param clientId the client
+   * @return at most ten writes, newest first
+   */
+  List<ExchangeJournalEntry> findTop10ByUserIdAndClientIdOrderByRecordedAtDescIdDesc(
+      UUID userId, String clientId);
+
+  /**
    * Finds a client's first write to one entry of a member since a point in time.
    *
    * @param userId the member

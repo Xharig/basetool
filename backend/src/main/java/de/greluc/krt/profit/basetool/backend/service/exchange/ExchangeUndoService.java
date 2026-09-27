@@ -37,9 +37,7 @@ import de.greluc.krt.profit.basetool.backend.repository.ExchangeChangeRepository
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeJournalRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeShipLinkRepository;
-import de.greluc.krt.profit.basetool.backend.repository.GameItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
-import de.greluc.krt.profit.basetool.backend.repository.MaterialRepository;
 import de.greluc.krt.profit.basetool.backend.repository.PersonalBlueprintRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ShipRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ShipTypeRepository;
@@ -100,8 +98,6 @@ public class ExchangeUndoService {
   private final PersonalBlueprintRepository blueprintRepository;
   private final PersonalBlueprintService blueprintService;
   private final ExchangeStockWriteService stockWriteService;
-  private final MaterialRepository materialRepository;
-  private final GameItemRepository gameItemRepository;
   private final ShipRepository shipRepository;
   private final ShipTypeRepository shipTypeRepository;
   private final LocationRepository locationRepository;
@@ -109,6 +105,7 @@ public class ExchangeUndoService {
   private final ExchangeShipLinkRepository linkRepository;
   private final AuditService auditService;
   private final ExchangeLiveSync liveSync;
+  private final ExchangeEntryLabels entryLabels;
   private final MeterRegistry meterRegistry;
   private final ObjectMapper objectMapper;
   private final Clock clock = Clock.systemUTC();
@@ -135,7 +132,7 @@ public class ExchangeUndoService {
   @Transactional
   public @NotNull ExchangeUndoResultDto undo(
       @NotNull UUID member, @NotNull String clientId, @NotNull Instant since) {
-    ExchangeClient client =
+    final ExchangeClient client =
         clientRepository
             .findWithCapabilitiesByClientId(clientId)
             .orElseThrow(() -> new NotFoundException("Client not found"));
@@ -149,7 +146,8 @@ public class ExchangeUndoService {
           .add(entry);
     }
     int restored = 0;
-    List<ExchangeUndoResultDto.Skipped> skipped = new ArrayList<>();
+    List<ExchangeJournalEntry> skippedEntries = new ArrayList<>();
+    List<String> skippedReasons = new ArrayList<>();
     Set<ExchangeResource> touched = EnumSet.noneOf(ExchangeResource.class);
     Instant now = clock.instant();
     for (List<ExchangeJournalEntry> group : groups.values()) {
@@ -157,7 +155,8 @@ public class ExchangeUndoService {
       ExchangeResource resource = newest.getResource();
       String reason = restore(member, clientId, group);
       if (reason != null) {
-        skipped.add(new ExchangeUndoResultDto.Skipped(resource.name(), label(group), reason));
+        skippedEntries.add(newest);
+        skippedReasons.add(reason);
         counter(resource, SKIPPED).increment();
         continue;
       }
@@ -165,6 +164,14 @@ public class ExchangeUndoService {
       restored++;
       touched.add(resource);
       counter(resource, RESTORED).increment();
+    }
+    Map<UUID, String> labels = entryLabels.label(skippedEntries);
+    List<ExchangeUndoResultDto.Skipped> skipped = new ArrayList<>();
+    for (int i = 0; i < skippedEntries.size(); i++) {
+      ExchangeJournalEntry entry = skippedEntries.get(i);
+      skipped.add(
+          new ExchangeUndoResultDto.Skipped(
+              entry.getResource().name(), labels.get(entry.getId()), skippedReasons.get(i)));
     }
     auditService.record(
         AuditEventType.EXCHANGE_CHANGES_UNDONE,
@@ -352,50 +359,6 @@ public class ExchangeUndoService {
                     .build());
           }
         });
-  }
-
-  /**
-   * Names an entry for the member: the blueprint, the material or item, or the ship type.
-   *
-   * @param group the client's writes to the entry
-   * @return the name, or {@code null} when it is no longer known
-   */
-  private @Nullable String label(@NotNull List<ExchangeJournalEntry> group) {
-    ExchangeJournalEntry entry = group.getFirst();
-    JsonNode state = parse(entry.getAfterState());
-    if (state == null) {
-      state = parse(group.getLast().getBeforeState());
-    }
-    return switch (entry.getResource()) {
-      case BLUEPRINT -> state == null ? null : text(state, "productName");
-      case STOCK -> lotLabel(entry.getEntityKey());
-      case SHIP -> {
-        String type = state == null ? null : text(state, "shipType");
-        yield type == null
-            ? null
-            : shipTypeRepository.findById(UUID.fromString(type)).map(t -> t.getName()).orElse(null);
-      }
-    };
-  }
-
-  /**
-   * Names a lot by its material or item.
-   *
-   * @param lotKey the lot
-   * @return the name, or {@code null} when it is gone
-   */
-  private @Nullable String lotLabel(@NotNull String lotKey) {
-    if (lotKey.length() < 38) {
-      return null;
-    }
-    try {
-      UUID id = UUID.fromString(lotKey.substring(2, 38));
-      return lotKey.startsWith("m:")
-          ? materialRepository.findById(id).map(m -> m.getName()).orElse(null)
-          : gameItemRepository.findById(id).map(i -> i.getName()).orElse(null);
-    } catch (IllegalArgumentException ignored) {
-      return null;
-    }
   }
 
   /**

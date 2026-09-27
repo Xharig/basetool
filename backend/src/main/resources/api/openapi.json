@@ -60135,9 +60135,36 @@
         },
         "required" : [ "holderId", "version" ]
       },
+      "ConnectedAppActivityDto" : {
+        "type" : "object",
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "recordedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "resource" : {
+            "type" : "string"
+          },
+          "undone" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "ConnectedAppDto" : {
         "type" : "object",
         "properties" : {
+          "activity" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectedAppActivityDto"
+            }
+          },
           "capabilities" : {
             "type" : "array",
             "items" : {

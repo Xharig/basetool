@@ -137,6 +137,20 @@
         });
     }
 
+    /** Reports the highlighted new connections as seen; the highlight stays until the next load. */
+    function markSeen() {
+        if (!window.krtFetch || !host || !host.querySelector('[data-ca-unseen]')) {
+            return;
+        }
+        window.krtFetch.write({
+            method: 'POST',
+            url: BASE + '/seen',
+            toast: false,
+            errorMessage: i18n.error,
+        });
+    }
+    markSeen();
+
     /** Re-renders the list in place from the `apps` fragment. */
     function refreshApps() {
         return window.krtFetch.swap({
