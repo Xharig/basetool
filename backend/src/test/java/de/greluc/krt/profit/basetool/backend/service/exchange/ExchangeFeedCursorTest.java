@@ -35,20 +35,28 @@ class ExchangeFeedCursorTest {
   void aSnapshotPositionSurvivesTheRoundTrip() {
     UUID id = UUID.randomUUID();
     ExchangeFeedCursor cursor =
-        ExchangeFeedCursor.parse(ExchangeFeedCursor.snapshot(42, id).format());
+        ExchangeFeedCursor.parse(
+            ExchangeFeedCursor.snapshot(new ExchangeFeedPosition(7000, 0), id).format());
 
     assertThat(cursor.isSnapshot()).isTrue();
-    assertThat(cursor.seq()).isEqualTo(42);
+    assertThat(cursor.position()).isEqualTo(new ExchangeFeedPosition(7000, 0));
     assertThat(cursor.afterId()).isEqualTo(id);
   }
 
   @Test
   void aFeedPositionSurvivesTheRoundTrip() {
-    ExchangeFeedCursor cursor = ExchangeFeedCursor.parse("f1.0");
+    ExchangeFeedCursor cursor = ExchangeFeedCursor.parse("f1.7000.42");
 
     assertThat(cursor.isSnapshot()).isFalse();
-    assertThat(cursor.seq()).isZero();
-    assertThat(cursor.format()).isEqualTo("f1.0");
+    assertThat(cursor.position()).isEqualTo(new ExchangeFeedPosition(7000, 42));
+    assertThat(cursor.format()).isEqualTo("f1.7000.42");
+  }
+
+  @Test
+  void positionsOrderByTransactionFirst() {
+    assertThat(new ExchangeFeedPosition(5, 900).isBefore(new ExchangeFeedPosition(6, 1))).isTrue();
+    assertThat(new ExchangeFeedPosition(6, 1).isBefore(new ExchangeFeedPosition(6, 2))).isTrue();
+    assertThat(new ExchangeFeedPosition(6, 2).isBefore(new ExchangeFeedPosition(6, 2))).isFalse();
   }
 
   @ParameterizedTest
@@ -56,14 +64,17 @@ class ExchangeFeedCursorTest {
       strings = {
         "",
         "f1.",
-        "f1.-1",
-        "f2.5",
-        "f1.99999999999999999999",
-        "f1.9999999999999999999",
-        "s1.5",
-        "s1.5.not-a-uuid",
-        "s1.5.00000000-0000-0000-0000-00000000000G",
-        " f1.5"
+        "f1.5",
+        "f1.5.",
+        "f1.-1.0",
+        "f2.5.0",
+        "f1.99999999999999999999.0",
+        "f1.9999999999999999999.0",
+        "f1.5.9999999999999999999",
+        "s1.5.0",
+        "s1.5.0.not-a-uuid",
+        "s1.5.0.00000000-0000-0000-0000-00000000000G",
+        " f1.5.0"
       })
   void aValueTheServerDidNotIssueHasExpired(String value) {
     assertThatThrownBy(() -> ExchangeFeedCursor.parse(value))

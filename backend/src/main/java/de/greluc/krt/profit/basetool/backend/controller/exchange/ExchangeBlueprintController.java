@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.controller.exchange;
 
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintPageDto;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeBlueprintFeedService;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeFeedReader;
 import de.greluc.krt.profit.basetool.backend.support.SubjectAuthentication;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -68,7 +69,7 @@ public class ExchangeBlueprintController {
   @ApiResponse(responseCode = "410", description = "The cursor has expired (CURSOR_EXPIRED)")
   public ResponseEntity<ExchangeBlueprintPageDto> page(
       @Nullable @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "" + ExchangeBlueprintFeedService.DEFAULT_LIMIT) int limit,
+      @RequestParam(defaultValue = "" + ExchangeFeedReader.DEFAULT_LIMIT) int limit,
       @NotNull Authentication authentication) {
     SubjectAuthentication caller = (SubjectAuthentication) authentication;
     return ResponseEntity.ok(feedService.page(UUID.fromString(caller.subject()), cursor, limit));

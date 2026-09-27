@@ -42,6 +42,8 @@ import de.greluc.krt.profit.basetool.backend.service.DefaultBlueprintKeyService;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeBlueprintFeedService;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -49,7 +51,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.jetbrains.annotations.NotNull;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,21 +66,23 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.WebApplicationContext;
 
+/**
+ * The member's blueprints as a snapshot and a change feed, relayed from the ingest gateway
+ * (REQ-XCH-013, REQ-XCH-015). Writes commit, because the feed reads only finished transactions.
+ */
 @SpringBootTest
 @ActiveProfiles("test")
-@Transactional
 @TestPropertySource(properties = "app.security.ingest-gateway.client-ids=test-ingest-gateway")
 class ExchangeBlueprintControllerTest {
 
   private static final String PATH = "/api/v1/exchange/me/blueprints";
-  private static final UUID MEMBER = UUID.fromString("44444444-4444-4444-4444-4444444440e1");
-  private static final UUID OTHER = UUID.fromString("44444444-4444-4444-4444-4444444440e2");
   private static final String GATEWAY = "55555555-5555-5555-5555-555555555555";
-  private static final String CLIENT = "versekit-bp";
   private static final String KEY = "Kx9_" + "e".repeat(39);
+  private static final String DEFAULT_PRODUCT = "feed-default-arrowhead";
 
   @Autowired private WebApplicationContext context;
   @Autowired private UserRepository userRepository;
@@ -85,10 +91,16 @@ class ExchangeBlueprintControllerTest {
   @Autowired private ExchangeSettingsRepository settingsRepository;
   @Autowired private ExchangeInstallationRepository installationRepository;
   @Autowired private DefaultBlueprintKeyService defaultKeys;
+  @Autowired private PlatformTransactionManager transactionManager;
+  @Autowired private DataSource dataSource;
   @Autowired private JdbcTemplate jdbc;
 
   private MockMvc mockMvc;
+  private UUID member;
+  private UUID other;
+  private String client;
   private ExchangeInstallation installation;
+  private boolean wasEnabled;
 
   @BeforeEach
   void setUp() {
@@ -96,34 +108,55 @@ class ExchangeBlueprintControllerTest {
         MockMvcBuilders.webAppContextSetup(context)
             .addFilters(context.getBean(FilterChainProxy.class))
             .build();
-    User member = user(MEMBER, "feed-member");
-    user(OTHER, "feed-other");
-    ExchangeClient client = new ExchangeClient();
-    client.setClientId(CLIENT);
-    client.setDisplayName("VerseKit");
-    client.setStatus(ExchangeClientStatus.ACTIVE);
-    client.setCapabilities(
+    member = user("feed-member").getId();
+    other = user("feed-other").getId();
+    client = "vk-" + UUID.randomUUID().toString().substring(0, 8);
+    ExchangeClient registered = new ExchangeClient();
+    registered.setClientId(client);
+    registered.setDisplayName("VerseKit");
+    registered.setStatus(ExchangeClientStatus.ACTIVE);
+    registered.setCapabilities(
         EnumSet.of(ExchangeCapability.CONNECT, ExchangeCapability.BLUEPRINTS_READ));
-    clientRepository.saveAndFlush(client);
+    registered = clientRepository.saveAndFlush(registered);
     installation = new ExchangeInstallation();
-    installation.setClient(client);
-    installation.setUser(member);
+    installation.setClient(registered);
+    installation.setUser(userRepository.findById(member).orElseThrow());
     installation.setKeyThumbprint(KEY);
     installation.setFirstSeenAt(Instant.now());
     installation.setLastSeenAt(Instant.now());
     installation = installationRepository.saveAndFlush(installation);
     ExchangeSettings settings =
         settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
+    wasEnabled = settings.isEnabled();
     settings.setEnabled(true);
+    settingsRepository.saveAndFlush(settings);
+  }
+
+  @AfterEach
+  void tearDown() {
+    jdbc.update("DELETE FROM default_blueprint WHERE product_key = ?", DEFAULT_PRODUCT);
+    defaultKeys.refresh();
+    jdbc.update(
+        "UPDATE exchange_feed_horizon SET purged_through_tx = 0, purged_through_seq = 0 WHERE id ="
+            + " 1");
+    jdbc.update("DELETE FROM exchange_client WHERE client_id = ?", client);
+    for (UUID id : List.of(member, other)) {
+      jdbc.update("DELETE FROM personal_blueprint WHERE owner_user_id = ?", id);
+      jdbc.update("DELETE FROM user_roles WHERE user_id = ?", id);
+      jdbc.update("DELETE FROM app_user WHERE id = ?", id);
+    }
+    ExchangeSettings settings =
+        settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
+    settings.setEnabled(wasEnabled);
     settingsRepository.saveAndFlush(settings);
   }
 
   @Test
   void aSnapshotPagesThroughTheMembersBlueprintsAndEndsAtTheFeed() throws Exception {
-    blueprint(MEMBER, "arrowhead");
-    blueprint(MEMBER, "p4-ar");
-    blueprint(MEMBER, "s71");
-    blueprint(OTHER, "not-mine");
+    blueprint(member, "arrowhead");
+    blueprint(member, "p4-ar");
+    blueprint(member, "s71");
+    blueprint(other, "not-mine");
 
     String first =
         read(relayed(get(PATH).param("limit", "2"), "exchange.blueprints.read"))
@@ -154,18 +187,22 @@ class ExchangeBlueprintControllerTest {
 
   @Test
   void theFeedAnswersAnAdditionAndATombstoneNamingTheRemovingInstallation() throws Exception {
-    blueprint(MEMBER, "arrowhead");
-    blueprint(MEMBER, "s71");
+    blueprint(member, "arrowhead");
+    blueprint(member, "s71");
     String cursor = snapshotEnd();
 
-    jdbc.queryForObject(
-        "SELECT set_config('basetool.change_source', ?, true)",
-        String.class,
-        "client|" + CLIENT + "|" + KEY);
-    jdbc.update(
-        "DELETE FROM personal_blueprint WHERE owner_user_id = ? AND product_key = 's71'", MEMBER);
-    jdbc.queryForObject("SELECT set_config('basetool.change_source', 'web', true)", String.class);
-    blueprint(MEMBER, "p4-ar");
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(
+            s -> {
+              jdbc.queryForObject(
+                  "SELECT set_config('basetool.change_source', ?, true)",
+                  String.class,
+                  "client|" + client + "|" + KEY);
+              jdbc.update(
+                  "DELETE FROM personal_blueprint WHERE owner_user_id = ? AND product_key = 's71'",
+                  member);
+            });
+    blueprint(member, "p4-ar");
 
     read(relayed(get(PATH).param("cursor", cursor), "exchange.blueprints.read"))
         .andExpect(status().isOk())
@@ -177,7 +214,7 @@ class ExchangeBlueprintControllerTest {
         .andExpect(jsonPath("$.removed.length()").value(1))
         .andExpect(jsonPath("$.removed[0].key").value("s71"))
         .andExpect(jsonPath("$.removed[0].removedBy.channel").value("client"))
-        .andExpect(jsonPath("$.removed[0].removedBy.clientId").value(CLIENT))
+        .andExpect(jsonPath("$.removed[0].removedBy.clientId").value(client))
         .andExpect(
             jsonPath("$.removed[0].removedBy.installationId")
                 .value(installation.getId().toString()))
@@ -185,18 +222,70 @@ class ExchangeBlueprintControllerTest {
   }
 
   @Test
+  void aWriterThatCommitsAfterALaterOneIsNeverPassed() throws Exception {
+    String cursor = snapshotEnd();
+
+    try (Connection slow = dataSource.getConnection()) {
+      slow.setAutoCommit(false);
+      try (PreparedStatement insert =
+          slow.prepareStatement(
+              "INSERT INTO personal_blueprint (id, owner_user_id, product_key, product_name)"
+                  + " VALUES (?, ?, 'slow', 'slow')")) {
+        insert.setObject(1, UUID.randomUUID());
+        insert.setObject(2, member);
+        insert.executeUpdate();
+      }
+      blueprint(member, "fast");
+
+      String held =
+          read(relayed(get(PATH).param("cursor", cursor), "exchange.blueprints.read"))
+              .andExpect(jsonPath("$.items.length()").value(0))
+              .andReturn()
+              .getResponse()
+              .getContentAsString();
+      cursor = JsonPath.read(held, "$.nextCursor");
+      slow.commit();
+    }
+
+    String caughtUp =
+        read(relayed(get(PATH).param("cursor", cursor), "exchange.blueprints.read"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(JsonPath.<List<String>>read(caughtUp, "$.items[*].key"))
+        .containsExactly("slow", "fast");
+  }
+
+  @Test
   void aKeyChangedTwiceIsAnsweredOnceWithItsCurrentState() throws Exception {
-    blueprint(MEMBER, "arrowhead");
+    blueprint(member, "arrowhead");
     String cursor = snapshotEnd();
 
     jdbc.update(
         "DELETE FROM personal_blueprint WHERE owner_user_id = ? AND product_key = 'arrowhead'",
-        MEMBER);
-    blueprint(MEMBER, "arrowhead");
+        member);
+    blueprint(member, "arrowhead");
 
     read(relayed(get(PATH).param("cursor", cursor), "exchange.blueprints.read"))
         .andExpect(jsonPath("$.items.length()").value(1))
         .andExpect(jsonPath("$.removed.length()").value(0));
+  }
+
+  @Test
+  void anIdleFeedKeepsItsCursorAtTheWatermark() throws Exception {
+    String cursor = snapshotEnd();
+    blueprint(other, "someone-elses");
+
+    String body =
+        read(relayed(get(PATH).param("cursor", cursor), "exchange.blueprints.read"))
+            .andExpect(jsonPath("$.items.length()").value(0))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    String next = JsonPath.read(body, "$.nextCursor");
+    assertThat(Long.parseLong(next.split("\\.")[1]))
+        .isGreaterThan(Long.parseLong(cursor.split("\\.")[1]));
   }
 
   @Test
@@ -208,7 +297,7 @@ class ExchangeBlueprintControllerTest {
         VALUES (?, ?, ?, ?)
         """,
         UUID.randomUUID(),
-        MEMBER,
+        member,
         longKey,
         "n".repeat(255));
     String key = ExchangeBlueprintFeedService.keyOf(longKey);
@@ -221,25 +310,27 @@ class ExchangeBlueprintControllerTest {
 
   @Test
   void aDefaultBlueprintIsMarkedAndItsSetChangeReachesTheFeed() throws Exception {
-    blueprint(MEMBER, "arrowhead");
+    blueprint(member, DEFAULT_PRODUCT);
     String cursor = snapshotEnd();
 
     jdbc.update(
-        "INSERT INTO default_blueprint (id, product_key, product_name) VALUES (?, 'arrowhead',"
-            + " 'Arrowhead')",
-        UUID.randomUUID());
+        "INSERT INTO default_blueprint (id, product_key, product_name) VALUES (?, ?, 'Arrowhead')",
+        UUID.randomUUID(),
+        DEFAULT_PRODUCT);
     defaultKeys.refresh();
 
     read(relayed(get(PATH).param("cursor", cursor), "exchange.blueprints.read"))
-        .andExpect(jsonPath("$.items[0].key").value("arrowhead"))
+        .andExpect(jsonPath("$.items[0].key").value(DEFAULT_PRODUCT))
         .andExpect(jsonPath("$.items[0].isDefault").value(true));
   }
 
   @Test
   void aCursorBelowTheHorizonHasExpired() throws Exception {
-    jdbc.update("UPDATE exchange_feed_horizon SET purged_through_seq = 9000000000 WHERE id = 1");
+    jdbc.update(
+        "UPDATE exchange_feed_horizon SET purged_through_tx = 9000000000, purged_through_seq = 1"
+            + " WHERE id = 1");
 
-    read(relayed(get(PATH).param("cursor", "f1.5"), "exchange.blueprints.read"))
+    read(relayed(get(PATH).param("cursor", "f1.5.0"), "exchange.blueprints.read"))
         .andExpect(status().isGone())
         .andExpect(jsonPath("$.code").value("CURSOR_EXPIRED"));
   }
@@ -283,7 +374,7 @@ class ExchangeBlueprintControllerTest {
   }
 
   /**
-   * Inserts a blueprint directly.
+   * Inserts and commits a blueprint.
    *
    * @param owner the owner
    * @param productKey the product key
@@ -303,14 +394,13 @@ class ExchangeBlueprintControllerTest {
   /**
    * Seeds a member.
    *
-   * @param id the id
-   * @param username the username
+   * @param username the username prefix
    * @return the member
    */
-  private @NotNull User user(@NotNull UUID id, @NotNull String username) {
+  private @NotNull User user(@NotNull String username) {
     User user = new User();
-    user.setId(id);
-    user.setUsername(username);
+    user.setId(UUID.randomUUID());
+    user.setUsername(username + "-" + UUID.randomUUID());
     user.setApprovalStatus(ApprovalStatus.ACTIVE);
     user.setInKeycloak(true);
     user.setRoles(new HashSet<>(Set.of(roleRepository.findByCode(Roles.KRT_MEMBER).orElseThrow())));
@@ -324,12 +414,12 @@ class ExchangeBlueprintControllerTest {
    * @param capabilities the relayed capabilities
    * @return the request
    */
-  private static @NotNull MockHttpServletRequestBuilder relayed(
+  private @NotNull MockHttpServletRequestBuilder relayed(
       @NotNull MockHttpServletRequestBuilder request, @NotNull String capabilities) {
     return request
         .with(jwt().jwt(t -> t.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-        .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-        .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, CLIENT)
+        .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, member.toString())
+        .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, client)
         .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, capabilities)
         .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, KEY);
   }

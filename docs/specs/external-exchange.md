@@ -409,8 +409,10 @@ purged position as the horizon, below which a cursor has expired.
 
 A snapshot pages by row id and ends with the feed cursor it was taken at, so nothing written during
 it is lost. A feed page answers each key changed after the cursor once, with its current state or a
-tombstone whose `installationId` is the removing installation's id. Cursors are `s1.<seq>.<id>` and
-`f1.<seq>` and stay opaque to clients; one the server did not issue also answers `CURSOR_EXPIRED`.
+tombstone whose `installationId` is the removing installation's id. A feed page that reaches the end
+moves the cursor up to the watermark, so an idle client's cursor never falls behind the horizon.
+Cursors are `s1.<tx>.<seq>.<id>` and `f1.<tx>.<seq>` and stay opaque to clients; one the server did not
+issue also answers `CURSOR_EXPIRED`.
 
 **Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
 (#2083); the backend's blueprint feed (`/api/v1/exchange/me/blueprints`) is built, the gateway route

@@ -20,28 +20,21 @@
 package de.greluc.krt.profit.basetool.backend.service.exchange;
 
 import de.greluc.krt.profit.basetool.backend.exception.ExchangeProblemException;
-import de.greluc.krt.profit.basetool.backend.model.ExchangeChange;
-import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
 import de.greluc.krt.profit.basetool.backend.model.PersonalBlueprint;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintPageDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeProductRefDto;
-import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeRemovedByDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeTombstoneDto;
-import de.greluc.krt.profit.basetool.backend.repository.ExchangeChangeRepository;
-import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.PersonalBlueprintRepository;
 import de.greluc.krt.profit.basetool.backend.service.DefaultBlueprintKeyService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -64,12 +57,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ExchangeBlueprintFeedService {
 
-  /** The largest page a client may ask for, the published schema's limit. */
-  public static final int MAX_LIMIT = 1000;
-
-  /** The page size when the client names none. */
-  public static final int DEFAULT_LIMIT = 500;
-
   /** Keys up to this length are used as they are; longer ones are hashed. */
   private static final int MAX_PLAIN_KEY = 128;
 
@@ -77,9 +64,7 @@ public class ExchangeBlueprintFeedService {
   private static final int MAX_NAME = 200;
 
   private final PersonalBlueprintRepository blueprintRepository;
-  private final ExchangeChangeRepository changeRepository;
-  private final ExchangeInstallationRepository installationRepository;
-  private final ExchangeChangeRetentionService retentionService;
+  private final ExchangeFeedReader feedReader;
   private final DefaultBlueprintKeyService defaultKeys;
 
   /**
@@ -87,7 +72,7 @@ public class ExchangeBlueprintFeedService {
    *
    * @param member the member
    * @param cursor the cursor the client echoed, or {@code null} for a new snapshot
-   * @param limit the page size, clamped to {@code 1..}{@value #MAX_LIMIT}
+   * @param limit the page size, clamped to {@code 1..}{@value ExchangeFeedReader#MAX_LIMIT}
    * @return the page
    * @throws ExchangeProblemException {@code 410 CURSOR_EXPIRED} for a cursor older than the
    *     retained changes or not issued by the server
@@ -95,17 +80,14 @@ public class ExchangeBlueprintFeedService {
   @Transactional(readOnly = true)
   public @NotNull ExchangeBlueprintPageDto page(
       @NotNull UUID member, @Nullable String cursor, int limit) {
-    int size = Math.clamp(limit, 1, MAX_LIMIT);
+    int size = ExchangeFeedReader.pageSize(limit);
     if (cursor == null) {
-      return snapshot(member, changeRepository.maxSeq(), null, size);
+      return snapshot(member, feedReader.snapshotStart(), null, size);
     }
-    ExchangeFeedCursor position = ExchangeFeedCursor.parse(cursor);
-    if (position.seq() < retentionService.horizon()) {
-      throw ExchangeProblemException.cursorExpired();
-    }
+    ExchangeFeedCursor position = feedReader.resume(cursor);
     return position.isSnapshot()
-        ? snapshot(member, position.seq(), position.afterId(), size)
-        : feed(member, position.seq(), size);
+        ? snapshot(member, position.position(), position.afterId(), size)
+        : feed(member, position.position(), size);
   }
 
   /**
@@ -131,13 +113,13 @@ public class ExchangeBlueprintFeedService {
    * Reads one snapshot page.
    *
    * @param member the member
-   * @param seq the feed position the snapshot was taken at
+   * @param at the feed position the snapshot was taken at
    * @param afterId the last row delivered, or {@code null} for the first page
    * @param size the page size
    * @return the page
    */
   private @NotNull ExchangeBlueprintPageDto snapshot(
-      @NotNull UUID member, long seq, @Nullable UUID afterId, int size) {
+      @NotNull UUID member, @NotNull ExchangeFeedPosition at, @Nullable UUID afterId, int size) {
     PageRequest page = PageRequest.of(0, size + 1);
     List<PersonalBlueprint> rows =
         afterId == null
@@ -148,8 +130,8 @@ public class ExchangeBlueprintFeedService {
     List<PersonalBlueprint> delivered = more ? rows.subList(0, size) : rows;
     String next =
         more
-            ? ExchangeFeedCursor.snapshot(seq, delivered.getLast().getId()).format()
-            : ExchangeFeedCursor.feed(seq).format();
+            ? ExchangeFeedCursor.snapshot(at, delivered.getLast().getId()).format()
+            : ExchangeFeedCursor.feed(at).format();
     return new ExchangeBlueprintPageDto(
         delivered.stream().map(this::toDto).toList(), List.of(), next, more);
   }
@@ -163,80 +145,28 @@ public class ExchangeBlueprintFeedService {
    * @param size the page size
    * @return the page
    */
-  private @NotNull ExchangeBlueprintPageDto feed(@NotNull UUID member, long after, int size) {
-    List<ExchangeChangeRepository.ChangedKey> changed =
-        changeRepository.findChangedKeys(
-            member, ExchangeResource.BLUEPRINT, after, PageRequest.of(0, size + 1));
-    boolean more = changed.size() > size;
-    List<ExchangeChangeRepository.ChangedKey> delivered = more ? changed.subList(0, size) : changed;
-    if (delivered.isEmpty()) {
-      return new ExchangeBlueprintPageDto(
-          List.of(), List.of(), ExchangeFeedCursor.feed(after).format(), false);
-    }
+  private @NotNull ExchangeBlueprintPageDto feed(
+      @NotNull UUID member, @NotNull ExchangeFeedPosition after, int size) {
+    ExchangeFeedReader.Changes changes =
+        feedReader.changes(member, ExchangeResource.BLUEPRINT, after, size);
     Map<String, PersonalBlueprint> current =
-        blueprintRepository
-            .findAllByOwnerUserIdAndProductKeyIn(
-                member,
-                delivered.stream().map(ExchangeChangeRepository.ChangedKey::getEntityKey).toList())
-            .stream()
-            .collect(Collectors.toMap(PersonalBlueprint::getProductKey, Function.identity()));
-    Map<Long, ExchangeChange> latest =
-        changeRepository
-            .findAllById(
-                delivered.stream().map(ExchangeChangeRepository.ChangedKey::getLastSeq).toList())
-            .stream()
-            .collect(Collectors.toMap(ExchangeChange::getSeq, Function.identity()));
-    Map<String, String> installations = installationIds(member, latest.values());
+        changes.keys().isEmpty()
+            ? Map.of()
+            : blueprintRepository
+                .findAllByOwnerUserIdAndProductKeyIn(member, changes.keys())
+                .stream()
+                .collect(Collectors.toMap(PersonalBlueprint::getProductKey, Function.identity()));
     List<ExchangeBlueprintDto> items = new ArrayList<>();
     List<ExchangeTombstoneDto> removed = new ArrayList<>();
-    for (ExchangeChangeRepository.ChangedKey key : delivered) {
-      PersonalBlueprint row = current.get(key.getEntityKey());
+    for (String key : changes.keys()) {
+      PersonalBlueprint row = current.get(key);
       if (row != null) {
         items.add(toDto(row));
       } else {
-        ExchangeChange change = latest.get(key.getLastSeq());
-        removed.add(
-            new ExchangeTombstoneDto(
-                keyOf(key.getEntityKey()),
-                change.getChangedAt(),
-                new ExchangeRemovedByDto(
-                    change.getSourceChannel(),
-                    change.getSourceClient(),
-                    change.getSourceKey() == null
-                        ? null
-                        : installations.get(
-                            change.getSourceClient() + "|" + change.getSourceKey()))));
+        removed.add(changes.tombstone(key, keyOf(key)));
       }
     }
-    return new ExchangeBlueprintPageDto(
-        items, removed, ExchangeFeedCursor.feed(delivered.getLast().getLastSeq()).format(), more);
-  }
-
-  /**
-   * Resolves the installation ids of the clients that made the given changes.
-   *
-   * @param member the member
-   * @param changes the changes
-   * @return the opaque installation id by {@code client|key}
-   */
-  private @NotNull Map<String, String> installationIds(
-      @NotNull UUID member, @NotNull Collection<ExchangeChange> changes) {
-    List<String> keys =
-        changes.stream()
-            .map(ExchangeChange::getSourceKey)
-            .filter(Objects::nonNull)
-            .distinct()
-            .toList();
-    if (keys.isEmpty()) {
-      return Map.of();
-    }
-    return installationRepository.findAllByUserAndKeys(member, keys).stream()
-        .collect(
-            Collectors.toMap(
-                (ExchangeInstallation i) ->
-                    i.getClient().getClientId() + "|" + i.getKeyThumbprint(),
-                i -> i.getId().toString(),
-                (a, b) -> a));
+    return new ExchangeBlueprintPageDto(items, removed, changes.nextCursor(), changes.more());
   }
 
   /**

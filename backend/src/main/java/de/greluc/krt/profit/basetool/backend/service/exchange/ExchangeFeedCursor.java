@@ -29,38 +29,46 @@ import org.jetbrains.annotations.Nullable;
 /**
  * A position in a resource's snapshot or change feed, opaque to clients (REQ-XCH-013).
  *
- * <p>{@code s1.<seq>.<id>} continues a snapshot after the row {@code id}, taken at feed position
- * {@code seq}; {@code f1.<seq>} is a feed position.
+ * <p>{@code s1.<tx>.<seq>.<id>} continues a snapshot after the row {@code id}, taken at the feed
+ * position {@code (tx, seq)}; {@code f1.<tx>.<seq>} is a feed position.
  *
- * @param seq the feed position: the snapshot's, or the last change delivered
+ * @param position the feed position: the snapshot's, or the last change delivered
  * @param afterId the last snapshot row delivered, or {@code null} for a feed position
  */
-public record ExchangeFeedCursor(long seq, @Nullable UUID afterId) {
+public record ExchangeFeedCursor(@NotNull ExchangeFeedPosition position, @Nullable UUID afterId) {
+
+  private static final String NUMBER = "(\\d{1,19})";
 
   private static final Pattern SNAPSHOT =
       Pattern.compile(
-          "^s1\\.(\\d{1,19})\\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$");
-  private static final Pattern FEED = Pattern.compile("^f1\\.(\\d{1,19})$");
+          "^s1\\."
+              + NUMBER
+              + "\\."
+              + NUMBER
+              + "\\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$");
+
+  private static final Pattern FEED = Pattern.compile("^f1\\." + NUMBER + "\\." + NUMBER + "$");
 
   /**
    * A snapshot position.
    *
-   * @param seq the feed position the snapshot was taken at
+   * @param position the feed position the snapshot was taken at
    * @param afterId the last row delivered
    * @return the cursor
    */
-  public static @NotNull ExchangeFeedCursor snapshot(long seq, @NotNull UUID afterId) {
-    return new ExchangeFeedCursor(seq, afterId);
+  public static @NotNull ExchangeFeedCursor snapshot(
+      @NotNull ExchangeFeedPosition position, @NotNull UUID afterId) {
+    return new ExchangeFeedCursor(position, afterId);
   }
 
   /**
    * A feed position.
    *
-   * @param seq the last change delivered
+   * @param position the last change delivered
    * @return the cursor
    */
-  public static @NotNull ExchangeFeedCursor feed(long seq) {
-    return new ExchangeFeedCursor(seq, null);
+  public static @NotNull ExchangeFeedCursor feed(@NotNull ExchangeFeedPosition position) {
+    return new ExchangeFeedCursor(position, null);
   }
 
   /**
@@ -74,11 +82,12 @@ public record ExchangeFeedCursor(long seq, @Nullable UUID afterId) {
   public static @NotNull ExchangeFeedCursor parse(@NotNull String value) {
     Matcher feed = FEED.matcher(value);
     if (feed.matches()) {
-      return feed(parseSeq(feed.group(1)));
+      return feed(position(feed.group(1), feed.group(2)));
     }
     Matcher snapshot = SNAPSHOT.matcher(value);
     if (snapshot.matches()) {
-      return snapshot(parseSeq(snapshot.group(1)), UUID.fromString(snapshot.group(2)));
+      return snapshot(
+          position(snapshot.group(1), snapshot.group(2)), UUID.fromString(snapshot.group(3)));
     }
     throw ExchangeProblemException.cursorExpired();
   }
@@ -98,19 +107,21 @@ public record ExchangeFeedCursor(long seq, @Nullable UUID afterId) {
    * @return the opaque value
    */
   public @NotNull String format() {
-    return afterId == null ? "f1." + seq : "s1." + seq + "." + afterId;
+    String at = position.tx() + "." + position.seq();
+    return afterId == null ? "f1." + at : "s1." + at + "." + afterId;
   }
 
   /**
-   * Parses a sequence number that may overflow.
+   * Parses a position whose numbers may overflow.
    *
-   * @param digits the digits
-   * @return the number
-   * @throws ExchangeProblemException when it overflows
+   * @param tx the transaction id's digits
+   * @param seq the sequence number's digits
+   * @return the position
+   * @throws ExchangeProblemException when a number overflows
    */
-  private static long parseSeq(@NotNull String digits) {
+  private static @NotNull ExchangeFeedPosition position(@NotNull String tx, @NotNull String seq) {
     try {
-      return Long.parseLong(digits);
+      return new ExchangeFeedPosition(Long.parseLong(tx), Long.parseLong(seq));
     } catch (NumberFormatException e) {
       throw ExchangeProblemException.cursorExpired();
     }
