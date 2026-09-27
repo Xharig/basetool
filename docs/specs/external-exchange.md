@@ -697,7 +697,17 @@ offers changed).
 the member's profile (REQ-SEC-072, stored since WP 1.4), case-insensitively, and answers `match`, `mismatch` or `unknown` (no handle
 stored). It never returns or logs the stored handle and is rate-limited tightly.
 
-**Status:** planned — WP 3.4 (#2106)
+The gateway checks the body against `account-check-request.schema.json` — a value that is no RSI
+handle is `400 SCHEMA_INVALID` naming only the pointer, never the value — relays it to the backend's
+`POST /api/v1/exchange/me/account-check`, and passes on only an answer that matches
+`account-check-response.schema.json`. The route is no write: it needs no `Idempotency-Key` and does
+not count against the daily quota, but it has its own limit of ten per hour per client and member
+(REQ-XCH-023).
+
+- [x] The gateway relays the route inside its own hourly limit; a value that is no handle is neither
+  relayed, echoed nor logged. *`ExchangeControllerTest`, `ExchangeLimitFilterTest`.*
+
+**Status:** gateway relay built — WP 3.4 (#2106); the backend answer with its own PR
 
 ### REQ-XCH-032 — „Verbundene Anwendungen" shows and controls every connection
 

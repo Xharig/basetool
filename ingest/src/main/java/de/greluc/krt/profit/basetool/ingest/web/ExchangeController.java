@@ -148,6 +148,30 @@ public class ExchangeController {
   }
 
   /**
+   * Answers whether an RSI handle belongs to the member, never disclosing the stored one.
+   *
+   * @param body the handle
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return {@code match}, {@code mismatch} or {@code unknown}
+   */
+  @PostMapping(value = "/me/account-check", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> accountCheck(
+      @NotNull @RequestBody JsonNode body,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return relayBody(
+        body,
+        "account-check-request.schema.json",
+        "/me/account-check",
+        "account-check-response.schema.json",
+        request,
+        acceptLanguage);
+  }
+
+  /**
    * Resolves item references.
    *
    * @param body the references

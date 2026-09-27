@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: Account-Abgleich.** Eine verbundene Anwendung kann fragen, ob ein RSI-Handle aus
+  dem Spiel-Log zum angemeldeten Mitglied gehört, und vor einem Zweit-Account warnen; die Antwort ist
+  nur `match`, `mismatch` oder `unknown`, der gespeicherte Handle wird nie herausgegeben
+  (REQ-XCH-031).
 - **Datenaustausch: Limits und idempotente Schreibzugriffe.** Das Gateway begrenzt jede Anwendung
   pro Mitglied (120/min, 500 Schreibzugriffe pro UTC-Tag) und insgesamt (1200/min) und verlangt bei
   Schreibzugriffen einen `Idempotency-Key`; eine Wiederholung liefert die gespeicherte Antwort,

@@ -55,6 +55,7 @@ class IngestEndpointSurfaceTest {
           new Call(HttpMethod.GET, "/exchange/v1/schemas/x"),
           new Call(HttpMethod.GET, "/exchange/v1"),
           new Call(HttpMethod.POST, "/exchange/v1/me/installation"),
+          new Call(HttpMethod.POST, "/exchange/v1/me/account-check"),
           new Call(HttpMethod.POST, "/exchange/v1/catalog/resolve"),
           new Call(HttpMethod.GET, "/exchange/v1/catalog/locations"));
 

@@ -283,7 +283,6 @@ public final class ExchangeTestSupport {
       return RouterFunctions.route()
           .GET(STOCK, ProbeRoutes::context)
           .POST(BLUEPRINT_CHANGES, ProbeRoutes::context)
-          .POST(ACCOUNT_CHECK, ProbeRoutes::context)
           .build();
     }
 
