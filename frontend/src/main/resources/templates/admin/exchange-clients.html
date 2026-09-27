@@ -139,6 +139,7 @@
                 <div class="form-group">
                     <label for="xc-displayName" th:text="#{admin.exchangeClients.form.displayName}">Name</label>
                     <input type="text" id="xc-displayName" required maxlength="100" autocomplete="off">
+                    <p class="form-hint" th:text="#{admin.exchangeClients.form.displayName.hint}">Lateinische Buchstaben, Ziffern, Leerzeichen und einfache Satzzeichen.</p>
                 </div>
                 <div class="form-group">
                     <label for="xc-minVersion" th:text="#{admin.exchangeClients.form.minVersion}">Mindestversion</label>
@@ -151,11 +152,11 @@
                 </div>
                 <div class="form-group">
                     <label for="xc-requestsPerMinute" th:text="#{admin.exchangeClients.form.requestsPerMinute}">Anfragen pro Minute</label>
-                    <input type="number" id="xc-requestsPerMinute" min="1" step="1">
+                    <input type="number" id="xc-requestsPerMinute" min="1" max="1200" step="1">
                 </div>
                 <div class="form-group">
                     <label for="xc-writesPerDay" th:text="#{admin.exchangeClients.form.writesPerDay}">Schreibzugriffe pro Tag</label>
-                    <input type="number" id="xc-writesPerDay" min="1" step="1">
+                    <input type="number" id="xc-writesPerDay" min="1" max="5000" step="1">
                     <p class="form-hint" th:text="#{admin.exchangeClients.form.limits.hint}">Leer: Standard.</p>
                 </div>
             </div>

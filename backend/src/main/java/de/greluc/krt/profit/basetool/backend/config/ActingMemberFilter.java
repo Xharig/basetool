@@ -119,6 +119,9 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           PATH_PARSER.parse("/api/v1/exchange/me/stock"),
           PATH_PARSER.parse("/api/v1/exchange/me/stock/changes"));
 
+  /** The path prefix of the backend's exchange layer. */
+  private static final String EXCHANGE_PREFIX = "/api/v1/exchange/";
+
   /** The shape of a registry client id, identical to the database check. */
   private static final Pattern EXCHANGE_CLIENT_ID = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
 
@@ -309,6 +312,20 @@ public class ActingMemberFilter extends OncePerRequestFilter {
   }
 
   /**
+   * Whether the request targets the backend's exchange layer, listed route or not, so its refusal
+   * speaks of an exchange request rather than an import.
+   *
+   * @param request the current request
+   * @return {@code true} when the path lies under {@value #EXCHANGE_PREFIX}
+   */
+  private static boolean isExchangeRoute(@NotNull HttpServletRequest request) {
+    return request
+        .getRequestURI()
+        .substring(request.getContextPath().length())
+        .startsWith(EXCHANGE_PREFIX);
+  }
+
+  /**
    * Parses the relayed capabilities, keeping only the scopes of known capabilities.
    *
    * @param header the comma-separated {@code X-Exchange-Capabilities} value, or {@code null}
@@ -329,8 +346,9 @@ public class ActingMemberFilter extends OncePerRequestFilter {
    * Writes the refusal as an RFC 7807 403 problem document instead of throwing, because this filter
    * runs before exception translation.
    *
-   * <p>Every reason produces a byte-identical body; the reason goes only to the metric and the log,
-   * so the endpoint cannot reveal which subjects exist.
+   * <p>Every reason produces the same body, worded for an exchange request on the exchange layer
+   * and for an import elsewhere; the reason goes only to the metric and the log, so the endpoint
+   * cannot reveal which subjects exist.
    *
    * @param request the refused request, for the problem {@code instance} and the locale
    * @param response the response to write into
@@ -351,13 +369,24 @@ public class ActingMemberFilter extends OncePerRequestFilter {
         .increment();
 
     Locale locale = request.getLocale();
+    boolean exchangeRoute = isExchangeRoute(request);
     String title =
-        messageSource.getMessage("problem.acting_member_refused.title", null, "Forbidden", locale);
+        messageSource.getMessage(
+            exchangeRoute
+                ? "problem.acting_member_refused.exchange_title"
+                : "problem.acting_member_refused.title",
+            null,
+            "Forbidden",
+            locale);
     String message =
         messageSource.getMessage(
-            "problem.acting_member_refused.detail",
+            exchangeRoute
+                ? "problem.acting_member_refused.exchange_detail"
+                : "problem.acting_member_refused.detail",
             null,
-            "The import could not be attributed to a valid member.",
+            exchangeRoute
+                ? "The exchange request could not be attributed to a valid member and application."
+                : "The import could not be attributed to a valid member.",
             locale);
 
     response.setStatus(HttpServletResponse.SC_FORBIDDEN);

@@ -329,6 +329,23 @@ class ExchangeStockWriteControllerTest {
   }
 
   @Test
+  void aQuantityOutsideTheSchemaBoundsIsRefusedBeforeAnyWrite() throws Exception {
+    UUID laranite = material("SCU", null);
+    String area18 = locationName(location(null));
+
+    set(laranite, area18, 500, "1000000000.5", "0", "SCU").andExpect(status().isBadRequest());
+    set(laranite, area18, 500, "-1", "0", "SCU").andExpect(status().isBadRequest());
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM inventory_item WHERE user_id = ? AND material_id = ?",
+                Integer.class,
+                member,
+                laranite))
+        .isZero();
+  }
+
+  @Test
   void aTradeGoodIsStoredAtQualityZero() throws Exception {
     UUID agricium = material("SCU", 900_000 + (int) (Math.random() * 90_000));
     String area18 = locationName(location(null));

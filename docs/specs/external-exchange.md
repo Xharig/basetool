@@ -137,8 +137,26 @@ differing, missing or unreadable document. The mirror is written only while
 `APP_EXCHANGE_MIRROR_ENABLED=true`; while it is off nothing is mirrored and the gateway, which then
 finds no document, refuses every exchange request.
 
+**What a registry entry may hold** (security review 2, L6). The display name reaches Keycloak's
+consent page, the member page and the connection notification, so it is Latin letters, ASCII digits,
+the plain space and the punctuation `.,:;!?'&()+/_-`, starts with a letter or digit and is already in
+NFKC form — no control, format (`Cf`) or bidi character, no foreign-script look-alike, no full-width
+letters — and it never contains „Basetool", compared without case, accents, spaces or punctuation
+(`400`, „Der Anzeigename darf nicht „Basetool" enthalten …"). `requestsPerMinute` is at most **1200**
+and `writesPerDay` at most **5000**, ten times the gateway defaults of 120 and 500 (REQ-XCH-023); the
+admin form carries the same bounds. A client id equal to one of the Basetool's own clients, as the
+backend is configured with them — the ingest gateway (`app.security.ingest-gateway.client-ids`), the
+web login (`app.exchange.connected-apps.web-client-ids`, `app.exchange.change-source.web-client-ids`),
+the app (`app.exchange.change-source.app-client-ids`, `app.security.partial-role-scope.client-ids`) and
+the backend's Keycloak admin client (`app.keycloak.sync.client-id`) — is refused `400` (the
+provisioner reserves the same ids). The SC Extractor's `basetool-sc-extractor` is deliberately not
+reserved: it joins the exchange as a registry client of its own at the go-live.
+
 **Acceptance**
 
+- [x] The display-name rules, the limit bounds and the first-party ids are refused with a localized
+  `detail` (`ExchangeDisplayNamesTest`, `FirstPartyClientIdsTest`,
+  `AdminExchangeRegistryControllerTest`).
 - [x] Tests for both write orders, a failed mirror write, the reconcile healing a divergence, and
   the gateway's fail-closed read. *Backend: `ExchangeRegistryMirrorIntegrationTest` against a real
   Redis under the backend's ACL user, and `ExchangeRegistrySnapshotTest` (WP 3.1). Gateway:
@@ -444,7 +462,10 @@ is live before the first registry entry exists.
 when the gateway acts for a member on an exchange route; from anyone else — or from the gateway on
 an ingest route — the request is refused with `403 ACTING_MEMBER_REFUSED` and counted as
 `basetool_on_behalf_of_refused_total{reason="forged_exchange_header"}`, and an exchange call without
-a well-formed client as `exchange_client_invalid`. The acting authentication carries the client;
+a well-formed client as `exchange_client_invalid`. On the exchange layer (`/api/v1/exchange/…`) the
+refusal's title and `detail` speak of an exchange request that could not be attributed to a valid
+member and application, elsewhere of an import (`ActingMemberFilterRefusalTextTest`); every reason
+still yields the same body per route kind. The acting authentication carries the client;
 `ClientAttribution` names it when the registry holds it (else `other`), for the audit row and —
 read from the header before the identity swap, for the gateway only — for
 `basetool_api_client_requests_total`. The audit viewer offers the registry's clients by their
@@ -663,7 +684,9 @@ client.
 The feed's lot key is the one the change log records, `m:<material>|l:<location>|q:<quality>|s:<0|1>`
 or `i:<item>|…`; a snapshot pages lots by their lowest row id. The material reference carries the
 material's or item's id as `bt`, an item lot has quality 0 and counts whole pieces, and an SCU amount
-is rounded to three decimals. Game items stay in the stock sync beside materials (owner decision
+is rounded to three decimals. The backend bounds every `quantity` and `expectedQuantity` amount to 0…10⁹
+like `quantity.schema.json`, so a change set that bypasses the gateway's schema check is still
+refused `400` (`ExchangeStockChangeSetValidationTest`, `ExchangeStockWriteControllerTest`). Game items stay in the stock sync beside materials (owner decision
 2026-09-27).
 
 The backend applies a change set at `POST /api/v1/exchange/me/stock/changes`
@@ -986,10 +1009,10 @@ Responses carry `RateLimit` and `Retry-After` headers. The account check has its
 
 | Limit | Default | Where |
 | --- | --- | --- |
-| requests per client and member | 120 per minute — a registry client's `requestsPerMinute` overrides it | in-process bucket |
+| requests per client and member | 120 per minute — a registry client's `requestsPerMinute` overrides it, at most 1200 | in-process bucket |
 | requests per client, over all its members | 1200 per minute | in-process bucket |
 | account checks per client and member | 10 per hour | in-process bucket |
-| write requests per client and member | 500 per UTC day — `writesPerDay` overrides it | Redis, `ingest:xch:quota:<client>:<member>:<day>`, created with its expiry by `SET NX EX`, then `INCR`; kept until the end of the following UTC day |
+| write requests per client and member | 500 per UTC day — `writesPerDay` overrides it, at most 5000 | Redis, `ingest:xch:quota:<client>:<member>:<day>`, created with its expiry by `SET NX EX`, then `INCR`; kept until the end of the following UTC day |
 
 The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
 a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
@@ -1362,7 +1385,7 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | A revoked installation refreshing its way back | persistent `jkt` deny list (REQ-XCH-008) |
 | A member who leaves keeping access | departure revocations (REQ-XCH-008) |
 | Malicious client update, compromised maintainer account | capability scoping, own-data-only, journal and undo, guard, suspension; signing recommended (REQ-XCH-002/-009/-021/-022) — accepted residual risk |
-| Compromised admin account (no capability ceiling) | audit area „Verbundene Anwendungen", `ExchangeRegistryChanged` alert, suspension — accepted risk (ADR-0217) |
+| Compromised admin account (no capability ceiling) | audit area „Verbundene Anwendungen", `ExchangeRegistryChanged` alert, suspension; display names that cannot pose as the Basetool, bounded limits, no first-party client ids (REQ-XCH-003) — accepted risk (ADR-0217) |
 | An admin's client running with admin authority | reduced exchange authentication and ArchUnit rule (REQ-XCH-009) |
 | Confused deputy on the relay hop; forged `X-Exchange-*` headers | headers honoured only from the gateway identity; explicit relay route list (REQ-XCH-010, REQ-XCH-001) |
 | Replay and cross-member idempotency replay | idempotency keyed per client and member, gates before cache (REQ-XCH-020) |
