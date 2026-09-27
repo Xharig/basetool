@@ -122,6 +122,22 @@ run_checker "$FIX"
 assert_run "an untitled panel inside a collapsed row is caught" 1 "has no title"
 
 FIX="$(mkfixture)"
+dashboard "$FIX" 01.json '{ "uid": "one", "title": "One", "panels": [
+  { "id": 1, "type": "timeseries", "title": "A", "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 } },
+  { "id": 2, "type": "timeseries", "title": "B", "gridPos": { "x": 6, "y": 4, "w": 12, "h": 8 } } ] }'
+run_checker "$FIX"
+assert_run "two panels on the same grid cells are caught" 1 "panels 1 and 2 overlap"
+
+FIX="$(mkfixture)"
+dashboard "$FIX" 01.json '{ "uid": "one", "title": "One", "panels": [
+  { "id": 1, "type": "timeseries", "title": "A", "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 } },
+  { "id": 2, "type": "timeseries", "title": "B", "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 } },
+  { "id": 3, "type": "row", "title": "Row", "collapsed": true, "gridPos": { "x": 0, "y": 8, "w": 24, "h": 1 },
+    "panels": [ { "id": 4, "type": "timeseries", "title": "C", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 } } ] } ] }'
+run_checker "$FIX"
+assert_run "side-by-side panels and a collapsed row's own grid pass" 0 "Grafana dashboards OK"
+
+FIX="$(mkfixture)"
 run_checker "$FIX"
 assert_run "an empty dashboard directory fails loudly" 2 "contains no dashboards"
 
