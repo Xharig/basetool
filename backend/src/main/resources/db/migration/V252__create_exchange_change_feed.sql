@@ -86,3 +86,59 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_default_blueprint_exchange_change
 AFTER INSERT OR DELETE OR UPDATE OF product_key ON default_blueprint
 FOR EACH ROW EXECUTE FUNCTION exchange_default_blueprint_changed();
+
+CREATE OR REPLACE FUNCTION exchange_stock_lot_key(
+    p_material UUID, p_item UUID, p_location UUID, p_quality INTEGER, p_stolen BOOLEAN)
+RETURNS VARCHAR AS $$
+    SELECT CASE WHEN p_material IS NOT NULL THEN 'm:' || p_material ELSE 'i:' || p_item END
+           || '|l:' || p_location
+           || '|q:' || COALESCE(p_quality, 0)
+           || '|s:' || CASE WHEN p_stolen THEN '1' ELSE '0' END;
+$$ LANGUAGE sql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION exchange_inventory_item_changed()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP IN ('UPDATE', 'DELETE') AND OLD.personal THEN
+        PERFORM exchange_record_change(OLD.user_id, 'STOCK',
+            exchange_stock_lot_key(OLD.material_id, OLD.game_item_id, OLD.location_id,
+                                   OLD.quality, OLD.stolen));
+    END IF;
+    IF TG_OP IN ('INSERT', 'UPDATE') AND NEW.personal
+       AND (TG_OP = 'INSERT'
+            OR NOT OLD.personal
+            OR NEW.user_id IS DISTINCT FROM OLD.user_id
+            OR NEW.material_id IS DISTINCT FROM OLD.material_id
+            OR NEW.game_item_id IS DISTINCT FROM OLD.game_item_id
+            OR NEW.location_id IS DISTINCT FROM OLD.location_id
+            OR NEW.quality IS DISTINCT FROM OLD.quality
+            OR NEW.stolen IS DISTINCT FROM OLD.stolen) THEN
+        PERFORM exchange_record_change(NEW.user_id, 'STOCK',
+            exchange_stock_lot_key(NEW.material_id, NEW.game_item_id, NEW.location_id,
+                                   NEW.quality, NEW.stolen));
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_inventory_item_exchange_change
+AFTER INSERT OR UPDATE OR DELETE ON inventory_item
+FOR EACH ROW EXECUTE FUNCTION exchange_inventory_item_changed();
+
+CREATE OR REPLACE FUNCTION exchange_ship_changed()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP IN ('UPDATE', 'DELETE') THEN
+        PERFORM exchange_record_change(OLD.owner_id, 'SHIP', OLD.id::text);
+    END IF;
+    IF TG_OP = 'INSERT'
+       OR (TG_OP = 'UPDATE' AND NEW.owner_id IS DISTINCT FROM OLD.owner_id) THEN
+        PERFORM exchange_record_change(NEW.owner_id, 'SHIP', NEW.id::text);
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_ship_exchange_change
+AFTER INSERT OR UPDATE OR DELETE ON ship
+FOR EACH ROW EXECUTE FUNCTION exchange_ship_changed();

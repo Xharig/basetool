@@ -4,9 +4,9 @@
 
 ### Added
 
-- **Datenaustausch: Änderungsprotokoll der Blueprints.** Jede Änderung an persönlichen Blueprints –
-  auch über Sammelaktionen und Standard-Blueprints – wird mit ihrer Quelle (Web, App, Anwendung,
-  System) protokolliert, 90 Tage aufbewahrt und in den Datenexport aufgenommen; Grundlage für den
+- **Datenaustausch: Änderungsprotokoll.** Jede Änderung an persönlichen Blueprints, am persönlichen
+  Lager und an Schiffen – auch über Sammelaktionen und Standard-Blueprints – wird mit ihrer Quelle
+  (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport aufgenommen; Grundlage für den
   Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224, REQ-XCH-013).
 
 - **Administration → Verbundene Anwendungen.** Admins registrieren, bearbeiten, sperren und

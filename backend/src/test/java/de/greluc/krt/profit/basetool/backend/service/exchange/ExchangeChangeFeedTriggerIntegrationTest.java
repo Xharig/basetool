@@ -24,8 +24,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeChange;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
+import de.greluc.krt.profit.basetool.backend.model.Location;
+import de.greluc.krt.profit.basetool.backend.model.ShipType;
 import de.greluc.krt.profit.basetool.backend.model.User;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeChangeRepository;
+import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ShipTypeRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import java.util.List;
 import java.util.Set;
@@ -51,11 +55,13 @@ class ExchangeChangeFeedTriggerIntegrationTest {
 
   /** Every table whose writes the feed must see, with the triggers that sequence them. */
   private static final Set<String> SYNCED_TABLES =
-      Set.of("personal_blueprint", "default_blueprint");
+      Set.of("personal_blueprint", "default_blueprint", "inventory_item", "ship");
 
   @Autowired private JdbcTemplate jdbc;
   @Autowired private UserRepository userRepository;
   @Autowired private ExchangeChangeRepository changeRepository;
+  @Autowired private LocationRepository locationRepository;
+  @Autowired private ShipTypeRepository shipTypeRepository;
 
   private UUID alice;
   private UUID bob;
@@ -175,6 +181,56 @@ class ExchangeChangeFeedTriggerIntegrationTest {
   }
 
   @Test
+  void personalStockIsSequencedByLotAndSharedStockIsNot() {
+    UUID material = material("feed-titanium");
+    UUID location = location("feed-area18");
+
+    UUID personal = stock(alice, material, location, 3, true, false);
+    stock(alice, material, location, 3, false, false);
+    jdbc.update("UPDATE inventory_item SET amount = 5 WHERE id = ?", personal);
+
+    assertThat(changes(alice))
+        .extracting(ExchangeChange::getResource, ExchangeChange::getEntityKey)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                ExchangeResource.STOCK, "m:" + material + "|l:" + location + "|q:3|s:0"),
+            org.assertj.core.groups.Tuple.tuple(
+                ExchangeResource.STOCK, "m:" + material + "|l:" + location + "|q:3|s:0"));
+  }
+
+  @Test
+  void rebookingPersonalStockToTheSharedPoolLeavesTheLot() {
+    UUID material = material("feed-quantainium");
+    UUID location = location("feed-orison");
+    UUID row = stock(alice, material, location, 1, true, true);
+    int before = changes(alice).size();
+
+    jdbc.update("UPDATE inventory_item SET personal = false WHERE id = ?", row);
+
+    assertThat(changes(alice)).hasSize(before + 1);
+    assertThat(changes(alice).getLast().getEntityKey()).endsWith("|q:1|s:1");
+  }
+
+  @Test
+  void aShipIsSequencedByItsIdAndFollowsItsOwner() {
+    UUID type = shipType("feed-cutter");
+    UUID ship = UUID.randomUUID();
+    jdbc.update(
+        "INSERT INTO ship (id, name, ship_type_id, owner_id) VALUES (?, 'Nomad', ?, ?)",
+        ship,
+        type,
+        alice);
+
+    jdbc.update("UPDATE ship SET owner_id = ? WHERE id = ?", bob, ship);
+
+    assertThat(changes(alice))
+        .extracting(ExchangeChange::getResource, ExchangeChange::getEntityKey)
+        .containsOnly(org.assertj.core.groups.Tuple.tuple(ExchangeResource.SHIP, ship.toString()))
+        .hasSize(2);
+    assertThat(changes(bob)).extracting(ExchangeChange::getEntityKey).contains(ship.toString());
+  }
+
+  @Test
   void deletingAMemberDropsTheirFeedWithoutFailing() {
     blueprint(alice, "a");
 
@@ -209,6 +265,84 @@ class ExchangeChangeFeedTriggerIntegrationTest {
         owner,
         productKey,
         productKey);
+  }
+
+  /**
+   * Inserts a stock row directly, as a bulk path would.
+   *
+   * @param owner the owner
+   * @param material the material
+   * @param location the location
+   * @param quality the quality
+   * @param personal whether it is the owner's personal stock
+   * @param stolen whether it is stolen
+   * @return the row id
+   */
+  private @NotNull UUID stock(
+      @NotNull UUID owner,
+      @NotNull UUID material,
+      @NotNull UUID location,
+      int quality,
+      boolean personal,
+      boolean stolen) {
+    UUID id = UUID.randomUUID();
+    jdbc.update(
+        """
+        INSERT INTO inventory_item (id, user_id, material_id, location_id, quality, amount,
+                                    personal, stolen)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+        """,
+        id,
+        owner,
+        material,
+        location,
+        quality,
+        personal,
+        stolen);
+    return id;
+  }
+
+  /**
+   * Seeds a material.
+   *
+   * @param name the unique name
+   * @return its id
+   */
+  private @NotNull UUID material(@NotNull String name) {
+    UUID id = UUID.randomUUID();
+    jdbc.update(
+        """
+        INSERT INTO material (id, name, type, quantity_type, is_manual_raw_material,
+                              is_job_order, is_visible, source_systems)
+        VALUES (?, ?, 'NO_REFINE', 'SCU', false, false, true, 'UEX_ONLY')
+        """,
+        id,
+        name);
+    return id;
+  }
+
+  /**
+   * Seeds a location.
+   *
+   * @param name the unique name
+   * @return its id
+   */
+  private @NotNull UUID location(@NotNull String name) {
+    Location location = new Location();
+    location.setName(name);
+    return locationRepository.saveAndFlush(location).getId();
+  }
+
+  /**
+   * Seeds a ship type.
+   *
+   * @param name the unique name
+   * @return its id
+   */
+  private @NotNull UUID shipType(@NotNull String name) {
+    ShipType type = new ShipType();
+    type.setName(name);
+    return shipTypeRepository.saveAndFlush(type).getId();
   }
 
   /**

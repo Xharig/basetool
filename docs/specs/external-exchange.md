@@ -395,15 +395,16 @@ purged `seq` as the horizon, below which a cursor has expired.
 **Acceptance**
 
 - [x] A test fails for any write path to the synced tables that bypasses the sequence.
-  *`ExchangeChangeFeedTriggerIntegrationTest` pins the synced tables to their triggers and runs bulk
-  deletes, owner reassignment and user deletion through them; blueprints so far, stock and ships
-  join with their slices.*
+  *`ExchangeChangeFeedTriggerIntegrationTest` pins the synced tables — `personal_blueprint`,
+  `default_blueprint`, `inventory_item` (the member's personal rows only, keyed by lot) and `ship` —
+  to their triggers and runs bulk deletes, owner reassignment, a rebooking to the shared pool and
+  user deletion through them.*
 - [x] A default-set change emits entries for every affected member.
   *`ExchangeChangeFeedTriggerIntegrationTest`.*
 - [x] Every writing transaction is attributed to its channel. *`ChangeSourceTransactionManagerIntegrationTest`.*
 
-**Status:** sequence, attribution and retention built for blueprints — WP 3.3 (#2083); stock, ships
-and the feed routes follow
+**Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
+(#2083); the feed routes follow with WP 4.1–4.4
 
 ### REQ-XCH-014 — A client never re-adds what the member removed elsewhere
 

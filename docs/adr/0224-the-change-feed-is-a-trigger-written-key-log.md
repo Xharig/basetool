@@ -26,7 +26,9 @@ services would miss all of these. A database trigger sees them, but not who is w
    `(member, resource, entity key)` in `exchange_change`, whose `seq` identity column is the feed's
    cursor. The log holds keys, not values: the feed reads the current state of each changed key
    and answers a tombstone when the entity is gone. A change of `default_blueprint` records the
-   product for every member who owns it.
+   product for every member who owns it. Stock is recorded only for the member's personal rows,
+   keyed by lot (material or item, location, quality, stolen) across org-unit pools; a ship by its
+   id.
 2. **The writer names itself per transaction.** A `JpaTransactionManager` subclass sets the
    transaction-local variable `basetool.change_source` at the start of every transaction that is not
    read-only, from the current authentication: `web` or `app` by the token's client, `client|<id>|
