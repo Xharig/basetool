@@ -33,7 +33,8 @@ until every service is healthy and applies the seed. `reset` is `down` followed 
 removes the containers **and the volumes**, so the next start is a clean sandbox.
 
 The images are `ghcr.io/krt-profit/basetool-sandbox-{backend,frontend,ingest,keycloak}`, tag
-`edge` unless `BASETOOL_SANDBOX_VERSION` names another. Use a tag that matches your checkout.
+`edge` unless `BASETOOL_SANDBOX_VERSION` names another. Use a tag that matches your checkout. They
+carry only test values and refuse to start as production.
 
 To build the images from your checkout instead, add `--build` (Linux) or `-Build` (Windows). The
 first build takes several minutes.
