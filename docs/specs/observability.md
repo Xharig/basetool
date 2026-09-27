@@ -1654,17 +1654,27 @@ the boot run carries the last run's values over and re-reads only the reboot fla
 - `basetool_exchange_account_checks_total{outcome}` counter — exchange account checks by answer
   (`match` / `mismatch` / `unknown`), registered at zero and shown per day beside the disconnects;
   a rising `mismatch` share means clients see alt accounts (REQ-XCH-031).
-- `basetool_exchange_writes_total{resource,outcome}` counter — ops external clients sent to the
-  member's synced data, by resource (`blueprint` / `stock` / `ship`) and outcome (`applied` /
+- `basetool_exchange_writes_total{client_id,resource,outcome}` counter — ops external clients sent to
+  the member's synced data, by registered client, resource (`blueprint` / `stock` / `ship`) and outcome (`applied` /
   `unchanged` / `unmatched` / `ambiguous` / `rejected`), plus `held` per change set the mass-change
-  guard held back; registered at zero and shown per day on panel 80 of the operations dashboard
-  (REQ-XCH-015…-017, REQ-XCH-021).
-- `basetool_exchange_undo_total{resource,outcome}` counter — entries a member's undo of a client's
-  writes restored or skipped (`restored` / `skipped`), by resource; registered at zero and shown on
-  the same panel 80 (REQ-XCH-022).
-- `basetool_exchange_mass_changes_confirmed_total{resource}` counter — held-back change sets members
-  confirmed, by resource; registered at zero and shown on panel 80 beside the gateway's staged count
+  guard held back; shown per day on panel 80 of the operations dashboard (REQ-XCH-015…-017,
+  REQ-XCH-021). `ExchangeGuardStorm` fires when one client's batches are held more than 10 times an
+  hour.
+- `basetool_exchange_undo_total{client_id,resource,outcome}` counter — entries a member's undo of a
+  client's writes restored or skipped (`restored` / `skipped`), by client and resource; shown on the
+  same panel 80 (REQ-XCH-022).
+- `basetool_exchange_mass_changes_confirmed_total{client_id,resource}` counter — held-back change
+  sets members confirmed, by client and resource; shown on panel 80 beside the gateway's staged count
   (REQ-XCH-021).
+- `basetool_exchange_removals_total{client_id,resource}` counter — removals clients committed to
+  members' entries, counted by the journal after commit; `ExchangeRemoveSpike` fires above 100 an hour
+  for one client (REQ-XCH-028).
+- `basetool_exchange_installations_created_total{client_id}` counter — installations seen for the
+  first time; `ExchangeInstallationSurge` fires above 20 an hour for one client (REQ-XCH-007,
+  REQ-XCH-028). `ExchangeUnknownClient` fires when the gateway keeps refusing tokens of a client the
+  registry does not list (`basetool_ingest_exchange_refused_total{client_id="unregistered"}`).
+- The `client_id` label of these backend counters is always a registered client, since only those
+  pass the relay; they are not pre-registered at zero, as the clients are not known at start-up.
 - `basetool_exchange_disconnects_total{kind}` counter — a member disconnecting one installation or
   a whole client (`installation` / `client`, REQ-XCH-008), registered at zero and shown per day on
   the operations dashboard. The relay's `exchange_installation_invalid` refusal joins
