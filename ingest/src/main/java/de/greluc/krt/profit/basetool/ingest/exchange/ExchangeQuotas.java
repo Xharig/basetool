@@ -31,9 +31,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * Counts each member's daily exchange writes per client in Redis, under {@code
- * ingest:xch:quota:<client>:<member>:<UTC day>} (REQ-XCH-023). A counter lives two days, so it
- * outlasts its own day wherever the gateway's clock stands, and counts in the byte budget from its
- * first write.
+ * ingest:xch:quota:<client>:<member>:<UTC day>} (REQ-XCH-023). A counter is created with its expiry
+ * in one command and lives until the end of the UTC day after its own, so it outlasts its day
+ * wherever the gateway's clock stands; every write registers it in the byte budget under that same
+ * expiry, which counts it once.
  */
 @Slf4j
 @Component
@@ -42,7 +43,7 @@ public class ExchangeQuotas {
   /** The key prefix of a daily counter. */
   static final String PREFIX = "ingest:xch:quota:";
 
-  /** How long a counter lives. */
+  /** How long after the start of its day a counter lives. */
   static final Duration TTL = Duration.ofDays(2);
 
   /** The bytes a counter is budgeted with: its key plus a long's decimal digits. */
@@ -89,16 +90,15 @@ public class ExchangeQuotas {
    * @throws ExchangeUnavailableException if Redis cannot count
    */
   public long countWrite(@NotNull String clientId, @NotNull String member) {
-    String key =
-        PREFIX + clientId + ":" + member + ":" + LocalDate.now(clock.withZone(ZoneOffset.UTC));
+    LocalDate day = LocalDate.now(clock.withZone(ZoneOffset.UTC));
+    String key = PREFIX + clientId + ":" + member + ":" + day;
+    Duration ttl = Duration.between(clock.instant(), day.atStartOfDay(ZoneOffset.UTC).plus(TTL));
     try {
+      budget.record(clientId, member, key, key.length() + (long) VALUE_BYTES, ttl);
+      redisTemplate.opsForValue().setIfAbsent(key, "0", ttl);
       Long count = redisTemplate.opsForValue().increment(key);
       if (count == null) {
         throw new ExchangeUnavailableException("The write quota cannot be counted.", null);
-      }
-      if (count == 1L) {
-        redisTemplate.expire(key, TTL);
-        budget.record(clientId, member, key, key.length() + (long) VALUE_BYTES, TTL);
       }
       return count;
     } catch (ExchangeUnavailableException e) {

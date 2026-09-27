@@ -762,7 +762,8 @@ name sent — or its first key when it has none — so it lands among the unmatc
 pick; repeats collapse to the earliest `acquiredAt`. For refinery orders it is the refinery import's
 draft. A draft the backend refuses as malformed is `400 SCHEMA_INVALID`. The gateway stages the
 answer in the member's extractor draft slots (`HandoffKind.BLUEPRINT` / `REFINERY`, at most
-`app.ingest.max-handoff-bytes`, a larger one `413 PAYLOAD_TOO_LARGE`), counts it against the
+`app.ingest.max-handoff-bytes`, measured as the staged value with its handoff wrapper; a larger one
+is `413 PAYLOAD_TOO_LARGE`, checked before staging and never cached), counts it against the
 exchange's byte budget and answers `draft-result` with the `frontendUrl` of the blueprint import
 review or the refinery create form. As write routes they take an `Idempotency-Key` and count
 against the daily quota.
@@ -788,7 +789,10 @@ The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash
 and body. The same request under a known key is answered from the cache with `Idempotency-Replayed:
 true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and never a staged mass
 change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
-the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write.
+the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write. That
+holds on every exchange route and for every kind of Redis failure — a lost connection, a timeout, a
+refused command while staging a draft or a mass change, or a store failure escaping a route — each
+answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`.
 
 The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
 per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
@@ -846,7 +850,9 @@ its client, installation, resource and `stagedAt` (the gateway's clock) in the h
 (`HandoffKind.MASS_CHANGE`, one slot
 per member apart from the extractor drafts, at most `app.exchange.store.max-mass-change-bytes`,
 512 KiB, counted against the exchange's Redis budget) and answers `409` with a `confirmationUrl` to
-`/connected-apps/confirm?handoff=<id>`. A change set too large to hold is `413 BATCH_TOO_LARGE`.
+`/connected-apps/confirm?handoff=<id>`. A change set too large to hold — measured, like a draft, as
+the staged value with its wrapper — is `413 BATCH_TOO_LARGE`, checked before staging and never
+cached.
 
 The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
 page consumes nothing: its script strips the id from the address bar and consumes the staged batch
@@ -916,7 +922,9 @@ WP 4.5 (#2087)
 
 Per-minute buckets per (client, member) and per client run in-process; daily write quotas live in
 Redis (`ingest:xch:quota:*`). All gateway-written exchange data in Redis is bounded to 1 MiB per
-client and member, 16 MB per client and 64 MB in total, counted exactly; above a limit the gateway
+client and member, 16 MB per client and 64 MB in total, counted per stored value with a fixed
+per-entry overhead (an estimate of Redis's own bookkeeping, not a measurement of its memory — see
+*The byte budget* below); above a limit the gateway
 answers `503 EXCHANGE_BUDGET_EXHAUSTED`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
 Responses carry `RateLimit` and `Retry-After` headers. The account check has its own tight limit.
 
@@ -927,7 +935,7 @@ Responses carry `RateLimit` and `Retry-After` headers. The account check has its
 | requests per client and member | 120 per minute — a registry client's `requestsPerMinute` overrides it | in-process bucket |
 | requests per client, over all its members | 1200 per minute | in-process bucket |
 | account checks per client and member | 10 per hour | in-process bucket |
-| write requests per client and member | 500 per UTC day — `writesPerDay` overrides it | Redis, `ingest:xch:quota:<client>:<member>:<day>`, `INCR`, kept two days |
+| write requests per client and member | 500 per UTC day — `writesPerDay` overrides it | Redis, `ingest:xch:quota:<client>:<member>:<day>`, created with its expiry by `SET NX EX`, then `INCR`; kept until the end of the following UTC day |
 
 The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
 a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
@@ -952,10 +960,25 @@ would overflow, so a full budget stops writes before they reach the backend. A c
 takes the reservation's place in one step, or is not cached when it does not fit; otherwise the
 reservation is freed. A staged draft or mass change reserves its exact staged size under an
 `ingest:xch:pending:<uuid>` name before it is written and is settled on its handoff key afterwards.
-A quota counter is recorded when its day's first write creates it, without a limit check: it exists
-already, and the write still needs its own reservation.
-`basetool_ingest_exchange_budget_used_ratio`
-reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
+A quota counter is recorded on every write, before the counter is touched and without a limit check
+— the write still needs its own reservation. Its entry has a fixed name and expiry, so recording it
+again counts it once; the counter itself is created with that expiry in one command (`SET NX EX`)
+and only then incremented, so no crash between two commands can leave it without an expiry or
+outside the budget. `basetool_ingest_exchange_budget_used_ratio` reports the total's use;
+`ExchangeBudgetHigh` fires above 80 %.
+
+What the budget counts, and what stays an estimate:
+
+| Counted | How |
+| --- | --- |
+| a write in flight | its 32 KiB reservation plus its lock, recorded (not only checked) under the lock's key |
+| a cached answer | its serialized value and key, replacing the reservation |
+| a staged draft or mass change | the staged value with its handoff wrapper, the same size the cap is checked against |
+| a quota counter | its key plus 20 bytes for the number |
+| the sorted sets and totals themselves | the fixed 512 bytes per entry — an estimate, not measured |
+
+The budget therefore bounds the exchange's data within a known margin of Redis's real memory use;
+it is not a byte-exact measurement of it.
 
 The ingest ACL user runs these scripts with `EVAL`/`EVALSHA`; Redis checks every command a script
 issues against the same user's key patterns and commands (REQ-SEC-068).
@@ -1007,7 +1030,12 @@ open, extensions are namespaced, identifiers and cursors are opaque (ADR-0219).
 The gateway finds the fields a request body carries that its schema does not declare — at any
 depth, following `$ref`, `allOf`, `anyOf` and `oneOf`, and leaving objects that accept any field
 (`extensions`) alone — and reports each as an `UNKNOWN_FIELD` warning with its JSON Pointer in answers
-that carry `warnings` (the resolve and change results); elsewhere they are ignored.
+that carry `warnings` (the resolve and change results); elsewhere they are ignored. A warning's
+pointer holds at most 200 characters, so a body whose undeclared field's pointer is longer is
+refused before the relay with `400 SCHEMA_INVALID`, `errors[]` naming the field's parent — otherwise
+a write the backend had committed would have ended in a `502` for an answer breaking its own schema,
+and never been cached. Every `errors[]` pointer is likewise shortened to its longest ancestor of at
+most 200 characters.
 
 **Acceptance**
 

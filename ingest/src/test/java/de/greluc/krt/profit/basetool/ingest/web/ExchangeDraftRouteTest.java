@@ -41,6 +41,7 @@ import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRelay;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRevocationReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeUnavailableException;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
@@ -58,6 +59,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -184,6 +187,41 @@ class ExchangeDraftRouteTest {
   }
 
   @Test
+  void aLostRedisConnectionWhileStagingIsARetryable503WithTheRegistryCode() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
+    when(stagingService.stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), anyString()))
+        .thenThrow(new RedisConnectionFailureException("refused"));
+
+    post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("Retry-After", "60"))
+        .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+        .andExpect(jsonPath("$.detail").value("The draft cannot be staged; try again later."));
+  }
+
+  @Test
+  void anExchangeStoreFailureEscapingARouteIsA503NotA500() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any()))
+        .thenThrow(new ExchangeUnavailableException("down", null));
+
+    post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("Retry-After", "60"))
+        .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+  }
+
+  @Test
+  void aStagingStoreFailureOfAnyDataAccessKindIsA503() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
+    when(stagingService.stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), anyString()))
+        .thenThrow(new QueryTimeoutException("slow"));
+
+    post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+  }
+
+  @Test
   void aRefineryDraftReachesItsBackendRouteAndOpensTheCreateForm() throws Exception {
     when(relay.forward(
             eq(HttpMethod.POST),
@@ -224,6 +262,20 @@ class ExchangeDraftRouteTest {
         .andExpect(jsonPath("$.code").value("SCHEMA_INVALID"));
 
     verify(stagingService, never()).stageDraft(anyString(), any(), anyString());
+  }
+
+  @Test
+  void aDraftWhoseStagedFormIsTooLargeIsRefusedWith413AndNotCached() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
+    when(stagingService.stagedBytes(eq(HandoffKind.BLUEPRINT), anyString()))
+        .thenReturn(100_000_000L);
+
+    post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
+        .andExpect(status().isContentTooLarge())
+        .andExpect(jsonPath("$.code").value("PAYLOAD_TOO_LARGE"));
+
+    verify(stagingService, never()).stageDraft(anyString(), any(), anyString());
+    verify(idempotency, never()).store(anyString(), any());
   }
 
   @Test

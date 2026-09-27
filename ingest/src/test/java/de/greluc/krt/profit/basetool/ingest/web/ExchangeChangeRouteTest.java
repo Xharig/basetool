@@ -166,6 +166,33 @@ class ExchangeChangeRouteTest {
   }
 
   @Test
+  void anUnknownFieldTooLongToReportIsRefusedBeforeTheRelay() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+    String name = "x".repeat(250);
+    String body =
+        "{\"ops\":[{\"op\":\"add\",\"ref\":{\"name\":\"Arrowhead\"},\"" + name + "\":1}]}";
+
+    post("/exchange/v1/me/blueprints/changes", body)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("SCHEMA_INVALID"))
+        .andExpect(jsonPath("$.errors[0].pointer").value("/ops/0"));
+
+    verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void anUnknownFieldAtTheLongestReportablePointerIsStillAWarning() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+    String name = "y".repeat(200 - "/ops/0/".length());
+
+    post(
+            "/exchange/v1/me/blueprints/changes",
+            "{\"ops\":[{\"op\":\"add\",\"ref\":{\"name\":\"Arrowhead\"},\"" + name + "\":1}]}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.warnings[0].pointer").value("/ops/0/" + name));
+  }
+
+  @Test
   void anOpOutsideTheSchemaIsRefusedBeforeTheRelay() throws Exception {
     post("/exchange/v1/me/blueprints/changes", "{\"ops\":[{\"op\":\"rename\"}]}")
         .andExpect(status().isBadRequest())
@@ -217,6 +244,21 @@ class ExchangeChangeRouteTest {
             eq(321L),
             any());
     assertThat(staged() - before).isEqualTo(1.0);
+  }
+
+  @Test
+  void aMassChangeWhoseStagedFormIsTooLargeIsRefusedWith413AndNotCached() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any()))
+        .thenReturn(new ExchangeRelay.Result(409, null, "MASS_CHANGE_CONFIRMATION_REQUIRED", ""));
+    when(stagingService.stagedBytes(eq(HandoffKind.MASS_CHANGE), anyString()))
+        .thenReturn(100_000_000L);
+
+    post("/exchange/v1/me/blueprints/changes", ADD)
+        .andExpect(status().isContentTooLarge())
+        .andExpect(jsonPath("$.code").value("BATCH_TOO_LARGE"));
+
+    verify(stagingService, never()).stageMassChange(anyString(), anyString(), anyLong());
+    verify(idempotency, never()).store(anyString(), any());
   }
 
   @Test
