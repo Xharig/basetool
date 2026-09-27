@@ -209,6 +209,14 @@ logout would otherwise disconnect every client (owner decision 2026-09-26). Cons
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
 The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
 
+The first-party SC Extractor is held to the same shape once it has migrated (security finding H1,
+owner decision 2026-09-27): its client `basetool-sc-extractor` requires consent, binds access and
+refresh tokens to DPoP, carries only `basic` by default and offers only its exchange scopes and
+`offline_access`. It loses both ingest scopes, so no extractor token carries `aud=basetool-backend`
+any more; before, a phished device code yielded an unbound, refreshable bearer token the backend API
+accepted. The provisioner applies this on production only **after** the legacy switch-off
+(REQ-XCH-033), because released extractors up to 2.9.1 still need `extractor-ingest-only` on `/v1/*`.
+
 **Acceptance**
 
 - [x] The provisioner's self-test covers the third-party template (withheld scopes removed from an
@@ -217,6 +225,10 @@ The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
   (owner decision 2026-09-27).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
+  *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
+  only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
+  the self-test converges a client in today's production shape to it. The box closes with the
+  production apply after the legacy switch-off (WP 6, #2092).*
 - [x] The theme renders both pages with the phishing warning (`login-oauth-grant.ftl`,
   `login-oauth2-device-verify-user-code.ftl`).
 - [x] Keycloak 26.7.4's behaviour is observed (WP 0.4, 2026-09-26, a throwaway local Keycloak of the

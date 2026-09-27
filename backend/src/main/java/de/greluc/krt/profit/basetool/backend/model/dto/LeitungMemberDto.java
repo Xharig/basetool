@@ -32,6 +32,12 @@ import java.util.UUID;
  * @param kommandoGroupId the bound Kommandogruppe for a Kommandoleiter / stellv. Kommandoleiter /
  *     Ensign, or {@code null} for every other rank and a Staffelleiter-direct Ensign.
  * @param version the membership row's optimistic-lock version, required on a squadron-rank write.
+ * @param self whether this row is the caller's own seat, which only an admin may change.
  */
 public record LeitungMemberDto(
-    UUID userId, String userDisplayName, MembershipRole role, UUID kommandoGroupId, long version) {}
+    UUID userId,
+    String userDisplayName,
+    MembershipRole role,
+    UUID kommandoGroupId,
+    long version,
+    boolean self) {}

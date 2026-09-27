@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.frontend.controller;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -116,7 +117,7 @@ class LeitungPageControllerMvcTest {
             OrgUnitKind.SPECIAL_COMMAND,
             canAppointLead,
             canManageRoster,
-            List.of(new LeitungMemberDto(UUID.randomUUID(), "Pilot", "MEMBER", null, 0L)),
+            List.of(new LeitungMemberDto(UUID.randomUUID(), "Pilot", "MEMBER", null, 0L, false)),
             List.of(),
             null);
     when(backendApiClient.get("/api/v1/leitung/view", LeitungViewDto.class))
@@ -149,6 +150,134 @@ class LeitungPageControllerMvcTest {
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("toggle-sk-lead")))
         .andExpect(content().string(not(containsString("/organisation/special-commands/"))));
+  }
+
+  /**
+   * Stubs a view holding exactly one Staffel with the given capability flags and roster.
+   *
+   * @param admin whether the caller is an admin
+   * @param canAppointLead the Staffelleiter-appointment cap
+   * @param canManageRoster the lower-rank cap
+   * @param members the roster rows
+   */
+  private void stubSquadronView(
+      boolean admin,
+      boolean canAppointLead,
+      boolean canManageRoster,
+      List<LeitungMemberDto> members) {
+    LeitungUnitDto squadron =
+        new LeitungUnitDto(
+            UUID.randomUUID(),
+            "Mamba",
+            "MAM",
+            OrgUnitKind.SQUADRON,
+            canAppointLead,
+            canManageRoster,
+            members,
+            List.of(),
+            null);
+    when(backendApiClient.get("/api/v1/leitung/view", LeitungViewDto.class))
+        .thenReturn(new LeitungViewDto(admin, List.of(), List.of(), List.of(squadron), List.of()));
+  }
+
+  /**
+   * Counts the non-overlapping occurrences of {@code needle} in {@code haystack}.
+   *
+   * @param haystack the rendered page
+   * @param needle the fragment to count
+   * @return the number of occurrences
+   */
+  private static int count(String haystack, String needle) {
+    int n = 0;
+    for (int i = haystack.indexOf(needle);
+        i >= 0;
+        i = haystack.indexOf(needle, i + needle.length())) {
+      n++;
+    }
+    return n;
+  }
+
+  @Test
+  @WithMockUser(roles = "OFFICER")
+  void page_staffelleiter_seesOwnSeatAsStaffelleiterReadOnly() throws Exception {
+    stubSquadronView(
+        false,
+        false,
+        true,
+        List.of(
+            new LeitungMemberDto(UUID.randomUUID(), "Lead", "STAFFELLEITER", null, 3L, true),
+            new LeitungMemberDto(UUID.randomUUID(), "Pilot", "MEMBER", null, 0L, false)));
+
+    String html =
+        mockMvc
+            .perform(get("/organisation/leitung"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertEquals(
+        1, count(html, "class=\"leitung-rank-select\""), "only the plain member is editable");
+    assertEquals(1, count(html, "data-leitung-action=\"save-rank\""));
+    assertEquals(0, count(html, "value=\"STAFFELLEITER\""));
+    assertEquals(1, count(html, "chip chip--primary"));
+  }
+
+  @Test
+  @WithMockUser(roles = "OFFICER")
+  void page_bereichsleiter_seesLowerRanksReadOnlyAndMayAppointStaffelleiter() throws Exception {
+    stubSquadronView(
+        false,
+        true,
+        false,
+        List.of(
+            new LeitungMemberDto(UUID.randomUUID(), "Kommando", "KOMMANDOLEITER", null, 1L, false),
+            new LeitungMemberDto(UUID.randomUUID(), "Pilot", "MEMBER", null, 0L, false)));
+
+    String html =
+        mockMvc
+            .perform(get("/organisation/leitung"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertEquals(1, count(html, "class=\"leitung-rank-select\""));
+    assertEquals(1, count(html, "value=\"STAFFELLEITER\""));
+    assertEquals(0, count(html, "value=\"KOMMANDOLEITER\""));
+  }
+
+  @Test
+  @WithMockUser(roles = "OFFICER")
+  void page_readOnlyViewer_getsNoRankControls() throws Exception {
+    stubSquadronView(
+        false,
+        false,
+        false,
+        List.of(new LeitungMemberDto(UUID.randomUUID(), "Lead", "STAFFELLEITER", null, 3L, false)));
+
+    mockMvc
+        .perform(get("/organisation/leitung"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(not(containsString("leitung-rank-select"))))
+        .andExpect(content().string(not(containsString("save-rank"))))
+        .andExpect(content().string(containsString("chip chip--primary")));
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void page_admin_mayEditOwnSeat() throws Exception {
+    stubSquadronView(
+        true,
+        true,
+        true,
+        List.of(new LeitungMemberDto(UUID.randomUUID(), "Admin", "STAFFELLEITER", null, 3L, true)));
+
+    mockMvc
+        .perform(get("/organisation/leitung"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("leitung-rank-select")))
+        .andExpect(content().string(containsString("save-rank")));
   }
 
   @Test
