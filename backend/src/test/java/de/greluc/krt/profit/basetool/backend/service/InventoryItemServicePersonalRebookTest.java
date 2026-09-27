@@ -56,6 +56,7 @@ import de.greluc.krt.profit.basetool.backend.repository.MissionParticipantReposi
 import de.greluc.krt.profit.basetool.backend.repository.MissionRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +91,7 @@ class InventoryItemServicePersonalRebookTest {
   @Mock private MissionFinanceEntryRepository missionFinanceEntryRepository;
   @Mock private MissionParticipantRepository missionParticipantRepository;
   @Mock private MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private InventoryItemMapper inventoryItemMapper;
   @Mock private MaterialMapper materialMapper;
   @Mock private OwnerScopeService ownerScopeService;
@@ -249,7 +251,7 @@ class InventoryItemServicePersonalRebookTest {
       assertEquals(6.0, item.getAmount(), "source keeps the remainder");
       verify(inventoryItemRepository).saveAndFlush(item);
       verify(inventoryItemRepository, never()).delete(any());
-      verify(materialExchangeOfferRepository).clampOfferedAmountToStock(eq(ITEM_ID), eq(6.0));
+      verify(offerRatchet).lower(ITEM_ID, 6.0, MaterialExchangeOfferRatchet.Reason.REBOOK);
 
       verify(auditService)
           .record(
@@ -297,6 +299,8 @@ class InventoryItemServicePersonalRebookTest {
       verify(inventoryItemRepository).save(saveCaptor.capture());
       assertFalse(saveCaptor.getValue().getPersonal());
       assertEquals(5.0, saveCaptor.getValue().getAmount());
+      verify(offerRatchet)
+          .beforeDelete(List.of(ITEM_ID), MaterialExchangeOfferRatchet.Reason.REBOOK);
       verify(inventoryItemRepository).delete(item);
       verify(inventoryItemRepository, never()).saveAndFlush(any());
       verify(auditService)

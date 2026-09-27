@@ -95,6 +95,7 @@ public class LiveSyncSubscriptionAuthorizer {
             case JOB_ORDER_QUEUE -> ownerScopeService.canViewJobOrders();
             case REFINERY_ORDER -> ownerScopeService.canSeeRefineryOrder(required(topic));
             case BANK_ACCOUNT -> canSeeOrgUnitBankAccount(required(topic));
+            case SELF -> required(topic).equals(authHelperService.currentUserId().orElse(null));
           };
       return allowed ? Verdict.permit() : Verdict.refuse(MetricNames.SUBSCRIBE_DENY_AUTHZ);
     } catch (RuntimeException e) {

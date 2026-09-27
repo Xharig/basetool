@@ -31,7 +31,7 @@
 
     <div class="hud-box mt-2">
 
-        <div class="data-section" id="hangar-results">
+        <div class="data-section" id="hangar-results" th:data-live-sync-topic="${hangarLiveSyncTopic}">
         <th:block th:fragment="hangarResults">
             <div class="flex-between-mb">
                 <h2 th:text="#{hangar.my_ships}">Meine Schiffe</h2>

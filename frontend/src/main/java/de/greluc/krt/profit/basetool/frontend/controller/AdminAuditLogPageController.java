@@ -318,6 +318,8 @@ public class AdminAuditLogPageController {
               List.of(
                   "MARKET_OFFER_RELEASED",
                   "MARKET_OFFER_DEACTIVATED",
+                  "MARKET_OFFER_REDUCED",
+                  "MARKET_OFFER_REMOVED",
                   "MARKET_REMARK_UPDATED",
                   "MARKET_INTEREST_REGISTERED",
                   "MARKET_INTEREST_WITHDRAWN",
@@ -367,6 +369,8 @@ public class AdminAuditLogPageController {
                   "EXCHANGE_CLIENT_DISCONNECTED",
                   "EXCHANGE_INSTALLATION_DISCONNECTED",
                   "EXCHANGE_MEMBER_DEPARTED",
+                  "EXCHANGE_CHANGES_UNDONE",
+                  "EXCHANGE_MASS_CHANGE_CONFIRMED",
                   "CONNECTED_APPS_AUDIT_EXPORTED",
                   "CONNECTED_APPS_AUDIT_PURGED")));
 

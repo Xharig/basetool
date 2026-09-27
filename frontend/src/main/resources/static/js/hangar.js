@@ -36,6 +36,36 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    const HANGAR_SECTIONS = { ships: { container: '#hangar-results' } };
+    const hangarResults = document.getElementById('hangar-results');
+    const hangarTopic = hangarResults ? hangarResults.dataset.liveSyncTopic || '' : '';
+
+    function afterHangarWrite() {
+        reswapHangar();
+        if (
+            hangarTopic &&
+            window.krtLiveSync &&
+            typeof window.krtLiveSync.sendChanged === 'function'
+        ) {
+            window.krtLiveSync.sendChanged(hangarTopic, Object.keys(HANGAR_SECTIONS));
+        }
+    }
+
+    if (
+        hangarTopic &&
+        window.krtLiveSync &&
+        typeof window.krtLiveSync.createReceiver === 'function'
+    ) {
+        window.krtLiveSync.createReceiver({
+            topic: hangarTopic,
+            sections: HANGAR_SECTIONS,
+            coalesceMs: 1500,
+            refresh() {
+                reswapHangar();
+            },
+        });
+    }
+
     function openModal() {
         window.krtModal.open(modal);
     }
@@ -127,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     onSuccess() {
                         if (deleteModal) window.krtModal.close(deleteModal);
                         closeModal();
-                        reswapHangar();
+                        afterHangarWrite();
                     },
                 })
                 .then(function () {
@@ -200,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.addEventListener('click', function () {
                 window.krtModal.close(resultModal);
                 if (document.getElementById('import-res-imported').textContent !== '0') {
-                    reswapHangar();
+                    afterHangarWrite();
                 }
             });
         });
@@ -301,7 +331,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     conflict: hangarConflict,
                     onSuccess() {
                         window.krtModal.close(deleteAllModal);
-                        reswapHangar();
+                        afterHangarWrite();
                         if (window.showFrontendSuccessToast) {
                             window.showFrontendSuccessToast(
                                 deleteAllBtn.getAttribute('data-success'),
@@ -373,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         conflict: hangarConflict,
                         onSuccess() {
                             closeHome();
-                            reswapHangar();
+                            afterHangarWrite();
                         },
                     })
                     .then(function () {
@@ -410,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 conflict: hangarConflict,
                 onSuccess() {
                     closeModal();
-                    reswapHangar();
+                    afterHangarWrite();
                 },
             })
             .then(function () {
