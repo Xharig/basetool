@@ -345,6 +345,12 @@
   Ablaufdatum in einem Befehl und kann es nicht mehr verlieren; er zählt dabei genau einmal im
   Redis-Budget.
   
+- **Verbundene Anwendungen: Registry-Felder begrenzt.** Der Anzeigename erlaubt nur lateinische
+  Buchstaben, Ziffern, Leerzeichen und einfache Satzzeichen und darf nicht „Basetool“ enthalten;
+  Limits höchstens 1200 Anfragen/Minute und 5000 Schreibzugriffe/Tag; Client-IDs des Basetools selbst
+  werden abgelehnt.
+- **Datenaustausch: Mengen und Ablehnungstext.** Das Backend begrenzt Lager-Mengen auf 0 bis 10⁹ wie
+  das Gateway-Schema, und eine nicht zuordenbare Austausch-Anfrage heißt nicht mehr „Import“.
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.
