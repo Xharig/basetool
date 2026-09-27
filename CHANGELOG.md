@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Audit: Änderungen über eine zugelassene Anwendung nennen diese Anwendung.** Der Client-Filter im
+  Audit-Log bietet die registrierten Anwendungen unter ihrem Produktnamen an (REQ-XCH-010).
 - **Datenaustausch: Verzeichnis zugelassener Anwendungen.** Admins verwalten zugelassene
   Fremd-Anwendungen samt Fähigkeiten und den globalen Schalter (`/api/v1/admin/exchange-clients`,
   `/api/v1/admin/exchange-settings`, Migration `V248`); jede Änderung steht im neuen Audit-Bereich

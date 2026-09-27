@@ -454,7 +454,7 @@ sweep"; that was true when written and is no longer.
 ### REQ-AUDIT-005 — The trail records which client a mutation came through
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> On the ingest relay hop the audit row names the external client asserted by the gateway (`X-Exchange-Client`) instead of `none`, with the vocabulary taken from the client registry (REQ-XCH-010, ADR-0217). Existing rows keep „Ohne Client (System)“. Ships with WP 3.1 (#2083), live before the first registry entry.
+> On the ingest relay hop the audit row names the external client asserted by the gateway (`X-Exchange-Client`) instead of `none`, with the vocabulary taken from the client registry (REQ-XCH-010, ADR-0217). Existing rows keep „Ohne Client (System)“. **Built with WP 3.1 (#2083)**: the viewer's client filter offers the registry's clients by their product names; a relayed client the registry does not hold is recorded as `other`. The extractor's relay hop keeps recording `none`.
 
 Every row **either** audit trail writes carries the **originating client**: which client software
 the request that caused the mutation was made from, stored in `audit_event.client_id` and

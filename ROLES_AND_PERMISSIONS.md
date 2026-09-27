@@ -209,6 +209,12 @@ just joined.
 > permission to name a member in `X-Ingest-On-Behalf-Of`, whose *own* authorities then apply for
 > that request. A named authority rather than an empty set on purpose, so a misconfiguration reads
 > as "authenticated as a machine" rather than as "not authenticated".
+>
+> On the **exchange** routes (`/api/v1/exchange/**`, REQ-XCH-009) the named member does **not** get
+> their own authorities: they hold only `ROLE_EXCHANGE_MEMBER` and the capabilities the gateway
+> relayed, and every route is gated by `@exchangeGate` against the client registry. An `ADMIN`
+> therefore has no admin authority there. A browser or app session reaches none of these routes,
+> and one that sends `X-Exchange-Client` / `X-Exchange-Capabilities` is refused.
 
 ---
 
