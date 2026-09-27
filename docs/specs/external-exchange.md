@@ -685,8 +685,12 @@ scope), one query, a city link winning over a space-station link.
 
 The backend serves the demand as `GET /api/v1/exchange/me/org-demand` (`exchange.demand.read`): the
 open and in-progress orders a unit of the member's memberships is responsible for. A material line
-sums `max(0, required − booked)` per material, quality floor (650 for „gut", else 0) and source, as
-the Materialbedarf computes it; `rawRefs` are the materials whose refined material it is. An item
+is the gap per material, quality floor (650 for „gut", else 0) and source, computed exactly as the
+Materialbedarf computes it: required and booked are summed over the orders of one responsible unit,
+each rounded to the material's precision, and the difference is clamped at 0 once — so stock booked
+beyond one order's need offsets another order's gap in that unit — then the units are added up
+(owner decision 2026-09-27; `ExchangeDemandParityTest`). *Corrected 2026-09-27: the feed clamped
+per order and rounded the difference, and so disagreed with the Materialbedarf in both cases.* `rawRefs` are the materials whose refined material it is. An item
 line sums `max(0, ordered − delivered − earmarked)` per game item, and `craftableByMe` matches the
 member's blueprints the way the order's blueprint coverage does (variant family when the order counts
 variants). Lines with nothing open are left out; `bt` is the material's or game item's id.
@@ -695,6 +699,8 @@ variants). Lines with nothing open are left out; `bt` is the material's or game 
 
 - [x] An overseer who is not a member of a unit does not see its demand.
   *`ExchangeDemandServiceTest` — only the member's own units are asked.*
+- [x] The feed's open quantities equal the Materialbedarf's gaps for the same orders.
+  *`ExchangeDemandParityTest`.*
 - [x] The response schema admits no name or free-text field.
   *`ExchangeOrgDemandRouteTest` pins the schema's field sets; the only names are catalogue names.*
 
