@@ -58,4 +58,15 @@ public interface SubjectAuthentication {
   default String exchangeInstallationKey() {
     return null;
   }
+
+  /**
+   * When the connection behind a relayed exchange request was made, as the gateway compared it with
+   * a client disconnect: an offline token's {@code iat}, any other token's {@code auth_time}.
+   *
+   * @return the connection time in epoch seconds, or {@code null} when none was relayed
+   */
+  @Nullable
+  default Long exchangeConnectedAt() {
+    return null;
+  }
 }

@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.controller.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -39,9 +40,11 @@ import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.RoleRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeCatalogService;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeRevocationMirror;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.AuthenticatedSubject;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -53,6 +56,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -61,6 +65,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -85,6 +90,7 @@ class ExchangeCatalogControllerTest {
   @Autowired private ExchangeClientRepository clientRepository;
   @Autowired private ExchangeSettingsRepository settingsRepository;
   @MockitoSpyBean private ExchangeCatalogService catalogService;
+  @MockitoBean private ExchangeRevocationMirror revocationMirror;
 
   private MockMvc mockMvc;
   private ExchangeClient client;
@@ -194,6 +200,54 @@ class ExchangeCatalogControllerTest {
   @Test
   void aCapabilityTheRegistryDoesNotGrantIsNotEnough() throws Exception {
     mockMvc.perform(relayed("exchange.stock.write")).andExpect(status().isForbidden());
+  }
+
+  @Test
+  void theBackendRefusesAConnectionMadeBeforeTheMemberDisconnectedTheClient() throws Exception {
+    Instant revokedAt = Instant.parse("2026-09-27T10:00:00Z");
+    when(revocationMirror.revokedAt("versekit-test", MEMBER)).thenReturn(revokedAt);
+
+    mockMvc
+        .perform(
+            relayed("exchange.connect")
+                .header(
+                    ActingMemberHeader.EXCHANGE_CONNECTED_AT_HEADER,
+                    Long.toString(revokedAt.getEpochSecond())))
+        .andExpect(status().isForbidden());
+    mockMvc.perform(relayed("exchange.connect")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(
+            relayed("exchange.connect")
+                .header(
+                    ActingMemberHeader.EXCHANGE_CONNECTED_AT_HEADER,
+                    Long.toString(revokedAt.getEpochSecond() + 1)))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void anUnreadableRevocationMirrorFailsClosed() throws Exception {
+    when(revocationMirror.revokedAt("versekit-test", MEMBER))
+        .thenThrow(new RedisConnectionFailureException("down"));
+
+    mockMvc
+        .perform(relayed("exchange.connect"))
+        .andExpect(status().isBadGateway())
+        .andExpect(jsonPath("$.code").value("EXTERNAL_SERVICE_ERROR"));
+  }
+
+  @Test
+  void aBrowserSessionCannotSendTheRelayedIssueTime() throws Exception {
+    mockMvc
+        .perform(
+            get(PATH)
+                .with(
+                    jwt()
+                        .jwt(
+                            token ->
+                                token.subject(MEMBER.toString()).claim("azp", "basetool-frontend")))
+                .header(ActingMemberHeader.EXCHANGE_CONNECTED_AT_HEADER, "1790000000"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("ACTING_MEMBER_REFUSED"));
   }
 
   @Test

@@ -207,7 +207,7 @@ class ExchangeChangeRouteTest {
         .thenReturn(
             new ExchangeRelay.Result(
                 409, null, "MASS_CHANGE_CONFIRMATION_REQUIRED", "40 removals in 24 hours."));
-    when(stagingService.stageMassChange(eq(member), anyString(), anyLong()))
+    when(stagingService.stageMassChange(eq("versekit"), eq(member), anyString(), anyLong()))
         .thenReturn(new HandoffStagingService.Staged("hid-1", "ingest:handoff:x:hid-1", 321L));
     when(stagingService.stagedBytes(eq(HandoffKind.MASS_CHANGE), anyString())).thenReturn(321L);
     double before = staged();
@@ -222,7 +222,7 @@ class ExchangeChangeRouteTest {
                 .value("http://localhost:18081/connected-apps/confirm?handoff=hid-1"));
 
     ArgumentCaptor<String> staged = ArgumentCaptor.forClass(String.class);
-    verify(stagingService).stageMassChange(eq(member), staged.capture(), anyLong());
+    verify(stagingService).stageMassChange(eq("versekit"), eq(member), staged.capture(), anyLong());
     assertThat(MAPPER.readTree(staged.getValue()).get("clientId").stringValue())
         .isEqualTo("versekit");
     assertThat(MAPPER.readTree(staged.getValue()).get("resource").stringValue())
@@ -257,7 +257,8 @@ class ExchangeChangeRouteTest {
         .andExpect(status().isContentTooLarge())
         .andExpect(jsonPath("$.code").value("BATCH_TOO_LARGE"));
 
-    verify(stagingService, never()).stageMassChange(anyString(), anyString(), anyLong());
+    verify(stagingService, never())
+        .stageMassChange(anyString(), anyString(), anyString(), anyLong());
     verify(idempotency, never()).store(anyString(), any());
   }
 
@@ -273,7 +274,8 @@ class ExchangeChangeRouteTest {
         .andExpect(header().exists("Retry-After"))
         .andExpect(jsonPath("$.code").value("EXCHANGE_BUDGET_EXHAUSTED"));
 
-    verify(stagingService, never()).stageMassChange(anyString(), anyString(), anyLong());
+    verify(stagingService, never())
+        .stageMassChange(anyString(), anyString(), anyString(), anyLong());
   }
 
   @Test

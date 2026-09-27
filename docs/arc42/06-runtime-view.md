@@ -165,7 +165,8 @@ as the installation's own write; „Verwerfen" drops it.
 at most 90 days back. From the journal, each entry goes back to its state before the client's first
 write in that span, through the same domain services; an entry changed afterwards by anything else
 is skipped as `CHANGED_AFTERWARDS`, a vanished one as `GONE`. Materialbörse offers a book-out
-lowered stay lowered (§11.7a). The client sees the undo in its feed, like any web edit.
+lowered stay lowered, and a removed ship comes back under a new id without the mission units it was
+detached from (§11.7a). The client sees the undo in its feed, like any web edit.
 
 **A draft.** `drafts/blueprints` and `drafts/refinery-orders` write nothing: the backend builds the
 same preview the extractor's upload builds, the gateway stages it for a one-time browser pickup and

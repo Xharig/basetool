@@ -274,6 +274,12 @@ public final class MetricNames {
   public static final String REASON_NON_JWT_PRINCIPAL = "non_jwt_principal";
 
   /**
+   * Client-identity reject reason: a client of the exchange registry the allowlist does not name
+   * called a legacy route (REQ-XCH-033).
+   */
+  public static final String REASON_EXCHANGE_CLIENT = "exchange_client";
+
+  /**
    * Counter {@code basetool_ingest_auth_failures_total} with tag {@code reason}: the RFC 6750 error
    * code ({@link #AUTH_INVALID_TOKEN} / {@link #AUTH_INVALID_REQUEST} / {@link
    * #AUTH_INSUFFICIENT_SCOPE}), {@link #AUTH_NO_CREDENTIALS} or {@link #AUTH_OTHER}.

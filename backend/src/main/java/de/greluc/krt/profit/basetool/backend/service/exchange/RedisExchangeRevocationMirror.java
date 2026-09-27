@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
@@ -77,6 +78,27 @@ public class RedisExchangeRevocationMirror implements ExchangeRevocationMirror {
       @NotNull String clientId, @NotNull UUID member, @NotNull Instant revokedAt) {
     return String.valueOf(revokedAt.getEpochSecond())
         .equals(redisTemplate.opsForValue().get(REVOKED_PREFIX + clientId + ":" + member));
+  }
+
+  /**
+   * Reads the revocation's epoch second.
+   *
+   * @param clientId the Keycloak client id
+   * @param member the member
+   * @return the revocation time, or {@code null} when none is mirrored
+   * @throws IllegalStateException when the entry is not an epoch second
+   */
+  @Override
+  public @Nullable Instant revokedAt(@NotNull String clientId, @NotNull UUID member) {
+    String value = redisTemplate.opsForValue().get(REVOKED_PREFIX + clientId + ":" + member);
+    if (value == null) {
+      return null;
+    }
+    try {
+      return Instant.ofEpochSecond(Long.parseLong(value));
+    } catch (NumberFormatException e) {
+      throw new IllegalStateException("A mirrored client revocation is unreadable", e);
+    }
   }
 
   /**

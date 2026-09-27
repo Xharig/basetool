@@ -203,16 +203,43 @@
 
 ### Changed
 
+- **Datenaustausch: zurückgehaltene Massenänderungen je Anwendung.** Jede verbundene Anwendung hat je
+  Mitglied einen eigenen Platz für eine zu bestätigende Massenänderung; eine andere Anwendung kann sie
+  nicht mehr verdrängen.
+  
 - **Datenaustausch: Geräte-Login ohne fertigen Code-Link.** Anwendungen zeigen den Code und die
   schlichte Adresse `verification_uri`, in die das Mitglied den Code selbst eintippt; den Link mit
   eingesetztem Code, der die Warnseite überspringt, öffnen sie nicht mehr (`docs/exchange/`,
   REQ-XCH-027).
+  
 - **Keycloak: der SC Extractor wird zum reinen Austausch-Client (Sicherheitsbefund H1).** Der
   Provisioner verlangt für `basetool-sc-extractor` künftig eine Zustimmung im Browser, bindet Zugriffs-
   und Auffrischungs-Token an DPoP und gibt nur noch die Austausch-Berechtigungen und `offline_access`
   frei; `extractor-ingest` und `extractor-ingest-only` entfallen. Ein Extractor-Token gilt damit nicht
   mehr für die Backend-API. Auf Produktion wird das erst nach dem Abschalten der alten
   Extractor-Adressen angewendet, weil Versionen bis 2.9.1 sie noch brauchen.
+  
+- **Datenaustausch: Backend prüft „Trennen“ selbst.** Hat ein Mitglied eine Anwendung getrennt,
+  lehnt jetzt auch das Backend deren Verbindungen von vor dem Trennen ab, mit derselben Zeit wie das Gateway; ist der Sperrspiegel in
+  Redis nicht lesbar, wird die Anfrage abgelehnt statt durchgelassen.
+  
+- **Datenaustausch: feste Fehlertexte.** Lehnt das Backend eine Anfrage einer verbundenen Anwendung
+  ab, erhält die Anwendung nur noch den Fehlercode mit einem festen englischen Text je Code, nie den
+  internen Text des Backends (REQ-XCH-025).
+  
+- **Datenaustausch: Entwürfe in eigenen Plätzen.** Entwürfe einer verbundenen Anwendung liegen je
+  Anwendung und Mitglied in eigenen Plätzen (höchstens 10); sie verdrängen keine offenen Uploads des
+  SC Extractors und keine Entwürfe anderer Anwendungen mehr.
+  
+- **Ingest: verbundene Anwendungen nicht auf den alten Endpunkten.** Die alten `/v1`-Endpunkte
+  lehnen jede Anwendung aus dem Austausch-Register ab, die nicht zusätzlich auf der
+  Client-Allowlist steht; der SC Extractor bleibt erreichbar.
+  
+- **Ingest: Produktion startet nicht ohne Client-Allowlist.** Solange die alten `/v1`-Endpunkte
+  aktiv sind, verweigert das Gateway unter `prod` den Start, wenn `IRI_INGEST_ALLOWED_CLIENT_IDS`
+  leer ist oder `IRI_INGEST_CLIENT_AUDIT_ONLY` auf `true` steht – sonst erreichte das Token einer
+  verbundenen Anwendung die alten Entwurfs-Relays. Produktion setzt beides bereits passend.
+  
 - **Keycloak: Offline-Sitzung des SC Extractors fest auf 30/90 Tage.** Der Provisioner setzt beim
   Client `basetool-sc-extractor` dieselbe Offline-Sitzung wie bei verbundenen Anwendungen (30 Tage
   ohne Nutzung, 90 Tage insgesamt), weil der Extractor ab 2.10.0 `offline_access` anfordert. Bisher

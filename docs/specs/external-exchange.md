@@ -192,7 +192,8 @@ only by property.
 **How the backend checks** (WP 3.1). `@exchangeGate.allows('<scope>', authentication)` — or
 `allowsAny(authentication)` for a route any exchange scope serves — passes only an acting member
 relayed for an external client whose authorities hold `ROLE_EXCHANGE_MEMBER`, while the global
-switch is on, the client is in the registry and `ACTIVE`, and the scope was both relayed (the
+switch is on, the client is in the registry and `ACTIVE`, neither the installation nor — after the
+token was issued — the client is disconnected (REQ-XCH-008), and the scope was both relayed (the
 `XCH_CAPABILITY:<scope>` authority) and granted to the client. Every refusal is counted as
 `basetool_exchange_gate_refused_total{reason}`.
 
@@ -351,7 +352,17 @@ with `502` before anything
 is written, and the timestamp is read only after Keycloak answered, so no token refreshed in between
 carries a later `iat`. The 60-second reconcile writes
 back any enforced entry the mirror lacks. The backend's `@exchangeGate` refuses a revoked installation
-itself (`installation_revoked`). The member's controls are `/api/v1/connected-apps` (list,
+itself (`installation_revoked`), and re-checks the client revocation the way the gateway does, so a
+gateway that missed it is caught behind it (security review 2026-09-27): the gateway relays the
+connection time it compared — an offline token's `iat`, any other token's `auth_time`
+(`ExchangeGateFilter.connectionTime`) — as `X-Exchange-Connected-At` (honoured like the other relay
+headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from the mirror on every
+exchange request and refuses a connection made at or before that second (`client_revoked`); a request
+relayed without a connection time counts as connected before it, as a token without the claim does
+at the gateway. Both sides therefore compare the same time. A mirror the
+backend cannot read fails closed: the request is refused as `502` (`revocations_unreadable`), which
+the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user already holds `GET` on
+`exchange:*`. The member's controls are `/api/v1/connected-apps` (list,
 `DELETE /{clientId}`, `DELETE /installations/{id}`), reachable only from the member's own web session.
 
 **Acceptance**
@@ -369,7 +380,10 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
   The backend removes the consent, deletes the client's own sessions and ends the client inside
   shared ones before it reads the time, and writes nothing when Keycloak fails
   (`ConnectedAppsServiceTest`, `KeycloakServiceTest`); the extension leaves the member's other
-  clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).*
+  clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).
+  The backend re-checks it from the relayed connection time and refuses an unreadable mirror
+  (backend `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the compared time in the gateway's
+  `ExchangeGateTest`, the relay header in `ExchangeRelayTest`).*
 - [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
   sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
   every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
@@ -425,7 +439,8 @@ authentication carries the external client, so audit rows and client metrics nam
 `versekit`) instead of `none`; the known-client vocabulary comes from the registry. This attribution
 is live before the first registry entry exists.
 
-**How it is built** (WP 3.1). `X-Exchange-Client` / `X-Exchange-Capabilities` are honoured only
+**How it is built** (WP 3.1). `X-Exchange-Client` / `X-Exchange-Capabilities` — and with them
+`X-Exchange-Installation` and `X-Exchange-Connected-At` (REQ-XCH-007, REQ-XCH-008) — are honoured only
 when the gateway acts for a member on an exchange route; from anyone else — or from the gateway on
 an ingest route — the request is refused with `403 ACTING_MEMBER_REFUSED` and counted as
 `basetool_on_behalf_of_refused_total{reason="forged_exchange_header"}`, and an exchange call without
@@ -775,6 +790,8 @@ REQ-INGEST-004 requires today; nothing is written until the member confirms.
 - [ ] The SC Extractor's draft flows pass unchanged through the exchange routes.
 - [x] A draft is checked against its schema, relayed, staged and answered with its handoff; a
   refused one stages nothing. *`ExchangeDraftRouteTest`.*
+- [x] A client's drafts evict only its own oldest drafts for that member, never the extractor's
+  uploads or another client's drafts. *`HandoffStagingServiceTest`.*
 - [x] The backend previews a blueprint draft as an upload would and writes nothing; each draft
   needs its own capability. *`ExchangeDraftControllerTest`.*
 
@@ -786,12 +803,15 @@ exactly what the extractor's upload builds: for blueprints it resolves each `ref
 name sent — or its first key when it has none — so it lands among the unmatched rows for a manual
 pick; repeats collapse to the earliest `acquiredAt`. For refinery orders it is the refinery import's
 draft. A draft the backend refuses as malformed is `400 SCHEMA_INVALID`. The gateway stages the
-answer in the member's extractor draft slots (`HandoffKind.BLUEPRINT` / `REFINERY`, at most
-`app.ingest.max-handoff-bytes`, measured as the staged value with its handoff wrapper; a larger one
-is `413 PAYLOAD_TOO_LARGE`, checked before staging and never cached), counts it against the
-exchange's byte budget and answers `draft-result` with the `frontendUrl` of the blueprint import
-review or the refinery create form. As write routes they take an `Idempotency-Key` and count
-against the daily quota.
+answer as a handoff (`HandoffKind.BLUEPRINT` / `REFINERY`, at most `app.ingest.max-handoff-bytes`,
+measured as the staged value with its handoff wrapper; a larger one is `413 PAYLOAD_TOO_LARGE`,
+checked before staging and never cached), counts it against the exchange's byte budget and answers
+`draft-result` with the `frontendUrl` of the blueprint import review or the refinery create form.
+The handoffs sit in slots of their own per client and member — at most
+`app.exchange.store.max-drafts-per-client-member` (10) live drafts, the oldest evicted — apart from
+the legacy extractor uploads' per-member slots, so a client with a drafts scope can never evict the
+member's pending extractor handoffs or another client's drafts (security review 2026-09-27). As
+write routes they take an `Idempotency-Key` and count against the daily quota.
 
 The web blueprint import reads the same `basetool.blueprints` envelope as an upload, so a client's
 offline file and its draft end in the same review (owner decision 2026-09-27, REQ-INV-014).
@@ -856,6 +876,10 @@ within one batch is not a removal. Only the member's browser session can confirm
 - [x] A batch is not confirmed after the client or installation was disconnected, or the client
   suspended, since its staging, nor past its 30-minute staging lifetime, and a kept session entry
   expires with it. *`ExchangeMassChangeControllerTest`, `ConnectedAppsConfirmControllerMvcTest`.*
+- [x] A held batch replaces only the same client's older held batch for that member, never another
+  client's or an extractor draft. *`HandoffStagingServiceTest`, `ExchangeChangeRouteTest`.* The
+  confirmation page keeps consumed batches by handoff id and the backend confirms each on its own,
+  so neither needed a change.
 
 The counting rule is `ExchangeMassChangeGuard`: over the journal's live removals of the client,
 member and resource in the last 24 hours plus the batch's, a batch trips above 25, or when that total
@@ -876,8 +900,9 @@ member's undo restores it; the threat model lists it as an accepted risk.
 
 When the backend answers `MASS_CHANGE_CONFIRMATION_REQUIRED`, the gateway stages the change set with
 its client, installation, resource and `stagedAt` (the gateway's clock) in the handoff staging
-(`HandoffKind.MASS_CHANGE`, one slot
-per member apart from the extractor drafts, at most `app.exchange.store.max-mass-change-bytes`,
+(`HandoffKind.MASS_CHANGE`, one slot per client and member, `ingest:handoff-index:mass:<client>:<sub>`,
+apart from the drafts — a client's newer held batch replaces its own older one, never another
+client's (owner decision 2026-09-27) — at most `app.exchange.store.max-mass-change-bytes`,
 512 KiB, counted against the exchange's Redis budget) and answers `409` with a `confirmationUrl` to
 `/connected-apps/confirm?handoff=<id>`. A change set too large to hold — measured, like a draft, as
 the staged value with its wrapper — is `413 BATCH_TOO_LARGE`, checked before staging and never
@@ -973,6 +998,17 @@ SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted a
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
+**Per instance, not per deployment.** The three in-process buckets — requests per client and member,
+per client, and the ten account checks an hour — and Spring's DPoP `jti` replay cache (REQ-XCH-006)
+are held in each gateway process's memory. A second gateway instance behind the edge would therefore
+multiply every per-minute and per-hour limit by the number of instances and let a proof replayed to
+the other instance pass its `jti` check within the 30-second `iat` window; the nonce key is drawn per
+process too, so instances would also reject each other's nonces. The daily write quota, the
+idempotency keys and the byte budget live in Redis and hold across instances. **Production runs
+exactly one gateway**: one `ingest.container` Quadlet unit (`ContainerName=ingest`) and one `ingest`
+compose service (`container_name: ingest`) with no replicas, checked 2026-09-27. Scaling it out
+needs these moved to Redis first — or accepted as a new risk — and this requirement changed with it.
+
 **The byte budget** (`app.exchange.store.*`): every value the gateway stores for the exchange
 registers `<key>|<charge>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
 `…:c:<client>` and `…:all` — scored by its expiry, and each set keeps its running total beside it
@@ -1045,9 +1081,25 @@ Every error is RFC 9457 problem+json with a `code` from the registry in `docs/ex
 each with its HTTP status and the client action it requires. Codes are never reused or repurposed;
 the gateway-side codes are the `reason` labels of the exchange metrics.
 
+A backend refusal reaches a client with its registry code and a **fixed English detail per code**
+(`ExchangeRelay.DETAILS`); the backend's own `detail` is never relayed. The security review of
+2026-09-27 audited what the backend puts there on the passed-through codes. The gate filters
+(`TERMS_NOT_ACCEPTED`, `PENDING_APPROVAL`, `NO_ROLE`, `ACTING_MEMBER_REFUSED`), `ACCESS_DENIED`,
+`VALIDATION_FAILED`, `OPTIMISTIC_LOCK` and the exchange layer's own `ExchangeProblemException` codes
+write fixed or bundle texts, and every exchange-reachable throw site found wrote a fixed text or a
+message key. But nothing makes that hold: `GlobalExceptionHandler` answers an `AppException` of
+kind `BAD_REQUEST` — which relays as `SCHEMA_INVALID` — with the exception's message verbatim
+whenever it is no bundle key, a `ResponseStatusException` with its reason, and a Spring
+`ErrorResponseException` with a body that names request parameters and headers. The exchange writes
+run through the Hangar, Lager and Blueprint services, whose messages can grow a name, an id or a
+value at any time, so the gateway replaces the detail rather than trusting every present and future
+message. `ExchangeRelayTest` feeds each passed-through and translated code a detail with a name,
+another member's id, SQL and a class name and checks none of it arrives.
+
 **Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error
-statuses) · **Status:** registry published — WP 0.2 (#2080); the gateway's refusal metrics carry
-the codes as `reason` labels (`ExchangeRefusals`) — WP 3.2 (#2082)
+statuses), `ExchangeRelayTest` (no backend detail reaches a client) · **Status:** registry published
+— WP 0.2 (#2080); the gateway's refusal metrics carry the codes as `reason` labels
+(`ExchangeRefusals`) — WP 3.2 (#2082)
 
 ### REQ-XCH-026 — The contract grows additively under `/exchange/v1`
 
@@ -1265,7 +1317,12 @@ catalogue) and whether it was undone.
 
 Behind `app.ingest.legacy-endpoints.enabled` (default `true`), `/v1/refinery-extract` and
 `/v1/blueprint-preview` answer `410 LEGACY_ENDPOINT_GONE` with a German update hint once the flag is
-`false` at the go-live. While it is `true` their behaviour is unchanged.
+`false` at the go-live. While it is `true` their behaviour is unchanged, and under `prod` the gateway
+refuses to start with an empty or audit-only client-id allowlist, so an exchange client's token can
+never reach these relays, which run with the member's stored authorities (REQ-INGEST-011,
+`LegacyClientGateGuard`; production sets the allowlist and enforces it, so the next deploy is
+unaffected). The routes also refuse every client the exchange registry lists unless the allowlist
+names it too (`exchange_client`, review 2 L1); a registry that cannot be read skips that check.
 
 The switch is `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED` on the host. The refusal runs before the security
 chain, so an outdated extractor sees the hint (*„Diese Schnittstelle wurde abgeschaltet. Bitte
@@ -1302,6 +1359,7 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | A malicious release changing many members' data at once | journal and each member's own undo, suspension (REQ-XCH-022) — being addressed (admin bulk undo) |
 | A single open order recognisable in the org demand feed | membership-only scope, catalogue fields only, no requester, title or free text; no low-count suppression, 7-day client cache (REQ-XCH-018) — accepted risk (ADR-0220) |
 | Silent removal of Materialbörse offers by a sync book-out | reported and audited, not undoable — accepted (REQ-XCH-016/-022) |
+| A ship removal through the exchange detaching the ship from its mission units, which are org data | reported (`detachedFromMissions`) and audited (`MISSION_UNIT_UPDATED`), not undoable: undo recreates the ship under a new id without its mission units — accepted (REQ-XCH-017/-022) |
 | The version gate bypassed by a manipulated client | cooperative by design — accepted (REQ-XCH-024) |
 | Data poisoning of org-wide views | own personal rows only, validated through the domain services (REQ-XCH-009/-016) |
 | Token leakage via backups, diagnostics or a problem-report webhook | client security requirements (REQ-XCH-027) |

@@ -5,6 +5,11 @@ Every error of the exchange API is an RFC 9457 `application/problem+json` docume
 whose `code` is one of the codes below (`REQ-XCH-025`). A code is never reused or repurposed; new
 codes may appear within v1, and a client treats an unknown code by its HTTP status.
 
+The `detail` is a short English sentence fixed per code and situation. It never echoes the request,
+and a refusal raised by the Basetool behind the gateway arrives with its code's own sentence, not
+the Basetool's internal text, whatever the `Accept-Language`. Decide by `code`; show `detail` at
+most as a hint.
+
 The **gateway** codes are the `reason` label values of the gateway's exchange metrics, in snake
 case. The **per-op** reasons never arrive as a problem: they appear in a change result's
 `results[].reason` for an op that was not applied.

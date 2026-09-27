@@ -21,6 +21,8 @@ package de.greluc.krt.profit.basetool.ingest.filter;
 
 import de.greluc.krt.profit.basetool.ingest.config.ClientIdentityProperties;
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeUnavailableException;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.web.ProblemResponseWriter;
 import de.greluc.krt.profit.basetool.logging.LogSafe;
@@ -51,7 +53,9 @@ import tools.jackson.databind.ObjectMapper;
  * {@code isAuthenticated()}.
  *
  * <p>Runs inside the security chain after authentication and {@link UserIdMdcFilter}. Segments
- * registered clients from one another; it is not anti-tamper.
+ * registered clients from one another; it is not anti-tamper. A client of the exchange registry is
+ * refused unless the allowlist names it too, whatever the audit-only switch says; a registry that
+ * cannot be read skips that check.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -87,6 +91,9 @@ public class ClientIdentityFilter extends OncePerRequestFilter {
   /** Supplies the MDC key the problem body's {@code correlationId} is read from. */
   private final LoggingProperties loggingProperties;
 
+  /** Reads the exchange registry whose clients the legacy routes refuse (REQ-XCH-033). */
+  private final ExchangeRegistryReader registryReader;
+
   /**
    * Evaluates the configured client-identity checks and either rejects the request with a {@code
    * 403} problem or lets it through, counting the outcome either way.
@@ -114,6 +121,10 @@ public class ClientIdentityFilter extends OncePerRequestFilter {
     }
     Jwt jwt = jwtAuthentication.getToken();
     String authorizedParty = claimText(jwt, AUTHORIZED_PARTY_CLAIM);
+    if (isUnlistedExchangeClient(authorizedParty)) {
+      refuseExchangeClient(request, response, authorizedParty);
+      return;
+    }
     String clientLabel = boundedClientLabel(authorizedParty);
     Rejection rejection = evaluate(request, authorizedParty);
 
@@ -287,6 +298,63 @@ public class ClientIdentityFilter extends OncePerRequestFilter {
     return authentication != null
         && authentication.isAuthenticated()
         && !(authentication instanceof AnonymousAuthenticationToken);
+  }
+
+  /**
+   * Tells whether the caller is a client of the exchange registry that the allowlist does not name.
+   *
+   * @param authorizedParty the token's {@code azp}, or {@code null}
+   * @return {@code true} when the registry lists the client and the allowlist does not; {@code
+   *     false} as well when the registry cannot be read
+   */
+  private boolean isUnlistedExchangeClient(@Nullable String authorizedParty) {
+    if (authorizedParty == null || properties.allowedClientIds().contains(authorizedParty)) {
+      return false;
+    }
+    try {
+      return registryReader.current().clients().containsKey(authorizedParty);
+    } catch (ExchangeUnavailableException unreadable) {
+      return false;
+    }
+  }
+
+  /**
+   * Refuses an exchange client on a legacy route with a {@code 403 CLIENT_NOT_ALLOWED}, counted
+   * under its own {@code exchange_client} reason, also under audit-only.
+   *
+   * @param request the current request
+   * @param response the response the problem body is written to
+   * @param authorizedParty the refused client's {@code azp}
+   * @throws IOException if writing the problem body fails
+   */
+  private void refuseExchangeClient(
+      @NotNull HttpServletRequest request,
+      @NotNull HttpServletResponse response,
+      @NotNull String authorizedParty)
+      throws IOException {
+    meterRegistry
+        .counter(
+            MetricNames.INGEST_CLIENT_REJECTED,
+            MetricNames.TAG_REASON,
+            MetricNames.REASON_EXCHANGE_CLIENT)
+        .increment();
+    meterRegistry
+        .counter(MetricNames.HTTP_ERROR, MetricNames.TAG_CODE, MetricNames.CODE_CLIENT_NOT_ALLOWED)
+        .increment();
+    log.warn(
+        "Ingest client rejected: reason={}, clientId={}, path={} {}",
+        MetricNames.REASON_EXCHANGE_CLIENT,
+        LogSafe.text(authorizedParty, MAX_LOGGED_CLIENT_ID),
+        request.getMethod(),
+        LogSafe.text(request.getRequestURI(), MAX_LOGGED_PATH));
+    ProblemResponseWriter.write(
+        response,
+        objectMapper,
+        loggingProperties,
+        HttpStatus.FORBIDDEN,
+        "Client not allowed",
+        MetricNames.CODE_CLIENT_NOT_ALLOWED,
+        "Connected applications use the exchange API, not the legacy ingest path.");
   }
 
   /**

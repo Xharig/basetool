@@ -270,6 +270,10 @@ and its global switch stays off until the go-live; the risks hold from then on.
 - **A sync book-out can lower or remove Materialbörse offers**, as a web book-out does, and undo
   does not restore them. The change result reports `offersReduced` / `offersRemoved` and each
   offer change is audited (REQ-XCH-016, -022).
+- **A sync ship removal detaches the ship from its mission units**, as a web delete does. Mission
+  units are org data the client never sees, and undo cannot restore them: it recreates the ship
+  under a new id without its mission units. The change result reports `detachedFromMissions` and
+  each detachment is audited as `MISSION_UNIT_UPDATED` (REQ-XCH-017, -022).
 - **The minimum-version gate is cooperative.** It reads the `User-Agent`, so it stops honest old
   releases, never a client that lies about its version (REQ-XCH-024).
 - **The org demand feed has no low-count suppression.** A unit's single open order is recognisable
@@ -285,6 +289,11 @@ and its global switch stays off until the go-live; the risks hold from then on.
 
 ## 11.8 Smaller, known, and deliberately left
 
+- **The exchange's per-minute limits and the DPoP replay cache are per gateway instance.** Production
+  runs one ingest gateway, so they hold as specified; a second instance would multiply the limits,
+  let a proof replayed to the other instance pass and reject the other's nonces. Scaling the gateway
+  out means moving them to Redis first ([`external-exchange.md`](../specs/external-exchange.md),
+  REQ-XCH-023).
 - **A fifth certificate directory** (`keycloak.<domain>`) is carried and served by nothing, left
   from before identity moved onto the app origin (ADR-0166). It is documented so the count does not
   read as a missing certificate; pruning it is a deliberate edge change, not a clean-up to do in

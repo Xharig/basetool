@@ -522,7 +522,15 @@ public class ExchangeController {
     try {
       staged =
           stageWithinBudget(
-              context, bytes, () -> stagingService.stageDraft(context.member(), kind, json));
+              context,
+              bytes,
+              () ->
+                  stagingService.stageDraft(
+                      context.clientId(),
+                      context.member(),
+                      kind,
+                      json,
+                      storeProperties.maxDraftsPerClientMember()));
       if (staged == null) {
         return unavailable(
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
@@ -634,7 +642,10 @@ public class ExchangeController {
               bytes,
               () ->
                   stagingService.stageMassChange(
-                      context.member(), json, storeProperties.maxMassChangeBytes()));
+                      context.clientId(),
+                      context.member(),
+                      json,
+                      storeProperties.maxMassChangeBytes()));
       if (staged == null) {
         return unavailable(
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
