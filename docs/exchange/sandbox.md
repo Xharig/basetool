@@ -153,12 +153,14 @@ client, change its capabilities or set a minimum version; the gateway sees a cha
 
 ## Checking the sandbox
 
-[`scripts/sandbox-smoke.py`][smoke] signs in as `sandbox-member` through the device flow with a
-DPoP key, reads every resource, resolves one entry per kind and syncs one blueprint, stock lot and
-ship. With `--conformance` it also sends every change-set fixture of the
-[conformance examples](examples/README.md): valid ones as dry runs, which must be accepted, and invalid
-ones, which must be refused. It needs only Python 3 and runs again on the same data; `--user` and
-`--password` pick another account. CI runs it against the published images after every release.
+[`scripts/sandbox-smoke.py`][smoke] signs in as `sandbox-member` through the device flow with a DPoP
+key — opening the bare `verification_uri`, typing the code and checking that the code-entry and
+consent pages carry the phishing warning and the consent page the code — reads every resource,
+resolves one entry per kind and syncs one blueprint, stock lot and ship. With `--conformance` it
+also sends every change-set fixture of the [conformance examples](examples/README.md): valid ones as
+dry runs, which must be accepted, and invalid ones, which must be refused. It needs only Python 3
+and runs again on the same data; `--user` and `--password` pick another account. CI runs it against
+the published images after every release.
 
 ```sh
 python3 scripts/sandbox-smoke.py --conformance

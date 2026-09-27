@@ -22,7 +22,13 @@ without `--import-realm` — the Keycloak database, not `realm-export.json`, is 
 
 The `discord` identity provider and the membership gate come from the `keycloak-spi` module
 (provider JAR delivered by `deploy.sh`, ADR-0055) — set up per
-[`DISCORD_KEYCLOAK_SETUP.md`](DISCORD_KEYCLOAK_SETUP.md). The login and account theme is
+[`DISCORD_KEYCLOAK_SETUP.md`](DISCORD_KEYCLOAK_SETUP.md). The same JAR replaces the realm's login
+forms with `krt-freemarker`, which adds a device login's user code to the consent page
+([ADR-0228](../adr/0228-a-login-forms-provider-shows-the-device-code-on-the-consent-page.md)). It
+becomes the `login` SPI's default by its `order()`, so no `KC_SPI_LOGIN__PROVIDER` is set anywhere;
+Keycloak logs `KC-SERVICES0047` for it at start, as for every provider of the JAR. On a Keycloak
+upgrade, re-check the classes it extends and render one device consent page (the sandbox smoke test
+does). The login and account theme is
 `krt-theme` from `keycloak-theme/`. Realm hardening and its per-step status:
 [`KEYCLOAK_HARDENING_RUNBOOK.md`](../KEYCLOAK_HARDENING_RUNBOOK.md).
 
