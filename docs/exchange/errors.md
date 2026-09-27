@@ -15,7 +15,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | --- | --- | --- | --- | --- |
 | `CLIENT_NOT_ALLOWED` | 403 | gateway | The token's client is not in the registry. | Stop; the client is not approved. |
 | `CLIENT_SUSPENDED` | 403 | gateway | The client is suspended in the registry. | Stop and tell the member; retry after the maintainer resolved it. |
-| `CLIENT_REVOKED` | 401 | gateway | The member disconnected this client after the token was issued. | Discard tokens; start a new device login only when the member asks. |
+| `CLIENT_REVOKED` | 401 | gateway | The member disconnected this client after this connection was made: an offline token issued before the disconnect, or a token without `offline_access` whose sign-in (`auth_time`) came before it. | Discard tokens; start a new device login only when the member asks. |
 | `INSTALLATION_REVOKED` | 401 | gateway | The member disconnected this installation; its DPoP key is refused for good. | Discard tokens **and** the DPoP key; reconnecting needs a new key. |
 | `CLIENT_VERSION_UNSUPPORTED` | 403 | gateway | The `User-Agent` version is below the client's minimum. | Ask the member to update. |
 | `EXCHANGE_DISABLED` | 503 | gateway | The exchange is switched off globally. | Back off; retry later. |

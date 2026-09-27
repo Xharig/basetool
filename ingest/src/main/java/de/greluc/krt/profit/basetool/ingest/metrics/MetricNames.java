@@ -205,6 +205,12 @@ public final class MetricNames {
       "basetool.ingest.exchange.idempotent.replays";
 
   /**
+   * Gauge {@code basetool_exchange_registry_mirror_age_seconds}: the seconds since the gateway last
+   * read the registry mirror successfully, {@code NaN} before the first read (REQ-XCH-028).
+   */
+  public static final String EXCHANGE_REGISTRY_MIRROR_AGE = "basetool.exchange.registry.mirror.age";
+
+  /**
    * Gauge {@code basetool_ingest_exchange_budget_used_ratio}: the share of the exchange's total
    * Redis byte budget in use when the gateway last measured it (REQ-XCH-023).
    */

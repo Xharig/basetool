@@ -63297,6 +63297,9 @@
             "type" : "string",
             "enum" : [ "MEMBER", "STAFFELLEITER", "KOMMANDOLEITER", "STELLV_KOMMANDOLEITER", "ENSIGN", "BEREICHSLEITER", "BEREICHSKOORDINATOR", "BEREICHSOPERATOR", "OL_MEMBER", "SK_LEAD" ]
           },
+          "self" : {
+            "type" : "boolean"
+          },
           "userDisplayName" : {
             "type" : "string"
           },

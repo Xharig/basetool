@@ -379,4 +379,27 @@ class OrgRoleManagementSecurityServiceTest {
 
     verify(membershipRepository, times(1)).findAllByIdUserId(callerId);
   }
+
+  @Test
+  void targetsAnotherUser_ownSeat_denied() {
+    when(authHelperService.currentUserId()).thenReturn(Optional.of(callerId));
+
+    assertFalse(service.targetsAnotherUser(callerId, authed));
+  }
+
+  @Test
+  void targetsAnotherUser_otherMember_allowed() {
+    when(authHelperService.currentUserId()).thenReturn(Optional.of(callerId));
+
+    assertTrue(service.targetsAnotherUser(UUID.randomUUID(), authed));
+  }
+
+  @Test
+  void targetsAnotherUser_unidentifiableOrAnonymousCaller_denied() {
+    when(authHelperService.currentUserId()).thenReturn(Optional.empty());
+    assertFalse(service.targetsAnotherUser(UUID.randomUUID(), authed));
+
+    assertFalse(service.targetsAnotherUser(null, authed));
+    assertFalse(service.targetsAnotherUser(UUID.randomUUID(), null));
+  }
 }

@@ -102,8 +102,9 @@ document and the schemas beside it and builds the site with Jekyll; a pull reque
 **Status:** the list, the onboarding page, the application template and the documentation site with
 its overview, formats, errors, versioning, changelog and authentication pages, and the MIT-licensed
 DPoP reference `docs/exchange/dpop-reference/` (stdlib Python, CNG and OpenSSL 3 through `ctypes`,
-its tests run by `exchange-docs.yml`), are built — WP 4.6 (#2090); the resource pages, the sync
-guide, the quick start and the sandbox page follow; the terms link and the privacy notice change with the go-live — WP 6 (#2092)
+its tests run by `exchange-docs.yml`), the resource pages, the sync guide, the sandbox page and the
+quick start are built — WP 4.6 (#2090), WP 2.3 (#2099); the terms link and the privacy notice change
+with the go-live — WP 6 (#2092)
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 
@@ -209,6 +210,14 @@ logout would otherwise disconnect every client (owner decision 2026-09-26). Cons
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
 The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
 
+The first-party SC Extractor is held to the same shape once it has migrated (security finding H1,
+owner decision 2026-09-27): its client `basetool-sc-extractor` requires consent, binds access and
+refresh tokens to DPoP, carries only `basic` by default and offers only its exchange scopes and
+`offline_access`. It loses both ingest scopes, so no extractor token carries `aud=basetool-backend`
+any more; before, a phished device code yielded an unbound, refreshable bearer token the backend API
+accepted. The provisioner applies this on production only **after** the legacy switch-off
+(REQ-XCH-033), because released extractors up to 2.9.1 still need `extractor-ingest-only` on `/v1/*`.
+
 **Acceptance**
 
 - [x] The provisioner's self-test covers the third-party template (withheld scopes removed from an
@@ -217,6 +226,10 @@ The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
   (owner decision 2026-09-27).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
+  *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
+  only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
+  the self-test converges a client in today's production shape to it. The box closes with the
+  production apply after the legacy switch-off (WP 6, #2092).*
 - [x] The theme renders both pages with the phishing warning (`login-oauth-grant.ftl`,
   `login-oauth2-device-verify-user-code.ftl`).
 - [x] Keycloak 26.7.4's behaviour is observed (WP 0.4, 2026-09-26, a throwaway local Keycloak of the
@@ -291,10 +304,15 @@ tombstones with WP 3.3
 Disconnecting **one installation** puts its key thumbprint on a persistent deny list (database,
 mirrored to Redis, kept at least as long as a client session can live — 90 days, ADR-0217 amendment); every token bound to that
 key is refused (`401 INSTALLATION_REVOKED`) whatever its `iat`, and reconnecting needs a new key.
-Disconnecting **a whole client** removes the member's Keycloak consent for it (for a first-party
-client without consent: ends its client and offline sessions) and stores a revocation timestamp per (client,
-member); a token issued before it is refused (`401 CLIENT_REVOKED`), and a new connection afterwards
-works at once. When a member leaves the org (disabled, deleted, membership lost), their exchange
+Disconnecting **a whole client** removes the member's Keycloak consent for it — which ends its
+offline sessions and, for a client with consent, its online sessions — ends the member's online
+sessions that hold only that client, and **then** stores a revocation timestamp per (client, member),
+read after Keycloak answered. A token of an earlier connection is refused (`401 CLIENT_REVOKED`): an
+offline token (scope `offline_access`) issued at or before the timestamp, and any other token whose
+`auth_time` — the sign-in it descends from, which a refresh keeps — is at or before it, or which
+carries no `auth_time`. A new connection afterwards works at once; one without `offline_access`
+needs a sign-in after the disconnect, because a device login that joins an older browser session
+keeps that session's `auth_time`. When a member leaves the org (disabled, deleted, membership lost), their exchange
 sessions and consents end — an admin logout, which also makes offline tokens stale — and
 revocations are written at once, not at the next roster sync. The
 gateway reads the deny list and the timestamps per request, bypassing its cache.
@@ -303,8 +321,14 @@ gateway reads the deny list and the timestamps per request, bypassing its cache.
 member's disconnect of a whole client is a row in `exchange_client_revocation` (V249). Both reach the
 Redis mirror before the commit — `exchange:deny:<thumbprint>` and
 `exchange:revoked:<clientId>:<member>`, each holding the revocation's epoch second and expiring 90 days
-after it — and a failed write fails the disconnect with `502`. Disconnecting a client also removes the
-member's Keycloak consent for it, which revokes its offline tokens. The 60-second reconcile writes
+after it — and a failed write fails the disconnect with `502`. Disconnecting a client first removes
+the member's Keycloak consent for it, which revokes its offline tokens (Keycloak does so with or
+without a consent, and ends the client's online sessions only when a consent existed), then deletes
+every online session of the member whose only client it is; a session the client shares with
+another, such as the member's web login, cannot be ended alone through the Admin API and is left to
+the gateway's `auth_time` check. A Keycloak failure fails the disconnect with `502` before anything
+is written, and the timestamp is read only after Keycloak answered, so no token refreshed in between
+carries a later `iat`. The 60-second reconcile writes
 back any enforced entry the mirror lacks. The backend's `@exchangeGate` refuses a revoked installation
 itself (`installation_revoked`). The member's controls are `/api/v1/connected-apps` (list,
 `DELETE /{clientId}`, `DELETE /installations/{id}`), reachable only from the member's own web session.
@@ -317,9 +341,12 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
   request, bypassing its cache, and refuses a listed key `401 INSTALLATION_REVOKED` whatever the
   token's `iat` (`ExchangeGateTest`). The end-to-end run follows with the sandbox (WP 2.3).*
 - [ ] A revoked client is refused, and a fresh connection right after works. *The gateway half is
-  in: it reads `exchange:revoked:<client>:<member>` per request and refuses a token issued at or
-  before that second `401 CLIENT_REVOKED`, while a token issued after it passes
-  (`ExchangeGateTest`).*
+  in: it reads `exchange:revoked:<client>:<member>` per request and refuses `401 CLIENT_REVOKED` an
+  offline token issued at or before that second and any other token signed in at or before it or
+  without `auth_time` — so a token refreshed after the disconnect from an older sign-in is refused —
+  while an offline token issued after it and a token of a later sign-in pass (`ExchangeGateTest`).
+  The backend removes the consent and ends the client's own sessions before it reads the time, and
+  writes nothing when Keycloak fails (`ConnectedAppsServiceTest`, `KeycloakServiceTest`).*
 - [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
   sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
   every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
@@ -763,12 +790,24 @@ true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and n
 change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
 the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write.
 
+The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
+per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
+first request stored its answer and took the lock after it was released replays that answer (or is
+refused with `422` for another body) instead of running the write twice. The lock is released by a
+compare-and-delete script only while it still holds the request's own token, so a request that
+outlived the two minutes never frees the lock of the request that took the key after it.
+
 **Acceptance**
 
 - [x] Replay, cross-member key, in-flight duplicate, uncached `429`. *The gates, limits and quota run
   before the cache, so a refused request never reaches it (`ExchangeIdempotencyFilterTest`: replay,
   reused key, in-flight duplicate, the cached and uncached statuses, a store that fails; the namespace
   holds the client and member, so one member's key can never answer another's).*
+- [x] A duplicate that raced the first request's answer replays it; a lock is freed only by its
+  holder. *`ExchangeIdempotencyFilterTest` (the lookup under the lock, replay and `422`);
+  `ExchangeStoreRedisIntegrationTest` against a real Redis under the ingest ACL user: a duplicate held
+  between its lookup and its lock replays instead of writing again, sixteen parallel duplicates run
+  the write once per key, and an expired holder's token does not release the next holder's lock.*
 
 **Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest` · **Status:**
 built — WP 3.2 (#2082)
@@ -898,14 +937,28 @@ SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted a
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
 **The byte budget** (`app.exchange.store.*`): every value the gateway stores for the exchange
-registers `<key>|<bytes>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
-`…:c:<client>` and `…:all` — scored by its expiry, and expired entries are pruned before each count,
-so the count falls as keys expire. Before a write runs, the gateway reserves the largest cacheable
-answer (32 KiB) against all three budgets and refuses with `503 EXCHANGE_BUDGET_EXHAUSTED` when one
-would overflow, so a full budget stops writes before they reach the backend. The quota counters (from
-their first write of the day) and the idempotency locks (while a write is in flight) count too.
+registers `<key>|<charge>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
+`…:c:<client>` and `…:all` — scored by its expiry, and each set keeps its running total beside it
+(`ingest:xch:budget-sum:m:…`, `…:c:…`, `…:all`). An entry's charge is the value's bytes plus a fixed
+512 bytes for its three set members and the key's own bookkeeping in Redis. One Lua script does each
+step atomically: it prunes up to 1000 expired entries per set (subtracting them from the total),
+checks all three limits and records the entry — so parallel writes cannot overshoot a budget, and no
+step reads a whole set. A total that is missing is rebuilt from its set once; the sets and totals
+expire together, never before their longest entry.
+
+Before a write runs, the gateway reserves the largest cacheable answer (32 KiB) plus its lock against
+all three budgets under the lock's key and refuses with `503 EXCHANGE_BUDGET_EXHAUSTED` when one
+would overflow, so a full budget stops writes before they reach the backend. A cacheable answer then
+takes the reservation's place in one step, or is not cached when it does not fit; otherwise the
+reservation is freed. A staged draft or mass change reserves its exact staged size under an
+`ingest:xch:pending:<uuid>` name before it is written and is settled on its handoff key afterwards.
+A quota counter is recorded when its day's first write creates it, without a limit check: it exists
+already, and the write still needs its own reservation.
 `basetool_ingest_exchange_budget_used_ratio`
 reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
+
+The ingest ACL user runs these scripts with `EVAL`/`EVALSHA`; Redis checks every command a script
+issues against the same user's key patterns and commands (REQ-SEC-068).
 
 **Acceptance**
 
@@ -913,6 +966,11 @@ reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
   working. *`ExchangeStoreRedisIntegrationTest` fills one member's and then one client's budget in a
   real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
   free their bytes. Sessions live under keys the ingest user cannot reach at all.*
+- [x] Parallel writes never overshoot a budget. *`ExchangeStoreRedisIntegrationTest`: sixteen
+  parallel reservations on one member admit exactly what fits, and across two clients exactly what
+  the total holds; a reservation settles on its value or stays when the value does not fit; a missing
+  total is rebuilt. `RedisAclIngestIntegrationTest`: a script under the ingest user reaches no key the
+  user could not.*
 
 **Status:** built — WP 3.2 (#2082); the production Redis size and ACL follow with the go-live,
 WP 2.1 (#2092)
@@ -997,8 +1055,24 @@ tombstones and journal reports task metrics.
   `ExchangeRemoveSpike`, `ExchangeGuardStorm`, `ExchangeInstallationSurge` and `ExchangeUnknownClient`
   alert on them (`exchange_write_alerts_test.yml`); `exchange_change_retention` purges feed and
   journal under `ScheduledJobStale`.*
+- [x] Every gateway log line of an exchange request carries the registry-bounded client label and
+  the route template (`exchangeClientId`, `exchangeRoute`; Loki structured metadata `client_id`,
+  `route`). *`ExchangeGateTest`, `CorrelationIdFilterTest`.*
+- [x] `basetool_exchange_clients{status}` counts the registry clients per status from the snapshot
+  the mirror sync reads, without a query per scrape. *`ExchangeClientGaugesTest`,
+  `ExchangeRegistryMirrorIntegrationTest`.*
+- [x] `basetool_exchange_registry_mirror_age_seconds` is the time since the gateway's last good read
+  of the mirror, which it reads every 30 s; `ExchangeRegistryMirrorStaleAtGateway` alerts above
+  5 minutes while the mirror is enabled. The document's `writtenAt` is not used, because the backend
+  rewrites the mirror only on a change. *`ExchangeRegistryReaderTest`,
+  `exchange_mirror_age_alerts_test.yml`.*
+- [x] A dedicated Grafana dashboard „Exchange" (`15-exchange.json`) shows all of the above per
+  client, with the gateway's log lines filtered by client.
+- `basetool_ingest_gate_enforcing` is not extended to the exchange gates, since they cannot be
+  switched off (owner decision 2026-09-27).
 
-**Status:** built — WP 3.3 (#2083), #2091; the runbooks live in the knowledge base
+**Status:** built — WP 3.3 (#2083), #2091 (the monitoring extras of 2026-09-27 included); the
+runbooks live in the knowledge base
 
 ### REQ-XCH-029 — Third parties get a local sandbox
 
@@ -1026,10 +1100,21 @@ backend is healthy, idempotently. It publishes loopback ports only
       the marker under `prod`) and fails on any secret Trivy finds. It publishes `edge` when run by
       hand on `main` and the version and `latest` on a release tag; the production packages stay
       private and untouched. The packages' public visibility is set once by the owner.*
-- [ ] The CI job that pulls them anonymously and runs the conformance fixtures and the
-      device-grant + DPoP smoke test; the E2E extension with ingest.
+- [x] The CI job that pulls them anonymously and runs the conformance fixtures and the
+      device-grant + DPoP smoke test.
+      *`.github/workflows/sandbox-smoke.yml` runs after every publish (called by
+      `sandbox-images.yml`), weekly and by hand, with `contents: read` only, so every image is
+      pulled without a registry login. It starts the sandbox with `scripts/sandbox.sh up` and runs
+      `scripts/sandbox-smoke.py`: device login with DPoP through the sandbox Keycloak, a token bound
+      to the key (`cnf.jkt`) for `basetool-ingest`, the service document, the installation, every
+      read resource, a resolve per kind, one blueprint, stock and ship sync, and with
+      `--conformance` every change-set fixture of `docs/exchange/examples/v1` (valid ones as dry
+      runs accepted, invalid ones refused); then the same without the fixtures as the second
+      member.*
+- [ ] The E2E extension with ingest.
 
-**Status:** local sandbox and the image pipeline built — WP 2.3 (#2099); the CI job follows
+**Status:** local sandbox, the image pipeline and its smoke job built — WP 2.3 (#2099); the E2E
+extension follows
 
 ### REQ-XCH-030 — Exchange writes appear live
 
