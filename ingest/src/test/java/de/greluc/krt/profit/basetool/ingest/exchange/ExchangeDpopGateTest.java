@@ -184,6 +184,33 @@ class ExchangeDpopGateTest {
   }
 
   @Test
+  void anUnboundTokenWithAProofIsRefusedAsDpopRequiredAndGetsTheNonce() throws Exception {
+    mockMvc
+        .perform(dpop(UNBOUND_TOKEN, proof(key, UNBOUND_TOKEN, nonce())))
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().exists(ExchangeTokenGateFilter.DPOP_NONCE_HEADER))
+        .andExpect(jsonPath("$.code").value("DPOP_REQUIRED"));
+  }
+
+  @Test
+  void aDpopSchemeRequestWithoutAProofIsRefusedAsDpopRequired() throws Exception {
+    mockMvc
+        .perform(get(STOCK).header(HttpHeaders.AUTHORIZATION, "DPoP " + TOKEN))
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().exists(ExchangeTokenGateFilter.DPOP_NONCE_HEADER))
+        .andExpect(jsonPath("$.code").value("DPOP_REQUIRED"));
+  }
+
+  @Test
+  void aBadProofIsRefusedWithTheNonce() throws Exception {
+    mockMvc
+        .perform(dpop(TOKEN, proof(ExchangeTestSupport.newKey(), TOKEN, nonce())))
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().exists(ExchangeTokenGateFilter.DPOP_NONCE_HEADER))
+        .andExpect(jsonPath("$.code").value("DPOP_INVALID"));
+  }
+
+  @Test
   void aTokenForAnotherAudienceIsRefusedWithTheAudiencePropertyBlank() throws Exception {
     double before = refused("unauthenticated");
 

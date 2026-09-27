@@ -69,6 +69,15 @@ public class SecurityProblemResponseHandler
   /** Serializes the problem body. */
   private static final String BEARER_SCHEME = "Bearer ";
 
+  /** The scheme of a DPoP-bound request. */
+  private static final String DPOP_SCHEME = "DPoP ";
+
+  /** The header carrying the DPoP proof. */
+  private static final String DPOP_PROOF_HEADER = "DPoP";
+
+  /** What the proof verifier reports for an access token without {@code cnf.jkt}. */
+  static final String UNBOUND_TOKEN_DESCRIPTION = "jkt claim is required.";
+
   private final ObjectMapper objectMapper;
 
   /** Counts every 401/403 on the bounded auth-failure and error counters. */
@@ -109,7 +118,7 @@ public class SecurityProblemResponseHandler
               MetricNames.TAG_PATH_SCOPE,
               MetricNames.PATH_SCOPE_EXCHANGE)
           .increment();
-      commenceExchange(request, response, bearerErrorCode);
+      commenceExchange(request, response, bearerErrorCode, authException);
       return;
     }
     bearerEntryPoint.commence(request, response, authException);
@@ -168,29 +177,35 @@ public class SecurityProblemResponseHandler
   }
 
   /**
-   * Answers an unauthenticated exchange request with the DPoP challenge (REQ-XCH-006): the bearer
-   * scheme is {@code DPOP_REQUIRED}, a missing nonce gets a fresh one to retry with, a bad proof is
+   * Answers an unauthenticated exchange request with the DPoP challenge and the current nonce
+   * (REQ-XCH-006): a bearer token, a DPoP-scheme request without a proof and a token without a key
+   * binding are {@code DPOP_REQUIRED}, a missing nonce gets the nonce to retry with, a bad proof is
    * {@code DPOP_INVALID}, anything else {@code UNAUTHENTICATED}.
    *
    * @param request the request
    * @param response the response
    * @param reason the failure's metric reason
+   * @param authException the failure
    * @throws IOException if writing fails
    */
   private void commenceExchange(
       @NotNull HttpServletRequest request,
       @NotNull HttpServletResponse response,
-      @NotNull String reason)
+      @NotNull String reason,
+      @NotNull AuthenticationException authException)
       throws IOException {
+    response.setHeader(ExchangeTokenGateFilter.DPOP_NONCE_HEADER, nonces.current());
+    String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
     String code;
     String detail;
-    if (StringUtils.startsWithIgnoreCase(
-        request.getHeader(HttpHeaders.AUTHORIZATION), BEARER_SCHEME)) {
+    if (StringUtils.startsWithIgnoreCase(authorization, BEARER_SCHEME)
+        || (StringUtils.startsWithIgnoreCase(authorization, DPOP_SCHEME)
+            && request.getHeader(DPOP_PROOF_HEADER) == null)
+        || isUnbound(authException)) {
       response.setHeader(HttpHeaders.WWW_AUTHENTICATE, ExchangeChallenge.header(null));
       code = ExchangeRefusals.DPOP_REQUIRED;
       detail = "Exchange routes need a DPoP-bound token and a DPoP proof.";
     } else if (MetricNames.AUTH_USE_DPOP_NONCE.equals(reason)) {
-      response.setHeader(ExchangeTokenGateFilter.DPOP_NONCE_HEADER, nonces.current());
       response.setHeader(
           HttpHeaders.WWW_AUTHENTICATE,
           ExchangeChallenge.header(ExchangeDpopProofValidation.USE_DPOP_NONCE));
@@ -209,6 +224,23 @@ public class SecurityProblemResponseHandler
     }
     refusals.count(code, MetricNames.EXCHANGE_CLIENT_NONE);
     write(response, HttpStatus.UNAUTHORIZED, "Unauthenticated", code, detail);
+  }
+
+  /**
+   * Whether a failure is the proof verifier finding no key binding in the access token.
+   *
+   * @param exception the failure
+   * @return {@code true} when a cause reports the token's missing {@code cnf.jkt}
+   */
+  private static boolean isUnbound(@NotNull Throwable exception) {
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      if (cause instanceof JwtValidationException validation
+          && validation.getErrors().stream()
+              .anyMatch(error -> UNBOUND_TOKEN_DESCRIPTION.equals(error.getDescription()))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
