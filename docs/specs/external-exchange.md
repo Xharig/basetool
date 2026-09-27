@@ -634,7 +634,11 @@ data is never sent. Detaching a ship from a mission by removal is reported in
 with the external client. A ship's `name` is optional and up to 255 characters, as in the web: an
 unnamed ship is sent without it, and an upsert may leave it out (owner decision 2026-09-27). An
 `upsert` sets the ship as sent: a `name` or `location` it leaves out is cleared, and only an absent
-`fitted` keeps its value.
+`fitted` keeps its value. A ship a client creates belongs to the member's only direct org unit, or to
+none when the member has none or several, because a client names no unit; the member assigns it
+later in the web, as a stock book-in (owner decision 2026-09-27, `HangarService.addShipForClient`).
+*Corrected 2026-09-27: a member of several units had the whole batch refused with
+`OWNER_ORG_UNIT_REQUIRED`.*
 
 **Acceptance**
 

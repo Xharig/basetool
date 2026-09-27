@@ -103,6 +103,7 @@ class ExchangeShipWriteControllerTest {
   private final List<UUID> shipTypes = new ArrayList<>();
   private final List<UUID> locations = new ArrayList<>();
   private final List<UUID> missions = new ArrayList<>();
+  private final List<UUID> orgUnits = new ArrayList<>();
 
   @BeforeEach
   void setUp() {
@@ -141,6 +142,9 @@ class ExchangeShipWriteControllerTest {
       jdbc.update("DELETE FROM user_roles WHERE user_id = ?", id);
       jdbc.update("DELETE FROM app_user WHERE id = ?", id);
     }
+    orgUnits.forEach(
+        id -> jdbc.update("DELETE FROM org_unit_membership WHERE org_unit_id = ?", id));
+    orgUnits.forEach(id -> jdbc.update("DELETE FROM org_unit WHERE id = ?", id));
     shipTypes.forEach(id -> jdbc.update("DELETE FROM ship_type WHERE id = ?", id));
     locations.forEach(id -> jdbc.update("DELETE FROM location WHERE id = ?", id));
     ExchangeSettings settings =
@@ -183,6 +187,66 @@ class ExchangeShipWriteControllerTest {
             .getContentAsString();
     List<Object> unlinked = JsonPath.read(otherFeed, "$.items[*].externalId");
     assertThat(unlinked).isEmpty();
+  }
+
+  @Test
+  void aShipCreatedForAMemberOfSeveralUnitsHasNoUnitAndOfOneUnitThatUnit() throws Exception {
+    UUID cutlass = shipType("Cutlass Black");
+    UUID squadron = orgUnit("SQUADRON");
+    UUID command = orgUnit("SPECIAL_COMMAND");
+    joins(squadron);
+    joins(command);
+
+    change(ops(upsert("vk-9", null, null, cutlass, "Two units", "{\"kind\":\"LTI\"}", null)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.applied").value(1));
+    assertThat(
+            jdbc.queryForList(
+                "SELECT owning_org_unit_id FROM ship WHERE owner_id = ? AND name = 'Two units'",
+                UUID.class,
+                member))
+        .containsExactly((UUID) null);
+
+    jdbc.update(
+        "DELETE FROM org_unit_membership WHERE user_id = ? AND org_unit_id = ?", member, command);
+    change(ops(upsert("vk-10", null, null, cutlass, "One unit", "{\"kind\":\"LTI\"}", null)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.applied").value(1));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT owning_org_unit_id FROM ship WHERE owner_id = ? AND name = 'One unit'",
+                UUID.class,
+                member))
+        .isEqualTo(squadron);
+  }
+
+  /**
+   * Seeds an active org unit.
+   *
+   * @param kind its kind
+   * @return its id
+   */
+  private @NotNull UUID orgUnit(@NotNull String kind) {
+    UUID id = UUID.randomUUID();
+    jdbc.update(
+        "INSERT INTO org_unit (id, kind, name, shorthand, active, is_promotion_enabled,"
+            + " is_profit_eligible) VALUES (?, ?, ?, ?, TRUE, FALSE, FALSE)",
+        id,
+        kind,
+        "Unit " + id,
+        "U" + id.toString().substring(0, 6));
+    orgUnits.add(id);
+    return id;
+  }
+
+  /**
+   * Makes the member a direct member of an org unit.
+   *
+   * @param orgUnit the org unit
+   */
+  private void joins(@NotNull UUID orgUnit) {
+    jdbc.update(
+        "INSERT INTO org_unit_membership (user_id, org_unit_id) VALUES (?, ?)", member, orgUnit);
   }
 
   @Test
