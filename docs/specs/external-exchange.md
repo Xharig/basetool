@@ -543,7 +543,8 @@ decision 2026-09-26), and a `$id` is never changed once published. The schemas a
 `observedAt`), `material-kind` (`RAW|REFINED|NO_REFINE` plus `commodity`), `blueprint`, `stock-lot`
 (material, location, quality, `stolen`, quantity — no org unit, no row id), `ship` (with required
 `version`), `org-demand`, `location`, `installation`, `account-check`, `change-set` (at most 500
-ops), `change-result` (compact, at most 32 KiB), `page`, `service-document`, `problem` and the
+ops), `change-result` (compact, at most 32 KiB; its optional `cursor` is reserved and never sent in
+v1 — a client reads the feed after a push), `page`, `service-document`, `problem` and the
 offline-file `envelope` (`format`, `formatVersion`, `generator`, `generatedAt`, `items`,
 `extensions`; no handle, player, source folder or file path). One OpenAPI 3.1 document,
 `ingest/src/main/resources/api/exchange-v1.openapi.json`, is authoritative for the exchange routes.

@@ -10,6 +10,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   `SERVICE_UNAVAILABLE` whose daily write quota cannot be counted; 60 with
   `EXCHANGE_BUDGET_EXHAUSTED` and a `SERVICE_UNAVAILABLE` for a store it cannot reach; 5 when the
   identity provider cannot be reached ([errors](errors.md)). The behaviour is unchanged.
+- **Clarified: the change result's `cursor` is reserved.** `change-result.schema.json` declares an
+  optional `cursor`, which the server has never sent. It stays in the schema, since `v1` never
+  removes a field, and is marked reserved; read the feed after a push for the new position.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and

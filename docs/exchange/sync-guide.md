@@ -26,7 +26,8 @@ against the baseline, never against a guess.
 Every sync cycle starts by reading the feed to its end — until `hasMore` is `false` — and applying it
 locally, tombstones included. Only then compare, and push what changed locally since the baseline.
 After a push, read the feed again: it shows your own writes as the server stored them, and that state
-with its cursor is the new baseline. A change result carries no cursor in `v1`.
+with its cursor is the new baseline. A change result carries no cursor in `v1`: the schema reserves
+a `cursor` property, but the server does not send it, so do not wait for one.
 
 ## The first sync is add-only
 
