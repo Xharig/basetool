@@ -60876,6 +60876,19 @@
           }
         }
       },
+      "ExchangeLocationRef" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "maxLength" : 200,
+            "minLength" : 1
+          },
+          "uex" : {
+            "$ref" : "#/components/schemas/Uex"
+          }
+        }
+      },
       "ExchangeMaterialKindDto" : {
         "type" : "object",
         "properties" : {
@@ -62715,19 +62728,6 @@
           "version" : {
             "type" : "integer",
             "format" : "int64"
-          }
-        }
-      },
-      "LocationRef" : {
-        "type" : "object",
-        "properties" : {
-          "name" : {
-            "type" : "string",
-            "maxLength" : 200,
-            "minLength" : 1
-          },
-          "uex" : {
-            "$ref" : "#/components/schemas/Uex"
           }
         }
       },
@@ -64660,7 +64660,7 @@
             "$ref" : "#/components/schemas/Quantity"
           },
           "location" : {
-            "$ref" : "#/components/schemas/LocationRef"
+            "$ref" : "#/components/schemas/ExchangeLocationRef"
           },
           "material" : {
             "$ref" : "#/components/schemas/ExchangeItemRef"
