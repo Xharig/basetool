@@ -67,8 +67,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   without `offline_access` is refused while its `auth_time` lies before the disconnect, also when it
   was refreshed afterwards; a client that requests `offline_access`, as it must, is unaffected.
 - **Store outages.** A store the exchange cannot reach answers `503 SERVICE_UNAVAILABLE` with
-  `Retry-After: 60` on every exchange route. A lost Redis connection while staging a draft answered with the extractor
-  upload's `Retry-After: 5`, and a store failure outside the staging could answer `500`.
+  `Retry-After: 60` on every exchange route. A lost Redis connection while staging a draft
+  answered with the extractor upload's `Retry-After: 5`, and a store failure outside the staging
+  could answer `500`.
 - **Oversize drafts.** A draft or a held-back change set whose staged form exceeds the cap answered
   `400 BAD_REQUEST`, a code outside the registry, and the answer was replayed for its key. It now
   answers `413 PAYLOAD_TOO_LARGE` (draft) or `413 BATCH_TOO_LARGE` (change set), which is not

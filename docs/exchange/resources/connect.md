@@ -48,8 +48,8 @@ The body is an [`installation`](../schemas/) with only `label`: at most 40 chara
 digits, space, `-`, `_` and `.`, not starting with a space — the pattern
 `^[\p{L}\p{N}._-][\p{L}\p{N} ._-]{0,39}$`. The `-` is the ASCII hyphen-minus only: an en dash
 (`VerseKit – Windows`), a colon or any other punctuation is refused, so write `VerseKit Windows` or
-`VerseKit-Windows`. The server normalises the label to NFC and checks the rule again. Never send a host or computer name. `installationId`, `firstSeenAt` and
-`lastSeenAt` are ignored on input.
+`VerseKit-Windows`. The server normalises the label to NFC and checks the rule again. Never send a
+host or computer name. `installationId`, `firstSeenAt` and `lastSeenAt` are ignored on input.
 
 ```json
 {"label": "VerseKit Windows"}
