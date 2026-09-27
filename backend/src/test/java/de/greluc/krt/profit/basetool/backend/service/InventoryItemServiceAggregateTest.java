@@ -112,7 +112,9 @@ class InventoryItemServiceAggregateTest {
               isNull(),
               anyBoolean(),
               any(),
-              any());
+              any(),
+              eq(false),
+              eq(false));
     }
 
     @Test
@@ -134,7 +136,9 @@ class InventoryItemServiceAggregateTest {
               isNull(),
               anyBoolean(),
               any(),
-              any());
+              any(),
+              eq(false),
+              eq(false));
     }
 
     @Test
@@ -157,7 +161,9 @@ class InventoryItemServiceAggregateTest {
               isNull(),
               anyBoolean(),
               any(),
-              any());
+              any(),
+              eq(false),
+              eq(false));
     }
 
     @Test
@@ -166,7 +172,8 @@ class InventoryItemServiceAggregateTest {
       UUID missionId = UUID.randomUUID();
       stubFindGlobalStacks();
 
-      service.getAllAggregatedInventory(null, null, 500, List.of(jobId), List.of(missionId));
+      service.getAllAggregatedInventory(
+          null, null, 500, List.of(jobId), List.of(missionId), false, false);
 
       verify(inventoryItemRepository)
           .findGlobalStacks(
@@ -181,7 +188,9 @@ class InventoryItemServiceAggregateTest {
               eq(List.of(missionId)),
               anyBoolean(),
               any(),
-              any());
+              any(),
+              eq(false),
+              eq(false));
     }
   }
 
@@ -306,7 +315,9 @@ class InventoryItemServiceAggregateTest {
                 any(),
                 anyBoolean(),
                 any(),
-                any()))
+                any(),
+                eq(false),
+                eq(false)))
         .thenReturn(List.of());
   }
 
@@ -327,7 +338,9 @@ class InventoryItemServiceAggregateTest {
             any(),
             anyBoolean(),
             any(),
-            any()))
+            any(),
+            eq(false),
+            eq(false)))
         .thenReturn(List.of(aggregates));
   }
 
@@ -356,6 +369,7 @@ class InventoryItemServiceAggregateTest {
                   probe.getQuality(),
                   null,
                   probe.getPersonal(),
+                  false,
                   java.util.List.of(),
                   0.0,
                   java.util.List.of(),
@@ -381,6 +395,7 @@ class InventoryItemServiceAggregateTest {
         null,
         location,
         quality,
+        false,
         false,
         null,
         totalAmount,

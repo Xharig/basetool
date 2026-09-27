@@ -53,6 +53,8 @@ import java.util.UUID;
  * @param viewerInterested whether the viewer registered interest.
  * @param status the offer status name (ACTIVE / DEACTIVATED).
  * @param version the optimistic-lock version.
+ * @param stolen whether the offered Lager row is marked „gestohlen" (REQ-INV-053); always {@code
+ *     false} for a free-stated item offer.
  */
 public record MaterialExchangeOfferDto(
     UUID id,
@@ -72,4 +74,5 @@ public record MaterialExchangeOfferDto(
     List<String> interestedHandles,
     boolean viewerInterested,
     @BackendEnumAsString String status,
-    Long version) {}
+    Long version,
+    boolean stolen) {}

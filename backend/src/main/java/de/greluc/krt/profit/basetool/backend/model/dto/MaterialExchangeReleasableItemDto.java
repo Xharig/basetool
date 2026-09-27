@@ -38,6 +38,7 @@ import java.util.UUID;
  * @param amount the row's quantity in its {@link #quantityType} unit.
  * @param locationName the row's location, shown only in the owner's own picker.
  * @param alreadyReleased whether an active offer already exists for this row.
+ * @param stolen whether the row is marked „gestohlen" (REQ-INV-053).
  */
 public record MaterialExchangeReleasableItemDto(
     UUID inventoryItemId,
@@ -47,4 +48,5 @@ public record MaterialExchangeReleasableItemDto(
     Integer quality,
     Double amount,
     String locationName,
-    boolean alreadyReleased) {}
+    boolean alreadyReleased,
+    boolean stolen) {}

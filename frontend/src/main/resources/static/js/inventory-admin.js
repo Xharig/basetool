@@ -43,6 +43,38 @@ function adminCheckbox(id) {
     return id ? /** @type {HTMLInputElement | null} */ (document.getElementById(id)) : null;
 }
 
+/**
+ * The „gestohlen" select of the active view (REQ-INV-053), when the page renders one.
+ *
+ * @returns {HTMLSelectElement | null} the select, or null when absent
+ */
+function adminStolenFilterSelect() {
+    return /** @type {HTMLSelectElement | null} */ (
+        document.getElementById('stolenFilter') || document.getElementById('itemStolenFilter')
+    );
+}
+
+/**
+ * The „gestohlen" filter of the active view: '' for all, 'non' without, 'only' stolen only.
+ *
+ * @returns {string} the filter value
+ */
+function adminStolenFilterValue() {
+    const el = adminStolenFilterSelect();
+    return el ? el.value : '';
+}
+
+/**
+ * Appends the backend flag of a „gestohlen" filter value to a query.
+ *
+ * @param {URLSearchParams} params the query to extend
+ * @param {string} value the filter value ('', 'non' or 'only')
+ */
+function appendAdminStolenFilter(params, value) {
+    if (value === 'only') params.append('stolenOnly', 'true');
+    else if (value === 'non') params.append('nonStolenOnly', 'true');
+}
+
 const ADMIN_INVENTORY_FILTER_KEY = 'inventory_admin_filters';
 
 const ADMIN_INVENTORY_FILTER_PARAMS = [
@@ -52,6 +84,8 @@ const ADMIN_INVENTORY_FILTER_PARAMS = [
     'minQuality',
     'jobOrderIds',
     'missionIds',
+    'stolenOnly',
+    'nonStolenOnly',
 ];
 
 function readAdminInventoryFilterPref() {
@@ -88,6 +122,7 @@ function snapshotAdminInventoryFilters() {
             gameItems: adminInventoryFilterSelection('gameItemCheck'),
             locations: adminInventoryFilterSelection('locCheck'),
             jobOrders: adminInventoryFilterSelection('jobOrderCheck'),
+            stolen: adminStolenFilterValue(),
         };
     }
     const minQualitySelect = /** @type {HTMLSelectElement | null} */ (
@@ -99,6 +134,7 @@ function snapshotAdminInventoryFilters() {
         minQuality: minQualitySelect ? minQualitySelect.value : '',
         jobOrders: adminInventoryFilterSelection('jobOrderCheck'),
         missions: adminInventoryFilterSelection('missionCheck'),
+        stolen: adminStolenFilterValue(),
     };
 }
 
@@ -164,6 +200,11 @@ function restoreAdminInventoryFilters() {
     families.forEach(function (f) {
         if (applyAdminSavedSelection(f[0], f[1], f[2], f[3])) changed = true;
     });
+    const stolenSelect = adminStolenFilterSelect();
+    if (stolenSelect && (saved.stolen === 'non' || saved.stolen === 'only')) {
+        stolenSelect.value = saved.stolen;
+        changed = true;
+    }
     return changed;
 }
 
@@ -174,6 +215,7 @@ function countActiveAdminInventoryFilters() {
         if (Array.isArray(snapshot[dimension]) && snapshot[dimension].length > 0) active++;
     });
     if (typeof snapshot.minQuality === 'string' && snapshot.minQuality !== '') active++;
+    if (snapshot.stolen === 'non' || snapshot.stolen === 'only') active++;
     return active;
 }
 
@@ -191,6 +233,7 @@ function filterInventory() {
         document.getElementById('minQuality')
     );
     const minQuality = minQualitySelect ? minQualitySelect.value : '';
+    const stolenFilter = adminStolenFilterValue();
 
     const container = document.getElementById('tableContainer');
     if (!container) return;
@@ -208,6 +251,7 @@ function filterInventory() {
     if (minQuality) url.searchParams.append('minQuality', minQuality);
     activeJobOrders.forEach((j) => url.searchParams.append('jobOrderIds', j));
     activeMissions.forEach((m) => url.searchParams.append('missionIds', m));
+    appendAdminStolenFilter(url.searchParams, stolenFilter);
 
     const visibleUrl = new URL(window.location.origin + '/inventory/all');
     if (itemsView) visibleUrl.searchParams.append('view', 'items');
@@ -217,6 +261,7 @@ function filterInventory() {
     if (minQuality) visibleUrl.searchParams.append('minQuality', minQuality);
     activeJobOrders.forEach((j) => visibleUrl.searchParams.append('jobOrderIds', j));
     activeMissions.forEach((m) => visibleUrl.searchParams.append('missionIds', m));
+    appendAdminStolenFilter(visibleUrl.searchParams, stolenFilter);
     try {
         window.history.replaceState({}, '', visibleUrl.toString());
     } catch {}
@@ -309,6 +354,8 @@ function resetInventoryFilter() {
         document.getElementById('minQuality')
     );
     if (minQualitySelect) minQualitySelect.value = '';
+    const stolenSelect = adminStolenFilterSelect();
+    if (stolenSelect) stolenSelect.value = '';
     if (document.getElementById('materialHeader'))
         adminLager.updateSelectState('matAll', 'matCheck', 'materialHeader');
     if (document.getElementById('gameItemHeader'))

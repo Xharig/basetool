@@ -141,6 +141,14 @@
                                th:checked="${selectedNonPersonalOnly}" data-trigger="inv-my-personal-filter">
                         <span class="form-label-xs" th:text="#{inventory.filter.nonPersonalOnly}">Nur nicht-pers\u00f6nliche Eintr\u00e4ge</span>
                     </label>
+                    <div class="flex-gap-sm">
+                        <label for="stolenFilter" class="form-label-xs" th:text="#{inventory.stolen.filter.label}">Gestohlen:</label>
+                        <select id="stolenFilter" class="krtm-padding-0-375rem-2-5rem-0-375rem-0-75rem-min-caea" data-trigger="inv-my-filter" data-testid="stolen-filter">
+                            <option value="" th:text="#{inventory.stolen.filter.all}">Alle</option>
+                            <option value="non" th:selected="${selectedNonStolenOnly}" th:text="#{inventory.stolen.filter.nonStolen}">Ohne gestohlene</option>
+                            <option value="only" th:selected="${selectedStolenOnly}" th:text="#{inventory.stolen.filter.stolenOnly}">Nur gestohlene</option>
+                        </select>
+                    </div>
                     <button type="button" class="btn btn-ghost" data-trigger="inv-my-reset-filter" th:text="#{inventory.filter.reset}">Filter zur\u00fccksetzen</button>
                 </form>
                 <form th:if="${view == 'items'}" th:action="@{/inventory/my}" method="get" id="myItemsFilterForm" class="my-inventory-filter no-track krtm-margin-0-display-flex-gap-1rem-align-items-c-5700">
@@ -209,6 +217,14 @@
                                th:checked="${selectedNonPersonalOnly}" data-trigger="inv-my-personal-filter">
                         <span class="form-label-xs" th:text="#{inventory.filter.nonPersonalOnly}">Nur nicht-pers\u00f6nliche Eintr\u00e4ge</span>
                     </label>
+                    <div class="flex-gap-sm">
+                        <label for="itemStolenFilter" class="form-label-xs" th:text="#{inventory.stolen.filter.label}">Gestohlen:</label>
+                        <select id="itemStolenFilter" class="krtm-padding-0-375rem-2-5rem-0-375rem-0-75rem-min-caea" data-trigger="inv-my-filter" data-testid="stolen-filter">
+                            <option value="" th:text="#{inventory.stolen.filter.all}">Alle</option>
+                            <option value="non" th:selected="${selectedNonStolenOnly}" th:text="#{inventory.stolen.filter.nonStolen}">Ohne gestohlene</option>
+                            <option value="only" th:selected="${selectedStolenOnly}" th:text="#{inventory.stolen.filter.stolenOnly}">Nur gestohlene</option>
+                        </select>
+                    </div>
                     <button type="button" class="btn btn-ghost" data-trigger="inv-my-reset-filter" th:text="#{inventory.filter.reset}">Filter zur\u00fccksetzen</button>
                 </form>
         </div>
@@ -230,6 +246,18 @@
                     th:text="#{inventory.orgUnitChange.bulk.btn}"
                     data-testid="bulk-org-unit-open"
                     data-trigger="inv-my-open-bulk-org-unit">Markierte: Einheit &auml;ndern</button>
+            <th:block th:if="${canMarkStolen}">
+                <button type="button" id="bulkStolenMarkBtn" class="btn btn-ghost" disabled
+                        th:text="#{inventory.stolen.bulk.mark.btn}"
+                        data-testid="bulk-stolen-mark"
+                        data-stolen="true"
+                        data-trigger="inv-my-bulk-stolen">Markierte: als gestohlen</button>
+                <button type="button" id="bulkStolenUnmarkBtn" class="btn btn-ghost" disabled
+                        th:text="#{inventory.stolen.bulk.unmark.btn}"
+                        data-testid="bulk-stolen-unmark"
+                        data-stolen="false"
+                        data-trigger="inv-my-bulk-stolen">Markierte: nicht gestohlen</button>
+            </th:block>
             <span id="bulkCheckoutCount" class="krtm-color-var-color-gray-2-font-size-0-9rem-cdef"></span>
         </div>
 
@@ -276,10 +304,13 @@
                                  th:data-location-id="${stack.location.id}"
                                  th:data-quality="${stack.quality}"
                                  th:data-personal="${stack.personal}"
+                                 th:data-stolen="${stack.stolen}"
                                  th:data-owning-org-unit-id="${stack.owningSquadron != null ? stack.owningSquadron.id : null}">
                                 <div class="tree-cell tree-name">
                                     <span class="tree-chevron toggle-icon stack-toggle-icon">▶</span>
                                     <span class="tree-label" th:text="${stack.location.name}" th:title="${stack.location.name}">Ort</span>
+                                    <span th:if="${stack.stolen}" class="chip chip--danger" data-testid="stolen-chip"
+                                          th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                                 </div>
                                 <div class="tree-cell"></div>
                                 <div class="tree-cell tree-cell--num">
@@ -343,10 +374,13 @@
                                  th:data-game-item-id="${group.gameItem.id}"
                                  th:data-location-id="${stack.location.id}"
                                  th:data-personal="${stack.personal}"
+                                 th:data-stolen="${stack.stolen}"
                                  th:data-owning-org-unit-id="${stack.owningSquadron != null ? stack.owningSquadron.id : null}">
                                 <div class="tree-cell tree-name">
                                     <span class="tree-chevron toggle-icon stack-toggle-icon">▶</span>
                                     <span class="tree-label" th:text="${stack.location.name}" th:title="${stack.location.name}">Ort</span>
+                                    <span th:if="${stack.stolen}" class="chip chip--danger" data-testid="stolen-chip"
+                                          th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                                 </div>
                                 <div class="tree-cell"></div>
                                 <div class="tree-cell tree-cell--num tree-amount">
@@ -656,6 +690,10 @@
         </div>
         </form>
     </th:block>
+</th:block>
+
+<th:block th:if="${canMarkStolen}">
+    <th:block th:replace="~{fragments/inventory-stolen-mark :: stolenMarkModal('inv-my')}"></th:block>
 </th:block>
 
 <th:block th:replace="~{fragments/toast :: toast}" />

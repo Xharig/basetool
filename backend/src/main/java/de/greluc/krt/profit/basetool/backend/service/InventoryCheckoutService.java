@@ -294,6 +294,7 @@ public class InventoryCheckoutService {
     newItem.setQuality(item.getQuality());
     newItem.setAmount(InventoryItem.roundToScuScale(dto.amount()));
     newItem.setPersonal(item.getPersonal());
+    newItem.setStolen(item.getStolen());
     Map<UUID, Double> orderReductions =
         AllocationReductions.resolveReductionPlan(
             item, dto.jobOrderReductions(), dto.amount(), true);
@@ -554,6 +555,7 @@ public class InventoryCheckoutService {
     newItem.setQuality(item.getQuality());
     newItem.setAmount(InventoryItem.roundToScuScale(dto.amount()));
     newItem.setPersonal(targetPersonal);
+    newItem.setStolen(item.getStolen());
     InventoryItem savedNew = inventoryItemRepository.save(newItem);
 
     if (depleted) {
@@ -623,6 +625,7 @@ public class InventoryCheckoutService {
                 row.getLocation().getId(),
                 null,
                 row.getPersonal(),
+                row.getStolen(),
                 row.getOwningOrgUnit() != null ? row.getOwningOrgUnit().getId() : null)
             : inventoryItemRepository.findMergeGroupForUpdate(
                 row.getUser().getId(),
@@ -630,6 +633,7 @@ public class InventoryCheckoutService {
                 row.getLocation().getId(),
                 row.getQuality(),
                 row.getPersonal(),
+                row.getStolen(),
                 row.getOwningOrgUnit() != null ? row.getOwningOrgUnit().getId() : null);
 
     final List<InventoryItem> victims =
@@ -1081,6 +1085,7 @@ public class InventoryCheckoutService {
     newItem.setQuality(source.getQuality());
     newItem.setAmount(InventoryItem.roundToScuScale(amount));
     newItem.setPersonal(targetPersonal);
+    newItem.setStolen(source.getStolen());
     newItem.setNote(source.getNote());
 
     Map<UUID, Double> orderReductions =

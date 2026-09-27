@@ -123,6 +123,12 @@ class InventoryOperationsE2eTest {
   private static String viewStateMatId;
   private static String viewStateItemId;
 
+  /** Own material of {@link #markingPartOfARowAsStolenSplitsItIntoItsOwnStackInPlace()}. */
+  private static String stolenMatId;
+
+  /** The 40-SCU legitimate row a part of which is marked „gestohlen". */
+  private static String stolenItemId;
+
   private static String needMatId;
   private static String needOrderId;
 
@@ -227,6 +233,10 @@ class InventoryOperationsE2eTest {
     viewStateItemId =
         seeder.createInventoryItem(
             USERNAME, PASSWORD, viewStateMatId, opsHubLocId, SEED_QUALITY, 100);
+
+    stolenMatId = seeder.createRefineryMaterial(USERNAME, PASSWORD, "E2E Inv Stolen Mat");
+    stolenItemId =
+        seeder.createInventoryItem(USERNAME, PASSWORD, stolenMatId, opsHubLocId, SEED_QUALITY, 40);
   }
 
   /** Releases the browser and the Playwright driver process. */
@@ -732,6 +742,44 @@ class InventoryOperationsE2eTest {
   }
 
   /**
+   * <em>Gestohlen</em> (REQ-INV-053). Marks 10 of a 40-SCU row as stolen through the row action, in
+   * place; the part becomes a stack of its own carrying the danger chip, the filter „Nur
+   * gestohlene" shows only that stack, and unmarking the whole split row merges the stock back to
+   * one legitimate total.
+   */
+  @Test
+  void markingPartOfARowAsStolenSplitsItIntoItsOwnStackInPlace() {
+    runFlow(
+        "inventory-stolen-marker",
+        page -> {
+          openMyInventoryToEntry(page, stolenMatId, stolenItemId);
+          String stolenRowId = submitStolenMark(page, stolenItemId, "10", false);
+
+          JsonArray stacks = stacksForMaterial(stolenMatId);
+          assertEquals(10.0, amountByMarker(stacks, true), AMOUNT_DELTA, "the part is stolen");
+          assertEquals(30.0, amountByMarker(stacks, false), AMOUNT_DELTA, "the rest is not");
+          Locator stolenStack = stackHeader(stolenMatId, true, page);
+          assertThat(stolenStack).hasCount(1);
+          assertThat(stolenStack.locator("[data-testid='stolen-chip']")).hasCount(1);
+          assertThat(stackHeader(stolenMatId, false, page)).hasCount(1);
+
+          E2eSupport.openFilterPanel(page);
+          page.waitForResponse(
+              r -> r.url().contains("/inventory/my?") && r.url().contains("stolenOnly=true"),
+              () -> page.locator("#stolenFilter").selectOption("only"));
+          assertThat(stackHeader(stolenMatId, true, page)).hasCount(1);
+          assertThat(stackHeader(stolenMatId, false, page)).hasCount(0);
+
+          openStackToEntry(page, stolenMatId, true, stolenRowId);
+          submitStolenMark(page, stolenRowId, null, true);
+
+          JsonArray after = stacksForMaterial(stolenMatId);
+          assertEquals(0.0, amountByMarker(after, true), AMOUNT_DELTA, "nothing stays stolen");
+          assertEquals(40.0, totalAmount(after), AMOUNT_DELTA, "the total is unchanged");
+        });
+  }
+
+  /**
    * A partial in-place book-out keeps the expanded group and stack open, with the leaf row visible
    * again without manual re-expansion (REQ-INV-002).
    */
@@ -991,6 +1039,109 @@ class InventoryOperationsE2eTest {
         Boolean.TRUE,
         page.evaluate("window.__krtNoReload === true"),
         "the in-place org-unit change must not reload the page");
+  }
+
+  /**
+   * The stack headers of one material carrying the given „gestohlen" marker.
+   *
+   * @param materialId the material
+   * @param stolen the marker
+   * @param page the page showing Mein Lager
+   * @return the matching stack headers
+   */
+  private static Locator stackHeader(String materialId, boolean stolen, Page page) {
+    return page.locator(
+        "div.stack-header[data-material-id='" + materialId + "'][data-stolen='" + stolen + "']");
+  }
+
+  /**
+   * Expands the material group and the stack with the given „gestohlen" marker on the page as it
+   * stands until the entry leaf row appears.
+   *
+   * @param page the page showing Mein Lager
+   * @param materialId the material whose group and stack to expand
+   * @param stolen the marker of the stack to expand
+   * @param itemId the entry whose leaf row signals the entries loaded
+   */
+  private static void openStackToEntry(
+      Page page, String materialId, boolean stolen, String itemId) {
+    Locator groupRow = page.locator("div.tree-row--group[data-material-id='" + materialId + "']");
+    assertThat(groupRow).isVisible(new LocatorAssertions.IsVisibleOptions().setTimeout(20_000));
+    if (isCollapsed(
+        page,
+        "div.tree-row--group[data-material-id='" + materialId + "'] + div.tree-group-items")) {
+      groupRow.click();
+    }
+    Locator header = stackHeader(materialId, stolen, page);
+    assertThat(header).isVisible(new LocatorAssertions.IsVisibleOptions().setTimeout(20_000));
+    if (isCollapsed(
+        page,
+        "div.stack-header[data-material-id='"
+            + materialId
+            + "'][data-stolen='"
+            + stolen
+            + "'] + div.tree-stack-entries")) {
+      header.click();
+    }
+    assertThat(page.locator("div.tree-row--leaf[data-item-id='" + itemId + "']"))
+        .isVisible(new LocatorAssertions.IsVisibleOptions().setTimeout(20_000));
+  }
+
+  /**
+   * Opens the mark / unmark dialog of a row, enters {@code amount} or takes the whole row with
+   * „Alles", submits it, waits for {@code POST /inventory/{id}/stolen} and asserts no page reload.
+   *
+   * @param page the page expanded to the entry
+   * @param itemId the row
+   * @param amount the part to change, or {@code null} for the whole row
+   * @param currentlyStolen whether the row carries the marker now, so the dialog unmarks
+   * @return the id of the row that carries the requested marker afterwards
+   */
+  private static String submitStolenMark(
+      Page page, String itemId, String amount, boolean currentlyStolen) {
+    Locator action = page.locator("button[data-trigger='inv-my-stolen'][data-id='" + itemId + "']");
+    assertThat(action).hasAttribute("data-stolen", String.valueOf(currentlyStolen));
+    action.click();
+    assertThat(page.locator("#stolenMarkModal")).isVisible();
+    if (amount == null) {
+      page.locator("[data-testid='stolen-mark-all']").click();
+    } else {
+      page.locator("#stolenMarkAmount").fill(amount);
+    }
+    page.evaluate("window.__krtNoReload = true;");
+    page.evaluate(
+        "() => { const f = document.querySelector('.krt-footer'); if (f) { f.style.display ="
+            + " 'none'; } }");
+    Response response =
+        page.waitForResponse(
+            r -> r.url().contains("/stolen") && "POST".equals(r.request().method()),
+            () -> page.locator("#stolenMarkSubmitBtn").click());
+    assertEquals(200, response.status(), "the marker change must succeed");
+    assertEquals(
+        Boolean.TRUE,
+        page.evaluate("window.__krtNoReload === true"),
+        "the in-place marker change must not reload the page");
+    return JsonParser.parseString(response.text()).getAsJsonObject().get("id").getAsString();
+  }
+
+  /**
+   * Sums the {@code totalAmount} of the stacks carrying the given „gestohlen" marker.
+   *
+   * @param stacks the stacks of one material
+   * @param stolen the marker to sum
+   * @return the summed amount (0 when none carries it)
+   */
+  private static double amountByMarker(JsonArray stacks, boolean stolen) {
+    double sum = 0;
+    for (JsonElement s : stacks) {
+      JsonObject stack = s.getAsJsonObject();
+      JsonElement marker = stack.get("stolen");
+      boolean isStolen = marker != null && !marker.isJsonNull() && marker.getAsBoolean();
+      if (isStolen == stolen) {
+        sum += stack.get("totalAmount").getAsDouble();
+      }
+    }
+    return sum;
   }
 
   /**

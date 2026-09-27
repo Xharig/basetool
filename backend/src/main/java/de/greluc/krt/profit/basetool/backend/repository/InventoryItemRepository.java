@@ -302,7 +302,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
   @Query(
       """
       SELECT new de.greluc.krt.profit.basetool.backend.model.projection.InventoryStackAggregate(m, i.user, i.location, i.quality, i.personal,
-      oou, SUM(COALESCE(i.amount, 0.0)), SUM(COALESCE(i.amount, 0.0) *
+      i.stolen, oou, SUM(COALESCE(i.amount, 0.0)), SUM(COALESCE(i.amount, 0.0) *
       COALESCE(i.quality, 0)), MAX(COALESCE(i.quality, 0)), COUNT(i)) FROM InventoryItem i
       LEFT JOIN i.material m
       LEFT JOIN i.owningOrgUnit oou
@@ -315,7 +315,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
           + " IN :jobOrderIds)) AND (:hasMissions = false OR EXISTS (SELECT 1 FROM"
           + " InventoryMissionAllocation ma WHERE ma.inventoryItem = i AND ma.mission.id IN"
           + " :missionIds)) AND (:hasLocations = false OR i.location.id IN :locationIds)"
-          + " GROUP BY m, i.user, i.location, i.quality, i.personal, oou")
+          + " AND (:stolenOnly = false OR i.stolen = true) AND (:nonStolenOnly = false OR"
+          + " i.stolen = false)"
+          + " GROUP BY m, i.user, i.location, i.quality, i.personal, i.stolen, oou")
   List<InventoryStackAggregate> findGlobalStacks(
       @Param("hasMaterials") boolean hasMaterials,
       @Param("materialIds") List<UUID> materialIds,
@@ -328,7 +330,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("missionIds") List<UUID> missionIds,
       @Param("isAdminAllScope") boolean isAdminAllScope,
       @Param("activeOrgUnitId") UUID activeOrgUnitId,
-      @Param("memberOrgUnitIds") Collection<UUID> memberOrgUnitIds);
+      @Param("memberOrgUnitIds") Collection<UUID> memberOrgUnitIds,
+      @Param("stolenOnly") boolean stolenOnly,
+      @Param("nonStolenOnly") boolean nonStolenOnly);
 
   /**
    * Aggregates the user's filtered material stock into one {@link InventoryStackAggregate} per
@@ -341,20 +345,22 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
   @Query(
       """
       SELECT new de.greluc.krt.profit.basetool.backend.model.projection.InventoryStackAggregate(m, i.user, i.location, i.quality, i.personal,
-      oou, SUM(COALESCE(i.amount, 0.0)), SUM(COALESCE(i.amount, 0.0) *
+      i.stolen, oou, SUM(COALESCE(i.amount, 0.0)), SUM(COALESCE(i.amount, 0.0) *
       COALESCE(i.quality, 0)), MAX(COALESCE(i.quality, 0)), COUNT(i)) FROM InventoryItem i
       LEFT JOIN i.material m
       LEFT JOIN i.owningOrgUnit oou
       WHERE i.user.id = :userId AND i.material IS NOT NULL
       AND (:personalOnly = false OR i.personal = true)
       AND (:nonPersonalOnly = false OR i.personal = false)
+      AND (:stolenOnly = false OR i.stolen = true)
+      AND (:nonStolenOnly = false OR i.stolen = false)
       AND (:hasMaterials = false OR i.material.id IN :materialIds) AND (:minQuality IS NULL
       OR i.quality >= :minQuality) AND (:hasJobOrders = false OR EXISTS (SELECT 1 FROM
       InventoryJobOrderAllocation ja WHERE ja.inventoryItem = i AND ja.jobOrder.id IN
       :jobOrderIds)) AND (:hasMissions = false OR EXISTS (SELECT 1 FROM
       InventoryMissionAllocation ma WHERE ma.inventoryItem = i AND ma.mission.id IN
       :missionIds)) AND (:hasLocations = false OR i.location.id IN :locationIds)
-      GROUP BY m, i.user, i.location, i.quality, i.personal, oou
+      GROUP BY m, i.user, i.location, i.quality, i.personal, i.stolen, oou
       """)
   List<InventoryStackAggregate> findUserStacks(
       @Param("userId") UUID userId,
@@ -368,7 +374,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("hasMissions") boolean hasMissions,
       @Param("missionIds") List<UUID> missionIds,
       @Param("personalOnly") boolean personalOnly,
-      @Param("nonPersonalOnly") boolean nonPersonalOnly);
+      @Param("nonPersonalOnly") boolean nonPersonalOnly,
+      @Param("stolenOnly") boolean stolenOnly,
+      @Param("nonStolenOnly") boolean nonStolenOnly);
 
   /**
    * Aggregates the scoped, filtered non-personal game-item stock into one {@link
@@ -386,12 +394,14 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
    * @param isAdminAllScope admin all-scopes mode (scope triple, REQ-ORG-003).
    * @param activeOrgUnitId the pinned active org unit, or {@code null}.
    * @param memberOrgUnitIds the caller's org-unit memberships.
+   * @param stolenOnly {@code true} narrows to stock marked „gestohlen" (REQ-INV-053).
+   * @param nonStolenOnly {@code true} narrows to stock not marked „gestohlen".
    * @return one aggregate per item stack in scope; never {@code null}.
    */
   @Query(
       """
       SELECT new de.greluc.krt.profit.basetool.backend.model.projection.InventoryItemStackAggregate(gi, i.user, i.location, i.personal,
-      oou, SUM(COALESCE(i.amount, 0.0)), COUNT(i)) FROM InventoryItem i
+      i.stolen, oou, SUM(COALESCE(i.amount, 0.0)), COUNT(i)) FROM InventoryItem i
       LEFT JOIN i.gameItem gi
       LEFT JOIN i.owningOrgUnit oou
       WHERE i.personal = false AND i.gameItem IS NOT NULL AND
@@ -401,7 +411,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
           + " false OR EXISTS (SELECT 1 FROM InventoryJobOrderAllocation ja WHERE"
           + " ja.inventoryItem = i AND ja.jobOrder.id IN :jobOrderIds))"
           + " AND (:hasLocations = false OR i.location.id IN :locationIds)"
-          + " GROUP BY gi, i.user, i.location, i.personal, oou")
+          + " AND (:stolenOnly = false OR i.stolen = true) AND (:nonStolenOnly = false OR"
+          + " i.stolen = false)"
+          + " GROUP BY gi, i.user, i.location, i.personal, i.stolen, oou")
   List<InventoryItemStackAggregate> findGlobalItemStacks(
       @Param("hasGameItems") boolean hasGameItems,
       @Param("gameItemIds") List<UUID> gameItemIds,
@@ -411,7 +423,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("jobOrderIds") List<UUID> jobOrderIds,
       @Param("isAdminAllScope") boolean isAdminAllScope,
       @Param("activeOrgUnitId") UUID activeOrgUnitId,
-      @Param("memberOrgUnitIds") Collection<UUID> memberOrgUnitIds);
+      @Param("memberOrgUnitIds") Collection<UUID> memberOrgUnitIds,
+      @Param("stolenOnly") boolean stolenOnly,
+      @Param("nonStolenOnly") boolean nonStolenOnly);
 
   /**
    * Aggregates the user's filtered game-item stock into one {@link InventoryItemStackAggregate} per
@@ -428,22 +442,26 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
    *     false.
    * @param personalOnly {@code true} narrows to the caller's private stock rows.
    * @param nonPersonalOnly {@code true} narrows to the caller's shared stock rows.
+   * @param stolenOnly {@code true} narrows to stock marked „gestohlen" (REQ-INV-053).
+   * @param nonStolenOnly {@code true} narrows to stock not marked „gestohlen".
    * @return one aggregate per item stack the user owns; never {@code null}.
    */
   @Query(
       """
       SELECT new de.greluc.krt.profit.basetool.backend.model.projection.InventoryItemStackAggregate(gi, i.user, i.location, i.personal,
-      oou, SUM(COALESCE(i.amount, 0.0)), COUNT(i)) FROM InventoryItem i
+      i.stolen, oou, SUM(COALESCE(i.amount, 0.0)), COUNT(i)) FROM InventoryItem i
       LEFT JOIN i.gameItem gi
       LEFT JOIN i.owningOrgUnit oou
       WHERE i.user.id = :userId AND i.gameItem IS NOT NULL
       AND (:personalOnly = false OR i.personal = true)
       AND (:nonPersonalOnly = false OR i.personal = false)
+      AND (:stolenOnly = false OR i.stolen = true)
+      AND (:nonStolenOnly = false OR i.stolen = false)
       AND (:hasGameItems = false OR i.gameItem.id IN :gameItemIds)
       AND (:hasJobOrders = false OR EXISTS (SELECT 1 FROM InventoryJobOrderAllocation ja
       WHERE ja.inventoryItem = i AND ja.jobOrder.id IN :jobOrderIds))
       AND (:hasLocations = false OR i.location.id IN :locationIds)
-      GROUP BY gi, i.user, i.location, i.personal, oou
+      GROUP BY gi, i.user, i.location, i.personal, i.stolen, oou
       """)
   List<InventoryItemStackAggregate> findUserItemStacks(
       @Param("userId") UUID userId,
@@ -454,7 +472,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("hasJobOrders") boolean hasJobOrders,
       @Param("jobOrderIds") List<UUID> jobOrderIds,
       @Param("personalOnly") boolean personalOnly,
-      @Param("nonPersonalOnly") boolean nonPersonalOnly);
+      @Param("nonPersonalOnly") boolean nonPersonalOnly,
+      @Param("stolenOnly") boolean stolenOnly,
+      @Param("nonStolenOnly") boolean nonStolenOnly);
 
   /**
    * Returns the ids of every material entry the user owns that matches the {@link #findUserStacks}
@@ -475,6 +495,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
    *     false.
    * @param personalOnly {@code true} narrows to the caller's private stock rows.
    * @param nonPersonalOnly {@code true} narrows to the caller's shared stock rows.
+   * @param stolenOnly {@code true} narrows to stock marked „gestohlen" (REQ-INV-053).
+   * @param nonStolenOnly {@code true} narrows to stock not marked „gestohlen".
    * @return the ids of every matching material entry the user owns; never {@code null}.
    */
   @Query(
@@ -483,6 +505,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       WHERE i.user.id = :userId AND i.material IS NOT NULL
       AND (:personalOnly = false OR i.personal = true)
       AND (:nonPersonalOnly = false OR i.personal = false)
+      AND (:stolenOnly = false OR i.stolen = true)
+      AND (:nonStolenOnly = false OR i.stolen = false)
       AND (:hasMaterials = false OR i.material.id IN :materialIds) AND (:minQuality IS NULL
       OR i.quality >= :minQuality) AND (:hasJobOrders = false OR EXISTS (SELECT 1 FROM
       InventoryJobOrderAllocation ja WHERE ja.inventoryItem = i AND ja.jobOrder.id IN
@@ -503,7 +527,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("hasMissions") boolean hasMissions,
       @Param("missionIds") List<UUID> missionIds,
       @Param("personalOnly") boolean personalOnly,
-      @Param("nonPersonalOnly") boolean nonPersonalOnly);
+      @Param("nonPersonalOnly") boolean nonPersonalOnly,
+      @Param("stolenOnly") boolean stolenOnly,
+      @Param("nonStolenOnly") boolean nonStolenOnly);
 
   /**
    * Returns the ids of every game-item entry the user owns that matches the {@link
@@ -520,6 +546,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
    *     false.
    * @param personalOnly {@code true} narrows to the caller's private stock rows.
    * @param nonPersonalOnly {@code true} narrows to the caller's shared stock rows.
+   * @param stolenOnly {@code true} narrows to stock marked „gestohlen" (REQ-INV-053).
+   * @param nonStolenOnly {@code true} narrows to stock not marked „gestohlen".
    * @return the ids of every matching game-item entry the user owns; never {@code null}.
    */
   @Query(
@@ -528,6 +556,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       WHERE i.user.id = :userId AND i.gameItem IS NOT NULL
       AND (:personalOnly = false OR i.personal = true)
       AND (:nonPersonalOnly = false OR i.personal = false)
+      AND (:stolenOnly = false OR i.stolen = true)
+      AND (:nonStolenOnly = false OR i.stolen = false)
       AND (:hasGameItems = false OR i.gameItem.id IN :gameItemIds)
       AND (:hasJobOrders = false OR EXISTS (SELECT 1 FROM InventoryJobOrderAllocation ja
       WHERE ja.inventoryItem = i AND ja.jobOrder.id IN :jobOrderIds))
@@ -543,7 +573,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("hasJobOrders") boolean hasJobOrders,
       @Param("jobOrderIds") List<UUID> jobOrderIds,
       @Param("personalOnly") boolean personalOnly,
-      @Param("nonPersonalOnly") boolean nonPersonalOnly);
+      @Param("nonPersonalOnly") boolean nonPersonalOnly,
+      @Param("stolenOnly") boolean stolenOnly,
+      @Param("nonStolenOnly") boolean nonStolenOnly);
 
   /**
    * Pages one non-personal material stack's entries, oldest first, within the caller's org-unit
@@ -553,7 +585,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
   @EntityGraph(attributePaths = {"material", "location", "user", "owningOrgUnit"})
   @Query(
       """
-      SELECT i FROM InventoryItem i WHERE i.personal = false AND i.material.id = :materialId AND
+      SELECT i FROM InventoryItem i WHERE i.personal = false AND i.stolen = :stolen AND
+      i.material.id = :materialId AND
       i.user.id = :userId AND i.location.id = :locationId AND ((:quality IS NULL AND
       i.quality IS NULL) OR i.quality = :quality) AND ((:owningOrgUnitId IS NULL AND
       i.owningOrgUnit IS NULL) OR i.owningOrgUnit.id = :owningOrgUnitId) AND
@@ -565,6 +598,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("userId") UUID userId,
       @Param("locationId") UUID locationId,
       @Param("quality") Integer quality,
+      @Param("stolen") Boolean stolen,
       @Param("owningOrgUnitId") UUID owningOrgUnitId,
       @Param("isAdminAllScope") boolean isAdminAllScope,
       @Param("activeOrgUnitId") UUID activeOrgUnitId,
@@ -580,7 +614,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       """
       SELECT i FROM InventoryItem i WHERE i.user.id = :userId AND i.material.id = :materialId AND
       i.location.id = :locationId AND ((:quality IS NULL AND i.quality IS NULL) OR
-      i.quality = :quality) AND i.personal = :personal AND ((:owningOrgUnitId IS NULL
+      i.quality = :quality) AND i.personal = :personal AND i.stolen = :stolen AND
+      ((:owningOrgUnitId IS NULL
       AND i.owningOrgUnit IS NULL) OR i.owningOrgUnit.id = :owningOrgUnitId) ORDER BY
       i.createdAt ASC
       """)
@@ -590,6 +625,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("locationId") UUID locationId,
       @Param("quality") Integer quality,
       @Param("personal") Boolean personal,
+      @Param("stolen") Boolean stolen,
       @Param("owningOrgUnitId") UUID owningOrgUnitId,
       Pageable pageable);
 
@@ -600,6 +636,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
    * @param gameItemId the stack's game item; never {@code null}.
    * @param userId the stack's owning user.
    * @param locationId the stack's storage location.
+   * @param stolen whether the stack holds stock marked „gestohlen" (REQ-INV-053).
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null} to match rows with
    *     no owning org unit.
    * @param isAdminAllScope admin all-scopes mode (scope triple, REQ-ORG-003).
@@ -612,7 +649,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       attributePaths = {"gameItem", "gameItem.manufacturer", "location", "user", "owningOrgUnit"})
   @Query(
       """
-      SELECT i FROM InventoryItem i WHERE i.personal = false AND i.gameItem.id = :gameItemId AND
+      SELECT i FROM InventoryItem i WHERE i.personal = false AND i.stolen = :stolen AND
+      i.gameItem.id = :gameItemId AND
       i.user.id = :userId AND i.location.id = :locationId AND ((:owningOrgUnitId IS NULL AND
       i.owningOrgUnit IS NULL) OR i.owningOrgUnit.id = :owningOrgUnitId) AND
       """
@@ -622,6 +660,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("gameItemId") UUID gameItemId,
       @Param("userId") UUID userId,
       @Param("locationId") UUID locationId,
+      @Param("stolen") Boolean stolen,
       @Param("owningOrgUnitId") UUID owningOrgUnitId,
       @Param("isAdminAllScope") boolean isAdminAllScope,
       @Param("activeOrgUnitId") UUID activeOrgUnitId,
@@ -635,6 +674,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
    * @param gameItemId the stack's game item; never {@code null}.
    * @param locationId the stack's storage location.
    * @param personal whether the stack is private stock.
+   * @param stolen whether the stack holds stock marked „gestohlen" (REQ-INV-053).
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null} to match rows with
    *     no owning org unit.
    * @param pageable the page request (the query forces oldest-first by creation instant).
@@ -645,7 +685,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
   @Query(
       """
       SELECT i FROM InventoryItem i WHERE i.user.id = :userId AND i.gameItem.id = :gameItemId AND
-      i.location.id = :locationId AND i.personal = :personal AND ((:owningOrgUnitId IS NULL
+      i.location.id = :locationId AND i.personal = :personal AND i.stolen = :stolen AND
+      ((:owningOrgUnitId IS NULL
       AND i.owningOrgUnit IS NULL) OR i.owningOrgUnit.id = :owningOrgUnitId) ORDER BY
       i.createdAt ASC
       """)
@@ -654,6 +695,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("gameItemId") UUID gameItemId,
       @Param("locationId") UUID locationId,
       @Param("personal") Boolean personal,
+      @Param("stolen") Boolean stolen,
       @Param("owningOrgUnitId") UUID owningOrgUnitId,
       Pageable pageable);
 
@@ -882,8 +924,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
 
   /**
    * Loads the rows sharing a stock's physical identity (user, catalog reference, location, quality,
-   * personal, owning org unit), oldest first and pessimistically locked, as merge candidates
-   * (REQ-INV-026).
+   * personal, stolen, owning org unit), oldest first and pessimistically locked, as merge
+   * candidates (REQ-INV-026).
    *
    * <p>Earmarks and {@code delivered} are not part of the key. {@code null} material, game item or
    * quality match only rows where that column is {@code NULL}. Rows backing a {@link
@@ -898,6 +940,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
    * @param quality the stack's quality grade, or {@code null} for a game-item stack (matches rows
    *     with no quality).
    * @param personal the stack's personal flag; never {@code null}.
+   * @param stolen the stack's „gestohlen" flag; never {@code null} (REQ-INV-053).
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null} to match rows with
    *     no owning org unit.
    * @return the locked matching rows (excluding offer-backed rows), oldest-first; never {@code
@@ -911,7 +954,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       ((:gameItemId IS NULL AND i.gameItem IS NULL) OR i.gameItem.id = :gameItemId) AND
       i.location.id = :locationId AND
       ((:quality IS NULL AND i.quality IS NULL) OR i.quality = :quality) AND
-      i.personal = :personal AND
+      i.personal = :personal AND i.stolen = :stolen AND
       ((:owningOrgUnitId IS NULL AND i.owningOrgUnit IS NULL) OR i.owningOrgUnit.id =
       :owningOrgUnitId) AND NOT EXISTS (SELECT 1 FROM MaterialExchangeOffer o WHERE
       o.inventoryItem = i) ORDER BY i.createdAt ASC, i.id ASC
@@ -923,17 +966,19 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("locationId") UUID locationId,
       @Param("quality") Integer quality,
       @Param("personal") Boolean personal,
+      @Param("stolen") Boolean stolen,
       @Param("owningOrgUnitId") UUID owningOrgUnitId);
 
   /**
    * Material-stack overload of {@link #findMergeGroupForUpdate(UUID, UUID, UUID, UUID, Integer,
-   * Boolean, UUID)} that passes {@code gameItemId = null}.
+   * Boolean, Boolean, UUID)} that passes {@code gameItemId = null}.
    *
    * @param userId the owning user of the stack; never {@code null}.
    * @param materialId the stack's material; never {@code null} on this overload.
    * @param locationId the stack's storage location; never {@code null}.
    * @param quality the stack's quality grade; never {@code null} on this overload.
    * @param personal the stack's personal flag; never {@code null}.
+   * @param stolen the stack's „gestohlen" flag; never {@code null} (REQ-INV-053).
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null} to match rows with
    *     no owning org unit.
    * @return the locked matching material rows (excluding offer-backed rows), oldest-first; never
@@ -945,9 +990,10 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       UUID locationId,
       Integer quality,
       Boolean personal,
+      Boolean stolen,
       UUID owningOrgUnitId) {
     return findMergeGroupForUpdate(
-        userId, materialId, null, locationId, quality, personal, owningOrgUnitId);
+        userId, materialId, null, locationId, quality, personal, stolen, owningOrgUnitId);
   }
 
   /**

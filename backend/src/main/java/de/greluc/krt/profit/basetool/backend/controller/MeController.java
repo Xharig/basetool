@@ -25,6 +25,7 @@ import de.greluc.krt.profit.basetool.backend.service.NotificationService;
 import de.greluc.krt.profit.basetool.backend.service.OrgUnitMembershipQueryService;
 import de.greluc.krt.profit.basetool.backend.service.OwnerScopeService;
 import de.greluc.krt.profit.basetool.backend.service.UserService;
+import de.greluc.krt.profit.basetool.backend.support.InventoryProperties;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import de.greluc.krt.profit.basetool.backend.web.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
@@ -68,6 +69,9 @@ public class MeController {
   /** Supplies the unread-notification count of the layout read. */
   private final NotificationService notificationService;
 
+  /** Supplies the server switch of the „gestohlen" marker. */
+  private final InventoryProperties inventoryProperties;
+
   /**
    * Returns the org-unit context applied to staffel-scoped queries for this request.
    *
@@ -106,7 +110,8 @@ public class MeController {
         authHelperService.hasReachableRole(Roles.authority(Roles.BANK_MANAGEMENT)),
         authHelperService.isLogisticianOrAbove(),
         authHelperService.hasReachableRole(Roles.authority(Roles.MISSION_MANAGER)),
-        authHelperService.isAdmin());
+        authHelperService.isAdmin(),
+        inventoryProperties.stolenMarkingEnabled());
   }
 
   /**
@@ -196,6 +201,8 @@ public class MeController {
    * @param isMissionManagerOrAbove whether the caller reaches {@code MISSION_MANAGER} through the
    *     role hierarchy; gates the payout confirmation
    * @param isAdmin whether the caller holds {@code ADMIN}
+   * @param canMarkStolen whether stock may be booked in as, marked or unmarked „gestohlen" now
+   *     (REQ-INV-053); a server switch, the same for every caller
    */
   public record CapabilitiesResponse(
       boolean canSeeBlueprintOverview,
@@ -205,7 +212,8 @@ public class MeController {
       boolean canManageBank,
       boolean isLogisticianOrAbove,
       boolean isMissionManagerOrAbove,
-      boolean isAdmin) {}
+      boolean isAdmin,
+      boolean canMarkStolen) {}
 
   /**
    * Response for {@code GET /api/v1/me/layout}: the four layout answers in one payload.

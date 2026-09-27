@@ -65,15 +65,58 @@ class CapabilityFlagsAdviceTest {
   }
 
   @Test
-  void meCapabilities_admin_allTrue_withoutBackendCall() {
+  void meCapabilities_admin_roleGatesTrue_stolenSwitchFromBackend() {
     when(authHelper.isAuthenticated()).thenReturn(true);
     when(authHelper.isAdmin()).thenReturn(true);
+    when(backendApiClient.get(LayoutResponses.PATH, LayoutContextLoader.MeLayoutResponse.class))
+        .thenReturn(LayoutResponses.stolenMarking(true));
 
     CapabilitiesResponse caps = advice().meCapabilities(new MockHttpServletRequest());
 
     assertTrue(caps.canSeeBlueprintOverview());
     assertTrue(caps.canViewJobOrders());
-    verify(backendApiClient, never()).get(any(String.class), anyClass());
+    assertTrue(caps.canViewOwnJobOrders());
+    assertTrue(caps.canMarkStolen());
+  }
+
+  @Test
+  void meCapabilities_admin_stolenSwitchOff_isOffForTheAdminToo() {
+    when(authHelper.isAuthenticated()).thenReturn(true);
+    when(authHelper.isAdmin()).thenReturn(true);
+    when(backendApiClient.get(LayoutResponses.PATH, LayoutContextLoader.MeLayoutResponse.class))
+        .thenReturn(LayoutResponses.stolenMarking(false));
+
+    CapabilitiesResponse caps = advice().meCapabilities(new MockHttpServletRequest());
+
+    assertTrue(caps.canSeeBlueprintOverview());
+    assertTrue(caps.canViewJobOrders());
+    assertFalse(caps.canMarkStolen());
+  }
+
+  @Test
+  void meCapabilities_admin_backendFails_roleGatesStayOn_stolenSwitchOff() {
+    when(authHelper.isAuthenticated()).thenReturn(true);
+    when(authHelper.isAdmin()).thenReturn(true);
+    when(backendApiClient.get(LayoutResponses.PATH, LayoutContextLoader.MeLayoutResponse.class))
+        .thenThrow(new RuntimeException("boom"));
+
+    CapabilitiesResponse caps = advice().meCapabilities(new MockHttpServletRequest());
+
+    assertTrue(caps.canViewJobOrders());
+    assertFalse(caps.canMarkStolen());
+  }
+
+  @Test
+  void meCapabilities_nonAdmin_stolenSwitchFromBackend() {
+    when(authHelper.isAuthenticated()).thenReturn(true);
+    when(authHelper.isAdmin()).thenReturn(false);
+    when(backendApiClient.get(LayoutResponses.PATH, LayoutContextLoader.MeLayoutResponse.class))
+        .thenReturn(LayoutResponses.stolenMarking(true));
+
+    CapabilitiesResponse caps = advice().meCapabilities(new MockHttpServletRequest());
+
+    assertTrue(caps.canMarkStolen());
+    assertFalse(caps.canViewJobOrders());
   }
 
   @Test
@@ -104,17 +147,22 @@ class CapabilityFlagsAdviceTest {
 
   @Test
   void derivedFlags_readFromCapabilities() {
-    assertTrue(advice().canSeeBlueprintOverview(new CapabilitiesResponse(true, false, false)));
-    assertFalse(advice().canSeeBlueprintOverview(new CapabilitiesResponse(false, true, false)));
-    assertTrue(advice().canViewJobOrders(new CapabilitiesResponse(false, true, false)));
-    assertFalse(advice().canViewJobOrders(new CapabilitiesResponse(true, false, false)));
-    assertTrue(advice().canViewOwnJobOrders(new CapabilitiesResponse(false, false, true)));
-    assertFalse(advice().canViewOwnJobOrders(new CapabilitiesResponse(false, false, false)));
+    assertTrue(
+        advice().canSeeBlueprintOverview(new CapabilitiesResponse(true, false, false, false)));
+    assertFalse(
+        advice().canSeeBlueprintOverview(new CapabilitiesResponse(false, true, false, false)));
+    assertTrue(advice().canViewJobOrders(new CapabilitiesResponse(false, true, false, false)));
+    assertFalse(advice().canViewJobOrders(new CapabilitiesResponse(true, false, false, false)));
+    assertTrue(advice().canViewOwnJobOrders(new CapabilitiesResponse(false, false, true, false)));
+    assertFalse(advice().canViewOwnJobOrders(new CapabilitiesResponse(false, false, false, false)));
+    assertTrue(advice().canMarkStolen(new CapabilitiesResponse(false, false, false, true)));
+    assertFalse(advice().canMarkStolen(new CapabilitiesResponse(true, true, true, false)));
   }
 
   @Test
   void derivedFlags_nullCapabilities_areFalse() {
     assertFalse(advice().canSeeBlueprintOverview(null));
     assertFalse(advice().canViewJobOrders(null));
+    assertFalse(advice().canMarkStolen(null));
   }
 }

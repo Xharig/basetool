@@ -25,6 +25,7 @@ services:
     environment:
       APP_RATE_LIMIT_ENABLED: "false"
       APP_REGISTRATION_REQUIRE_APPROVAL: "false"
+      APP_INVENTORY_STOLEN_MARKING_ENABLED: "true"
     extra_hosts: !override []
     volumes: !override
       - type: tmpfs

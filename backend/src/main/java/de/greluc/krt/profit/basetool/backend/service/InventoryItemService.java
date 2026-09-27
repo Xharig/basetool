@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.service;
 
 import de.greluc.krt.profit.basetool.backend.exception.BadRequestException;
+import de.greluc.krt.profit.basetool.backend.exception.BusinessConflictException;
 import de.greluc.krt.profit.basetool.backend.exception.Entities;
 import de.greluc.krt.profit.basetool.backend.exception.NotFoundException;
 import de.greluc.krt.profit.basetool.backend.exception.OverAllocationException;
@@ -63,6 +64,7 @@ import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAuditLabels;
+import de.greluc.krt.profit.basetool.backend.support.InventoryProperties;
 import de.greluc.krt.profit.basetool.backend.support.OptimisticLock;
 import de.greluc.krt.profit.basetool.backend.support.StringNormalization;
 import java.util.HashSet;
@@ -104,6 +106,7 @@ public class InventoryItemService {
   private final AuditService auditService;
   private final InventoryAggregationService inventoryAggregationService;
   private final InventoryCheckoutService inventoryCheckoutService;
+  private final InventoryProperties inventoryProperties;
 
   /**
    * Pools the user's entire stock (personal and shared rows) into one SCU total per (material,
@@ -176,7 +179,7 @@ public class InventoryItemService {
   /**
    * Aggregates the user's shared and personal stock with the given filters, without location
    * narrowing; see {@link #getMyAggregatedInventory(UUID, List, List, Integer, List, List, boolean,
-   * boolean)}.
+   * boolean, boolean, boolean)}.
    *
    * @param userId owner id
    * @param materialIds optional material filter
@@ -208,6 +211,8 @@ public class InventoryItemService {
    * @param personalOnly {@code true} to return only private ({@code personal = true}) stock
    * @param nonPersonalOnly {@code true} to return only shared stock; mutually exclusive with {@code
    *     personalOnly}, both {@code false} returns everything
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return aggregated items
    * @throws NotFoundException when the user id is unknown
    */
@@ -219,7 +224,9 @@ public class InventoryItemService {
       List<UUID> jobOrderIds,
       List<UUID> missionIds,
       boolean personalOnly,
-      boolean nonPersonalOnly) {
+      boolean nonPersonalOnly,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     return inventoryAggregationService.getMyAggregatedInventory(
         userId,
         materialIds,
@@ -228,7 +235,9 @@ public class InventoryItemService {
         jobOrderIds,
         missionIds,
         personalOnly,
-        nonPersonalOnly);
+        nonPersonalOnly,
+        stolenOnly,
+        nonStolenOnly);
   }
 
   /**
@@ -243,6 +252,8 @@ public class InventoryItemService {
    * @param missionIds optional mission filter
    * @param personalOnly {@code true} to match only private stock rows
    * @param nonPersonalOnly {@code true} to match only shared stock rows
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return the matching entry ids, in creation order
    * @throws NotFoundException when the user id is unknown
    */
@@ -254,7 +265,9 @@ public class InventoryItemService {
       List<UUID> jobOrderIds,
       List<UUID> missionIds,
       boolean personalOnly,
-      boolean nonPersonalOnly) {
+      boolean nonPersonalOnly,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     return inventoryAggregationService.getMyEntryIds(
         userId,
         materialIds,
@@ -263,7 +276,9 @@ public class InventoryItemService {
         jobOrderIds,
         missionIds,
         personalOnly,
-        nonPersonalOnly);
+        nonPersonalOnly,
+        stolenOnly,
+        nonStolenOnly);
   }
 
   /**
@@ -287,6 +302,8 @@ public class InventoryItemService {
    * @param minQuality optional min-quality filter
    * @param jobOrderIds optional job order filter
    * @param missionIds optional mission filter
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return aggregated items grouped by material
    */
   public List<GroupedInventoryDto> getAllAggregatedInventory(
@@ -294,9 +311,11 @@ public class InventoryItemService {
       List<UUID> locationIds,
       Integer minQuality,
       List<UUID> jobOrderIds,
-      List<UUID> missionIds) {
+      List<UUID> missionIds,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     return inventoryAggregationService.getAllAggregatedInventory(
-        materialIds, locationIds, minQuality, jobOrderIds, missionIds);
+        materialIds, locationIds, minQuality, jobOrderIds, missionIds, stolenOnly, nonStolenOnly);
   }
 
   /**
@@ -308,6 +327,8 @@ public class InventoryItemService {
    * @param locationId the stack's storage location
    * @param quality the stack's quality grade, or {@code null}
    * @param personal whether the stack is private stock ({@code null} means {@code false})
+   * @param stolen whether the stack holds stock marked „gestohlen" ({@code null} means {@code
+   *     false})
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null}
    * @param pageable the page request (sorting is forced oldest-first)
    * @return one page of the stack's entries
@@ -318,10 +339,11 @@ public class InventoryItemService {
       UUID locationId,
       Integer quality,
       Boolean personal,
+      Boolean stolen,
       UUID owningOrgUnitId,
       Pageable pageable) {
     return inventoryAggregationService.getMyStackEntries(
-        userId, materialId, locationId, quality, personal, owningOrgUnitId, pageable);
+        userId, materialId, locationId, quality, personal, stolen, owningOrgUnitId, pageable);
   }
 
   /**
@@ -333,6 +355,8 @@ public class InventoryItemService {
    * @param userId the stack's owning user
    * @param locationId the stack's storage location
    * @param quality the stack's quality grade, or {@code null}
+   * @param stolen whether the stack holds stock marked „gestohlen" ({@code null} means {@code
+   *     false})
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null}
    * @param pageable the page request (sorting is forced oldest-first)
    * @return one page of the stack's entries
@@ -342,10 +366,11 @@ public class InventoryItemService {
       UUID userId,
       UUID locationId,
       Integer quality,
+      Boolean stolen,
       UUID owningOrgUnitId,
       Pageable pageable) {
     return inventoryAggregationService.getAllStackEntries(
-        materialId, userId, locationId, quality, owningOrgUnitId, pageable);
+        materialId, userId, locationId, quality, stolen, owningOrgUnitId, pageable);
   }
 
   /**
@@ -454,6 +479,10 @@ public class InventoryItemService {
       throw new BadRequestException("Game-item stock cannot be assigned to a mission");
     }
 
+    boolean isStolen = Boolean.TRUE.equals(dto.stolen());
+    if (isStolen && !inventoryProperties.stolenMarkingEnabled()) {
+      throw new BusinessConflictException("error.inventory.stolen.disabled");
+    }
     Boolean isPersonal = dto.personal() != null ? dto.personal() : false;
 
     final OrgUnit owningOrgUnit =
@@ -468,6 +497,7 @@ public class InventoryItemService {
     item.setQuality(dto.quality());
     item.setAmount(InventoryItem.roundToScuScale(dto.amount()));
     item.setPersonal(isPersonal);
+    item.setStolen(isStolen);
     List<InventoryAllocationInput> jobAllocations =
         effectiveAllocations(dto.jobOrderAllocations(), dto.jobOrderId(), item.getAmount());
     List<InventoryAllocationInput> missionAllocations =
