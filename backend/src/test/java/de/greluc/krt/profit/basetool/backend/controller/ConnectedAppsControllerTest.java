@@ -65,6 +65,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.test.context.ActiveProfiles;
@@ -95,6 +96,7 @@ class ConnectedAppsControllerTest {
   @Autowired private NotificationRepository notificationRepository;
   @Autowired private NotificationCreationService notificationCreationService;
   @MockitoBean private KeycloakService keycloakService;
+  @Autowired private JdbcTemplate jdbc;
 
   private MockMvc mockMvc;
   private ExchangeClient client;
@@ -117,6 +119,33 @@ class ConnectedAppsControllerTest {
     clientRepository.saveAndFlush(client);
     mine = installation(member, "m".repeat(43), "Desktop");
     theirs = installation(other, "o".repeat(43), "Theirs");
+  }
+
+  @Test
+  void eachClientListsItsLatestWritesWithTheirNamesNewestFirst() throws Exception {
+    journal(
+        MEMBER, "BLUEPRINT", "rifle", "BLUEPRINT_ADD", "Arrowhead Rifle", "2026-09-27T10:00:00Z");
+    journal(
+        MEMBER,
+        "BLUEPRINT",
+        "pistol",
+        "BLUEPRINT_REMOVE",
+        "Arclight Pistol",
+        "2026-09-27T11:00:00Z");
+    journal(OTHER, "BLUEPRINT", "theirs", "BLUEPRINT_ADD", "Not Mine", "2026-09-27T12:00:00Z");
+    jdbc.update(
+        "UPDATE exchange_journal SET undone_at = now() WHERE user_id = ? AND entity_key = 'pistol'",
+        MEMBER);
+
+    mockMvc
+        .perform(get(PATH).with(browser(MEMBER)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].activity.length()").value(2))
+        .andExpect(jsonPath("$[0].activity[0].action").value("BLUEPRINT_REMOVE"))
+        .andExpect(jsonPath("$[0].activity[0].label").value("Arclight Pistol"))
+        .andExpect(jsonPath("$[0].activity[0].undone").value(true))
+        .andExpect(jsonPath("$[0].activity[1].label").value("Arrowhead Rifle"))
+        .andExpect(jsonPath("$[0].activity[1].undone").value(false));
   }
 
   @Test
@@ -312,5 +341,39 @@ class ConnectedAppsControllerTest {
         .entityType("EXCHANGE_INSTALLATION")
         .entityId(installationId)
         .build();
+  }
+
+  /**
+   * Journals one write of the test client.
+   *
+   * @param member the member
+   * @param resource the resource
+   * @param key the entry key
+   * @param action the action
+   * @param name the blueprint's name in the journaled state
+   * @param at when it was written
+   */
+  private void journal(
+      UUID member, String resource, String key, String action, String name, String at) {
+    String state = "{\"productKey\":\"" + key + "\",\"productName\":\"" + name + "\"}";
+    boolean removal = action.endsWith("REMOVE");
+    jdbc.update(
+        """
+        INSERT INTO exchange_journal (id, user_id, client_id, installation_key, batch_id, resource,
+                                      entity_key, action, removal, before_state, after_state,
+                                      recorded_at)
+        VALUES (?, ?, 'versekit-ca', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        UUID.randomUUID(),
+        member,
+        "m".repeat(43),
+        UUID.randomUUID(),
+        resource,
+        key,
+        action,
+        removal,
+        removal ? state : null,
+        removal ? null : state,
+        java.sql.Timestamp.from(java.time.Instant.parse(at)));
   }
 }
