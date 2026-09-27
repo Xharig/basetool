@@ -261,7 +261,14 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
   client keeps working. *The backend half is in (`ExchangeInstallationControllerTest`,
   `ExchangeRevocationMirrorIntegrationTest`); the gateway's refusal follows with WP 3.2.*
 - [ ] A revoked client is refused, and a fresh connection right after works.
-- [ ] A departed member is refused on the next request.
+- [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
+  sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
+  every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
+  commit, only while the registry holds a client — writes a revocation for every client (mirror and
+  database), removes the member's consent for each and logs them out of every session, auditing
+  `EXCHANGE_MEMBER_DEPARTED`; a failed step is counted and alerts (`ExchangeDepartureIncomplete`)
+  instead of failing the sync (`ExchangeDepartureIntegrationTest`, `UserReconciliationServiceTest`).
+  The gateway's refusal follows with WP 3.2.*
 
 **Status:** planned — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
 

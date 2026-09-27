@@ -741,6 +741,12 @@ public final class MetricNames {
   public static final String EXCHANGE_DISCONNECTS = "basetool.exchange.disconnects";
 
   /**
+   * Counter {@code basetool_exchange_departures_total{outcome}} — a departed member's exchange
+   * access ended ({@code done}) or ended only in part ({@code failed}, REQ-XCH-008).
+   */
+  public static final String EXCHANGE_DEPARTURES = "basetool.exchange.departures";
+
+  /**
    * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path
    * without a well-formed {@code X-Exchange-Installation}.
    */

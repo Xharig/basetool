@@ -695,6 +695,12 @@ public enum AuditEventType {
   /** A member disconnected one installation of an exchange client (REQ-XCH-008). */
   EXCHANGE_INSTALLATION_DISCONNECTED(AuditDomain.CONNECTED_APPS),
 
+  /**
+   * A departed member's exchange access was ended: revocations for every client, consents removed,
+   * sessions ended (REQ-XCH-008).
+   */
+  EXCHANGE_MEMBER_DEPARTED(AuditDomain.CONNECTED_APPS),
+
   /** The connected-applications audit log was exported as a PDF or JSON for a period. */
   CONNECTED_APPS_AUDIT_EXPORTED(AuditDomain.CONNECTED_APPS),
 
