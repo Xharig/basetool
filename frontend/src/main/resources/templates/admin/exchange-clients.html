@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}" lang="de">
+<head th:replace="~{fragments/head :: head(titleContent=~{::title}, additionalLinks=~{::extraLinks})}">
+    <title th:text="#{admin.exchangeClients.title} + ' - ' + ${appTitle}">Verbundene Anwendungen - Profit Basetool</title>
+    <th:block th:fragment="extraLinks">
+        <link rel="stylesheet" th:href="@{/css/pages/admin-exchange-clients.css}">
+    </th:block>
+</head>
+<body>
+<th:block th:replace="~{fragments/sidebar :: sidebar}" />
+
+<header>
+    <nav>
+        <button id="hamburger" class="hamburger-btn" type="button" th:aria-label="#{a11y.nav.menu}">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <a th:href="@{/}" class="brand">
+            <img th:src="@{/logos/basetool-logo.svg}" alt="" height="50">
+            <span class="logo-text" th:text="${appTitle}">Profit Basetool</span>
+        </a>
+    </nav>
+</header>
+
+<main>
+    <span id="xc-i18n" hidden
+          th:attr="data-saved=#{admin.exchangeClients.success.saved},data-suspended=#{admin.exchangeClients.success.suspended},data-activated=#{admin.exchangeClients.success.activated},data-switched=#{admin.exchangeClients.success.switched},data-error=#{notification.error.title},data-confirm-ok=#{notifications.confirm.ok},data-confirm-cancel=#{general.cancel},data-confirm-suspend-title=#{admin.exchangeClients.confirmSuspend.title},data-confirm-suspend-body=#{admin.exchangeClients.confirmSuspend.body},data-confirm-widen-title=#{admin.exchangeClients.confirmWiden.title},data-confirm-widen-body=#{admin.exchangeClients.confirmWiden.body},data-confirm-off-title=#{admin.exchangeClients.confirmOff.title},data-confirm-off-body=#{admin.exchangeClients.confirmOff.body},data-confirm-on-title=#{admin.exchangeClients.confirmOn.title},data-confirm-on-body=#{admin.exchangeClients.confirmOn.body},data-form-create=#{admin.exchangeClients.form.create},data-form-edit=#{admin.exchangeClients.form.edit}"></span>
+
+    <div class="greeting hud-box">
+        <h1 th:text="#{admin.exchangeClients.title}">Verbundene Anwendungen</h1>
+        <p th:text="#{admin.exchangeClients.subtitle}">Welche Anwendungen Daten austauschen d&uuml;rfen.</p>
+    </div>
+
+    <div id="xc-registry-host">
+        <th:block th:fragment="registry">
+            <div class="hud-box mt-2" th:if="${error}">
+                <p class="text-danger" th:text="#{${error}}">Fehler beim Laden.</p>
+            </div>
+
+            <div class="hud-box mt-2" id="xc-switch" th:if="${settings != null}"
+                 th:attr="data-enabled=${settings.enabled},data-version=${settings.version}">
+                <h2 th:text="#{admin.exchangeClients.switch.title}">Datenaustausch</h2>
+                <p>
+                    <span th:if="${settings.enabled}" class="chip chip--success" th:text="#{admin.exchangeClients.switch.on}">Eingeschaltet</span>
+                    <span th:unless="${settings.enabled}" class="chip chip--danger" th:text="#{admin.exchangeClients.switch.off}">Ausgeschaltet</span>
+                    <span class="xc-switch-hint" th:text="${settings.enabled} ? #{admin.exchangeClients.switch.hintOn} : #{admin.exchangeClients.switch.hintOff}">Hinweis</span>
+                </p>
+                <button type="button" data-xc-switch
+                        th:class="${settings.enabled} ? 'btn btn-quiet-danger' : 'btn btn--cta'"
+                        th:text="${settings.enabled} ? #{admin.exchangeClients.switch.turnOff} : #{admin.exchangeClients.switch.turnOn}">Ausschalten</button>
+            </div>
+
+            <div class="hud-box mt-2">
+                <h2 th:text="#{admin.exchangeClients.list}">Registrierte Anwendungen</h2>
+                <div class="table-responsive">
+                    <table id="xc-table">
+                        <thead>
+                        <tr>
+                            <th th:text="#{admin.exchangeClients.column.name}">Anwendung</th>
+                            <th th:text="#{admin.exchangeClients.column.clientId}">Client-ID</th>
+                            <th th:text="#{admin.exchangeClients.column.status}">Status</th>
+                            <th th:text="#{admin.exchangeClients.column.capabilities}">Berechtigungen</th>
+                            <th th:text="#{admin.exchangeClients.column.minVersion}">Mindestversion</th>
+                            <th th:text="#{admin.exchangeClients.column.limits}">Limits</th>
+                            <th th:text="#{admin.exchangeClients.column.contact}">Kontakt</th>
+                            <th th:text="#{admin.exchangeClients.column.actions}">Aktion</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="c : ${clients}"
+                            th:attr="data-client-id=${c.id},data-version=${c.version},data-status=${c.status}">
+                            <td th:text="${c.displayName}">VerseKit</td>
+                            <td><code th:text="${c.clientId}">versekit</code></td>
+                            <td>
+                                <span th:if="${c.status == 'ACTIVE'}" class="chip chip--success" th:text="#{admin.exchangeClients.status.ACTIVE}">Freigegeben</span>
+                                <span th:unless="${c.status == 'ACTIVE'}" class="chip chip--danger" th:text="#{admin.exchangeClients.status.SUSPENDED}">Gesperrt</span>
+                            </td>
+                            <td>
+                                <ul class="xc-capabilities">
+                                    <li th:each="cap : ${c.capabilities}"
+                                        th:text="${#messages.msgOrNull('exchange.capability.' + cap) ?: cap}">Blueprints lesen</li>
+                                </ul>
+                            </td>
+                            <td th:text="${c.minClientVersion} ?: '–'">2.1.0</td>
+                            <td>
+                                <span th:if="${c.requestsPerMinute == null and c.writesPerDay == null}" th:text="#{admin.exchangeClients.limits.default}">Standard</span>
+                                <span th:if="${c.requestsPerMinute != null}" class="xc-limit" th:text="#{admin.exchangeClients.limits.perMinute(${c.requestsPerMinute})}">120/min</span>
+                                <span th:if="${c.writesPerDay != null}" class="xc-limit" th:text="#{admin.exchangeClients.limits.perDay(${c.writesPerDay})}">500/Tag</span>
+                            </td>
+                            <td>
+                                <a th:if="${c.contactUrl != null}" th:href="${c.contactUrl}" target="_blank" rel="noopener noreferrer"
+                                   th:text="#{admin.exchangeClients.contact.open}">&Ouml;ffnen</a>
+                                <span th:if="${c.contactUrl == null}">&ndash;</span>
+                            </td>
+                            <td>
+                                <div class="flex-gap-xs">
+                                    <button type="button" class="btn btn-icon" data-xc-edit
+                                            th:title="#{admin.exchangeClients.edit}" th:aria-label="#{admin.exchangeClients.edit}">
+                                        <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-edit"></use></svg>
+                                    </button>
+                                    <button th:if="${c.status == 'ACTIVE'}" type="button" class="btn btn-quiet-danger" data-xc-suspend
+                                            th:text="#{admin.exchangeClients.suspend}">Sperren</button>
+                                    <button th:unless="${c.status == 'ACTIVE'}" type="button" class="btn btn-secondary" data-xc-activate
+                                            th:text="#{admin.exchangeClients.activate}">Freigeben</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${error == null and #lists.isEmpty(clients)}">
+                            <td colspan="8" th:text="#{admin.exchangeClients.empty}">Noch keine Anwendung registriert.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </th:block>
+    </div>
+
+    <div class="hud-box mt-2">
+        <h2 id="xc-form-title" th:text="#{admin.exchangeClients.form.create}">Anwendung registrieren</h2>
+        <form id="xc-form" data-client-id="" novalidate>
+            <input type="hidden" id="xc-version" value="">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="xc-clientId" th:text="#{admin.exchangeClients.form.clientId}">Client-ID</label>
+                    <input type="text" id="xc-clientId" required maxlength="63" pattern="[a-z0-9][a-z0-9\-]{1,62}" autocomplete="off">
+                    <p class="form-hint" th:text="#{admin.exchangeClients.form.clientId.hint}">Kleinbuchstaben, Ziffern, Bindestriche.</p>
+                </div>
+                <div class="form-group">
+                    <label for="xc-displayName" th:text="#{admin.exchangeClients.form.displayName}">Name</label>
+                    <input type="text" id="xc-displayName" required maxlength="100" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="xc-minVersion" th:text="#{admin.exchangeClients.form.minVersion}">Mindestversion</label>
+                    <input type="text" id="xc-minVersion" maxlength="32" autocomplete="off">
+                    <p class="form-hint" th:text="#{admin.exchangeClients.form.minVersion.hint}">z. B. 2.1.0</p>
+                </div>
+                <div class="form-group">
+                    <label for="xc-contactUrl" th:text="#{admin.exchangeClients.form.contactUrl}">Kontakt</label>
+                    <input type="url" id="xc-contactUrl" maxlength="500" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="xc-requestsPerMinute" th:text="#{admin.exchangeClients.form.requestsPerMinute}">Anfragen pro Minute</label>
+                    <input type="number" id="xc-requestsPerMinute" min="1" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="xc-writesPerDay" th:text="#{admin.exchangeClients.form.writesPerDay}">Schreibzugriffe pro Tag</label>
+                    <input type="number" id="xc-writesPerDay" min="1" step="1">
+                    <p class="form-hint" th:text="#{admin.exchangeClients.form.limits.hint}">Leer: Standard.</p>
+                </div>
+            </div>
+            <fieldset class="mt-2 xc-capability-set">
+                <legend th:text="#{admin.exchangeClients.form.capabilities}">Berechtigungen</legend>
+                <label th:each="cap : ${capabilities}" class="xc-capability">
+                    <input type="checkbox" name="capability" th:value="${cap}"
+                           th:attr="data-required=${cap == 'exchange.connect'} ? 'true' : null"
+                           th:checked="${cap == 'exchange.connect'}" th:disabled="${cap == 'exchange.connect'}">
+                    <span th:text="${#messages.msgOrNull('exchange.capability.' + cap) ?: cap}">Blueprints lesen</span>
+                </label>
+                <p class="form-hint" th:text="#{admin.exchangeClients.form.capabilities.connectHint}">Jede Anwendung braucht die Grundberechtigung.</p>
+            </fieldset>
+            <div class="mt-2">
+                <button type="submit" class="btn btn--cta" th:text="#{admin.exchangeClients.form.save}">Speichern</button>
+                <button type="button" class="btn btn-secondary" id="xc-cancel" th:text="#{general.cancel}">Abbrechen</button>
+            </div>
+        </form>
+    </div>
+</main>
+
+<script th:src="@{/js/admin-exchange-clients.js}" defer th:attr="nonce=${cspNonce}"></script>
+</body>
+</html>
