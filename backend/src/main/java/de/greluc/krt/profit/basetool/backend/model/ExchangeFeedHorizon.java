@@ -47,7 +47,13 @@ public class ExchangeFeedHorizon {
   @Column(name = "id", nullable = false)
   private Short id;
 
-  /** The highest sequence number the purge removed, {@code 0} before the first purge. */
+  /** The transaction id of the last feed position the purge removed, {@code 0} before the first. */
+  @Column(name = "purged_through_tx", nullable = false)
+  private long purgedThroughTx;
+
+  /**
+   * The sequence number of the last feed position the purge removed, {@code 0} before the first.
+   */
   @Column(name = "purged_through_seq", nullable = false)
   private long purgedThroughSeq;
 

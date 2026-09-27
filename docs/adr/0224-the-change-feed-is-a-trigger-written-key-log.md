@@ -23,23 +23,28 @@ services would miss all of these. A database trigger sees them, but not who is w
 ## Decision
 
 1. **Triggers write a key log.** Every synced table carries an `AFTER` row trigger that records
-   `(member, resource, entity key)` in `exchange_change`, whose `seq` identity column is the feed's
-   cursor. The log holds keys, not values: the feed reads the current state of each changed key
+   `(member, resource, entity key)` in `exchange_change`. The log holds keys, not values: the feed reads the current state of each changed key
    and answers a tombstone when the entity is gone. A change of `default_blueprint` records the
    product for every member who owns it. Stock is recorded only for the member's personal rows,
    keyed by lot (material or item, location, quality, stolen) across org-unit pools; a ship by its
    id.
-2. **The writer names itself per transaction.** A `JpaTransactionManager` subclass sets the
+2. **A reader passes only finished transactions.** A sequence number is taken at insert, not at
+   commit, so a transaction can commit an entry below one a reader has already passed. Each entry
+   therefore also records its writer's transaction id, and the feed position is `(transaction id,
+   seq)`. A reader delivers only entries of transactions below `pg_snapshot_xmin(pg_current_snapshot())`
+   — all finished, and no later transaction can get a lower id — so nothing ever appears behind a
+   position. A running writing transaction holds the feed back until it ends; read-only ones do not.
+3. **The writer names itself per transaction.** A `JpaTransactionManager` subclass sets the
    transaction-local variable `basetool.change_source` at the start of every transaction that is not
    read-only, from the current authentication: `web` or `app` by the token's client, `client|<id>|
    <installation key>` for a request the ingest gateway relayed, otherwise `system`. The triggers
    read it; an absent or unknown value counts as `system`. It costs one statement per writing
    transaction.
-3. **Retention is a horizon.** A nightly job deletes entries older than 90 days and records the
-   highest deleted `seq`; a cursor below it answers `410 CURSOR_EXPIRED`.
-4. **Deleting a member drops their log.** The foreign key cascades, and the trigger records nothing
+4. **Retention is a horizon.** A nightly job deletes every entry up to the position of the last one
+   older than 90 days and records that position; a cursor below it answers `410 CURSOR_EXPIRED`.
+5. **Deleting a member drops their log.** The foreign key cascades, and the trigger records nothing
    for a member who no longer exists, so a cascading delete cannot fail on the log.
-5. **A test guards the set.** It fails when a synced table carries no exchange trigger.
+6. **A test guards the set.** It fails when a synced table carries no exchange trigger.
 
 ## Consequences
 
@@ -54,5 +59,7 @@ services would miss all of these. A database trigger sees them, but not who is w
 - **Record in the services.** Rejected: the bulk paths and the computed `isDefault` bypass them.
 - **Triggers without attribution, filled in where the service knows.** Rejected by the owner: bulk
   paths would read `system` even when an admin triggered them in the web.
+- **Serialise the writers with an advisory lock held to commit.** Rejected: it orders every write
+  to a synced table behind every other one and adds a lock that can deadlock with row locks.
 - **Logical decoding.** Rejected: it needs a replication slot and a consumer process for a volume
   one table can hold.

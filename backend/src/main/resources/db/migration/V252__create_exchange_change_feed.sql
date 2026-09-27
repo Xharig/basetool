@@ -1,5 +1,6 @@
 CREATE TABLE exchange_change (
     seq            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tx             BIGINT                   NOT NULL DEFAULT (pg_current_xact_id()::text)::bigint,
     user_id        UUID                     NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,
     resource       VARCHAR(16)              NOT NULL,
     entity_key     VARCHAR(255)             NOT NULL,
@@ -11,17 +12,18 @@ CREATE TABLE exchange_change (
     CONSTRAINT ck_exchange_change_channel CHECK (source_channel IN ('web', 'app', 'client', 'system'))
 );
 
-CREATE INDEX idx_exchange_change_user_id ON exchange_change (user_id, resource, seq);
+CREATE INDEX idx_exchange_change_user_id ON exchange_change (user_id, resource, tx, seq);
 CREATE INDEX idx_exchange_change_changed_at ON exchange_change (changed_at);
 
 CREATE TABLE exchange_feed_horizon (
     id                 SMALLINT PRIMARY KEY,
+    purged_through_tx  BIGINT                   NOT NULL,
     purged_through_seq BIGINT                   NOT NULL,
     purged_at          TIMESTAMP WITH TIME ZONE,
     CONSTRAINT ck_exchange_feed_horizon_singleton CHECK (id = 1)
 );
 
-INSERT INTO exchange_feed_horizon (id, purged_through_seq) VALUES (1, 0);
+INSERT INTO exchange_feed_horizon (id, purged_through_tx, purged_through_seq) VALUES (1, 0, 0);
 
 CREATE OR REPLACE FUNCTION exchange_record_change(p_user UUID, p_resource VARCHAR, p_key VARCHAR)
 RETURNS VOID AS $$

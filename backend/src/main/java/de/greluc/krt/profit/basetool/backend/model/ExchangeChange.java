@@ -45,10 +45,14 @@ import org.hibernate.annotations.Immutable;
 @NoArgsConstructor
 public class ExchangeChange {
 
-  /** The database sequence number, the feed's cursor position. */
+  /** The database sequence number, the minor part of the feed position. */
   @Id
   @Column(name = "seq", nullable = false, updatable = false)
   private Long seq;
+
+  /** The id of the writing transaction, the major part of the feed position. */
+  @Column(name = "tx", nullable = false, updatable = false, insertable = false)
+  private long tx;
 
   /** The member whose entity changed. */
   @Column(name = "user_id", nullable = false, updatable = false)

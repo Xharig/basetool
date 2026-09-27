@@ -23,6 +23,7 @@ import de.greluc.krt.profit.basetool.backend.model.ExchangeFeedHorizon;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeChangeRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeFeedHorizonRepository;
 import java.time.Instant;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Service;
@@ -40,8 +41,8 @@ public class ExchangeChangeRetentionService {
   private final ExchangeFeedHorizonRepository horizonRepository;
 
   /**
-   * Deletes every entry up to the last one older than the cutoff and records that sequence number
-   * as the horizon; the horizon never moves back.
+   * Deletes every entry up to the feed position of the last one older than the cutoff and records
+   * that position as the horizon; the horizon never moves back.
    *
    * @param cutoff the oldest change still kept
    * @param now the time recorded with the horizon
@@ -49,17 +50,20 @@ public class ExchangeChangeRetentionService {
    */
   @Transactional
   public int purgeOlderThan(@NotNull Instant cutoff, @NotNull Instant now) {
-    long through = changeRepository.maxSeqBefore(cutoff);
-    if (through == 0) {
+    Optional<ExchangeChangeRepository.Position> last = changeRepository.lastPositionBefore(cutoff);
+    if (last.isEmpty()) {
       return 0;
     }
-    int deleted = changeRepository.deleteThrough(through);
+    ExchangeFeedPosition through =
+        new ExchangeFeedPosition(last.get().getTx(), last.get().getSeq());
+    int deleted = changeRepository.deleteThrough(through.tx(), through.seq());
     ExchangeFeedHorizon horizon =
         horizonRepository
             .findById(ExchangeFeedHorizon.SINGLETON_ID)
             .orElseThrow(() -> new IllegalStateException("exchange_feed_horizon row missing"));
-    if (through > horizon.getPurgedThroughSeq()) {
-      horizon.setPurgedThroughSeq(through);
+    if (positionOf(horizon).isBefore(through)) {
+      horizon.setPurgedThroughTx(through.tx());
+      horizon.setPurgedThroughSeq(through.seq());
       horizon.setPurgedAt(now);
       horizonRepository.save(horizon);
     }
@@ -67,15 +71,25 @@ public class ExchangeChangeRetentionService {
   }
 
   /**
-   * Returns the sequence number below which the feed has lost entries.
+   * Returns the feed position up to which the feed has lost entries.
    *
-   * @return the horizon, {@code 0} before the first purge
+   * @return the horizon, {@link ExchangeFeedPosition#START} before the first purge
    */
   @Transactional(readOnly = true)
-  public long horizon() {
+  public @NotNull ExchangeFeedPosition horizon() {
     return horizonRepository
         .findById(ExchangeFeedHorizon.SINGLETON_ID)
-        .map(ExchangeFeedHorizon::getPurgedThroughSeq)
-        .orElse(0L);
+        .map(ExchangeChangeRetentionService::positionOf)
+        .orElse(ExchangeFeedPosition.START);
+  }
+
+  /**
+   * Reads the horizon row's position.
+   *
+   * @param horizon the row
+   * @return its position
+   */
+  private static @NotNull ExchangeFeedPosition positionOf(@NotNull ExchangeFeedHorizon horizon) {
+    return new ExchangeFeedPosition(horizon.getPurgedThroughTx(), horizon.getPurgedThroughSeq());
   }
 }

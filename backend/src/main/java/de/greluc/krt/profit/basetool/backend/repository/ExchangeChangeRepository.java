@@ -20,11 +20,10 @@
 package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.ExchangeChange;
-import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -34,23 +33,40 @@ import org.springframework.data.repository.query.Param;
 public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, Long> {
 
   /**
-   * Returns the highest sequence number of the entries older than a cutoff.
+   * Returns the oldest transaction id still running; every entry of a lower one is final.
    *
-   * @param cutoff the oldest change still kept
-   * @return the sequence number, {@code 0} when no entry is that old
+   * @return the watermark
    */
-  @Query("SELECT COALESCE(MAX(c.seq), 0) FROM ExchangeChange c WHERE c.changedAt < :cutoff")
-  long maxSeqBefore(@Param("cutoff") Instant cutoff);
+  @Query(
+      value = "SELECT CAST(CAST(pg_snapshot_xmin(pg_current_snapshot()) AS text) AS bigint)",
+      nativeQuery = true)
+  long watermark();
 
   /**
-   * Deletes every entry up to and including a sequence number.
+   * Returns the feed position of the last entry older than a cutoff.
    *
-   * @param seq the highest sequence number to delete
+   * @param cutoff the oldest change still kept
+   * @return the position, empty when no entry is that old
+   */
+  @Query(
+      value =
+          """
+          SELECT tx, seq FROM exchange_change WHERE changed_at < :cutoff
+          ORDER BY tx DESC, seq DESC LIMIT 1
+          """,
+      nativeQuery = true)
+  Optional<Position> lastPositionBefore(@Param("cutoff") Instant cutoff);
+
+  /**
+   * Deletes every entry up to and including a feed position.
+   *
+   * @param tx the position's transaction id
+   * @param seq the position's sequence number
    * @return the number of entries deleted
    */
   @Modifying
-  @Query(value = "DELETE FROM exchange_change WHERE seq <= :seq", nativeQuery = true)
-  int deleteThrough(@Param("seq") long seq);
+  @Query(value = "DELETE FROM exchange_change WHERE (tx, seq) <= (:tx, :seq)", nativeQuery = true)
+  int deleteThrough(@Param("tx") long tx, @Param("seq") long seq);
 
   /**
    * Lists a member's entries in sequence order.
@@ -61,50 +77,64 @@ public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, 
   List<ExchangeChange> findAllByUserIdOrderBySeqAsc(UUID userId);
 
   /**
-   * Returns the highest sequence number, the position a snapshot taken now starts the feed at.
-   *
-   * @return the sequence number, {@code 0} while the log is empty
-   */
-  @Query("SELECT COALESCE(MAX(c.seq), 0) FROM ExchangeChange c")
-  long maxSeq();
-
-  /**
-   * Lists the keys of one member's resource changed after a position, each with its latest change,
-   * in the order of those latest changes.
+   * Returns the keys of one resource that changed after a feed position and below the watermark,
+   * each once with its latest entry, in the order of those entries.
    *
    * @param userId the member
-   * @param resource the resource
-   * @param after the position
-   * @param pageable the page size
+   * @param resource the resource name
+   * @param tx the position's transaction id
+   * @param seq the position's sequence number
+   * @param watermark the oldest transaction id still running
+   * @param limit the most keys to return
    * @return the changed keys
    */
   @Query(
-      """
-      SELECT c.entityKey AS entityKey, MAX(c.seq) AS lastSeq FROM ExchangeChange c
-      WHERE c.userId = :userId AND c.resource = :resource AND c.seq > :after
-      GROUP BY c.entityKey ORDER BY MAX(c.seq)
-      """)
+      value =
+          """
+          SELECT latest.entity_key AS entityKey, latest.tx AS tx, latest.seq AS seq
+          FROM (SELECT DISTINCT ON (c.entity_key) c.entity_key, c.tx, c.seq
+                FROM exchange_change c
+                WHERE c.user_id = :userId AND c.resource = :resource
+                  AND (c.tx, c.seq) > (:tx, :seq) AND c.tx < :watermark
+                ORDER BY c.entity_key, c.tx DESC, c.seq DESC) latest
+          ORDER BY latest.tx, latest.seq
+          LIMIT :limit
+          """,
+      nativeQuery = true)
   List<ChangedKey> findChangedKeys(
       @Param("userId") UUID userId,
-      @Param("resource") ExchangeResource resource,
-      @Param("after") long after,
-      Pageable pageable);
+      @Param("resource") String resource,
+      @Param("tx") long tx,
+      @Param("seq") long seq,
+      @Param("watermark") long watermark,
+      @Param("limit") int limit);
 
-  /** A changed key and its latest change, from {@link #findChangedKeys}. */
-  interface ChangedKey {
+  /** A feed position as a native query returns it. */
+  interface Position {
 
     /**
-     * Returns the entity key.
+     * The writing transaction's id.
+     *
+     * @return the id
+     */
+    long getTx();
+
+    /**
+     * The sequence number.
+     *
+     * @return the number
+     */
+    long getSeq();
+  }
+
+  /** A changed key with the position of its latest entry. */
+  interface ChangedKey extends Position {
+
+    /**
+     * The entity's key within the resource.
      *
      * @return the key
      */
     String getEntityKey();
-
-    /**
-     * Returns the sequence number of the key's latest change.
-     *
-     * @return the sequence number
-     */
-    long getLastSeq();
   }
 }
