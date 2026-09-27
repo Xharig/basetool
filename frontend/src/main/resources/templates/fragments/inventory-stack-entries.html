@@ -14,6 +14,8 @@
                        th:data-id="${entry.id}"
                        th:data-material-id="${entry.material.id}"
                        data-trigger="inv-my-update-bulk-state">
+                <span th:if="${entry.stolen}" class="chip chip--danger" data-testid="stolen-chip"
+                      th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                 <div class="tree-fieldset">
                     <div class="tree-field">
                         <span class="tree-field-cap" th:text="#{inventory.order}">Auftrag</span>
@@ -195,6 +197,19 @@
                         th:title="#{inventory.orgUnitChange.action}" th:aria-label="#{inventory.orgUnitChange.action}">
                     <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-users"/></svg>
                 </button>
+                <button type="button" class="btn btn-outline btn-xs btn-icon"
+                        th:if="${canMarkStolen == true and entry.canEdit == true}"
+                        th:data-id="${entry.id}"
+                        th:data-version="${entry.version}"
+                        th:data-amount="${entry.amount}"
+                        th:data-quantity-type="${entry.material.quantityType}"
+                        th:data-stolen="${entry.stolen == true}"
+                        data-trigger="inv-my-stolen"
+                        data-testid="stolen-mark-open"
+                        th:title="${entry.stolen == true} ? #{inventory.stolen.unmark.action} : #{inventory.stolen.mark.action}"
+                        th:aria-label="${entry.stolen == true} ? #{inventory.stolen.unmark.action} : #{inventory.stolen.mark.action}">
+                    <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-warning"/></svg>
+                </button>
                 <button type="button" class="btn btn-xs btn-icon inventory-note-btn"
                         th:classappend="${entry.note != null and !#strings.isEmpty(entry.note)} ? 'btn-outline has-note' : 'btn-ghost'"
                         th:data-id="${entry.id}"
@@ -222,6 +237,8 @@
                        th:data-id="${entry.id}"
                        th:data-game-item-id="${entry.gameItem.id}"
                        data-trigger="inv-my-update-bulk-state">
+                <span th:if="${entry.stolen}" class="chip chip--danger" data-testid="stolen-chip"
+                      th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                 <div class="tree-fieldset">
                     <div class="tree-field">
                         <span class="tree-field-cap" th:text="#{inventory.order}">Auftrag</span>
@@ -342,6 +359,19 @@
                         th:title="#{inventory.orgUnitChange.action}" th:aria-label="#{inventory.orgUnitChange.action}">
                     <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-users"/></svg>
                 </button>
+                <button type="button" class="btn btn-outline btn-xs btn-icon"
+                        th:if="${canMarkStolen == true and entry.canEdit == true}"
+                        th:data-id="${entry.id}"
+                        th:data-version="${entry.version}"
+                        th:data-amount="${entry.amount}"
+                        data-quantity-type="PIECE"
+                        th:data-stolen="${entry.stolen == true}"
+                        data-trigger="inv-my-stolen"
+                        data-testid="stolen-mark-open"
+                        th:title="${entry.stolen == true} ? #{inventory.stolen.unmark.action} : #{inventory.stolen.mark.action}"
+                        th:aria-label="${entry.stolen == true} ? #{inventory.stolen.unmark.action} : #{inventory.stolen.mark.action}">
+                    <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-warning"/></svg>
+                </button>
                 <button type="button" class="btn btn-xs btn-icon inventory-note-btn"
                         th:classappend="${entry.note != null and !#strings.isEmpty(entry.note)} ? 'btn-outline has-note' : 'btn-ghost'"
                         th:data-id="${entry.id}"
@@ -390,6 +420,8 @@
         <th:block th:if="${entry.gameItem == null}">
         <div class="tree-row tree-row--leaf" th:data-item-id="${entry.id}">
             <div class="tree-leaf-main">
+                <span th:if="${entry.stolen}" class="chip chip--danger" data-testid="stolen-chip"
+                      th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                 <div class="tree-fieldset">
                     <div class="tree-field">
                         <span class="tree-field-cap" th:text="#{inventory.order}">Auftrag</span>
@@ -562,6 +594,19 @@
                         th:title="#{inventory.rebook.action}" th:aria-label="#{inventory.rebook.action}">
                     <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-rebook"/></svg>
                 </button>
+                <button type="button" class="btn btn-outline btn-xs btn-icon"
+                        th:if="${canMarkStolen == true and entry.canEdit == true}"
+                        th:data-id="${entry.id}"
+                        th:data-version="${entry.version}"
+                        th:data-amount="${entry.amount}"
+                        th:data-quantity-type="${entry.material.quantityType}"
+                        th:data-stolen="${entry.stolen == true}"
+                        data-trigger="inv-admin-stolen"
+                        data-testid="stolen-mark-open"
+                        th:title="${entry.stolen == true} ? #{inventory.stolen.unmark.action} : #{inventory.stolen.mark.action}"
+                        th:aria-label="${entry.stolen == true} ? #{inventory.stolen.unmark.action} : #{inventory.stolen.mark.action}">
+                    <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-warning"/></svg>
+                </button>
                 <button type="button" class="btn btn-xs btn-icon inventory-note-btn"
                         th:classappend="${entry.note != null and !#strings.isEmpty(entry.note)} ? 'btn-outline has-note' : 'btn-ghost'"
                         th:data-id="${entry.id}"
@@ -585,6 +630,8 @@
         <th:block th:if="${entry.gameItem != null}">
         <div class="tree-row tree-row--leaf" th:data-item-id="${entry.id}">
             <div class="tree-leaf-main">
+                <span th:if="${entry.stolen}" class="chip chip--danger" data-testid="stolen-chip"
+                      th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                 <div class="tree-fieldset">
                     <div class="tree-field">
                         <span class="tree-field-cap" th:text="#{inventory.order}">Auftrag</span>
@@ -685,6 +732,19 @@
                         data-trigger="inv-admin-umbuchen"
                         th:title="#{inventory.rebook.action}" th:aria-label="#{inventory.rebook.action}">
                     <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-rebook"/></svg>
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-icon"
+                        th:if="${canMarkStolen == true and entry.canEdit == true}"
+                        th:data-id="${entry.id}"
+                        th:data-version="${entry.version}"
+                        th:data-amount="${entry.amount}"
+                        data-quantity-type="PIECE"
+                        th:data-stolen="${entry.stolen == true}"
+                        data-trigger="inv-admin-stolen"
+                        data-testid="stolen-mark-open"
+                        th:title="${entry.stolen == true} ? #{inventory.stolen.unmark.action} : #{inventory.stolen.mark.action}"
+                        th:aria-label="${entry.stolen == true} ? #{inventory.stolen.unmark.action} : #{inventory.stolen.mark.action}">
+                    <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-warning"/></svg>
                 </button>
                 <button type="button" class="btn btn-xs btn-icon inventory-note-btn"
                         th:classappend="${entry.note != null and !#strings.isEmpty(entry.note)} ? 'btn-outline has-note' : 'btn-ghost'"

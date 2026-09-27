@@ -63,6 +63,7 @@ class InventoryWriteControllerAllocationTest {
         750,
         10.0,
         false,
+        false,
         List.of(),
         0.0,
         List.of(),

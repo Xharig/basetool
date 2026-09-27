@@ -243,7 +243,7 @@ public class InventoryAggregationService {
 
   /**
    * Overload of {@link #getMyAggregatedInventory(UUID, List, List, Integer, List, List, boolean,
-   * boolean)} without location filter and without personal/shared narrowing.
+   * boolean, boolean, boolean)} without location filter and without personal/shared narrowing.
    *
    * @param userId owner id
    * @param materialIds optional material filter
@@ -260,7 +260,7 @@ public class InventoryAggregationService {
       List<UUID> jobOrderIds,
       List<UUID> missionIds) {
     return getMyAggregatedInventory(
-        userId, materialIds, null, minQuality, jobOrderIds, missionIds, false, false);
+        userId, materialIds, null, minQuality, jobOrderIds, missionIds, false, false, false, false);
   }
 
   /**
@@ -277,6 +277,8 @@ public class InventoryAggregationService {
    * @param personalOnly {@code true} to return only personal rows
    * @param nonPersonalOnly {@code true} to return only shared rows; mutually exclusive with {@code
    *     personalOnly}, both {@code false} returns both
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return aggregated items
    * @throws NotFoundException when the user id is unknown
    */
@@ -288,7 +290,9 @@ public class InventoryAggregationService {
       List<UUID> jobOrderIds,
       List<UUID> missionIds,
       boolean personalOnly,
-      boolean nonPersonalOnly) {
+      boolean nonPersonalOnly,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     User user = Entities.require(userRepository.findPlainById(userId), "User not found");
     boolean hasMaterials = materialIds != null && !materialIds.isEmpty();
     boolean hasLocations = locationIds != null && !locationIds.isEmpty();
@@ -307,14 +311,16 @@ public class InventoryAggregationService {
             hasMissions,
             hasMissions ? missionIds : null,
             personalOnly,
-            nonPersonalOnly);
+            nonPersonalOnly,
+            stolenOnly,
+            nonStolenOnly);
 
     return buildGroupedFromStacks(stacks);
   }
 
   /**
-   * Overload of {@link #getAllAggregatedInventory(List, List, Integer, List, List)} without
-   * location, job-order and mission filters.
+   * Overload of {@link #getAllAggregatedInventory(List, List, Integer, List, List, boolean,
+   * boolean)} without location, job-order and mission filters.
    *
    * @param materialIds optional material filter
    * @param minQuality optional min-quality filter
@@ -322,7 +328,7 @@ public class InventoryAggregationService {
    */
   public List<GroupedInventoryDto> getAllAggregatedInventory(
       List<UUID> materialIds, Integer minQuality) {
-    return getAllAggregatedInventory(materialIds, null, minQuality, null, null);
+    return getAllAggregatedInventory(materialIds, null, minQuality, null, null, false, false);
   }
 
   /**
@@ -335,6 +341,8 @@ public class InventoryAggregationService {
    * @param minQuality optional min-quality filter
    * @param jobOrderIds optional job order filter
    * @param missionIds optional mission filter
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return aggregated items grouped by material
    */
   public List<GroupedInventoryDto> getAllAggregatedInventory(
@@ -342,7 +350,9 @@ public class InventoryAggregationService {
       List<UUID> locationIds,
       Integer minQuality,
       List<UUID> jobOrderIds,
-      List<UUID> missionIds) {
+      List<UUID> missionIds,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     boolean hasMaterials = materialIds != null && !materialIds.isEmpty();
     boolean hasLocations = locationIds != null && !locationIds.isEmpty();
     boolean hasJobOrders = jobOrderIds != null && !jobOrderIds.isEmpty();
@@ -361,7 +371,9 @@ public class InventoryAggregationService {
             hasMissions ? missionIds : null,
             scope.adminAllScope(),
             scope.activeOrgUnitId(),
-            scope.memberOrgUnitIds());
+            scope.memberOrgUnitIds(),
+            stolenOnly,
+            nonStolenOnly);
 
     return buildGroupedFromStacks(stacks);
   }
@@ -377,6 +389,8 @@ public class InventoryAggregationService {
    * @param jobOrderIds optional job-order filter
    * @param personalOnly when {@code true}, narrows to the caller's private stock rows
    * @param nonPersonalOnly when {@code true}, narrows to the caller's shared stock rows
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return item groups, each carrying its sorted stacks and item-wide total
    * @throws NotFoundException when the user id is unknown
    */
@@ -386,7 +400,9 @@ public class InventoryAggregationService {
       List<UUID> locationIds,
       List<UUID> jobOrderIds,
       boolean personalOnly,
-      boolean nonPersonalOnly) {
+      boolean nonPersonalOnly,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     User user = Entities.require(userRepository.findPlainById(userId), "User not found");
     boolean hasGameItems = gameItemIds != null && !gameItemIds.isEmpty();
     boolean hasLocations = locationIds != null && !locationIds.isEmpty();
@@ -401,7 +417,9 @@ public class InventoryAggregationService {
             hasJobOrders,
             hasJobOrders ? jobOrderIds : null,
             personalOnly,
-            nonPersonalOnly);
+            nonPersonalOnly,
+            stolenOnly,
+            nonStolenOnly);
     return buildGroupedFromItemStacks(stacks);
   }
 
@@ -418,6 +436,8 @@ public class InventoryAggregationService {
    * @param missionIds optional mission filter
    * @param personalOnly when {@code true}, narrows to the caller's private stock rows
    * @param nonPersonalOnly when {@code true}, narrows to the caller's shared stock rows
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return the ids of every matching material entry, in creation order; never {@code null}
    * @throws NotFoundException when the user id is unknown
    */
@@ -429,7 +449,9 @@ public class InventoryAggregationService {
       List<UUID> jobOrderIds,
       List<UUID> missionIds,
       boolean personalOnly,
-      boolean nonPersonalOnly) {
+      boolean nonPersonalOnly,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     User user = Entities.require(userRepository.findPlainById(userId), "User not found");
     boolean hasMaterials = materialIds != null && !materialIds.isEmpty();
     boolean hasLocations = locationIds != null && !locationIds.isEmpty();
@@ -447,7 +469,9 @@ public class InventoryAggregationService {
         hasMissions,
         hasMissions ? missionIds : null,
         personalOnly,
-        nonPersonalOnly);
+        nonPersonalOnly,
+        stolenOnly,
+        nonStolenOnly);
   }
 
   /**
@@ -460,6 +484,8 @@ public class InventoryAggregationService {
    * @param jobOrderIds optional job-order filter
    * @param personalOnly when {@code true}, narrows to the caller's private stock rows
    * @param nonPersonalOnly when {@code true}, narrows to the caller's shared stock rows
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return the ids of every matching game-item entry, in creation order; never {@code null}
    * @throws NotFoundException when the user id is unknown
    */
@@ -469,7 +495,9 @@ public class InventoryAggregationService {
       List<UUID> locationIds,
       List<UUID> jobOrderIds,
       boolean personalOnly,
-      boolean nonPersonalOnly) {
+      boolean nonPersonalOnly,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     User user = Entities.require(userRepository.findPlainById(userId), "User not found");
     boolean hasGameItems = gameItemIds != null && !gameItemIds.isEmpty();
     boolean hasLocations = locationIds != null && !locationIds.isEmpty();
@@ -483,20 +511,29 @@ public class InventoryAggregationService {
         hasJobOrders,
         hasJobOrders ? jobOrderIds : null,
         personalOnly,
-        nonPersonalOnly);
+        nonPersonalOnly,
+        stolenOnly,
+        nonStolenOnly);
   }
 
   /**
-   * Game-item sibling of {@link #getAllAggregatedInventory(List, List, Integer, List, List)}: the
-   * scoped game-item stock grouped by item and stack. No quality or mission filter (REQ-INV-031).
+   * Game-item sibling of {@link #getAllAggregatedInventory(List, List, Integer, List, List,
+   * boolean, boolean)}: the scoped game-item stock grouped by item and stack. No quality or mission
+   * filter (REQ-INV-031).
    *
    * @param gameItemIds optional game-item filter
    * @param locationIds optional storage-location filter (REQ-INV-040)
    * @param jobOrderIds optional job-order filter
+   * @param stolenOnly when {@code true}, narrows to stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, narrows to stock not marked „gestohlen"
    * @return item groups, each carrying its sorted stacks and item-wide total
    */
   public List<GroupedInventoryDto> getAllAggregatedItemInventory(
-      List<UUID> gameItemIds, List<UUID> locationIds, List<UUID> jobOrderIds) {
+      List<UUID> gameItemIds,
+      List<UUID> locationIds,
+      List<UUID> jobOrderIds,
+      boolean stolenOnly,
+      boolean nonStolenOnly) {
     boolean hasGameItems = gameItemIds != null && !gameItemIds.isEmpty();
     boolean hasLocations = locationIds != null && !locationIds.isEmpty();
     boolean hasJobOrders = jobOrderIds != null && !jobOrderIds.isEmpty();
@@ -511,7 +548,9 @@ public class InventoryAggregationService {
             hasJobOrders ? jobOrderIds : null,
             scope.adminAllScope(),
             scope.activeOrgUnitId(),
-            scope.memberOrgUnitIds());
+            scope.memberOrgUnitIds(),
+            stolenOnly,
+            nonStolenOnly);
     return buildGroupedFromItemStacks(stacks);
   }
 
@@ -564,6 +603,7 @@ public class InventoryAggregationService {
               refs.location(),
               refs.quality(),
               refs.personal(),
+              refs.stolen(),
               refs.owningSquadron(),
               amt,
               stackAvg,
@@ -626,6 +666,7 @@ public class InventoryAggregationService {
               refs.location(),
               null,
               refs.personal(),
+              refs.stolen(),
               refs.owningSquadron(),
               amt,
               null,
@@ -652,6 +693,7 @@ public class InventoryAggregationService {
     probe.setGameItem(aggregate.gameItem());
     probe.setLocation(aggregate.location());
     probe.setPersonal(aggregate.personal());
+    probe.setStolen(aggregate.stolen());
     probe.setOwningOrgUnit(aggregate.owningOrgUnit());
     return inventoryItemMapper.toDto(probe);
   }
@@ -672,6 +714,7 @@ public class InventoryAggregationService {
     probe.setLocation(aggregate.location());
     probe.setQuality(aggregate.quality());
     probe.setPersonal(aggregate.personal());
+    probe.setStolen(aggregate.stolen());
     probe.setOwningOrgUnit(aggregate.owningOrgUnit());
     return inventoryItemMapper.toDto(probe);
   }
@@ -685,6 +728,8 @@ public class InventoryAggregationService {
    * @param locationId the stack's storage location
    * @param quality the stack's quality grade, or {@code null}
    * @param personal whether the stack is private stock ({@code null} means {@code false})
+   * @param stolen whether the stack holds stock marked „gestohlen" ({@code null} means {@code
+   *     false})
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null}
    * @param pageable the page request; ordering is fixed to oldest first
    * @return one page of the stack's entries, oldest-first
@@ -695,6 +740,7 @@ public class InventoryAggregationService {
       UUID locationId,
       Integer quality,
       Boolean personal,
+      Boolean stolen,
       UUID owningOrgUnitId,
       Pageable pageable) {
     User user = Entities.require(userRepository.findPlainById(userId), "User not found");
@@ -705,6 +751,7 @@ public class InventoryAggregationService {
             locationId,
             quality,
             personal != null ? personal : Boolean.FALSE,
+            stolen != null ? stolen : Boolean.FALSE,
             owningOrgUnitId,
             pageable)
         .map(inventoryItemMapper::toDto);
@@ -718,6 +765,8 @@ public class InventoryAggregationService {
    * @param userId the stack's owning user
    * @param locationId the stack's storage location
    * @param quality the stack's quality grade, or {@code null}
+   * @param stolen whether the stack holds stock marked „gestohlen" ({@code null} means {@code
+   *     false})
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null}
    * @param pageable the page request; ordering is fixed to oldest first
    * @return one page of the stack's entries, oldest-first
@@ -727,6 +776,7 @@ public class InventoryAggregationService {
       UUID userId,
       UUID locationId,
       Integer quality,
+      Boolean stolen,
       UUID owningOrgUnitId,
       Pageable pageable) {
     ScopePredicate scope = ownerScopeService.currentScopePredicate();
@@ -736,6 +786,7 @@ public class InventoryAggregationService {
             userId,
             locationId,
             quality,
+            stolen != null ? stolen : Boolean.FALSE,
             owningOrgUnitId,
             scope.adminAllScope(),
             scope.activeOrgUnitId(),
@@ -745,13 +796,15 @@ public class InventoryAggregationService {
   }
 
   /**
-   * Game-item sibling of {@link #getMyStackEntries(UUID, UUID, UUID, Integer, Boolean, UUID,
-   * Pageable)}, addressed by game item without a quality key.
+   * Game-item sibling of {@link #getMyStackEntries(UUID, UUID, UUID, Integer, Boolean, Boolean,
+   * UUID, Pageable)}, addressed by game item without a quality key.
    *
    * @param userId the calling owner whose stack to drill into
    * @param gameItemId the stack's game item
    * @param locationId the stack's storage location
    * @param personal whether the stack is private stock ({@code null} means {@code false})
+   * @param stolen whether the stack holds stock marked „gestohlen" ({@code null} means {@code
+   *     false})
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null}
    * @param pageable the page request; ordering is fixed to oldest first
    * @return one page of the stack's entries, oldest-first
@@ -762,6 +815,7 @@ public class InventoryAggregationService {
       UUID gameItemId,
       UUID locationId,
       Boolean personal,
+      Boolean stolen,
       UUID owningOrgUnitId,
       Pageable pageable) {
     User user = Entities.require(userRepository.findPlainById(userId), "User not found");
@@ -771,30 +825,39 @@ public class InventoryAggregationService {
             gameItemId,
             locationId,
             personal != null ? personal : Boolean.FALSE,
+            stolen != null ? stolen : Boolean.FALSE,
             owningOrgUnitId,
             pageable)
         .map(inventoryItemMapper::toDto);
   }
 
   /**
-   * Game-item sibling of {@link #getAllStackEntries(UUID, UUID, UUID, Integer, UUID, Pageable)},
-   * addressed by game item without a quality key and under the same scope.
+   * Game-item sibling of {@link #getAllStackEntries(UUID, UUID, UUID, Integer, Boolean, UUID,
+   * Pageable)}, addressed by game item without a quality key and under the same scope.
    *
    * @param gameItemId the stack's game item
    * @param userId the stack's owning user
    * @param locationId the stack's storage location
+   * @param stolen whether the stack holds stock marked „gestohlen" ({@code null} means {@code
+   *     false})
    * @param owningOrgUnitId the stack's owning org-unit pool id, or {@code null}
    * @param pageable the page request; ordering is fixed to oldest first
    * @return one page of the stack's entries, oldest-first
    */
   public Page<InventoryItemDto> getAllItemStackEntries(
-      UUID gameItemId, UUID userId, UUID locationId, UUID owningOrgUnitId, Pageable pageable) {
+      UUID gameItemId,
+      UUID userId,
+      UUID locationId,
+      Boolean stolen,
+      UUID owningOrgUnitId,
+      Pageable pageable) {
     ScopePredicate scope = ownerScopeService.currentScopePredicate();
     return inventoryItemRepository
         .findGlobalItemStackEntries(
             gameItemId,
             userId,
             locationId,
+            stolen != null ? stolen : Boolean.FALSE,
             owningOrgUnitId,
             scope.adminAllScope(),
             scope.activeOrgUnitId(),
@@ -1012,13 +1075,14 @@ public class InventoryAggregationService {
 
   /**
    * Display order of stacks within a group: highest quality first, then location name ascending,
-   * then largest amount first.
+   * then a legitimate stack before its stolen twin, then largest amount first.
    */
   private static final Comparator<InventoryStackDto> STACK_ORDER =
       Comparator.<InventoryStackDto, Integer>comparing(s -> s.quality() != null ? s.quality() : 0)
           .reversed()
           .thenComparing(
               s -> s.location() != null && s.location().name() != null ? s.location().name() : "")
+          .thenComparing(s -> Boolean.TRUE.equals(s.stolen()))
           .thenComparing(
               Comparator.<InventoryStackDto, Double>comparing(
                       s -> s.totalAmount() != null ? s.totalAmount() : 0.0)

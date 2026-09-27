@@ -273,6 +273,7 @@ class InventoryItemCatalogQueryDataTest {
             gameItem.getId(),
             location.getId(),
             false,
+            false,
             orgUnit.getId(),
             PageRequest.of(0, 20));
     Page<InventoryItem> globalEntries =
@@ -280,6 +281,7 @@ class InventoryItemCatalogQueryDataTest {
             gameItem.getId(),
             user.getId(),
             location.getId(),
+            false,
             orgUnit.getId(),
             true,
             null,

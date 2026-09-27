@@ -106,6 +106,7 @@ class InventoryItemCreateDtoValidationTest {
         quality,
         5.0,
         false,
+        null,
         missionId,
         null,
         null,

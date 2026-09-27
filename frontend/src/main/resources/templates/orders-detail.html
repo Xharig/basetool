@@ -525,7 +525,11 @@
                     </thead>
                     <tbody>
                     <tr th:each="inv : ${orphanedInventory}">
-                        <td th:text="${inv.material != null ? inv.material.name() : '-'}">Torite</td>
+                        <td>
+                            <span th:text="${inv.material != null ? inv.material.name() : '-'}">Torite</span>
+                            <span th:if="${inv.stolen}" class="chip chip--danger chip-xs" data-testid="stolen-chip"
+                                  th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
+                        </td>
                         <td th:text="${inv.user != null ? inv.user.effectiveName() : '-'}">-</td>
                         <td th:text="${inv.location != null ? inv.location.name() : '-'}">-</td>
                         <td th:text="${inv.quality}">0</td>
@@ -730,6 +734,8 @@
                                     <span th:text="' (Qual. ' + ${item.quality} + ')'"></span>:
                                     <span th:if="${item.material.quantityType == 'PIECE'}" th:text="|${#numbers.formatInteger(item.amount, 1)} #{material.quantity.piece}|"></span>
                                     <span th:unless="${item.material.quantityType == 'PIECE'}" th:text="|${#numbers.formatDecimal(item.amount, 1, 'NONE', 3, 'DEFAULT')} #{material.quantity.scu}|"></span>
+                                    <span th:if="${item.stolen}" class="chip chip--danger chip-xs" data-testid="stolen-chip"
+                                          th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                                 </li>
                             </ul>
                         </td>
@@ -1232,6 +1238,7 @@
 
     const MSG_OWNER = /*[[#{orders.detail.inventory.owner}]]*/ 'Besitzer';
     const MSG_LOCATION = /*[[#{orders.detail.inventory.location}]]*/ 'Ort';
+    const MSG_STOLEN = /*[[#{inventory.stolen.chip}]]*/ 'Gestohlen';
     const MSG_QUALITY = /*[[#{orders.detail.inventory.quality}]]*/ 'Qualit\u00e4t';
     const MSG_QUANTITY = /*[[#{orders.detail.inventory.quantity}]]*/ 'Menge';
     const MSG_SQUADRON = /*[[#{orders.detail.inventory.squadron}]]*/ 'Staffel';

@@ -31,6 +31,7 @@ package de.greluc.krt.profit.basetool.frontend.model.dto;
  * @param location the storage location shared by every entry
  * @param quality the quality grade shared by every entry
  * @param personal whether the stack holds private stock
+ * @param stolen whether the stack holds stock marked „gestohlen" (REQ-INV-053)
  * @param owningSquadron the owning org-unit pool, or {@code null}
  * @param totalAmount the summed quantity across all entries
  * @param averageQuality the amount-weighted mean quality
@@ -42,6 +43,7 @@ public record InventoryStackDto(
     LocationReferenceDto location,
     Integer quality,
     Boolean personal,
+    Boolean stolen,
     SquadronReferenceDto owningSquadron,
     Double totalAmount,
     Double averageQuality,

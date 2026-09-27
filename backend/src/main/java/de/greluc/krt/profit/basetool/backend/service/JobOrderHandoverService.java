@@ -198,6 +198,7 @@ public class JobOrderHandoverService {
       JobOrderHandoverItem handoverItem = new JobOrderHandoverItem();
       handoverItem.setMaterial(inventoryItem.getMaterial());
       handoverItem.setQuality(inventoryItem.getQuality());
+      handoverItem.setStolen(inventoryItem.getStolen());
       handoverItem.setAmount(itemDto.amount());
       handoverItem.setLocationName(
           inventoryItem.getLocation() != null ? inventoryItem.getLocation().getName() : null);

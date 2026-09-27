@@ -1495,6 +1495,7 @@ class InventoryItemServiceBookOutTest {
         500,
         amount,
         false,
+        false,
         java.util.List.of(),
         0.0,
         java.util.List.of(),

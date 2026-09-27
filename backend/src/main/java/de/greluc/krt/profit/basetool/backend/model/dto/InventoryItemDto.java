@@ -29,8 +29,8 @@ import org.jetbrains.annotations.NotNull;
  *
  * <p>Exactly one of {@code material} (with {@code quality}) and {@code gameItem} is set
  * (REQ-INV-029). The allocation lists and rest figures carry the job-order and mission splits
- * (REQ-INV-027); {@code canEdit} is the server's answer whether the caller may write this row
- * (REQ-SEC-030).
+ * (REQ-INV-027); {@code stolen} is the „gestohlen" marker (REQ-INV-053); {@code canEdit} is the
+ * server's answer whether the caller may write this row (REQ-SEC-030).
  */
 public record InventoryItemDto(
     UUID id,
@@ -41,6 +41,7 @@ public record InventoryItemDto(
     Integer quality,
     Double amount,
     Boolean personal,
+    Boolean stolen,
     List<JobOrderAllocationDto> jobOrderAllocations,
     Double jobOrderRest,
     List<MissionAllocationDto> missionAllocations,
@@ -69,6 +70,7 @@ public record InventoryItemDto(
         quality,
         amount,
         personal,
+        stolen,
         jobOrderAllocations,
         jobOrderRest,
         missionAllocations,

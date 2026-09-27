@@ -261,6 +261,26 @@ class InventoryItemServicePersonalRebookTest {
     }
 
     @Test
+    void partial_carriesTheStolenMarkerOntoTheNewRow() {
+      InventoryItem item = newItem(10.0, 1L, true);
+      item.setStolen(true);
+      item.setOwningOrgUnit(sourceOrgUnit);
+      when(inventoryItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+      UUID pickedId = UUID.randomUUID();
+      when(ownerScopeService.resolveOrgUnitForPickerOutputNullable(owner, pickedId))
+          .thenReturn(sourceOrgUnit);
+
+      service.rebookPersonal(ITEM_ID, dto(4.0, 1L, pickedId), OWNER_ID, false);
+
+      ArgumentCaptor<InventoryItem> saveCaptor = ArgumentCaptor.forClass(InventoryItem.class);
+      verify(inventoryItemRepository).save(saveCaptor.capture());
+      assertEquals(
+          Boolean.TRUE,
+          saveCaptor.getValue().getStolen(),
+          "rebooking never launders stolen stock into legitimate stock (REQ-INV-053)");
+    }
+
+    @Test
     void full_deletesSourceAndSavesSharedRow() {
       InventoryItem item = newItem(5.0, 1L, true);
       item.setOwningOrgUnit(sourceOrgUnit);
@@ -537,6 +557,7 @@ class InventoryItemServicePersonalRebookTest {
         null,
         500,
         4.0,
+        false,
         false,
         java.util.List.of(),
         0.0,

@@ -44,8 +44,9 @@ public class CapabilityFlagsAdvice {
   private final FrontendAuthHelperService authHelper;
 
   /**
-   * Resolves the caller's UI capability flags once per request: all on for admins, all off for
-   * anonymous callers, otherwise from {@link LayoutContextLoader}. Fails closed to all off.
+   * Resolves the caller's UI capability flags once per request: all role gates on for admins, all
+   * off for anonymous callers, otherwise from {@link LayoutContextLoader}. The server switch {@code
+   * canMarkStolen} always comes from the backend, admins included. Fails closed to all off.
    *
    * @param request the current request, through which the layout context is memoised
    * @return the caller's capability flags; never {@code null}
@@ -56,7 +57,8 @@ public class CapabilityFlagsAdvice {
       return CapabilitiesResponse.NONE;
     }
     if (authHelper.isAdmin()) {
-      return new CapabilitiesResponse(true, true, true);
+      return new CapabilitiesResponse(
+          true, true, true, layoutContextLoader.load(request).capabilities().canMarkStolen());
     }
     return layoutContextLoader.load(request).capabilities();
   }
@@ -99,6 +101,18 @@ public class CapabilityFlagsAdvice {
   }
 
   /**
+   * Whether stock may be booked in as, marked or unmarked „gestohlen" (REQ-INV-053); a server
+   * switch that is the same for every caller. Reading, the chip and the filters never depend on it.
+   *
+   * @param caps the per-request capability flags from {@link #meCapabilities(HttpServletRequest)}
+   * @return {@code true} iff the marking actions are offered
+   */
+  @ModelAttribute("canMarkStolen")
+  public boolean canMarkStolen(@ModelAttribute("meCapabilities") CapabilitiesResponse caps) {
+    return caps != null && caps.canMarkStolen();
+  }
+
+  /**
    * Computes whether the promotion subsystem is exposed to the caller, based on the active
    * squadron.
    *
@@ -128,11 +142,17 @@ public class CapabilityFlagsAdvice {
    * @param canViewJobOrders whether the caller may enter the Job-Order area
    * @param canViewOwnJobOrders whether the caller may view their own org unit's orders
    *     (REQ-ORDERS-023)
+   * @param canMarkStolen whether stock may be booked in as, marked or unmarked „gestohlen"
+   *     (REQ-INV-053); a server switch, the same for every caller
    */
   public record CapabilitiesResponse(
-      boolean canSeeBlueprintOverview, boolean canViewJobOrders, boolean canViewOwnJobOrders) {
+      boolean canSeeBlueprintOverview,
+      boolean canViewJobOrders,
+      boolean canViewOwnJobOrders,
+      boolean canMarkStolen) {
 
     /** Every capability off: the fail-closed answer for an anonymous or unresolved caller. */
-    public static final CapabilitiesResponse NONE = new CapabilitiesResponse(false, false, false);
+    public static final CapabilitiesResponse NONE =
+        new CapabilitiesResponse(false, false, false, false);
   }
 }
