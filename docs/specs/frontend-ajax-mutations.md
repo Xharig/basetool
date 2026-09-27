@@ -498,6 +498,11 @@ admin-only lead toggle still posts to `/admin/special-commands/{id}/members/{use
 Neither page takes part in the live multi-user sync — no admin catalogue page does, except the org
 structure.
 
+The **exchange registry** page (`/admin/exchange-clients`, REQ-XCH-003) follows the same shape: every
+register, edit, suspend, activate and switch re-swaps its `admin/exchange-clients :: registry`
+fragment (`?fragment=registry`), which holds the global switch and the client table, so the switch,
+each row's status and its echoed `data-version` move together. It joins no peer sync either.
+
 The **admin materials** create (2026-09-22, FE-PERF-06) dropped the `setTimeout(location.reload)`
 that followed a successful create: the page has no `?fragment=` render, so it re-reads itself and
 swaps the table body, the name datalist and the create modal's refined-material select in place,
