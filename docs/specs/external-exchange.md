@@ -536,7 +536,8 @@ mass-change guard counts a lot set to 0 or cut to a tenth of what it held when t
 opened, except when another lot of the same material rises in the same batch. A book-in is a new
 personal row without an org unit (`INVENTORY_ITEM_CREATED`); a book-out runs the Lager's own
 `DISCARD` book-out over the rows without an org unit first, then the oldest, and every offer it
-lowers or removes is audited (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`) and counted in
+lowers or removes is audited by that book-out (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`,
+`reason=stock`, REQ-MARKET-013) and counted in
 `offersReduced` / `offersRemoved`. Each changed lot is journaled.
 
 **Status:** read and write sides built in the backend — WP 4.2 (#2085); the gateway routes are

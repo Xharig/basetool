@@ -44,11 +44,11 @@ import de.greluc.krt.profit.basetool.backend.repository.ExchangeJournalRepositor
 import de.greluc.krt.profit.basetool.backend.repository.GameItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
-import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.repository.MaterialRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.service.InventoryCheckoutService;
+import de.greluc.krt.profit.basetool.backend.service.MaterialExchangeOfferRatchet;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAuditLabels;
@@ -83,7 +83,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>A book-in is a new personal row without an org unit. A book-out takes the lot's rows without
  * an org unit first, then the oldest, through the Lager's own book-out, which lowers linked
- * Materialbörse offers; each offer it lowers or removes is audited here and counted in the result.
+ * Materialbörse offers and audits each offer it lowers or removes; they are counted in the result.
  */
 @Service
 @RequiredArgsConstructor
@@ -124,7 +124,6 @@ public class ExchangeStockWriteService {
   private final LocationRepository locationRepository;
   private final InventoryItemRepository inventoryRepository;
   private final InventoryCheckoutService checkoutService;
-  private final MaterialExchangeOfferRepository offerRepository;
   private final UserRepository userRepository;
   private final AuditService auditService;
   private final InventoryProperties inventoryProperties;
@@ -513,8 +512,8 @@ public class ExchangeStockWriteService {
   }
 
   /**
-   * Books stock out through the Lager's own book-out, row by row, and audits every Materialbörse
-   * offer that it lowered or removed.
+   * Books stock out through the Lager's own book-out, row by row, which audits every Materialbörse
+   * offer it lowers or removes, and counts those offers.
    *
    * @param member the member
    * @param rows the lot's locked rows, in the order to take them
@@ -528,12 +527,6 @@ public class ExchangeStockWriteService {
       @NotNull BigDecimal amount,
       @NotNull String unit,
       @NotNull OfferEffects offers) {
-    Map<UUID, MaterialExchangeOfferRepository.OfferStock> before = new LinkedHashMap<>();
-    for (MaterialExchangeOfferRepository.OfferStock offer :
-        offerRepository.findActiveStockByInventoryItemIds(
-            rows.stream().map(InventoryItem::getId).toList())) {
-      before.put(offer.getId(), offer);
-    }
     BigDecimal remaining = amount;
     for (InventoryItem row : rows) {
       if (remaining.signum() <= 0) {
@@ -543,84 +536,26 @@ public class ExchangeStockWriteService {
       if (take.signum() <= 0) {
         continue;
       }
-      checkoutService.bookOutInventoryItem(
-          row.getId(),
-          new InventoryItemBookOutDto(
-              take.doubleValue(),
-              null,
-              null,
-              CheckoutType.DISCARD,
-              null,
-              null,
-              row.getVersion(),
-              null,
-              null,
-              null,
-              null),
-          member,
-          false);
+      MaterialExchangeOfferRatchet.Effects effects =
+          checkoutService.bookOutForClient(
+              row.getId(),
+              new InventoryItemBookOutDto(
+                  take.doubleValue(),
+                  null,
+                  null,
+                  CheckoutType.DISCARD,
+                  null,
+                  null,
+                  row.getVersion(),
+                  null,
+                  null,
+                  null,
+                  null),
+              member);
+      offers.reduced += effects.reduced();
+      offers.removed += effects.removed();
       remaining = remaining.subtract(take);
     }
-    inventoryRepository.flush();
-    Map<UUID, MaterialExchangeOfferRepository.OfferAmount> after = new HashMap<>();
-    if (!before.isEmpty()) {
-      for (MaterialExchangeOfferRepository.OfferAmount offer :
-          offerRepository.findAmountsByIds(before.keySet())) {
-        after.put(offer.getId(), offer);
-      }
-    }
-    for (MaterialExchangeOfferRepository.OfferStock offer : before.values()) {
-      MaterialExchangeOfferRepository.OfferAmount now = after.get(offer.getId());
-      String label = offer.getItemName() != null ? offer.getItemName() : offer.getMaterialName();
-      if (now == null) {
-        offers.removed++;
-        auditService.record(
-            AuditEventType.MARKET_OFFER_REMOVED,
-            offer.getId(),
-            label,
-            offer.getOwnerId(),
-            AuditDetails.of("kind", offer.getKind()).with("reason", "stock"));
-      } else if (lowered(offer, now)) {
-        offers.reduced++;
-        auditService.record(
-            AuditEventType.MARKET_OFFER_REDUCED,
-            offer.getId(),
-            label,
-            offer.getOwnerId(),
-            AuditDetails.of("kind", offer.getKind())
-                .with(
-                    "from",
-                    offer.getOfferedAmount() != null
-                        ? offer.getOfferedAmount()
-                        : offer.getItemQuantity())
-                .with(
-                    "to",
-                    now.getOfferedAmount() != null
-                        ? now.getOfferedAmount()
-                        : now.getItemQuantity()));
-      }
-    }
-  }
-
-  /**
-   * Whether a book-out lowered an offer.
-   *
-   * @param before the offer before
-   * @param after the offer after
-   * @return {@code true} when its offered amount or item quantity fell
-   */
-  private static boolean lowered(
-      @NotNull MaterialExchangeOfferRepository.OfferStock before,
-      @NotNull MaterialExchangeOfferRepository.OfferAmount after) {
-    boolean amount =
-        before.getOfferedAmount() != null
-            && after.getOfferedAmount() != null
-            && after.getOfferedAmount() < before.getOfferedAmount();
-    boolean quantity =
-        before.getItemQuantity() != null
-            && after.getItemQuantity() != null
-            && after.getItemQuantity() < before.getItemQuantity();
-    return amount || quantity;
   }
 
   /**
