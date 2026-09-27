@@ -16,7 +16,7 @@ services:
   prometheus:
     <<: *mon-base
     container_name: prometheus
-    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     cap_drop: [ALL]
     environment:
       GOMEMLIMIT: "900MiB"
@@ -48,7 +48,7 @@ services:
   grafana:
     <<: *mon-base
     container_name: grafana
-    image: grafana/grafana-oss:13.0.2@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2
+    image: grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
     cap_drop: [ALL]
     environment:
       GOMEMLIMIT: "768MiB"
@@ -149,7 +149,7 @@ services:
   alloy:
     <<: *mon-base
     container_name: alloy
-    image: grafana/alloy:v1.19.2@sha256:b8ec653c44235fbe910879145dac3597d66b0aaecf60bcbbe82580767771a839
+    image: grafana/alloy:v1.20.0@sha256:f111cce835516c5f99166342be7038496b52ced16667be5a11e19258a3e4cd30
     cap_drop: [ALL]
     group_add: ["473", "4"]
     environment:

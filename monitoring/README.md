@@ -815,15 +815,15 @@ scripts/check-monitoring-configs.test.sh
 # with the directory elsewhere it matches nothing and promtool silently checks no rule file at all.
 docker run --rm --entrypoint promtool \
   -v "$PWD/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
-  -v "$PWD/monitoring/prometheus/alerts:/etc/prometheus/alerts:ro" prom/prometheus:v3.14.0 \
+  -v "$PWD/monitoring/prometheus/alerts:/etc/prometheus/alerts:ro" prom/prometheus:v3.15.0 \
   check config /etc/prometheus/prometheus.yml
 # The glob'd commands go through `sh -c` so the pattern is expanded INSIDE the container.
-docker run --rm --entrypoint sh -v "$PWD/monitoring/prometheus:/cfg" prom/prometheus:v3.14.0 \
+docker run --rm --entrypoint sh -v "$PWD/monitoring/prometheus:/cfg" prom/prometheus:v3.15.0 \
   -c 'promtool check rules /cfg/alerts/*.yml'
 
 # Alert-rule unit tests (-w /work makes the tests' ../alerts paths resolve)
 docker run --rm --entrypoint sh -v "$PWD/monitoring/prometheus:/work" -w /work \
-  prom/prometheus:v3.14.0 -c 'promtool test rules tests/*_test.yml'
+  prom/prometheus:v3.15.0 -c 'promtool test rules tests/*_test.yml'
 
 # Loki ruler rules — every file parses and every expr is valid LogQL (CI: repo-lint)
 scripts/check-loki-rules.sh
@@ -847,9 +847,9 @@ done
 docker rm -f bb-lint
 
 # Alloy — format check + validate. `validate` exits 0 even on failure: read its output.
-docker run --rm -v "$PWD/monitoring/alloy:/cfg" grafana/alloy:v1.19.2 \
+docker run --rm -v "$PWD/monitoring/alloy:/cfg" grafana/alloy:v1.20.0 \
   fmt --test /cfg/config.alloy
-docker run --rm -v "$PWD/monitoring/alloy:/cfg" grafana/alloy:v1.19.2 \
+docker run --rm -v "$PWD/monitoring/alloy:/cfg" grafana/alloy:v1.20.0 \
   validate /cfg/config.alloy
 # The shipper-side masks (CI: repo-lint -> alloy-log-masking)
 python3 scripts/check-alloy-log-masking.py
