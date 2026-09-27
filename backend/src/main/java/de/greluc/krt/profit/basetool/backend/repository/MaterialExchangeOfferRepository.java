@@ -20,8 +20,10 @@
 package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOffer;
+import de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferKind;
 import de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferStatus;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -226,4 +228,117 @@ public interface MaterialExchangeOfferRepository
    * @return the number of the owner's offers in that status.
    */
   long countByStatusAndOwnerId(MaterialExchangeOfferStatus status, UUID ownerId);
+
+  /**
+   * Reads the active offers standing on the given Lager rows, before a book-out changes them.
+   *
+   * @param inventoryItemIds the rows
+   * @return the offers with what they offer
+   */
+  @Query(
+      """
+      SELECT o.id AS id, o.kind AS kind, o.offeredAmount AS offeredAmount,
+             o.itemQuantity AS itemQuantity, o.itemName AS itemName, o.owner.id AS ownerId,
+             m.name AS materialName
+      FROM MaterialExchangeOffer o JOIN o.inventoryItem i LEFT JOIN i.material m
+      WHERE i.id IN :inventoryItemIds
+        AND o.status = de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferStatus.ACTIVE
+      """)
+  List<OfferStock> findActiveStockByInventoryItemIds(
+      @Param("inventoryItemIds") Collection<UUID> inventoryItemIds);
+
+  /**
+   * Reads the active offers standing on the non-personal rows the global wipe deletes in the given
+   * scope.
+   *
+   * @param isAdminAllScope {@code true} for an admin without an active org unit
+   * @param activeOrgUnitId the single org unit the wipe is scoped to, or {@code null}
+   * @param memberOrgUnitIds the caller's org units on the non-admin path
+   * @return the offers with what they offer
+   */
+  @Query(
+      """
+      SELECT o.id AS id, o.kind AS kind, o.offeredAmount AS offeredAmount,
+             o.itemQuantity AS itemQuantity, o.itemName AS itemName, o.owner.id AS ownerId,
+             m.name AS materialName
+      FROM MaterialExchangeOffer o JOIN o.inventoryItem i LEFT JOIN i.material m
+      WHERE i.personal = false
+        AND o.status = de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferStatus.ACTIVE
+        AND
+      """
+          + ScopeSpecifications.INVENTORY_ITEM_SCOPE_TRIPLE)
+  List<OfferStock> findActiveStockOnNonPersonalRows(
+      @Param("isAdminAllScope") boolean isAdminAllScope,
+      @Param("activeOrgUnitId") UUID activeOrgUnitId,
+      @Param("memberOrgUnitIds") Collection<UUID> memberOrgUnitIds);
+
+  /**
+   * Reads the active offers standing on the Lager rows of one member.
+   *
+   * @param userId the rows' owner
+   * @return the offers with what they offer
+   */
+  @Query(
+      """
+      SELECT o.id AS id, o.kind AS kind, o.offeredAmount AS offeredAmount,
+             o.itemQuantity AS itemQuantity, o.itemName AS itemName, o.owner.id AS ownerId,
+             m.name AS materialName
+      FROM MaterialExchangeOffer o JOIN o.inventoryItem i LEFT JOIN i.material m
+      WHERE i.user.id = :userId
+        AND o.status = de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferStatus.ACTIVE
+      """)
+  List<OfferStock> findActiveStockByRowOwner(@Param("userId") UUID userId);
+
+  /** An active offer standing on a Lager row, before its stock changes. */
+  interface OfferStock {
+
+    /**
+     * The offer.
+     *
+     * @return the id
+     */
+    UUID getId();
+
+    /**
+     * The offered amount of a material offer.
+     *
+     * @return the amount, or {@code null}
+     */
+    Double getOfferedAmount();
+
+    /**
+     * The quantity of an item offer.
+     *
+     * @return the quantity, or {@code null}
+     */
+    Integer getItemQuantity();
+
+    /**
+     * The offer's kind.
+     *
+     * @return {@code MATERIAL} or {@code ITEM}
+     */
+    MaterialExchangeOfferKind getKind();
+
+    /**
+     * The item offer's name.
+     *
+     * @return the name, or {@code null} for a material offer
+     */
+    String getItemName();
+
+    /**
+     * The material of the row a material offer stands on.
+     *
+     * @return the name, or {@code null}
+     */
+    String getMaterialName();
+
+    /**
+     * The offer's owner.
+     *
+     * @return the member
+     */
+    UUID getOwnerId();
+  }
 }

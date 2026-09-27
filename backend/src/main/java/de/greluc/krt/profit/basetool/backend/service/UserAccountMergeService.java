@@ -119,7 +119,9 @@ public class UserAccountMergeService {
           OwnedRows.of("notification_rule_selector", "user_id"),
           OwnedRows.deduped("member_evaluation", "user_id", "category_id"),
           OwnedRows.deduped(
-              "exchange_installation", "user_id", "exchange_client_id", "key_thumbprint"));
+              "exchange_installation", "user_id", "exchange_client_id", "key_thumbprint"),
+          OwnedRows.deduped(
+              "exchange_ship_link", "user_id", "client_id", "installation_key", "external_id"));
 
   /**
    * Every user column that records an act rather than a belonging, and therefore stays with the
@@ -154,7 +156,8 @@ public class UserAccountMergeService {
           "user_roles.user_id",
           "terms_acceptance.user_id",
           "exchange_client_revocation.user_id",
-          "exchange_change.user_id");
+          "exchange_change.user_id",
+          "exchange_journal.user_id");
 
   /**
    * The moved tables as {@code table.column}, the form the schema catalogue reports.

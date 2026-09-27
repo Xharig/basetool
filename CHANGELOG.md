@@ -4,6 +4,21 @@
 
 ### Added
 
+- **Datenaustausch: Blueprints lesen.** Verbundene Anwendungen mit `exchange.blueprints.read` lesen
+  über `GET /exchange/v1/me/blueprints` die Blueprints des Mitglieds als Snapshot und danach nur die
+  Änderungen seit ihrem Cursor (REQ-XCH-013, REQ-XCH-015).
+- **Datenaustausch: Lager und Hangar lesen.** Verbundene Anwendungen mit `exchange.stock.read` bzw.
+  `exchange.hangar.read` lesen über `GET /exchange/v1/me/stock` und `GET /exchange/v1/me/ships` den
+  persönlichen Bestand und die eigenen Schiffe des Mitglieds als Snapshot und danach die Änderungen
+  (REQ-XCH-016, REQ-XCH-017).
+- **Datenaustausch: Account-Abgleich.** Eine verbundene Anwendung kann fragen, ob ein RSI-Handle aus
+  dem Spiel-Log zum angemeldeten Mitglied gehört, und vor einem Zweit-Account warnen; die Antwort ist
+  nur `match`, `mismatch` oder `unknown`, der gespeicherte Handle wird nie herausgegeben
+  (REQ-XCH-031).
+- **Datenaustausch: Limits und idempotente Schreibzugriffe.** Das Gateway begrenzt jede Anwendung
+  pro Mitglied (120/min, 500 Schreibzugriffe pro UTC-Tag) und insgesamt (1200/min) und verlangt bei
+  Schreibzugriffen einen `Idempotency-Key`; eine Wiederholung liefert die gespeicherte Antwort,
+  statt doppelt zu schreiben (REQ-XCH-020, REQ-XCH-023).
 - **Datenaustausch: Bewerbung für Fremd-Anwendungen.** `docs/exchange/onboarding.md` und
   `docs/exchange/client-security.md` beschreiben Kriterien und Sicherheitsanforderungen, eine
   Issue-Vorlage nimmt Bewerbungen auf, und `docs/legal/approved-clients.md` ist das öffentliche
@@ -13,9 +28,51 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Verbundene Anwendungen: letzte Änderungen und neue Verbindungen.** Jede Anwendung zeigt ihre zehn
+  letzten Änderungen an deinen Daten (zurückgenommene markiert); eine neue Installation ist bis zum
+  nächsten Aufruf als „Neu" hervorgehoben (REQ-XCH-032).
+- **Verbundene Anwendungen: große Änderungen bestätigen.** Will eine Anwendung auf einmal viele
+  Einträge entfernen, zeigt der Bestätigungslink, was passieren würde; erst „Bestätigen" wendet es an,
+  „Verwerfen" lässt alles, wie es ist (REQ-XCH-021).
+- **Verbundene Anwendungen: Änderungen zurücknehmen.** Auf der Seite setzt „Änderungen
+  zurücknehmen" alles zurück, was eine Anwendung im gewählten Zeitraum (bis 90 Tage) an Blueprints,
+  Lager und Hangar geändert hat; danach anders Geändertes bleibt und wird aufgelistet,
+  Materialbörse-Angebote kommen nicht zurück (REQ-XCH-022).
+- **Datenaustausch: Seiten aktualisieren sich live.** Schreibt eine verbundene Anwendung, laden
+  Hangar, „Meine Blueprints", Lager und Materialbörse ohne Neuladen nach; Hangar und Blueprints
+  haben dafür je einen persönlichen Live-Sync-Raum, den nur das Mitglied selbst abonnieren kann.
+- **Datenaustausch: Schiffe schreiben.** Verbundene Anwendungen verknüpfen ihre Schiffe zuerst mit
+  den vorhandenen – je Installation –, legen danach neue an, ändern und löschen mit der zuletzt
+  gesehenen Version (`/api/v1/exchange/me/ships/changes`); ein Fleetview-Import wird so nicht
+  verdoppelt, und eine Löschung meldet, aus wie vielen Missionseinheiten das Schiff genommen wurde
+  (REQ-XCH-017, Migration V254).
+- **Datenaustausch: Lager schreiben.** Verbundene Anwendungen setzen die Menge eines persönlichen
+  Postens gegen die zuletzt gesehene Menge (`/api/v1/exchange/me/stock/changes`); die Differenz wird
+  wie im Lager ein- oder ausgebucht, gekürzte oder entfernte Materialbörse-Angebote stehen im Audit
+  (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`), und reservierte Mengen bleiben unangetastet
+  (REQ-XCH-016).
+- **Datenaustausch: Blueprints schreiben.** Verbundene Anwendungen können Blueprints hinzufügen
+  und entfernen (`/api/v1/exchange/me/blueprints/changes`); Standard-Blueprints bleiben, was ein
+  anderes Gerät oder das Web entfernt hat, kommt nur nach Rückfrage wieder, zu große Löschungen
+  warten auf die Bestätigung im Browser, und jede Änderung steht im Audit und im Schreibjournal
+  (REQ-XCH-014, REQ-XCH-015, REQ-XCH-021).
+- **Datenaustausch: Bedarf der eigenen Einheiten.** Das Backend liefert dem Gateway den offenen
+  Material- und Item-Bedarf der Einheiten, in denen das Mitglied ist, anonym zusammengefasst – ohne
+  Namen, Titel oder einzelne Aufträge (`/api/v1/exchange/me/org-demand`, REQ-XCH-018).
+- **Datenaustausch: Schreibjournal.** Das Backend kann Änderungen verbundener Anwendungen an
+  Blueprints, Lager und Hangar mit dem Zustand davor und danach 90 Tage protokollieren – Grundlage
+  für das Rückgängigmachen und die Massenänderungs-Sperre der folgenden Schreibzugriffe; das Journal
+  erscheint im Datenexport (Migration `V253`, REQ-XCH-022).
 - **Datenaustausch: Blueprints lesen.** Das Backend liefert dem Gateway die Blueprints eines
   Mitglieds als Snapshot und als Änderungs-Feed mit Löschmarken samt Quelle; ein abgelaufener Cursor
   antwortet `410 CURSOR_EXPIRED` (`/api/v1/exchange/me/blueprints`, REQ-XCH-013, REQ-XCH-015).
+- **Datenaustausch: persönliches Lager lesen.** Das Backend liefert dem Gateway den persönlichen
+  Bestand eines Mitglieds als Posten (Material oder Item, Ort, Qualität, gestohlen) über alle
+  Einheiten-Pools summiert, als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/stock`,
+  REQ-XCH-016).
+- **Datenaustausch: Hangar lesen.** Das Backend liefert dem Gateway die eigenen Schiffe eines
+  Mitglieds ohne Kaufdaten als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/ships`,
+  REQ-XCH-017).
 - **Datenaustausch: Vertrag öffentlich abrufbar.** Das Ingest-Gateway liefert das OpenAPI-Dokument
   und die JSON-Schemas der Exchange-API anonym unter `/exchange/v1/openapi.json` und
   `/exchange/v1/schemas/<name>.schema.json` aus (REQ-XCH-011). Die alten Extractor-Endpunkte lassen
@@ -115,6 +172,12 @@
   einem Lauf der Ansible-Rolle (`--tags deploy,scripts`).
 
 ### Fixed
+
+- **Audit-Log der Materialbörse: Kürzungen und Entfernungen durch Lagerbewegungen fehlten.** Wenn
+  eine Ausbuchung, Übertragung, Umbuchung, Übergabe, Produktion, das Leeren des Lagers oder das
+  Löschen eines Kontos ein Angebot kürzte oder mitlöschte, stand das bisher nicht im Audit; jetzt
+  gibt es dafür `MARKET_OFFER_REDUCED` bzw. `MARKET_OFFER_REMOVED` mit dem Anlass (REQ-MARKET-013,
+  REQ-AUDIT-001).
 
 - **Lager: die Org-Einheiten-Auswahl in „Mein Lager“ ist nicht mehr leer.** Beim Sammel-Umbuchen
   und beim Ändern der Org-Einheit fragte die Seite die eigenen Mitgliedschaften mit dem Benutzernamen

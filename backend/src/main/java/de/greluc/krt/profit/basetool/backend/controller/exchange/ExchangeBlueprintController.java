@@ -19,13 +19,18 @@
 
 package de.greluc.krt.profit.basetool.backend.controller.exchange;
 
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintChangeSet;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintPageDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeChangeResultDto;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeBlueprintFeedService;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeBlueprintWriteService;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeCaller;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeFeedReader;
 import de.greluc.krt.profit.basetool.backend.support.SubjectAuthentication;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -34,6 +39,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -51,6 +58,9 @@ public class ExchangeBlueprintController {
   /** Reads the snapshot and the feed. */
   private final ExchangeBlueprintFeedService feedService;
 
+  /** Applies the changes. */
+  private final ExchangeBlueprintWriteService writeService;
+
   /**
    * Returns a snapshot page, or with {@code cursor} the changes since it.
    *
@@ -67,11 +77,35 @@ public class ExchangeBlueprintController {
       description = "Gateway-only. Without a cursor a snapshot, with one the changes since it.")
   @ApiResponse(responseCode = "200", description = "The page")
   @ApiResponse(responseCode = "410", description = "The cursor has expired (CURSOR_EXPIRED)")
-  public ResponseEntity<ExchangeBlueprintPageDto> page(
+  public ResponseEntity<ExchangeBlueprintPageDto> blueprints(
       @Nullable @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "" + ExchangeFeedReader.DEFAULT_LIMIT) int limit,
       @NotNull Authentication authentication) {
     SubjectAuthentication caller = (SubjectAuthentication) authentication;
     return ResponseEntity.ok(feedService.page(UUID.fromString(caller.subject()), cursor, limit));
+  }
+
+  /**
+   * Adds and removes blueprints for the member in one transaction.
+   *
+   * @param changeSet the changes
+   * @param authentication the relayed acting member the gate admitted
+   * @return the counts and the detail of every op that was not applied
+   */
+  @NotNull
+  @PostMapping("/changes")
+  @PreAuthorize("@exchangeGate.allows('exchange.blueprints.write', authentication)")
+  @Operation(
+      summary = "Exchange: add or remove my blueprints",
+      description = "Gateway-only. 409 MASS_CHANGE_CONFIRMATION_REQUIRED writes nothing.")
+  @ApiResponse(responseCode = "200", description = "The result")
+  @ApiResponse(
+      responseCode = "409",
+      description = "The member must confirm the batch (MASS_CHANGE_CONFIRMATION_REQUIRED)")
+  public ResponseEntity<ExchangeChangeResultDto> blueprintChanges(
+      @NotNull @Valid @RequestBody ExchangeBlueprintChangeSet changeSet,
+      @NotNull Authentication authentication) {
+    return ResponseEntity.ok(
+        writeService.apply(ExchangeCaller.of((SubjectAuthentication) authentication), changeSet));
   }
 }

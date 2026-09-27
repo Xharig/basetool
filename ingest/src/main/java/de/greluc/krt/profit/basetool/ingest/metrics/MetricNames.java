@@ -164,10 +164,44 @@ public final class MetricNames {
   public static final String INGEST_LEGACY_ENABLED = "basetool.ingest.legacy.endpoints.enabled";
 
   /**
-   * Counter {@code basetool_ingest_exchange_refused_total{reason}}: every exchange request the
-   * gateway refused, by its problem code in snake case (REQ-XCH-028).
+   * Counter {@code basetool_ingest_exchange_refused_total{reason,client_id}}: every exchange
+   * request the gateway refused, by its problem code in snake case and the registry client it came
+   * from (REQ-XCH-028).
    */
   public static final String EXCHANGE_REFUSED = "basetool.ingest.exchange.refused";
+
+  /**
+   * Counter {@code basetool_ingest_exchange_relay_total{outcome,client_id}}: every admitted
+   * exchange request the gateway relayed — {@code ok}, {@code refused} by the backend with a
+   * registry code, or {@code failed} (answered {@code 502}) — by registry client (REQ-XCH-028).
+   */
+  public static final String EXCHANGE_RELAY = "basetool.ingest.exchange.relay";
+
+  /**
+   * {@link #TAG_CLIENT_ID} value on the exchange counters before a token names a client, and on the
+   * zero registrations.
+   */
+  public static final String EXCHANGE_CLIENT_NONE = "none";
+
+  /** {@link #TAG_CLIENT_ID} value on the exchange counters for a client the registry lacks. */
+  public static final String EXCHANGE_CLIENT_UNREGISTERED = "unregistered";
+
+  /** {@link #TAG_CLIENT_ID} value on the exchange counters while the registry cannot be read. */
+  public static final String EXCHANGE_CLIENT_UNKNOWN = "unknown";
+
+  /**
+   * Counter {@code basetool_ingest_exchange_idempotent_replays_total}: exchange writes answered
+   * from the idempotency cache instead of running again (REQ-XCH-020).
+   */
+  public static final String EXCHANGE_IDEMPOTENT_REPLAYS =
+      "basetool.ingest.exchange.idempotent.replays";
+
+  /**
+   * Gauge {@code basetool_ingest_exchange_budget_used_ratio}: the share of the exchange's total
+   * Redis byte budget in use when the gateway last measured it (REQ-XCH-023).
+   */
+  public static final String EXCHANGE_BUDGET_USED_RATIO =
+      "basetool.ingest.exchange.budget.used.ratio";
 
   /**
    * Tag key on {@link #INGEST_AUTH_FAILURES}: the surface the request targeted — {@link
@@ -184,7 +218,10 @@ public final class MetricNames {
   /** {@link #TAG_PATH_SCOPE} value: any other path. */
   public static final String PATH_SCOPE_OTHER = "other";
 
-  /** Tag key: the calling client's Keycloak client id, bounded by the configured allowlist. */
+  /**
+   * Tag key: the calling client's Keycloak client id, bounded by the configured allowlist or, on
+   * the exchange counters, by the registry.
+   */
   public static final String TAG_CLIENT_ID = "client_id";
 
   /** Tag: the outcome of an operation; bounded per meter (REQ-OBS-011). */

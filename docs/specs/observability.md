@@ -1609,16 +1609,38 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   bookings need no dedicated meter — `JOB_ORDER_PRODUCTION_BOOKED` and
   `INVENTORY_CONSUMED_BY_PRODUCTION` roll into the existing `JOB_ORDER` and `INVENTORY` domain
   counts (REQ-ORDERS-025).
-- `basetool_ingest_exchange_refused_total{reason}` counter — every exchange request the gateway
-  refused, by its problem code in snake case (`dpop_required`, `dpop_invalid`, `unauthenticated`;
-  the registry and scope gates add theirs), registered at zero (REQ-XCH-028). A nonce challenge
-  counts as `dpop_invalid`, since the client sees that code.
+- **`client_id` on the two exchange request counters** (`refused_total`, `relay_total`): the
+  registry client id when the registry lists the token's `azp`, otherwise `unregistered`,
+  `unknown` while the registry cannot be read, and `none` before a token names a client (and on
+  the zero registrations). The label is bounded by the registry, never by what a caller sends. The
+  operations dashboard shows both per client beside the budget, and `ExchangeClientRefusalsSpike`
+  (warning, 10 m) fires when one registered client is refused more than 30 times in 15 minutes for
+  anything but its own limits (`rate_limited`, `quota_exceeded`, `idempotency_in_progress`)
+  (REQ-XCH-028).
+- `basetool_ingest_exchange_refused_total{reason,client_id}` counter — every exchange request the gateway
+  refused, by its problem code in snake case — `dpop_required`, `dpop_invalid`, `unauthenticated`,
+  `not_found`, `registry_unavailable`, `exchange_disabled`, `client_not_allowed`,
+  `client_suspended`, `installation_revoked`, `client_revoked`, `scope_missing`,
+  `client_version_unsupported`, `rate_limited`, `quota_exceeded`, `service_unavailable`,
+  `idempotency_key_missing`, `idempotency_key_reused`, `idempotency_in_progress`,
+  `exchange_budget_exhausted` — registered at zero (REQ-XCH-028).
+  `basetool_ingest_exchange_idempotent_replays_total` counts writes answered from the idempotency
+  cache; `basetool_ingest_exchange_budget_used_ratio` is the total byte budget's use at the last
+  measurement, and `ExchangeBudgetHigh` (warning, 10 m) fires above 0.8 (REQ-XCH-020, REQ-XCH-023). A nonce challenge counts as
+  `dpop_invalid`, since the client sees that code. `ExchangeRegistryUnreadableAtGateway` (warning,
+  5 m) fires while the gateway fails closed on `registry_unavailable`.
 - `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`legacy`, `exchange`,
   `other`) so a third-party client's failures stay apart from the extractor's, and two reasons:
   `invalid_dpop_proof` and `use_dpop_nonce` (the normal first round trip, never alerted).
   `IngestAuthFailureSpike` and `IngestUnauthenticatedFlood` alert per scope;
   `ExchangeDpopProofsFailing` (warning, 15 m) fires on sustained refused exchange proofs
   (REQ-XCH-006).
+- `basetool_ingest_exchange_relay_total{outcome,client_id}` counter — every admitted exchange request the
+  gateway relayed: `ok`, `refused` (the backend refused with a code of the exchange error registry,
+  passed on to the client) or `failed` (answered `502 BACKEND_RELAY_FAILED` — including a backend
+  that cannot be reached, an open circuit breaker and a missing gateway token), registered at zero.
+  `ExchangeRelayFailing` (warning) fires on more than three failures in 15 minutes (REQ-XCH-011,
+  REQ-XCH-028).
 - `basetool_ingest_legacy_endpoints_enabled` gauge (`1` while the legacy extractor endpoints answer,
   `0` once switched off) and `basetool_ingest_legacy_gone_total` counter (legacy requests refused
   with `410 LEGACY_ENDPOINT_GONE`, registered at zero). No alert: after the go-live a trickle of
@@ -1629,6 +1651,17 @@ the boot run carries the last run's values over and re-reads only the reboot fla
 - `basetool_exchange_account_checks_total{outcome}` counter — exchange account checks by answer
   (`match` / `mismatch` / `unknown`), registered at zero and shown per day beside the disconnects;
   a rising `mismatch` share means clients see alt accounts (REQ-XCH-031).
+- `basetool_exchange_writes_total{resource,outcome}` counter — ops external clients sent to the
+  member's synced data, by resource (`blueprint` / `stock` / `ship`) and outcome (`applied` /
+  `unchanged` / `unmatched` / `ambiguous` / `rejected`), plus `held` per change set the mass-change
+  guard held back; registered at zero and shown per day on panel 80 of the operations dashboard
+  (REQ-XCH-015…-017, REQ-XCH-021).
+- `basetool_exchange_undo_total{resource,outcome}` counter — entries a member's undo of a client's
+  writes restored or skipped (`restored` / `skipped`), by resource; registered at zero and shown on
+  the same panel 80 (REQ-XCH-022).
+- `basetool_exchange_mass_changes_confirmed_total{resource}` counter — held-back change sets members
+  confirmed, by resource; registered at zero and shown on panel 80 beside the gateway's staged count
+  (REQ-XCH-021).
 - `basetool_exchange_disconnects_total{kind}` counter — a member disconnecting one installation or
   a whole client (`installation` / `client`, REQ-XCH-008), registered at zero and shown per day on
   the operations dashboard. The relay's `exchange_installation_invalid` refusal joins
@@ -1892,10 +1925,11 @@ symptom of a section-key skew is one panel going stale while the rest of the pag
 which an all-rejected-only counter would never see. The rejected key is client-supplied and therefore
 never becomes a tag value; it appears once, sanitised, in the `DEBUG` line (REQ-OBS-001) —
 the component that shipped the REQ-FE-010 staleness defect. Since #1102 (REQ-FE-015 / ADR-0094) both
-counters carry a bounded `topic_class` label (one of the fourteen `LiveSyncTopicClass` labels:
+counters carry a bounded `topic_class` label (one of the sixteen `LiveSyncTopicClass` labels:
 `mission`, `operation`, `order_detail`, `orders_queue`, `bank_account`, `bank_staff`, `orgunit_bank`,
 `materialboard`, `inventory_all`, since #1235 `missions_list`, `refinery_queue`, `members_roster`,
-`org_structure`, and since #1238 `refinery_order`), and
+`org_structure`, since #1238 `refinery_order`, and since WP 4.4 of the exchange epic the personal
+`hangar_own` and `blueprints_own`), and
 the meter names stay put — a rename would break the `07` panels and this alert set.
 
 Both drop signals are **alerted** since #1238, on a threshold measured rather than guessed: read on
@@ -3228,7 +3262,11 @@ the presented token (REQ-OBS-004).
 **The 401 volume on these surfaces is a designed constant, not a signal.** Three blackbox jobs probe
 `https://api.profit-base.online/api/v1/terms/status` every 30 s and the ingest gateway's root is
 probed the same way, all expecting a 401 — that is the whole point of the `http_2xx_or_401` module
-(below). Of 601 401s sampled at the edge in one hour, **600 carried `Blackbox-Exporter/0.28.0`** and
+(below). The exchange service document `GET /exchange/v1` is probed every 30 s as well, with the
+stricter `http_401` module (`blackbox-http-401`, REQ-XCH-028): a `200` there would mean the
+exchange answers without a token. It adds about 0.03/s of `no_credentials` in the `exchange`
+scope and of `unauthenticated` with `client_id="none"` to the exchange refusals, far below
+`IngestUnauthenticatedFlood`'s 1/s. Of 601 401s sampled at the edge in one hour, **600 carried `Blackbox-Exporter/0.28.0`** and
 one was an outside scanner. The floor this puts under the backend's 401 rate is **~0.1/s**, and it
 rises with every probe target added.
 

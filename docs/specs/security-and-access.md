@@ -3939,7 +3939,7 @@ one event type.
 ### REQ-SEC-058 — Art. 15 / Art. 20 data export
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The export gains the exchange's member-linked tables. **In since WP 3.1:** the installations with their labels (`connectedApps`, the label scrubbed like other free text) and the client revocations (`connectedAppRevocations`); the deny list is the revoked installations. **In since WP 3.3's first slice:** the change sequence (`exchangeChanges`: resource, key, channel and client of every change to the member's synced data, kept 90 days, ADR-0224). **Still to come:** journal and external refs (WP 3.3).
+> The export gains the exchange's member-linked tables. **In since WP 3.1:** the installations with their labels (`connectedApps`, the label scrubbed like other free text) and the client revocations (`connectedAppRevocations`); the deny list is the revoked installations. **In since WP 3.3's first slice:** the change sequence (`exchangeChanges`: resource, key, channel and client of every change to the member's synced data, kept 90 days, ADR-0224). **In since WP 3.3's second slice:** the write journal (`exchangeJournal`: client, resource, key, action and the entry before and after each client write, kept 90 days; the states scrubbed like other free text, since a note or a ship name can name somebody). **In since WP 4.4:** the installations' ship links (`exchangeShipLinks`: client, the installation's id for the ship, the ship and when it was linked).
 >
 > *The optional RSI handle is in since WP 1.4 (REQ-SEC-072, 2026-09-26): the account section lists it, and as a name spelling it is scrubbed from other members' free text. The „gestohlen“ marker of Lager rows is in since WP 1.3 (REQ-INV-053): the Lager section lists it.*
 
@@ -4709,7 +4709,7 @@ template is the reference) · **Code:** `keycloak-theme/krt-theme/login/login.ft
 ### REQ-SEC-068 — Each service reaches Redis as its own least-privilege ACL user
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Two key families join the ACL (ADR-0221). **In since WP 3.1:** the backend reads and writes `exchange:*` (`GET`, `SET`) and ingest reads it (`%R~exchange:*`, `GET`) — the table below. **Still to come:** ingest's `SET` with `NX`, `INCR` and the sorted-set commands on `ingest:xch:*` (WP 3.2, #2082), and the revocation and deny-list keys under `exchange:*` (WP 3.1). The mirror never sits under `ingest:*`. Rendering the new ACL on production is a gated write before the first exchange release (WP 2.1, #2092).
+> Two key families join the ACL (ADR-0221). **In since WP 3.1:** the backend reads and writes `exchange:*` (`GET`, `SET`) and ingest reads it (`%R~exchange:*`, `GET`) — the table below. ingest's `INCR` on `ingest:*` for the daily write quotas and `ZADD`, `ZRANGE`/`ZRANGEBYSCORE` and `ZREMRANGEBYSCORE` for the byte budget, with `SET … NX` for the idempotency locks (WP 3.2, #2082). **Still to come:**, and the revocation and deny-list keys under `exchange:*` (WP 3.1). The mirror never sits under `ingest:*`. Rendering the new ACL on production is a gated write before the first exchange release (WP 2.1, #2092).
 
 Redis holds the frontend's sessions — OAuth2 access **and refresh** tokens included — the live-sync
 and notification fan-out, and the ingest handoff. Backend, frontend and ingest used to reach it as
@@ -4725,7 +4725,7 @@ its service does:
 | --- | --- | --- | --- |
 | `basetool-frontend` | `basetool:session:*`, `ingest:handoff:*` | `basetool:session:*`, the created-event pattern, `__keyevent@0__:del` / `:expired`, `basetool:livesync:changed` / `:presence` | read, write, keyspace, hash, set, sorted set, string, pub/sub, transaction, `INFO`; no dangerous command, no `CONFIG` |
 | `basetool-backend` | `exchange:*` | `basetool:livesync:changed`, `basetool:notify:published` | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE`, `GET`, `SET`, `INFO` |
-| `basetool-ingest` | `ingest:*`, read-only `exchange:*` | none | `GET`, `SET`/`SETEX`/`PSETEX`, `RPUSH`, `LPOP`, `EXPIRE`/`PEXPIRE`, `DEL`/`UNLINK`, `INFO` |
+| `basetool-ingest` | `ingest:*`, read-only `exchange:*` | none | `GET`, `SET`/`SETEX`/`PSETEX`, `INCR`, `ZADD`, `ZRANGE`/`ZRANGEBYSCORE`, `ZREMRANGEBYSCORE`, `RPUSH`, `LPOP`, `EXPIRE`/`PEXPIRE`, `DEL`/`UNLINK`, `INFO` |
 | `monitoring` | none | none | introspection; **not** `SCAN` or `RANDOMKEY`, which are not key-checked and would list every session id |
 | `admin` | all | all | all — the operator's, never in an application's environment |
 | `default` | — | — | switched **off** at the end of the rollout |

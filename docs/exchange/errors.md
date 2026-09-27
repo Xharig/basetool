@@ -30,18 +30,18 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `NO_ROLE` | 403 | backend | The member holds no role. | Stop and tell the member. |
 | `ACTING_MEMBER_REFUSED` | 403 | backend | The relay refused the member (unknown, disabled or deleted). | Stop and tell the member. |
 | `NOT_PERMITTED` | 403 | backend | The member may not do this. | Stop; do not retry. |
-| `SCHEMA_INVALID` | 400 | gateway | The body does not match the v1 schema; `errors[]` points at the fields. | Fix the request. |
+| `SCHEMA_INVALID` | 400 | gateway | The body or a query parameter does not match the v1 contract; `errors[]` points at the fields, a parameter as `/<name>`. | Fix the request. |
 | `BATCH_TOO_LARGE` | 413 | gateway | A change set holds more than 500 ops. | Split the batch. |
 | `PAYLOAD_TOO_LARGE` | 413 | gateway | The body exceeds the size cap. | Split or shrink the request. |
 | `IDEMPOTENCY_KEY_MISSING` | 400 | gateway | A write carries no `Idempotency-Key`. | Send a fresh key per logical write. |
 | `IDEMPOTENCY_KEY_REUSED` | 422 | gateway | The key was used with a different body. | Use a fresh key. |
 | `IDEMPOTENCY_IN_PROGRESS` | 409 | gateway | The same key is still being processed. | Retry the same request after a short wait. |
-| `CURSOR_EXPIRED` | 410 | backend | The cursor is older than the tombstones. | Reconcile a full snapshot against the last baseline — not add-only. |
+| `CURSOR_EXPIRED` | 410 | backend, gateway | The cursor is older than the tombstones, or not one the server issued. | Reconcile a full snapshot against the last baseline — not add-only. |
 | `VERSION_CONFLICT` | 409 | backend | A ship's `version` or a lot's `expectedQuantity` no longer matches. | Pull, merge, retry. |
 | `MASS_CHANGE_CONFIRMATION_REQUIRED` | 409 | backend | The batch exceeds the mass-change guard; it is staged. | Show the member `confirmationUrl`; do not retry the batch. |
 | `RATE_LIMITED` | 429 | gateway | A per-minute limit is exhausted. | Honour `Retry-After`. |
 | `QUOTA_EXCEEDED` | 429 | gateway | The daily write quota is exhausted. | Retry after `Retry-After`, the next day at the latest. |
-| `BACKEND_RELAY_FAILED` | 502 | gateway | The backend did not answer usably. | Back off; retry with the same key. |
+| `BACKEND_RELAY_FAILED` | 502 | gateway | The backend did not answer usably: an error, a refusal the contract does not name, or an answer that breaks the v1 schema. | Back off; retry with the same key. |
 | `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable. | Back off; retry with the same key. |
 | `NOT_FOUND` | 404 | gateway | The requested document, such as a schema name, does not exist. | Check the name. |
 | `LEGACY_ENDPOINT_GONE` | 410 | gateway | A legacy `/v1/*` extractor endpoint after the go-live. | Update the client. |
@@ -53,11 +53,13 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `UNMATCHED` | The reference resolves to nothing. | Show it; offer `catalog/resolve`. |
 | `AMBIGUOUS` | The reference resolves to several entries. | Ask the member to pick; send `bt`. |
 | `DEFAULT_NOT_REMOVABLE` | A default-granted blueprint cannot be removed. | Keep it. |
-| `REMOVED_ELSEWHERE` | The entry has a live tombstone from another channel or installation. | Ask the member; resend with `override: true` only if they agree. |
+| `STOCK_EARMARKED` | The lot's stock is reserved for a job order or mission. | Ask the member to release the reservation in the web. |
+| `STOLEN_MARKING_DISABLED` | The Basetool does not yet keep stolen stock apart. | Keep the lot local until the server supports it. |
+| `REMOVED_ELSEWHERE` | The entry has a live tombstone from another channel or installation; for a ship, the named `shipId` was removed there. | Ask the member; resend with `override: true` only if they agree. |
 | `UNIT_MISMATCH` | The quantity's unit does not match the material's. | Fix the unit. |
 | `LOCATION_UNKNOWN` | The place has no Lager location. | Offer a place from `catalog/locations`. |
-| `LINK_TARGET_TAKEN` | The server ship is already linked to another external id. | Pull and re-link. |
-| `VERSION_CONFLICT` | As above, for this op only. | Pull, merge, retry this op. |
+| `LINK_TARGET_TAKEN` | The server ship is already linked to another external id of this installation. | Pull and re-link. |
+| `VERSION_CONFLICT` | As above, for this op only; also an `upsert` without `shipId` for an id this installation already linked. | Pull, merge, retry this op. |
 
 ## Warnings
 

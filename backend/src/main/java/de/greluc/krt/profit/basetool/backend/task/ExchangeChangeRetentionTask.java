@@ -22,6 +22,7 @@ package de.greluc.krt.profit.basetool.backend.task;
 import de.greluc.krt.profit.basetool.backend.metrics.ScheduledJob;
 import de.greluc.krt.profit.basetool.backend.metrics.TaskMetrics;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeChangeRetentionService;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeJournalService;
 import de.greluc.krt.profit.basetool.backend.support.ExchangeChangeRetentionProperties;
 import jakarta.annotation.PostConstruct;
 import java.time.Clock;
@@ -33,8 +34,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Nightly purge of the exchange change feed's entries, and so its tombstones, past their retention
- * of {@code app.exchange.change-retention.max-age} (default 90 days, REQ-XCH-013).
+ * Nightly purge of the exchange change feed's entries, and so its tombstones, and of the exchange
+ * write journal past their retention of {@code app.exchange.change-retention.max-age} (default 90
+ * days, REQ-XCH-013, REQ-XCH-022).
  */
 @Component
 @ConditionalOnProperty(
@@ -47,6 +49,7 @@ import org.springframework.stereotype.Component;
 public class ExchangeChangeRetentionTask {
 
   private final ExchangeChangeRetentionService retentionService;
+  private final ExchangeJournalService journalService;
   private final ExchangeChangeRetentionProperties properties;
   private final TaskMetrics taskMetrics;
   private final Clock clock = Clock.systemUTC();
@@ -63,13 +66,16 @@ public class ExchangeChangeRetentionTask {
   /**
    * Runs one purge.
    *
-   * @return the number of entries deleted
+   * @return the number of change and journal entries deleted
    */
   private int purge() {
     Instant now = clock.instant();
-    int deleted = retentionService.purgeOlderThan(now.minus(properties.maxAge()), now);
-    log.info("Exchange change feed retention: {} change entries purged.", deleted);
-    return deleted;
+    Instant cutoff = now.minus(properties.maxAge());
+    int changes = retentionService.purgeOlderThan(cutoff, now);
+    int writes = journalService.purgeRecordedBefore(cutoff);
+    log.info(
+        "Exchange retention: {} change entries and {} journal entries purged.", changes, writes);
+    return changes + writes;
   }
 
   /**

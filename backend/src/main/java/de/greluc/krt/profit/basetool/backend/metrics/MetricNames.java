@@ -365,6 +365,9 @@ public final class MetricNames {
   /** Tag key: the run outcome ({@link #OUTCOME_SUCCESS} / {@link #OUTCOME_FAILURE}). */
   public static final String TAG_OUTCOME = "outcome";
 
+  /** Tag key for an exchange resource. */
+  public static final String TAG_RESOURCE = "resource";
+
   /** Tag key: the stable RFC-7807 error code. */
   public static final String TAG_CODE = "code";
 
@@ -751,6 +754,28 @@ public final class MetricNames {
    * answer ({@code match} / {@code mismatch} / {@code unknown}, REQ-XCH-031).
    */
   public static final String EXCHANGE_ACCOUNT_CHECKS = "basetool.exchange.account.checks";
+
+  /**
+   * Counter {@code basetool_exchange_writes_total{resource,outcome}} — exchange ops by resource
+   * ({@code blueprint} / {@code stock} / {@code ship}) and outcome ({@code applied} / {@code
+   * unchanged} / {@code unmatched} / {@code ambiguous} / {@code rejected}), plus {@code held} per
+   * change set the mass-change guard held back (REQ-XCH-015…-017, REQ-XCH-021).
+   */
+  public static final String EXCHANGE_WRITES = "basetool.exchange.writes";
+
+  /**
+   * Counter of the entries a member's undo of a client's writes restored or skipped, tagged by
+   * resource ({@code blueprint} / {@code stock} / {@code ship}) and outcome ({@code restored} /
+   * {@code skipped}) (REQ-XCH-022).
+   */
+  public static final String EXCHANGE_UNDO = "basetool.exchange.undo";
+
+  /**
+   * Counter of the held-back change sets members confirmed, tagged by resource ({@code blueprint} /
+   * {@code stock} / {@code ship}) (REQ-XCH-021).
+   */
+  public static final String EXCHANGE_MASS_CHANGES_CONFIRMED =
+      "basetool.exchange.mass.changes.confirmed";
 
   /**
    * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path

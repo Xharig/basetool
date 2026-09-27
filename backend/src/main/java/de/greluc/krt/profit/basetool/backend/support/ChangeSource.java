@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.support;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -38,6 +39,34 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ChangeSource {
 
+  /** The client a write in this thread is recorded for, while {@link #asClient} runs it. */
+  private static final ThreadLocal<String> ON_BEHALF = new ThreadLocal<>();
+
+  /**
+   * Runs a write the member confirmed in the browser as the exchange client's own, so the change
+   * feed records the installation that staged it (REQ-XCH-021).
+   *
+   * @param clientId the client
+   * @param installationKey the installation that staged the write
+   * @param write the write, which must open its transaction inside this call
+   * @param <T> its result
+   * @return its result
+   */
+  public static <T> T asClient(
+      @NotNull String clientId, @NotNull String installationKey, @NotNull Supplier<T> write) {
+    String previous = ON_BEHALF.get();
+    ON_BEHALF.set("client|" + clientId + "|" + installationKey);
+    try {
+      return write.get();
+    } finally {
+      if (previous == null) {
+        ON_BEHALF.remove();
+      } else {
+        ON_BEHALF.set(previous);
+      }
+    }
+  }
+
   /** The transaction-local variable the triggers read. */
   public static final String VARIABLE = "basetool.change_source";
 
@@ -47,9 +76,14 @@ public class ChangeSource {
   /**
    * Returns the source of the current thread's writes.
    *
-   * @return the source for the current authentication, {@code system} when there is none
+   * @return the client a confirmed write runs for, else the source for the current authentication,
+   *     {@code system} when there is none
    */
   public @NotNull String current() {
+    String client = ON_BEHALF.get();
+    if (client != null) {
+      return client;
+    }
     return of(SecurityContextHolder.getContext().getAuthentication());
   }
 

@@ -180,6 +180,25 @@ public final class DataExportSections {
               FROM exchange_change WHERE user_id = :userId ORDER BY seq
               """),
           new Section(
+              "exchangeJournal",
+              ART_15,
+              "Recorded for every write an external client made to the member's synced data, with"
+                  + " the entry before and after, so the member can undo it; kept 90 days.",
+              """
+              SELECT client_id, resource, entity_key, action, before_state, after_state,
+                     recorded_at, undone_at
+              FROM exchange_journal WHERE user_id = :userId ORDER BY recorded_at
+              """),
+          new Section(
+              "exchangeShipLinks",
+              ART_15,
+              "Recorded when an installation of an external client links its own id for a ship to"
+                  + " one of the member's ships.",
+              """
+              SELECT client_id, external_id, ship_id, created_at
+              FROM exchange_ship_link WHERE user_id = :userId ORDER BY created_at
+              """),
+          new Section(
               "personalInventory",
               ART_15_20,
               "Entered by the member, including free-text notes.",
@@ -387,6 +406,7 @@ public final class DataExportSections {
           Map.entry("warehouseContributions", Set.of("note")),
           Map.entry("hangar", Set.of("name")),
           Map.entry("connectedApps", Set.of("label")),
+          Map.entry("exchangeJournal", Set.of("before_state", "after_state")),
           Map.entry("personalInventory", Set.of("name", "note")),
           Map.entry("personalBlueprints", Set.of("note")),
           Map.entry("notifications", Set.of("params")),

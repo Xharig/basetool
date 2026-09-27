@@ -32,6 +32,7 @@ import de.greluc.krt.profit.basetool.frontend.model.dto.PersonalBlueprintDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.PersonalBlueprintRecipeDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.PersonalBlueprintUpdateRequest;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
+import de.greluc.krt.profit.basetool.frontend.support.CurrentUser;
 import de.greluc.krt.profit.basetool.frontend.support.StringNormalization;
 import de.greluc.krt.profit.basetool.logging.LogSafe;
 import java.time.Instant;
@@ -46,9 +47,12 @@ import org.jetbrains.annotations.Nullable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -109,6 +113,20 @@ public class PersonalInventoryBlueprintsPageController {
       PERSONAL_BLUEPRINT_PAGE = new ParameterizedTypeReference<>() {};
 
   private final BackendApiClient backendApiClient;
+
+  /**
+   * Names the caller's own blueprints live-sync room, which the page subscribes to so a connected
+   * application's change appears without a reload.
+   *
+   * @param principal the caller, or {@code null} when anonymous
+   * @return {@code blueprints:<user id>}, or {@code null} without a caller
+   */
+  @ModelAttribute("blueprintsLiveSyncTopic")
+  public @Nullable String blueprintsLiveSyncTopic(
+      @AuthenticationPrincipal @Nullable OidcUser principal) {
+    String id = CurrentUser.userIdText(principal);
+    return id == null ? null : "blueprints:" + id;
+  }
 
   /**
    * Renders the owned-blueprint list with the multi-select add bar and the edit / remove modals.

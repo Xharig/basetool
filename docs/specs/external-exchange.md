@@ -123,10 +123,12 @@ finds no document, refuses every exchange request.
 
 **Acceptance**
 
-- [ ] Tests for both write orders, a failed mirror write, the reconcile healing a divergence, and
-  the gateway's fail-closed read. *The backend half is in (WP 3.1, `ExchangeRegistryMirrorIntegrationTest`
-  against a real Redis under the backend's ACL user, and `ExchangeRegistrySnapshotTest`); the
-  gateway's read follows with WP 3.2.*
+- [x] Tests for both write orders, a failed mirror write, the reconcile healing a divergence, and
+  the gateway's fail-closed read. *Backend: `ExchangeRegistryMirrorIntegrationTest` against a real
+  Redis under the backend's ACL user, and `ExchangeRegistrySnapshotTest` (WP 3.1). Gateway:
+  `ExchangeRegistryReaderTest` — a missing document, an unknown `schemaVersion`, garbage and an
+  unreachable Redis all fail closed, a failed read is not cached — and `ExchangeGateTest`, which
+  answers them `503 REGISTRY_UNAVAILABLE` with `Retry-After` (WP 3.2).*
 - [x] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
   `ExchangeRegistryChanged` alert.
 - [x] The admin page *Administration → Verbundene Anwendungen* (`/admin/exchange-clients`)
@@ -144,8 +146,9 @@ finds no document, refuses every exchange request.
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
 **Code:** `ExchangeRegistryService`, `ExchangeRegistryMirrorSync`, `RedisExchangeRegistryMirror`,
 `ExchangeRegistryReconcileTask`, `AdminExchangeRegistryController` · **Status:** registry, admin
-API and mirror built — WP 3.1 (#2083); the gateway's read with WP 3.2 (#2082); the admin page
-built — WP 4.5 (#2087)
+API and mirror built — WP 3.1 (#2083); the gateway's read — `ExchangeRegistryReader`, a
+five-second cache (`app.exchange.registry-cache-ttl`) of the `app.exchange.registry-key` document —
+built with WP 3.2 (#2082); the admin page built — WP 4.5 (#2087)
 
 ### REQ-XCH-004 — Capabilities are OAuth scopes, enforced at the gateway and re-checked at the backend
 
@@ -160,10 +163,13 @@ only by property.
 
 **Acceptance**
 
-- [ ] Gate tests for a scope missing from the token, a scope not granted in the registry, and a
-  wrong audience with the audience property blank. *The audience half is in: the gateway requires
-  `aud` ∋ `basetool-ingest` on exchange routes in code and refuses anything else `401
-  UNAUTHENTICATED` (`ExchangeDpopGateTest`); the scope gates follow with the registry read.*
+- [x] Gate tests for a scope missing from the token, a scope not granted in the registry, and a
+  wrong audience with the audience property blank. *The gateway requires `aud` ∋ `basetool-ingest`
+  on exchange routes in code (`ExchangeDpopGateTest`); a route passes only when its capability is
+  both in the token and granted in the registry, and a route for "any exchange scope" needs at
+  least one such capability (`ExchangeGateTest`). `ExchangeRoutes` holds the route table,
+  `ExchangeRoutesContractTest` pins it to the committed OpenAPI document route for route and scope
+  for scope, and a path or method it does not list is `404 NOT_FOUND`.*
 - [x] ArchUnit: every exchange controller method carries the exchange gate
   (`ArchitectureTest.everyExchangeControllerMethodCarriesTheExchangeGate`).
 
@@ -256,9 +262,13 @@ labels are letters and are accepted: the label is always shown after the registe
   (`ExchangeInstallationControllerTest`).
 - [x] Log-capture test: the label never appears in any log line (`ExchangeInstallationControllerTest`).
 - [ ] The installation response and the service document carry the same `installationId`, and a
-  tombstone written by that installation names it.
+  tombstone written by that installation names it. *The gateway half is in: `POST
+  /exchange/v1/me/installation` checks the label against `installation.schema.json` before the relay
+  (a rule-breaking label never reaches the backend), and the service document takes
+  `installationId` from the backend's installation of the relayed key (`ExchangeControllerTest`).*
 
-**Status:** planned — WP 3.2 (#2082), WP 3.3 (#2083)
+**Status:** gateway routes built — WP 3.2 (#2082); the backend's installations with WP 3.1 (#2083),
+tombstones with WP 3.3
 
 ### REQ-XCH-008 — Revocation takes effect on the next request
 
@@ -286,9 +296,14 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
 **Acceptance**
 
 - [ ] A revoked installation is refused after a token refresh; another installation of the same
-  client keeps working. *The backend half is in (`ExchangeInstallationControllerTest`,
-  `ExchangeRevocationMirrorIntegrationTest`); the gateway's refusal follows with WP 3.2.*
-- [ ] A revoked client is refused, and a fresh connection right after works.
+  client keeps working. *Backend: `ExchangeInstallationControllerTest`,
+  `ExchangeRevocationMirrorIntegrationTest`. Gateway: it reads `exchange:deny:<jkt>` on every
+  request, bypassing its cache, and refuses a listed key `401 INSTALLATION_REVOKED` whatever the
+  token's `iat` (`ExchangeGateTest`). The end-to-end run follows with the sandbox (WP 2.3).*
+- [ ] A revoked client is refused, and a fresh connection right after works. *The gateway half is
+  in: it reads `exchange:revoked:<client>:<member>` per request and refuses a token issued at or
+  before that second `401 CLIENT_REVOKED`, while a token issued after it passes
+  (`ExchangeGateTest`).*
 - [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
   sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
   every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
@@ -296,7 +311,8 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
   database), removes the member's consent for each and logs them out of every session, auditing
   `EXCHANGE_MEMBER_DEPARTED`; a failed step is counted and alerts (`ExchangeDepartureIncomplete`)
   instead of failing the sync (`ExchangeDepartureIntegrationTest`, `UserReconciliationServiceTest`).
-  The gateway's refusal follows with WP 3.2.*
+  The gateway refuses the member through the per-client revocations those steps write
+  (`ExchangeGateTest`); the end-to-end run follows with the sandbox (WP 2.3).*
 
 **Status:** planned — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
 
@@ -376,7 +392,16 @@ offline-file `envelope` (`format`, `formatVersion`, `generator`, `generatedAt`, 
 
 - [x] CI validates every conformance fixture in `docs/exchange/examples/v1/` against its schema, and
   every schema the OpenAPI document names exists and has valid and invalid fixtures.
-- [ ] A test fails when a served route and the OpenAPI document diverge (with the routes, WP 3.2).
+- [x] A test fails when a served route and the OpenAPI document diverge: `ExchangeRoutesContractTest`
+  holds the gate's route table equal to the document, route for route and scope for scope, and
+  `IngestEndpointSurfaceTest` fails for any served exchange route outside that table.
+
+The gateway checks each request body against its schema before relaying it and answers a violation
+`400 SCHEMA_INVALID` with `errors[]` (JSON Pointer and the violated keyword, at most 50); it checks
+the backend's answer against the response schema too, and an answer that breaks it is `502
+BACKEND_RELAY_FAILED`, never passed on (`ExchangeSchemas`, `ExchangeSchemasTest` over every
+conformance fixture, `ExchangeControllerTest`). The validator is `com.networknt:json-schema-validator`,
+the library the contract test already used, without its YAML module.
 
 The gateway serves both anonymously and unchanged, with `Cache-Control: public, max-age=3600`:
 `GET /exchange/v1/openapi.json` and `GET /exchange/v1/schemas/<name>.schema.json` (as
@@ -467,6 +492,11 @@ moves the cursor up to the watermark, so an idle client's cursor never falls beh
 Cursors are `s1.<tx>.<seq>.<id>` and `f1.<tx>.<seq>` and stay opaque to clients; one the server did not
 issue also answers `CURSOR_EXPIRED`.
 
+Once an exchange write has committed, the backend raises the live-sync frames the member's web
+pages listen on, so they refresh without a reload: `hangar:{member}` after a ship write,
+`blueprints:{member}` after a blueprint write, `inventory` after a stock write and `materialboard`
+when that write lowered or removed an offer (REQ-FE-015). A rolled-back write raises none.
+
 **Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
 (#2083); the backend's blueprint feed (`/api/v1/exchange/me/blueprints`) is built, the gateway route
 and the stock and ship feeds follow with WP 4.1–4.4
@@ -479,10 +509,14 @@ the member; the override is journaled.
 
 **Acceptance**
 
-- [ ] One installation removes, another tries to re-add: refused; with override: applied and
+- [x] One installation removes, another tries to re-add: refused; with override: applied and
   journaled.
 
-**Status:** planned — WP 3.3 (#2083), WP 4.1 (#2084)
+A tombstone is live while the key's latest change-log entry — its removal — is within the
+retention; the same installation may re-add what it removed itself. *`ExchangeBlueprintWriteControllerTest`
+also covers a removal in the web.*
+
+**Status:** built for blueprints — WP 4.1 (#2084); stock and ships follow with their writes
 
 ### REQ-XCH-015 — Blueprints sync as a set
 
@@ -501,8 +535,17 @@ resolver (REQ-XCH-012) answers a blueprint with the same `bt` and accepts it bac
 - [x] The feed marks default-granted blueprints and follows a change of the default set.
   *`ExchangeBlueprintControllerTest`.*
 
-**Status:** read side built in the backend — WP 4.1 (#2084); the gateway route and the writes
-follow
+The backend applies a change set at `POST /api/v1/exchange/me/blueprints/changes`
+(`exchange.blueprints.write`) in one transaction: it resolves every reference in one resolver call,
+plans the ops in order — an add of an owned product and a remove of a missing one are `unchanged`, a
+remove of a default `rejected DEFAULT_NOT_REMOVABLE`, an add against another's tombstone `rejected
+REMOVED_ELSEWHERE` — then asks the mass-change guard, and writes through the web's own add and
+delete, so the Blueprints audit names the client; each written entry is journaled. `dryRun` plans
+only. `basetool_exchange_writes_total{resource,outcome}` counts the ops.
+
+**Status:** read and write sides built in the backend, and the gateway's read route (`GET
+/exchange/v1/me/blueprints`) — WP 4.1 (#2084); the gateway's write route and the corpus round trip
+follow with the sandbox (WP 2.3)
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -518,9 +561,35 @@ client.
 **Acceptance**
 
 - [ ] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
-- [ ] A book-out below an offered amount lowers the offer and records the audit event.
+- [x] A book-out below an offered amount lowers the offer and records the audit event.
+  *`ExchangeStockWriteControllerTest`.*
+- [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
+  tombstone when its rows are gone or rebooked to the shared pool. *`ExchangeStockControllerTest`.*
 
-**Status:** planned — WP 4.2 (#2085)
+The feed's lot key is the one the change log records, `m:<material>|l:<location>|q:<quality>|s:<0|1>`
+or `i:<item>|…`; a snapshot pages lots by their lowest row id. The material reference carries the
+material's or item's id as `bt`, an item lot has quality 0 and counts whole pieces, and an SCU amount
+is rounded to three decimals.
+
+The backend applies a change set at `POST /api/v1/exchange/me/stock/changes`
+(`exchange.stock.write`) in one transaction. Each op resolves its material — a material first, an
+item otherwise — and its place, the UEX link first, then the exact name of a non-hidden location
+(`LOCATION_UNKNOWN`), checks both units against the material's (`UNIT_MISMATCH`), locks the lot's
+rows and compares `expectedQuantity` (`VERSION_CONFLICT`). A trade good is stored at quality 0. A
+lot emptied by another channel or installation is refilled only with `override`
+(`REMOVED_ELSEWHERE`); stock reserved for a job order or mission is never taken (`STOCK_EARMARKED`,
+owner decision 2026-09-27 — personal rows carry no reservations, so this guards the invariant);
+a stolen lot waits for `APP_INVENTORY_STOLEN_MARKING_ENABLED` (`STOLEN_MARKING_DISABLED`). The
+mass-change guard counts a lot set to 0 or cut to a tenth of what it held when the client's window
+opened, except when another lot of the same material rises in the same batch. A book-in is a new
+personal row without an org unit (`INVENTORY_ITEM_CREATED`); a book-out runs the Lager's own
+`DISCARD` book-out over the rows without an org unit first, then the oldest, and every offer it
+lowers or removes is audited by that book-out (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`,
+`reason=stock`, REQ-MARKET-013) and counted in
+`offersReduced` / `offersRemoved`. Each changed lot is journaled.
+
+**Status:** read and write sides built in the backend, and the gateway's read route (`GET
+/exchange/v1/me/stock`) — WP 4.2 (#2085); the gateway's write route follows
 
 ### REQ-XCH-017 — Ships sync with a link step before the first create
 
@@ -528,13 +597,39 @@ client.
 `version`. A client links before it creates, so a Fleetview import is never duplicated. Purchase
 data is never sent. Detaching a ship from a mission by removal is reported in
 `detachedFromMissions` and audited (`MISSION_UNIT_UPDATED`). Writes are audited in the Hangar domain
-with the external client.
+with the external client. A ship's `name` is optional and up to 255 characters, as in the web: an
+unnamed ship is sent without it, and an upsert may leave it out (owner decision 2026-09-27).
 
 **Acceptance**
 
-- [ ] First sync against a Fleetview-imported hangar creates no duplicate.
+- [x] First sync against a Fleetview-imported hangar creates no duplicate.
+  *`ExchangeShipWriteControllerTest`.*
+- [x] The feed carries the member's own ships only, without purchase data, and answers a ship given
+  to another member as a tombstone. *`ExchangeShipControllerTest`.*
 
-**Status:** planned — WP 4.4 (#2086)
+The ship feed keys a ship by its id and sends its `version`, the ship type's id as `shipType.bt`,
+insurance as `LTI` or a number of months, and the location when it has one. A ship stored without
+insurance, which the web's validation does not allow, reads as zero months.
+
+The backend applies a change set at `POST /api/v1/exchange/me/ships/changes`
+(`exchange.hangar.write`) in one transaction; the feed carries each ship's `externalId` for the
+calling installation. A link belongs to one **installation** (owner decision 2026-09-27): each
+installation links its own ids, so two installations with separate local databases never mistake
+each other's ids, and a server ship is linked at most once per installation (`LINK_TARGET_TAKEN`);
+re-linking an id moves it. `link` needs the member's own ship; `upsert` without `shipId` creates the
+ship through the Hangar's own create and links it, unless the id is already linked, which answers
+`VERSION_CONFLICT` so the client pulls first; `upsert` with `shipId` requires the ship's `version`
+(`VERSION_CONFLICT`), writes through the Hangar's own update and links the id if it is not yet. An
+`upsert` naming a ship the server no longer has brings it back as a new ship only when the calling
+installation removed it or with `override` after asking the member (`REMOVED_ELSEWHERE`, owner
+decision 2026-09-27); a ship the member never had is `unmatched`. `remove` requires the `version`,
+detaches the ship from its mission units through the Hangar's delete (`MISSION_UNIT_UPDATED`) and
+reports the count as `detachedFromMissions`. The ship type resolves through `catalog/resolve`, the
+place like a stock lot's; an absent `fitted` keeps the ship's. Every write is audited in the Hangar
+area with the client and journaled.
+
+**Status:** built in the backend, and the gateway's read route (`GET /exchange/v1/me/ships`) —
+WP 4.4 (#2086); the gateway's write route follows
 
 ### REQ-XCH-018 — Org demand is anonymised and membership-scoped; locations are the non-hidden list
 
@@ -548,13 +643,22 @@ per-order breakdown and no low-count suppression; a client may cache it for up t
 The backend serves the location list as `GET /api/v1/exchange/catalog/locations` (any exchange
 scope), one query, a city link winning over a space-station link.
 
+The backend serves the demand as `GET /api/v1/exchange/me/org-demand` (`exchange.demand.read`): the
+open and in-progress orders a unit of the member's memberships is responsible for. A material line
+sums `max(0, required − booked)` per material, quality floor (650 for „gut", else 0) and source, as
+the Materialbedarf computes it; `rawRefs` are the materials whose refined material it is. An item
+line sums `max(0, ordered − delivered − earmarked)` per game item, and `craftableByMe` matches the
+member's blueprints the way the order's blueprint coverage does (variant family when the order counts
+variants). Lines with nothing open are left out; `bt` is the material's or game item's id.
+
 **Acceptance**
 
-- [ ] An overseer who is not a member of a unit does not see its demand.
+- [x] An overseer who is not a member of a unit does not see its demand.
+  *`ExchangeDemandServiceTest` — only the member's own units are asked.*
 - [ ] The response schema admits no name or free-text field.
 
-**Status:** the backend location list is built — WP 3.1 (#2083); the demand feed with WP 4.3
-(#2095) and WP 3.3
+**Status:** the backend location list is built — WP 3.1 (#2083); the backend's demand is built — WP
+4.3 (#2095); the gateway route follows
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 
@@ -575,11 +679,22 @@ produced after them are cached — never `401`, `403`, `429`, `503`,
 `MASS_CHANGE_CONFIRMATION_REQUIRED` or a `5xx`. A duplicate in flight gets
 `409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different body `422 IDEMPOTENCY_KEY_REUSED`.
 
+The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash, under
+`ingest:xch:idem:<client>:<member>:<sha256>`; a request's fingerprint is the SHA-256 of method, path
+and body. The same request under a known key is answered from the cache with `Idempotency-Replayed:
+true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and never a staged mass
+change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
+the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write.
+
 **Acceptance**
 
-- [ ] Replay, cross-member key, in-flight duplicate, uncached `429`.
+- [x] Replay, cross-member key, in-flight duplicate, uncached `429`. *The gates, limits and quota run
+  before the cache, so a refused request never reaches it (`ExchangeIdempotencyFilterTest`: replay,
+  reused key, in-flight duplicate, the cached and uncached statuses, a store that fails; the namespace
+  holds the client and member, so one member's key can never answer another's).*
 
-**Status:** planned — WP 3.2 (#2082)
+**Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest` · **Status:**
+built — WP 3.2 (#2082)
 
 ### REQ-XCH-021 — Mass changes are confirmed by the member in the browser
 
@@ -594,7 +709,31 @@ within one batch is not a removal. Only the member's browser session can confirm
 
 - [ ] One test per counting rule, including repeated 89 % cuts and a move.
 
-**Status:** planned — WP 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
+The counting rule is `ExchangeMassChangeGuard`: over the journal's live removals of the client,
+member and resource in the last 24 hours plus the batch's, a batch trips above 25, or when that total
+is at least 5 and more than a fifth of the current count plus the window's removals. Each resource's
+write service decides what in its batch is a removal.
+
+A stock lot counts as removed when it is set to 0 or cut to at most a tenth of what it held when the
+client's window opened, taken from the lot's first journal entry in the window; a lot of a material
+that rises elsewhere in the same batch is a move and does not count.
+
+A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
+
+The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
+page consumes nothing: its script strips the id from the address bar and consumes the staged batch
+with an explicit request, after which the batch waits in the member's server session and the
+browser names it only by its handoff id, so it cannot alter the batch or its client. The backend
+checks again what the gateway checked — the global switch, the client active with the write
+capability, the client not disconnected by the member within the staging lifetime (30 minutes),
+the installation not disconnected — then previews the batch as a dry run and, on „Bestätigen",
+applies it without asking the guard again, in one transaction recorded in the change log as the
+installation's own write and audited as `EXCHANGE_MASS_CHANGE_CONFIRMED`
+(`POST /api/v1/connected-apps/mass-changes/preview|confirm`, member session only). „Verwerfen"
+drops it; a batch confirmed or dropped once is gone.
+
+**Status:** built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086), WP 3.2 (#2082),
+WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 
@@ -604,9 +743,27 @@ changed afterwards or a merge removed, and does not restore Materialbörse offer
 
 **Acceptance**
 
-- [ ] Undo after a later web edit skips that row and reports it.
+- [x] Undo after a later web edit skips that row and reports it. *`ExchangeUndoControllerTest`.*
 
-**Status:** planned — WP 3.3 (#2083), WP 4.5 (#2087)
+The journal is `exchange_journal`: one row per written entry with the client, installation, change
+set, resource, key, action, whether it counts as a removal, the entry before and after as JSON, the
+writing transaction's id and the time. It is written in the write's own transaction, purged with the
+change feed after 90 days by `exchange_change_retention`, exported under Art. 15, stays with the
+source account on a merge, and its states are searched by the Personensuche.
+
+The member undoes from „Verbundene Anwendungen" with `POST /api/v1/connected-apps/{clientId}/undo
+{since}` (member session only), reaching back at most 90 days. Each entry the client wrote in the
+span goes back to its state before the client's first write there — a blueprint added or removed, a
+lot set back through the Lager's own book-in and book-out, a ship deleted, updated back or recreated
+under a new id without its mission units — unless the entry's latest change-log entry is not the
+client's last write, then it is skipped as `CHANGED_AFTERWARDS`; one that no longer belongs to the
+member or names something gone is skipped as `GONE`. Links the client made are taken back. The
+restored entries' journal rows are marked undone, the undo is audited as `EXCHANGE_CHANGES_UNDONE`
+(restored and skipped counts) and counted in `basetool_exchange_undo_total{resource,outcome}`, and
+the member's pages refresh live.
+
+**Status:** journal and undo built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086),
+WP 4.5 (#2087)
 
 ### REQ-XCH-023 — Rate limits, quotas and a hard Redis budget
 
@@ -616,10 +773,39 @@ client and member, 16 MB per client and 64 MB in total, counted exactly; above a
 answers `503 EXCHANGE_BUDGET_EXHAUSTED`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
 Responses carry `RateLimit` and `Retry-After` headers. The account check has its own tight limit.
 
+**The limits** (owner decision 2026-09-27; `app.exchange.limits.*`):
+
+| Limit | Default | Where |
+| --- | --- | --- |
+| requests per client and member | 120 per minute — a registry client's `requestsPerMinute` overrides it | in-process bucket |
+| requests per client, over all its members | 1200 per minute | in-process bucket |
+| account checks per client and member | 10 per hour | in-process bucket |
+| write requests per client and member | 500 per UTC day — `writesPerDay` overrides it | Redis, `ingest:xch:quota:<client>:<member>:<day>`, `INCR`, kept two days |
+
+The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
+a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
+`Retry-After` (the quota's until the next UTC day); a quota that cannot be counted is `503
+SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted answer carries
+`RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
+bucket. The in-process buckets live per gateway instance and are bounded (least recently used out);
+the Redis byte budget follows with the idempotency cache.
+
+**The byte budget** (`app.exchange.store.*`): every value the gateway stores for the exchange
+registers `<key>|<bytes>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
+`…:c:<client>` and `…:all` — scored by its expiry, and expired entries are pruned before each count,
+so the count falls as keys expire. Before a write runs, the gateway reserves the largest cacheable
+answer (32 KiB) against all three budgets and refuses with `503 EXCHANGE_BUDGET_EXHAUSTED` when one
+would overflow, so a full budget stops writes before they reach the backend. The quota counters (from
+their first write of the day) and the idempotency locks (while a write is in flight) count too.
+`basetool_ingest_exchange_budget_used_ratio`
+reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
+
 **Acceptance**
 
-- [ ] A load test fills one member's budget, then one client's; sessions and other members keep
-  working.
+- [x] A load test fills one member's budget, then one client's; sessions and other members keep
+  working. *`ExchangeStoreRedisIntegrationTest` fills one member's and then one client's budget in a
+  real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
+  free their bytes. Sessions live under keys the ingest user cannot reach at all.*
 
 **Status:** planned — WP 3.2 (#2082), WP 2.1 (#2092)
 
@@ -630,7 +816,10 @@ The registry holds a minimum version per client. A request whose `User-Agent`
 `403 CLIENT_VERSION_UNSUPPORTED`. The gate is cooperative: it stops honest old releases, not a
 client that lies.
 
-**Status:** planned — WP 3.2 (#2082)
+A missing or unparseable `User-Agent` counts as older, and a pre-release of the minimum itself
+(`2.4.0-beta.1` against `2.4.0`) is below it, while build metadata (`2.4.0+7`) is not.
+
+**Enforced by:** `ClientVersionsTest`, `ExchangeGateTest` · **Status:** built — WP 3.2 (#2082)
 
 ### REQ-XCH-025 — Errors are problem+json with a stable code
 
@@ -648,6 +837,11 @@ Within `v1` only additive changes are allowed; a breaking change is `v2`, served
 least 12 months with `Deprecation` and `Sunset` headers. Readers are tolerant both ways (unknown
 fields ignored and reported as `warnings`, unknown enum values `UNKNOWN`), published schemas stay
 open, extensions are namespaced, identifiers and cursors are opaque (ADR-0219).
+
+The gateway finds the fields a request body carries that its schema does not declare — at any
+depth, following `$ref`, `allOf`, `anyOf` and `oneOf`, and leaving objects that accept any field
+(`extensions`) alone — and reports each as an `UNKNOWN_FIELD` warning with its JSON Pointer in answers
+that carry `warnings` (the resolve and change results); elsewhere they are ignored.
 
 **Acceptance**
 
@@ -679,7 +873,19 @@ bounded labels (REQ-OBS-011), alert on a registry change, on 80 % of the Redis b
 spikes per client, and a blackbox probe checks `GET /exchange/v1` for `401`. The nightly purge of
 tombstones and journal reports task metrics.
 
-**Status:** planned — every WP, tracked by #2091
+- [x] The gateway's refusal and relay counters carry a `client_id` bounded by the registry, the
+  operations dashboard shows them per client, and `ExchangeClientRefusalsSpike` alerts on one client's
+  refusals outside its own limits. *`ExchangeRefusalsTest`, `ExchangeGateTest`,
+  `exchange_gateway_alerts_test.yml`.* The admin page links there instead of showing an error rate
+  itself (owner decision 2026-09-27).
+- [x] Registry changes and the Redis budget alert (`ExchangeRegistryChanged`, `ExchangeBudgetHigh`).
+- [x] A blackbox probe checks `GET /exchange/v1` for exactly `401` (`blackbox-http-401`, module
+  `http_401`; `BlackboxProbeFailed` covers it).
+- [ ] Per-client write metrics with the WP 3.3 journal, and the tombstone and journal purge task
+  metrics.
+
+**Status:** partly built — the gateway's per-client counters and alerts; the rest with WP 3.3 and
+#2091
 
 ### REQ-XCH-029 — Third parties get a local sandbox
 
@@ -708,12 +914,20 @@ The backend answers the relayed call at `POST /api/v1/exchange/me/account-check`
 `400` otherwise, without echoing it) and counts every answer in
 `basetool_exchange_account_checks_total{outcome}`.
 
+The gateway checks the body against `account-check-request.schema.json` — a value that is no RSI
+handle is `400 SCHEMA_INVALID` naming only the pointer, never the value — relays it to the backend's
+`POST /api/v1/exchange/me/account-check`, and passes on only an answer that matches
+`account-check-response.schema.json`. The route is no write: it needs no `Idempotency-Key` and does
+not count against the daily quota, but it has its own limit of ten per hour per client and member
+(REQ-XCH-023).
+
 - [x] Match, mismatch and unknown, the match case-insensitive; the stored handle is in no answer and
   neither handle in a log line. *`ExchangeAccountCheckControllerTest`.*
-- [ ] The gateway relays the route inside its own ten-per-hour limit.
+- [x] The gateway relays the route inside its own hourly limit; a value that is no handle is neither
+  relayed, echoed nor logged. *`ExchangeControllerTest`, `ExchangeLimitFilterTest`.*
 - [ ] End to end on the sandbox (WP 2.3, #2099).
 
-**Status:** backend built — WP 3.4 (#2106); the gateway relay follows
+**Status:** backend and gateway relay built — WP 3.4 (#2106); the sandbox run follows with WP 2.3
 
 ### REQ-XCH-032 — „Verbundene Anwendungen" shows and controls every connection
 
@@ -742,12 +956,22 @@ change only, not audited.
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
-- [ ] The page highlights an unseen installation until it is seen.
-- [ ] Recent activity, undo and the staged mass-change confirmation (WP 3.3's journal and guard).
+- [x] The page highlights an unseen installation („Neu") and then reports it seen; the highlight
+  ends with the next load. *`ConnectedAppsPageControllerMvcTest`.*
+- [x] Undo a client's changes since a chosen span, with the skipped entries listed.
+  *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
+- [x] Confirm or discard a staged mass change. *`ExchangeMassChangeControllerTest`,
+  `ConnectedAppsConfirmControllerMvcTest`.*
+- [x] Recent activity: each client's last ten writes to the member's data, newest first, named by
+  blueprint, material or item, or ship type, undone ones marked. *`ConnectedAppsControllerTest`,
+  `ConnectedAppsPageControllerMvcTest`.*
 - [ ] The end-to-end run on the sandbox (WP 2.3, #2099).
 
-**Status:** list, disconnects, the admin page, the new-connection notification and the unseen state
-built — WP 4.5 (#2087); the page's highlight and the rest follow
+Each client in `GET /api/v1/connected-apps` carries `activity`: its last ten journal rows for the
+member, newest first, each with the time, resource, action, the entry's name (read in one lookup per
+catalogue) and whether it was undone.
+
+**Status:** built — WP 4.5 (#2087); the end-to-end run on the sandbox follows with WP 2.3 (#2099)
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 

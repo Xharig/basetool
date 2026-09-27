@@ -109,6 +109,27 @@ public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, 
       @Param("watermark") long watermark,
       @Param("limit") int limit);
 
+  /**
+   * Returns the latest entry of one key, the one that tells who changed it last.
+   *
+   * @param userId the member
+   * @param resource the resource name
+   * @param entityKey the key
+   * @return the latest entry, or empty when the key has none left
+   */
+  @Query(
+      value =
+          """
+          SELECT * FROM exchange_change
+          WHERE user_id = :userId AND resource = :resource AND entity_key = :entityKey
+          ORDER BY tx DESC, seq DESC LIMIT 1
+          """,
+      nativeQuery = true)
+  Optional<ExchangeChange> findLatestForKey(
+      @Param("userId") UUID userId,
+      @Param("resource") String resource,
+      @Param("entityKey") String entityKey);
+
   /** A feed position as a native query returns it. */
   interface Position {
 

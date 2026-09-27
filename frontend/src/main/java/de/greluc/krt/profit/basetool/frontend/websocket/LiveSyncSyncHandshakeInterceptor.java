@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.frontend.websocket;
 
 import de.greluc.krt.profit.basetool.frontend.logging.ActiveSquadronContext;
+import de.greluc.krt.profit.basetool.frontend.support.CurrentUser;
 import de.greluc.krt.profit.basetool.frontend.support.TermsGateHandoff;
 import java.util.Map;
 import java.util.Set;
@@ -36,6 +37,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
@@ -87,6 +89,12 @@ public class LiveSyncSyncHandshakeInterceptor implements HandshakeInterceptor {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.toUnmodifiableSet());
         attributes.put(LiveSyncWebSocketHandler.ATTR_AUTHORITIES, authorities);
+        if (authentication.getPrincipal() instanceof OidcUser principal) {
+          UUID subject = CurrentUser.userId(principal);
+          if (subject != null) {
+            attributes.put(LiveSyncWebSocketHandler.ATTR_SUBJECT, subject);
+          }
+        }
       }
       if (authentication != null && request instanceof ServletServerHttpRequest servletRequest) {
         OAuth2AuthorizedClient client =

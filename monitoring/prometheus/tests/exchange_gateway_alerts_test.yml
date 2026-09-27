@@ -1,0 +1,124 @@
+rule_files:
+  - ../alerts/business.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - the gateway keeps failing closed
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="registry_unavailable"}'
+        values: "0+2x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeRegistryUnreadableAtGateway
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "The ingest gateway cannot read the exchange registry"
+              description: "The ingest gateway cannot read the exchange registry mirror or the revocations in Redis and refuses exchange requests with 503 REGISTRY_UNAVAILABLE (fail-closed, REQ-XCH-003). Check that the backend writes exchange:registry (APP_EXCHANGE_MIRROR_ENABLED, ExchangeMirrorWriteFailed), that Redis is up, and that the ingest ACL user still reads ~exchange:*."
+
+  - name: silent - other refusals are the clients' own
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="scope_missing"}'
+        values: "0+5x30"
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="registry_unavailable"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRegistryUnreadableAtGateway
+        exp_alerts: []
+
+  - name: fires - relays keep failing
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_relay_total{job="basetool-ingest", instance="ingest:11272", outcome="failed"}'
+        values: "0+1x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRelayFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Exchange relays to the backend keep failing"
+              description: "The ingest gateway relayed admitted exchange requests but the backend answered unusably - 5xx, a refusal outside the exchange error registry, an answer that breaks the v1 schema, or no answer at all (unreachable, circuit open, no gateway token) - and the client got 502 BACKEND_RELAY_FAILED (REQ-XCH-011). Check the backend and its exchange layer and the gateway log lines 'Exchange relay to' or 'Exchange answer breaks'."
+
+  - name: silent - backend refusals with a registry code are the member's own
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_relay_total{job="basetool-ingest", instance="ingest:11272", outcome="refused"}'
+        values: "0+5x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRelayFailing
+        exp_alerts: []
+
+  - name: fires - the exchange budget runs high
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_budget_used_ratio{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0.85x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeBudgetHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "The exchange's Redis budget is more than 80 % used"
+              description: "The exchange data the ingest gateway keeps in Redis (the idempotency cache) uses more than 80 % of its 64 MiB budget. Above 100 % every exchange write is refused with 503 EXCHANGE_BUDGET_EXHAUSTED, while sessions keep their room (REQ-XCH-023, ADR-0221). Check which client writes most (the per-client sets under ingest:xch:budget:c:*) and whether a client loops."
+
+  - name: silent - a budget in normal use
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_budget_used_ratio{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0.3x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeBudgetHigh
+        exp_alerts: []
+
+  - name: fires - one registered client is refused again and again
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="client_version_unsupported", client_id="versekit"}'
+        values: "0+3x40"
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="client_version_unsupported", client_id="sc-extractor"}'
+        values: "0+0x40"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeClientRefusalsSpike
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              client_id: versekit
+            exp_annotations:
+              summary: "A registered exchange client is refused unusually often"
+              description: "The ingest gateway refused more than 30 requests of one registered client (client_id) in 15 minutes for a reason other than its own limits - typically a release below the minimum version, a capability the registry does not grant, revoked keys or broken DPoP proofs after a client update (REQ-XCH-028). Check the per-client panel and the refusal reasons on the operations dashboard, then contact the client's author or suspend it under Administration - Verbundene Anwendungen."
+
+  - name: silent - a client over its own limits is not a spike
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="rate_limited", client_id="versekit"}'
+        values: "0+10x40"
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="quota_exceeded", client_id="versekit"}'
+        values: "0+10x40"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeClientRefusalsSpike
+        exp_alerts: []
+
+  - name: silent - tokens the registry does not list are no client of ours
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="client_not_allowed", client_id="unregistered"}'
+        values: "0+10x40"
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="dpop_required", client_id="none"}'
+        values: "0+10x40"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeClientRefusalsSpike
+        exp_alerts: []

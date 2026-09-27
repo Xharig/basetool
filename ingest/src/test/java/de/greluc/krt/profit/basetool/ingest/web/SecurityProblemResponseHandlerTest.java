@@ -25,6 +25,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.support.LogCapture;
 import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
@@ -55,7 +56,8 @@ class SecurityProblemResponseHandlerTest {
           meterRegistry,
           TestLoggingProperties.defaults(),
           new ExchangeDpopNonces(),
-          new ExchangeRefusals(meterRegistry));
+          new ExchangeRefusals(
+              meterRegistry, org.mockito.Mockito.mock(ExchangeRegistryReader.class)));
 
   @AfterEach
   void clearMdc() {

@@ -202,7 +202,7 @@ public class BackendImportClient {
    * @return the value when it is a well-formed, length-bounded language range, otherwise {@code
    *     null} to omit the header
    */
-  private static @Nullable String sanitizedAcceptLanguage(@Nullable String acceptLanguage) {
+  public static @Nullable String sanitizedAcceptLanguage(@Nullable String acceptLanguage) {
     if (acceptLanguage == null || acceptLanguage.isBlank()) {
       return null;
     }

@@ -22,6 +22,7 @@ package de.greluc.krt.profit.basetool.frontend.controller;
 import static de.greluc.krt.profit.basetool.frontend.support.ResponseTypeMatchers.anyTypeRef;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,13 +31,18 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedAppActivityDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedAppDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedInstallationDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeUndoRequestDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeUndoResultDto;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import de.greluc.krt.profit.basetool.frontend.service.BackendServiceException;
 import java.time.Instant;
@@ -46,6 +52,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -91,7 +98,14 @@ class ConnectedAppsPageControllerMvcTest {
                     Instant.parse("2026-09-27T08:00:00Z"),
                     Instant.parse("2026-09-27T09:30:00Z"),
                     false),
-                new ConnectedInstallationDto(UUID.randomUUID(), null, null, null, false)));
+                new ConnectedInstallationDto(UUID.randomUUID(), null, null, null, true)),
+            List.of(
+                new ConnectedAppActivityDto(
+                    Instant.parse("2026-09-27T10:00:00Z"),
+                    "BLUEPRINT",
+                    "BLUEPRINT_REMOVE",
+                    "Arclight <i>Pistol</i>",
+                    true)));
     when(backendApiClient.get(eq("/api/v1/connected-apps"), anyTypeRef())).thenReturn(List.of(app));
   }
 
@@ -112,6 +126,34 @@ class ConnectedAppsPageControllerMvcTest {
         .andExpect(content().string(containsString("27.09.2026 08:00 UTC")))
         .andExpect(content().string(containsString("data-installation-id=\"" + INSTALLATION)))
         .andExpect(content().string(not(containsString("??"))));
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void theListShowsTheLatestChangesEscapedAndHighlightsANewInstallation() throws Exception {
+    stubApps();
+
+    mockMvc
+        .perform(get("/connected-apps"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("data-testid=\"ca-activity\"")))
+        .andExpect(content().string(containsString("Blueprint entfernt")))
+        .andExpect(content().string(containsString("(zurückgenommen)")))
+        .andExpect(content().string(containsString("Arclight &lt;i&gt;Pistol&lt;/i&gt;")))
+        .andExpect(content().string(containsString("27.09.2026 10:00 UTC")))
+        .andExpect(content().string(containsString("data-ca-unseen")))
+        .andExpect(content().string(containsString("ca-unseen")));
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void markingSeenIsRelayed() throws Exception {
+    mockMvc
+        .perform(
+            post("/connected-apps/seen").header("X-Requested-With", "XMLHttpRequest").with(csrf()))
+        .andExpect(status().isNoContent());
+
+    verify(backendApiClient).post("/api/v1/connected-apps/seen", null, Void.class);
   }
 
   @Test
@@ -163,6 +205,50 @@ class ConnectedAppsPageControllerMvcTest {
         .andExpect(status().isNoContent());
 
     verify(backendApiClient).delete("/api/v1/connected-apps/versekit", Void.class);
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void anUndoIsRelayedAndItsResultComesBack() throws Exception {
+    when(backendApiClient.post(
+            eq("/api/v1/connected-apps/versekit/undo"),
+            any(ExchangeUndoRequestDto.class),
+            eq(ExchangeUndoResultDto.class)))
+        .thenReturn(
+            new ExchangeUndoResultDto(
+                2,
+                List.of(
+                    new ExchangeUndoResultDto.Skipped("STOCK", "Laranite", "CHANGED_AFTERWARDS"))));
+
+    mockMvc
+        .perform(
+            post("/connected-apps/versekit/undo")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"since\":\"2026-09-27T10:00:00Z\"}")
+                .with(csrf()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.restored").value(2))
+        .andExpect(jsonPath("$.skipped[0].reason").value("CHANGED_AFTERWARDS"));
+
+    verify(backendApiClient)
+        .post(
+            eq("/api/v1/connected-apps/versekit/undo"),
+            eq(new ExchangeUndoRequestDto(Instant.parse("2026-09-27T10:00:00Z"))),
+            eq(ExchangeUndoResultDto.class));
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void thePageOffersTheUndoForEachApplication() throws Exception {
+    stubApps();
+
+    mockMvc
+        .perform(get("/connected-apps"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("data-ca-undo")))
+        .andExpect(content().string(containsString("id=\"ca-undo-modal\"")))
+        .andExpect(content().string(containsString("id=\"ca-undo-result\"")));
   }
 
   @Test

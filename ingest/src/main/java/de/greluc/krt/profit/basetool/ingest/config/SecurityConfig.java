@@ -19,9 +19,17 @@
 
 package de.greluc.krt.profit.basetool.ingest.config;
 
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeBudget;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopProofValidation;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeGateFilter;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeIdempotency;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeIdempotencyFilter;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeLimitFilter;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeQuotas;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRevocationReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTokenGateFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.ClientIdentityFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.UserIdMdcFilter;
@@ -191,7 +199,14 @@ public class SecurityConfig {
       ClientIdentityProperties clientIdentityProperties,
       IngestProperties ingestProperties,
       ExchangeDpopNonces exchangeNonces,
-      ExchangeRefusals exchangeRefusals)
+      ExchangeRefusals exchangeRefusals,
+      ExchangeRegistryReader exchangeRegistryReader,
+      ExchangeRevocationReader exchangeRevocationReader,
+      ExchangeLimitProperties exchangeLimitProperties,
+      ExchangeQuotas exchangeQuotas,
+      ExchangeIdempotency exchangeIdempotency,
+      ExchangeBudget exchangeBudget,
+      ExchangeStoreProperties exchangeStoreProperties)
       throws Exception {
     SecurityProblemResponseHandler securityProblems =
         new SecurityProblemResponseHandler(
@@ -269,6 +284,34 @@ public class SecurityConfig {
             new ExchangeTokenGateFilter(
                 exchangeNonces, exchangeRefusals, objectMapper, loggingProperties, meterRegistry),
             ClientIdentityFilter.class)
+        .addFilterAfter(
+            new ExchangeGateFilter(
+                exchangeRegistryReader,
+                exchangeRevocationReader,
+                exchangeRefusals,
+                objectMapper,
+                loggingProperties,
+                meterRegistry),
+            ExchangeTokenGateFilter.class)
+        .addFilterAfter(
+            new ExchangeLimitFilter(
+                exchangeLimitProperties,
+                exchangeQuotas,
+                exchangeRefusals,
+                objectMapper,
+                loggingProperties,
+                meterRegistry),
+            ExchangeGateFilter.class)
+        .addFilterAfter(
+            new ExchangeIdempotencyFilter(
+                exchangeIdempotency,
+                exchangeBudget,
+                exchangeStoreProperties,
+                exchangeRefusals,
+                objectMapper,
+                loggingProperties,
+                meterRegistry),
+            ExchangeLimitFilter.class)
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
     return http.build();
   }

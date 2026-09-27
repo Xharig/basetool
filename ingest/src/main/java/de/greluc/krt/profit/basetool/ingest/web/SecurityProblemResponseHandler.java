@@ -207,7 +207,7 @@ public class SecurityProblemResponseHandler
       code = ExchangeRefusals.UNAUTHENTICATED;
       detail = "A valid DPoP-bound token is required.";
     }
-    refusals.count(code);
+    refusals.count(code, MetricNames.EXCHANGE_CLIENT_NONE);
     write(response, HttpStatus.UNAUTHORIZED, "Unauthenticated", code, detail);
   }
 
