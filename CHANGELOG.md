@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: Bewerbung für Fremd-Anwendungen.** `docs/exchange/onboarding.md` und
+  `docs/exchange/client-security.md` beschreiben Kriterien und Sicherheitsanforderungen, eine
+  Issue-Vorlage nimmt Bewerbungen auf, und `docs/legal/approved-clients.md` ist das öffentliche
+  Verzeichnis zugelassener Anwendungen (noch leer; REQ-XCH-002, REQ-XCH-027).
 - **Datenaustausch: Änderungsprotokoll.** Jede Änderung an persönlichen Blueprints, am persönlichen
   Lager und an Schiffen – auch über Sammelaktionen und Standard-Blueprints – wird mit ihrer Quelle
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
