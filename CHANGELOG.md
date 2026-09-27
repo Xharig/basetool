@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: Bewerbung für Fremd-Anwendungen.** `docs/exchange/onboarding.md` und
+  `docs/exchange/client-security.md` beschreiben Kriterien und Sicherheitsanforderungen, eine
+  Issue-Vorlage nimmt Bewerbungen auf, und `docs/legal/approved-clients.md` ist das öffentliche
+  Verzeichnis zugelassener Anwendungen (noch leer; REQ-XCH-002, REQ-XCH-027).
 - **Administration → Verbundene Anwendungen.** Admins registrieren, bearbeiten, sperren und
   begrenzen die zugelassenen Anwendungen des Datenaustauschs und schalten ihn global ein oder aus;
   Sperren, der Schalter und zusätzliche Berechtigungen fragen vorher nach (REQ-XCH-003).
