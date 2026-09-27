@@ -476,7 +476,8 @@ client.
 `version`. A client links before it creates, so a Fleetview import is never duplicated. Purchase
 data is never sent. Detaching a ship from a mission by removal is reported in
 `detachedFromMissions` and audited (`MISSION_UNIT_UPDATED`). Writes are audited in the Hangar domain
-with the external client.
+with the external client. A ship's `name` is optional and up to 255 characters, as in the web: an
+unnamed ship is sent without it, and an upsert may leave it out (owner decision 2026-09-27).
 
 **Acceptance**
 
