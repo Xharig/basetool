@@ -22,6 +22,7 @@ package de.greluc.krt.profit.basetool.ingest.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeLogContext;
 import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletRequest;
@@ -131,6 +132,23 @@ class CorrelationIdFilterTest {
 
     assertThat(MDC.get("correlationId")).isNull();
     assertThat(MDC.get("userId")).isNull();
+  }
+
+  @Test
+  void clearsTheExchangeFieldsTheGateSetAfterTheRequest() throws Exception {
+    FilterChain gate =
+        (request, response) -> {
+          MDC.put(ExchangeLogContext.CLIENT_KEY, "versekit");
+          MDC.put(ExchangeLogContext.ROUTE_KEY, "GET /exchange/v1/me/stock");
+        };
+
+    filter.doFilter(
+        new MockHttpServletRequest("GET", "/exchange/v1/me/stock"),
+        new MockHttpServletResponse(),
+        gate);
+
+    assertThat(MDC.get(ExchangeLogContext.CLIENT_KEY)).isNull();
+    assertThat(MDC.get(ExchangeLogContext.ROUTE_KEY)).isNull();
   }
 
   @Test

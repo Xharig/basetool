@@ -50,7 +50,8 @@ import tools.jackson.databind.ObjectMapper;
  * exchange be switched on, the client be active in the registry, neither the installation key nor
  * the client be revoked for this member, the route's capability be both in the token and granted,
  * and the client's version meet its minimum (REQ-XCH-001, -003, -004, -008, -024). An admitted
- * request carries an {@link ExchangeRequestContext}.
+ * request carries an {@link ExchangeRequestContext}, and every request past the token gate is
+ * tagged in the log with its registry client and route ({@link ExchangeLogContext}).
  *
  * <p>The registry comes through a five-second cache; the revocations are read on every request.
  * Anything unreadable fails closed with {@code 503 REGISTRY_UNAVAILABLE}.
@@ -99,6 +100,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           "No such exchange route.");
       return;
     }
+    ExchangeLogContext.route(route.get());
     ExchangeRequestContext context;
     try {
       context = admit(jwt, route.get(), request, response);
@@ -115,6 +117,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     if (context == null) {
       return;
     }
+    ExchangeLogContext.client(context.clientId());
     request.setAttribute(ExchangeRequestContext.ATTRIBUTE, context);
     filterChain.doFilter(request, response);
   }
@@ -139,6 +142,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     ExchangeRegistry registry = registryReader.current();
     String clientId = jwt.getClaimAsString("azp");
     String label = ExchangeRefusals.clientLabel(clientId, registry);
+    ExchangeLogContext.client(label);
     if (!registry.enabled()) {
       response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
       refuse(
@@ -251,6 +255,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
       @NotNull String code,
       @NotNull String detail)
       throws IOException {
+    ExchangeLogContext.client(client);
     refusals.count(code, client);
     meterRegistry.counter(MetricNames.HTTP_ERROR, MetricNames.TAG_CODE, code).increment();
     ProblemResponseWriter.write(

@@ -40,6 +40,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
@@ -72,6 +73,9 @@ public final class ExchangeTestSupport {
 
   /** The request header telling the probe what to answer: {@code <status>:<code>}. */
   public static final String PROBE_ANSWER = "X-Probe-Answer";
+
+  /** The request header asking the probe to answer with the exchange log fields it sees. */
+  public static final String PROBE_MDC = "X-Probe-Mdc";
 
   /** The account check, which needs {@code exchange.connect} and has its own hourly limit. */
   public static final String ACCOUNT_CHECK = "/exchange/v1/me/account-check";
@@ -301,6 +305,13 @@ public final class ExchangeTestSupport {
         return ServerResponse.status(Integer.parseInt(answer.substring(0, colon)))
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body("{\"code\":\"" + answer.substring(colon + 1) + "\"}");
+      }
+      if (request.headers().firstHeader(PROBE_MDC) != null) {
+        return ServerResponse.ok()
+            .body(
+                MDC.get(ExchangeLogContext.CLIENT_KEY)
+                    + " | "
+                    + MDC.get(ExchangeLogContext.ROUTE_KEY));
       }
       ExchangeRequestContext context = ExchangeRequestContext.of(request.servletRequest());
       if (context == null) {
