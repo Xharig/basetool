@@ -193,6 +193,12 @@
 
 ### Changed
 
+- **Keycloak: der SC Extractor wird zum reinen Austausch-Client (Sicherheitsbefund H1).** Der
+  Provisioner verlangt für `basetool-sc-extractor` künftig eine Zustimmung im Browser, bindet Zugriffs-
+  und Auffrischungs-Token an DPoP und gibt nur noch die Austausch-Berechtigungen und `offline_access`
+  frei; `extractor-ingest` und `extractor-ingest-only` entfallen. Ein Extractor-Token gilt damit nicht
+  mehr für die Backend-API. Auf Produktion wird das erst nach dem Abschalten der alten
+  Extractor-Adressen angewendet, weil Versionen bis 2.9.1 sie noch brauchen.
 - **Keycloak: Offline-Sitzung des SC Extractors fest auf 30/90 Tage.** Der Provisioner setzt beim
   Client `basetool-sc-extractor` dieselbe Offline-Sitzung wie bei verbundenen Anwendungen (30 Tage
   ohne Nutzung, 90 Tage insgesamt), weil der Extractor ab 2.10.0 `offline_access` anfordert. Bisher
