@@ -494,6 +494,48 @@ class ExchangeStockWriteControllerTest {
   }
 
   @Test
+  void repeatedCutsCountOnlyOnceTheyReachNinetyPercentOfTheWindowStart() throws Exception {
+    UUID laranite = material("SCU", null);
+    List<String> places = new ArrayList<>();
+    for (int i = 0; i < 5; i++) {
+      UUID place = location(null);
+      row(laranite, place, 500, 100, null);
+      places.add(locationName(place));
+    }
+
+    change(batch(laranite, places, "50", "100")).andExpect(status().isOk());
+    change(batch(laranite, places, "11", "50")).andExpect(status().isOk());
+    assertThat(total(laranite)).isEqualTo(55.0);
+
+    change(batch(laranite, places, "10", "11"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("MASS_CHANGE_CONFIRMATION_REQUIRED"));
+    assertThat(total(laranite)).isEqualTo(55.0);
+  }
+
+  /**
+   * Builds one change set setting the same material at several places.
+   *
+   * @param material the material
+   * @param places the location names
+   * @param quantity the new quantity
+   * @param expected the expected quantity
+   * @return the change set as JSON
+   */
+  private static @NotNull String batch(
+      @NotNull UUID material,
+      @NotNull List<String> places,
+      @NotNull String quantity,
+      @NotNull String expected) {
+    StringBuilder ops = new StringBuilder();
+    for (String place : places) {
+      ops.append(ops.isEmpty() ? "" : ",")
+          .append(op(material, place, 500, quantity, expected, "SCU"));
+    }
+    return "{\"ops\":[" + ops + "]}";
+  }
+
+  @Test
   void withoutTheWriteCapabilityTheChangeIsRefused() throws Exception {
     mockMvc
         .perform(
