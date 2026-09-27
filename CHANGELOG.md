@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
+  `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
+  das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Die
+  Produktions-Images bleiben privat.
 - **Datenaustausch: lokale Sandbox für Fremd-Anwendungen.** `scripts/sandbox.sh` bzw.
   `scripts/sandbox.ps1` starten Gateway, Backend, Frontend und einen Keycloak-Realm mit Testclient
   `sandbox-client`, synthetischen Mitgliedern und Beispieldaten nur auf `127.0.0.1` – ausschließlich

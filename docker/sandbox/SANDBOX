@@ -1,0 +1,2 @@
+This is a Profit Basetool sandbox image. It holds only throwaway test values and refuses the prod
+profile at start-up (REQ-XCH-029).

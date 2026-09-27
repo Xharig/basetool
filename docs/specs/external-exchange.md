@@ -988,11 +988,19 @@ backend is healthy, idempotently. It publishes loopback ports only
 ([`docs/exchange/sandbox.md`](../exchange/sandbox.md)).
 
 - [x] Profile, provisioned realm, seed, one command and the docs page — WP 2.3 part 1.
-- [ ] The public sandbox images, their publishing pipeline and secret scan.
+- [x] The public sandbox images, their publishing pipeline and secret scan.
+      *`.github/workflows/sandbox-images.yml` builds `basetool-sandbox-{backend,frontend,ingest}`
+      from the unchanged `docker/app/Dockerfile` plus the marker `docker/sandbox/SANDBOX`
+      (`docker/sandbox/app.Dockerfile`) and `basetool-sandbox-keycloak` from
+      `docker/sandbox/keycloak/Dockerfile`; before publishing it proves each application image
+      refuses the `prod` profile (`SandboxProfileGuard`, which fails the start of any image carrying
+      the marker under `prod`) and fails on any secret Trivy finds. It publishes `edge` when run by
+      hand on `main` and the version and `latest` on a release tag; the production packages stay
+      private and untouched. The packages' public visibility is set once by the owner.*
 - [ ] The CI job that pulls them anonymously and runs the conformance fixtures and the
       device-grant + DPoP smoke test; the E2E extension with ingest.
 
-**Status:** local sandbox built — WP 2.3 (#2099); the public images and the CI job follow
+**Status:** local sandbox and the image pipeline built — WP 2.3 (#2099); the CI job follows
 
 ### REQ-XCH-030 — Exchange writes appear live
 

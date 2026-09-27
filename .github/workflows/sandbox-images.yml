@@ -1,0 +1,180 @@
+name: Sandbox Images
+
+on:
+  push:
+    tags: ['v*.*.*']
+  pull_request:
+    paths:
+      - docker/sandbox/**
+      - scripts/build-sandbox-realm.py
+      - .github/workflows/sandbox-images.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sandbox-images-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
+  PUBLISH: ${{ github.event_name != 'pull_request' }}
+
+jobs:
+  apps:
+    name: Build, check and publish basetool-sandbox-${{ matrix.module }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [backend, frontend, ingest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Build the application image
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          set -euo pipefail
+          docker build --file docker/app/Dockerfile --build-arg "MODULE=${MODULE}" \
+            --tag "sandbox-base-${MODULE}:local" .
+
+      - name: Add the sandbox marker
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          set -euo pipefail
+          docker build --file docker/sandbox/app.Dockerfile \
+            --build-arg "BASE=sandbox-base-${MODULE}:local" \
+            --label "org.opencontainers.image.title=basetool-sandbox-${MODULE}" \
+            --label "org.opencontainers.image.description=Profit Basetool ${MODULE} for the local exchange sandbox; test values only, refuses the prod profile" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.licenses=GPL-3.0-only" \
+            --tag "basetool-sandbox-${MODULE}:local" .
+
+      - name: guard / The image refuses the prod profile
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          set -uo pipefail
+          output="$(timeout 120 docker run --rm -e SPRING_PROFILES_ACTIVE=prod \
+            "basetool-sandbox-${MODULE}:local" 2>&1)"
+          status=$?
+          if [ "$status" -eq 0 ] || [ "$status" -eq 124 ]; then
+            echo "::error::basetool-sandbox-${MODULE} did not refuse the prod profile (exit ${status})" >&2
+            printf '%s\n' "$output" | tail -40 >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$output" | grep -q "This is a sandbox image"; then
+            echo "::error::basetool-sandbox-${MODULE} stopped, but not because of the sandbox guard" >&2
+            printf '%s\n' "$output" | tail -40 >&2
+            exit 1
+          fi
+          echo "basetool-sandbox-${MODULE} refuses the prod profile"
+
+      - name: secrets / Scan the image for secrets
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: basetool-sandbox-${{ matrix.module }}:local
+          scanners: secret
+          exit-code: '1'
+          format: table
+
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/basetool-sandbox-${{ matrix.module }}
+          tags: |
+            type=edge,branch=main
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+
+      - name: Publish
+        if: env.PUBLISH == 'true'
+        env:
+          MODULE: ${{ matrix.module }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag "basetool-sandbox-${MODULE}:local" "$tag"
+            docker push "$tag"
+          done <<< "$TAGS"
+
+  keycloak:
+    name: Build, check and publish basetool-sandbox-keycloak
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Build the image
+        run: |
+          set -euo pipefail
+          docker build --file docker/sandbox/keycloak/Dockerfile \
+            --label "org.opencontainers.image.title=basetool-sandbox-keycloak" \
+            --label "org.opencontainers.image.description=Keycloak with the Basetool provider, theme and the sandbox realm; test values only" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --tag basetool-sandbox-keycloak:local .
+
+      - name: secrets / Scan the image for secrets
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: basetool-sandbox-keycloak:local
+          scanners: secret
+          exit-code: '1'
+          format: table
+
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/basetool-sandbox-keycloak
+          tags: |
+            type=edge,branch=main
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+
+      - name: Publish
+        if: env.PUBLISH == 'true'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag basetool-sandbox-keycloak:local "$tag"
+            docker push "$tag"
+          done <<< "$TAGS"

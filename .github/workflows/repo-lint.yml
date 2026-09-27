@@ -88,7 +88,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: >-
           hadolint docker/app/Dockerfile docker/config/Dockerfile docker/keycloak-spi/Dockerfile
-          docker/sandbox/keycloak/Dockerfile
+          docker/sandbox/keycloak/Dockerfile docker/sandbox/app.Dockerfile
 
   repo-gates:
     name: Repository gates
