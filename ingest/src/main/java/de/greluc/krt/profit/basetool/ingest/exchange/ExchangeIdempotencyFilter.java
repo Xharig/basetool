@@ -46,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
  * Makes exchange writes idempotent (REQ-XCH-020) within the byte budget (REQ-XCH-023). A write
  * needs an {@code Idempotency-Key}; its answer is kept a day per client, member and key and
  * replayed for the same request, a different request under the same key is refused, and a duplicate
- * in flight waits for the first. Under the lock the cache is read again, so a request that raced
+ * in flight waits for the first. Under the claim the cache is read again, so a request that raced
  * the first one's answer replays it instead of writing twice. The gates, limits and quota run
  * before this filter, so a refused request is never cached; neither is any {@code 401}, {@code
  * 403}, {@code 429}, {@code 5xx} or a staged mass change.
@@ -145,7 +145,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
         replayOrRefuse(context.clientId(), response, stored.get(), fingerprint);
         return;
       }
-      token = idempotency.lock(namespace).orElse(null);
+      token = idempotency.claim(namespace).orElse(null);
     } catch (ExchangeUnavailableException e) {
       storeUnavailable(context.clientId(), response);
       return;
@@ -161,7 +161,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
     }
     ContentCachingResponseWrapper wrapper = new ContentCachingResponseWrapper(response);
     try {
-      runLocked(
+      runClaimed(
           new CachedBodyRequest(request, body),
           wrapper,
           filterChain,
@@ -169,13 +169,13 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
           namespace,
           fingerprint);
     } finally {
-      idempotency.unlock(namespace, token);
+      idempotency.releaseClaim(namespace, token);
       wrapper.copyBodyToResponse();
     }
   }
 
   /**
-   * Runs one write under its key's lock: replays an answer another request cached meanwhile,
+   * Runs one write under its key's claim: replays an answer another request cached meanwhile,
    * reserves the largest cacheable answer in the byte budget, then runs the write and settles the
    * reservation on the answer it cached, or frees it.
    *
@@ -188,7 +188,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
    * @throws ServletException if a later filter fails
    * @throws IOException if reading or writing fails
    */
-  private void runLocked(
+  private void runClaimed(
       @NotNull HttpServletRequest request,
       @NotNull ContentCachingResponseWrapper wrapper,
       @NotNull FilterChain filterChain,
@@ -196,8 +196,8 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
       @NotNull String namespace,
       @NotNull String fingerprint)
       throws ServletException, IOException {
-    String reservation = ExchangeIdempotency.LOCK_PREFIX + namespace;
-    long reserved = ExchangeIdempotency.lockBytes(namespace) + properties.maxResultBytes();
+    String reservation = ExchangeIdempotency.CLAIM_PREFIX + namespace;
+    long reserved = ExchangeIdempotency.claimBytes(namespace) + properties.maxResultBytes();
     try {
       Optional<ExchangeIdempotency.Stored> stored = idempotency.find(namespace);
       if (stored.isPresent()) {

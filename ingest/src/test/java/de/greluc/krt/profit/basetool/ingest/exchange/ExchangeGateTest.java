@@ -114,7 +114,7 @@ class ExchangeGateTest {
     tokenScopes("exchange.connect exchange.stock.read");
     registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), null);
     when(revocationReader.isDenied(anyString())).thenReturn(false);
-    when(idempotency.lock(anyString())).thenReturn(Optional.of("lock-token"));
+    when(idempotency.claim(anyString())).thenReturn(Optional.of("claim-token"));
     when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
     when(budget.settle(
             anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
