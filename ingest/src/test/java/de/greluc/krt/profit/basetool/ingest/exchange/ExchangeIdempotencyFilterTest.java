@@ -72,7 +72,7 @@ class ExchangeIdempotencyFilterTest {
   private static final String TOKEN = "idem-token";
   private static final String KEY = "write-0000001";
   private static final String BODY = "{\"ops\":[]}";
-  private static final String LOCK_TOKEN = "lock-token";
+  private static final String CLAIM_TOKEN = "claim-token";
   private static final Set<String> GRANTS =
       Set.of("exchange.connect", "exchange.stock.read", "exchange.blueprints.write");
 
@@ -109,7 +109,7 @@ class ExchangeIdempotencyFilterTest {
         .thenReturn(ExchangeTestSupport.registry(true, true, GRANTS, null));
     when(revocationReader.isDenied(anyString())).thenReturn(false);
     when(idempotency.find(anyString())).thenReturn(Optional.empty());
-    when(idempotency.lock(anyString())).thenReturn(Optional.of(LOCK_TOKEN));
+    when(idempotency.claim(anyString())).thenReturn(Optional.of(CLAIM_TOKEN));
     when(idempotency.sizeOf(anyString(), any())).thenReturn(200);
     when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
     when(budget.settle(
@@ -137,25 +137,25 @@ class ExchangeIdempotencyFilterTest {
         .isEqualTo(
             ExchangeIdempotency.fingerprint(
                 "POST", BLUEPRINT_CHANGES, BODY.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-    long reserved = ExchangeIdempotency.lockBytes(namespace()) + 32768L;
+    long reserved = ExchangeIdempotency.claimBytes(namespace()) + 32768L;
     verify(budget)
         .reserve(
             eq(ExchangeTestSupport.CLIENT),
             eq(member),
-            eq(ExchangeIdempotency.LOCK_PREFIX + namespace()),
+            eq(ExchangeIdempotency.CLAIM_PREFIX + namespace()),
             eq(reserved),
             any());
     verify(budget)
         .settle(
             eq(ExchangeTestSupport.CLIENT),
             eq(member),
-            eq(ExchangeIdempotency.LOCK_PREFIX + namespace()),
+            eq(ExchangeIdempotency.CLAIM_PREFIX + namespace()),
             eq(reserved),
             eq(ExchangeIdempotency.PREFIX + namespace()),
             eq(200L),
             any());
     verify(budget, never()).release(anyString(), anyString(), anyString(), anyLong());
-    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+    verify(idempotency).releaseClaim(namespace(), CLAIM_TOKEN);
   }
 
   @Test
@@ -180,7 +180,7 @@ class ExchangeIdempotencyFilterTest {
 
     verify(budget, never()).reserve(anyString(), anyString(), anyString(), anyLong(), any());
     verify(idempotency, never()).store(anyString(), any());
-    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+    verify(idempotency).releaseClaim(namespace(), CLAIM_TOKEN);
   }
 
   @Test
@@ -195,7 +195,7 @@ class ExchangeIdempotencyFilterTest {
         .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
 
     verify(idempotency, never()).store(anyString(), any());
-    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+    verify(idempotency).releaseClaim(namespace(), CLAIM_TOKEN);
   }
 
   @Test
@@ -211,9 +211,9 @@ class ExchangeIdempotencyFilterTest {
         .release(
             eq(ExchangeTestSupport.CLIENT),
             eq(member),
-            eq(ExchangeIdempotency.LOCK_PREFIX + namespace()),
+            eq(ExchangeIdempotency.CLAIM_PREFIX + namespace()),
             anyLong());
-    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+    verify(idempotency).releaseClaim(namespace(), CLAIM_TOKEN);
   }
 
   @Test
@@ -234,7 +234,7 @@ class ExchangeIdempotencyFilterTest {
         .andExpect(status().isCreated())
         .andExpect(header().string(ExchangeIdempotencyFilter.REPLAYED, "true"))
         .andExpect(content().json("{\"replayed\":true}"));
-    verify(idempotency, never()).lock(anyString());
+    verify(idempotency, never()).claim(anyString());
   }
 
   @Test
@@ -249,7 +249,7 @@ class ExchangeIdempotencyFilterTest {
 
   @Test
   void aDuplicateInFlightIsRefused() throws Exception {
-    when(idempotency.lock(namespace())).thenReturn(Optional.empty());
+    when(idempotency.claim(namespace())).thenReturn(Optional.empty());
 
     write(KEY, null)
         .andExpect(status().isConflict())
@@ -268,7 +268,7 @@ class ExchangeIdempotencyFilterTest {
     verify(budget, never())
         .settle(anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any());
     verify(budget, never()).release(anyString(), anyString(), anyString(), anyLong());
-    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+    verify(idempotency).releaseClaim(namespace(), CLAIM_TOKEN);
   }
 
   @Test
@@ -293,12 +293,12 @@ class ExchangeIdempotencyFilterTest {
     verify(idempotency, never()).store(eq(namespace("write-0000002")), any());
     verify(idempotency, never()).store(eq(namespace("write-0000003")), any());
     verify(idempotency, never()).store(eq(namespace("write-0000004")), any());
-    verify(idempotency).unlock(namespace("write-0000003"), LOCK_TOKEN);
+    verify(idempotency).releaseClaim(namespace("write-0000003"), CLAIM_TOKEN);
     verify(budget)
         .release(
             eq(ExchangeTestSupport.CLIENT),
             eq(member),
-            eq(ExchangeIdempotency.LOCK_PREFIX + namespace("write-0000003")),
+            eq(ExchangeIdempotency.CLAIM_PREFIX + namespace("write-0000003")),
             anyLong());
   }
 
@@ -320,7 +320,7 @@ class ExchangeIdempotencyFilterTest {
         .store(anyString(), any());
 
     write(KEY, null).andExpect(status().isOk());
-    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+    verify(idempotency).releaseClaim(namespace(), CLAIM_TOKEN);
     verify(budget)
         .release(
             eq(ExchangeTestSupport.CLIENT),

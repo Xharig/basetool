@@ -42,9 +42,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The exchange's idempotency cache in Redis (REQ-XCH-020): per client, member and key, the answer
- * to a write and the fingerprint of the request that produced it, kept for a day; and a lock while
- * the first request with a key is in flight, held with a random token so only its holder releases
- * it. Keys are hashed, so no client-chosen text becomes part of a Redis key.
+ * to a write and the fingerprint of the request that produced it, kept for a day; and a claim on
+ * the key, a Redis entry and no JVM lock, while the first request with a key is in flight, held
+ * with a random token so only its holder releases it. Keys are hashed, so no client-chosen text
+ * becomes part of a Redis key.
  */
 @Slf4j
 @Component
@@ -54,17 +55,17 @@ public class ExchangeIdempotency {
   /** The key prefix of a cached answer. */
   static final String PREFIX = "ingest:xch:idem:";
 
-  /** The key prefix of a lock. */
-  static final String LOCK_PREFIX = "ingest:xch:idem-lock:";
+  /** The key prefix of a claim. */
+  static final String CLAIM_PREFIX = "ingest:xch:idem-lock:";
 
-  /** The random bytes of a lock token. */
+  /** The random bytes of a claim token. */
   static final int TOKEN_BYTES = 16;
 
-  /** The characters of a lock token, URL-safe base64 without padding. */
+  /** The characters of a claim token, URL-safe base64 without padding. */
   static final int TOKEN_LENGTH = 22;
 
-  /** Deletes a lock only while it holds the caller's token. */
-  private static final RedisScript<Long> UNLOCK =
+  /** Deletes a claim only while it holds the caller's token. */
+  private static final RedisScript<Long> RELEASE_CLAIM =
       new DefaultRedisScript<>(
           """
           if redis.call('GET', KEYS[1]) == ARGV[1] then
@@ -100,15 +101,14 @@ public class ExchangeIdempotency {
    * @param method the method
    * @param path the path
    * @param body the body
-   * @return the SHA-256 of method, path and body, hex
+   * @return the SHA-256 of {@code method + " " + path + "\n"} followed by the body, hex
    */
   public static @NotNull String fingerprint(
       @NotNull String method, @NotNull String path, byte @NotNull [] body) {
-    byte[] head = (method + " " + path + "\n").getBytes(StandardCharsets.UTF_8);
-    byte[] all = new byte[head.length + body.length];
-    System.arraycopy(head, 0, all, 0, head.length);
-    System.arraycopy(body, 0, all, head.length, body.length);
-    return sha256(all);
+    MessageDigest digest = sha256Digest();
+    digest.update((method + " " + path + "\n").getBytes(StandardCharsets.UTF_8));
+    digest.update(body);
+    return HexFormat.of().formatHex(digest.digest());
   }
 
   /**
@@ -145,13 +145,14 @@ public class ExchangeIdempotency {
   }
 
   /**
-   * Takes the lock of a namespace for the first request in flight, holding a token of its own.
+   * Claims a namespace for the first request in flight with a Redis entry holding a token of its
+   * own.
    *
    * @param namespace the namespace
-   * @return the token this request holds the lock with, or empty when another request holds it
+   * @return the token this request holds the claim with, or empty when another request holds it
    * @throws ExchangeUnavailableException if Redis cannot be written
    */
-  public @NotNull Optional<String> lock(@NotNull String namespace) {
+  public @NotNull Optional<String> claim(@NotNull String namespace) {
     byte[] raw = new byte[TOKEN_BYTES];
     RANDOM.nextBytes(raw);
     String token = TOKEN_ENCODER.encodeToString(raw);
@@ -159,7 +160,7 @@ public class ExchangeIdempotency {
       Boolean taken =
           redisTemplate
               .opsForValue()
-              .setIfAbsent(LOCK_PREFIX + namespace, token, properties.lockTtl());
+              .setIfAbsent(CLAIM_PREFIX + namespace, token, properties.lockTtl());
       return Boolean.TRUE.equals(taken) ? Optional.of(token) : Optional.empty();
     } catch (RuntimeException e) {
       throw unavailable(e);
@@ -167,31 +168,32 @@ public class ExchangeIdempotency {
   }
 
   /**
-   * Releases the lock of a namespace only while it still holds the given token, as one atomic step;
-   * a failure is logged, since the lock expires on its own.
+   * Releases the claim on a namespace only while it still holds the given token, as one atomic
+   * step; a failure is logged, since the claim expires on its own.
    *
    * @param namespace the namespace
-   * @param token the token {@link #lock(String)} returned
-   * @return {@code true} when the lock was this request's and is released
+   * @param token the token {@link #claim(String)} returned
+   * @return {@code true} when the claim was this request's and is released
    */
-  public boolean unlock(@NotNull String namespace, @NotNull String token) {
+  public boolean releaseClaim(@NotNull String namespace, @NotNull String token) {
     try {
-      Long released = redisTemplate.execute(UNLOCK, List.of(LOCK_PREFIX + namespace), token);
+      Long released =
+          redisTemplate.execute(RELEASE_CLAIM, List.of(CLAIM_PREFIX + namespace), token);
       return released != null && released > 0L;
     } catch (RuntimeException e) {
-      log.warn("An idempotency lock could not be released: {}", e.getClass().getSimpleName());
+      log.warn("An idempotency claim could not be released: {}", e.getClass().getSimpleName());
       return false;
     }
   }
 
   /**
-   * Returns the bytes a lock of a namespace occupies: its key and its token.
+   * Returns the bytes a claim on a namespace occupies: its key and its token.
    *
    * @param namespace the namespace
    * @return the size in bytes
    */
-  public static long lockBytes(@NotNull String namespace) {
-    return (long) LOCK_PREFIX.length() + namespace.length() + TOKEN_LENGTH;
+  public static long claimBytes(@NotNull String namespace) {
+    return (long) CLAIM_PREFIX.length() + namespace.length() + TOKEN_LENGTH;
   }
 
   /**
@@ -257,8 +259,18 @@ public class ExchangeIdempotency {
    * @return the SHA-256, hex
    */
   private static @NotNull String sha256(byte @NotNull [] bytes) {
+    return HexFormat.of().formatHex(sha256Digest().digest(bytes));
+  }
+
+  /**
+   * Returns a fresh SHA-256 digest.
+   *
+   * @return the digest
+   * @throws IllegalStateException if the JVM offers no SHA-256
+   */
+  private static @NotNull MessageDigest sha256Digest() {
     try {
-      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+      return MessageDigest.getInstance("SHA-256");
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("SHA-256 is unavailable", e);
     }

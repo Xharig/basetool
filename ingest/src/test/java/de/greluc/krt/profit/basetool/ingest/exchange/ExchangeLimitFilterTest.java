@@ -109,7 +109,7 @@ class ExchangeLimitFilterTest {
     when(registryReader.current())
         .thenReturn(ExchangeTestSupport.registry(true, true, GRANTS, null));
     when(revocationReader.isDenied(anyString())).thenReturn(false);
-    when(idempotency.lock(anyString())).thenReturn(Optional.of("lock-token"));
+    when(idempotency.claim(anyString())).thenReturn(Optional.of("claim-token"));
     when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
     when(budget.settle(
             anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
