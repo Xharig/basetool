@@ -180,6 +180,40 @@ class ExchangeResolveServiceTest {
   }
 
   @Test
+  void aNameKeyResolvesCaseInsensitivelyAndSilencesTheWarning() {
+    ShipType cutlass = new ShipType();
+    cutlass.setId(UUID.randomUUID());
+    cutlass.setName("Cutlass Black");
+    cutlass.setNameKey("vehicle_NameDRAK_Cutlass_Black");
+    when(shipTypeRepository.findAll()).thenReturn(List.of(cutlass));
+    Material agricium = material("Agricium", true);
+    agricium.setNameKey("items_commodities_agricium");
+    when(materialRepository.findAll()).thenReturn(List.of(agricium));
+
+    ExchangeResolveResponse ship =
+        resolve(
+            ExchangeCatalogKind.SHIP_TYPE,
+            new ExchangeItemRef(
+                null, null, null, null, "VEHICLE_NameDRAK_Cutlass_Black", "Something Else", null));
+    ExchangeResolveResponse unknown =
+        resolve(
+            ExchangeCatalogKind.MATERIAL,
+            new ExchangeItemRef(
+                null, null, null, null, "items_commodities_nope", "Agricium", null));
+    ExchangeResolveResponse known =
+        resolve(
+            ExchangeCatalogKind.MATERIAL,
+            new ExchangeItemRef(null, null, null, null, "items_commodities_agricium", null, null));
+
+    assertThat(only(ship).ref().name()).isEqualTo("Cutlass Black");
+    assertThat(ship.warnings()).isNull();
+    assertThat(only(unknown).ref().name()).isEqualTo("Agricium");
+    assertThat(unknown.warnings()).hasSize(1);
+    assertThat(only(known).ref().name()).isEqualTo("Agricium");
+    assertThat(known.warnings()).isNull();
+  }
+
+  @Test
   void warningsAreCappedAtFifty() {
     products("arclight pistol", "Arclight Pistol");
     List<ExchangeItemRef> refs = new ArrayList<>();
@@ -198,9 +232,9 @@ class ExchangeResolveServiceTest {
   void itemsWithOneNameListAtMostTenCandidates() {
     List<ExchangeItemKeyRow> twins = new ArrayList<>();
     for (int i = 0; i < 12; i++) {
-      twins.add(new ExchangeItemKeyRow(UUID.randomUUID(), "Twin", null, null, null, null));
+      twins.add(new ExchangeItemKeyRow(UUID.randomUUID(), "Twin", null, null, null, null, null));
     }
-    when(gameItemRepository.findExchangeKeyRows(any(), any(), any(), any(), any()))
+    when(gameItemRepository.findExchangeKeyRows(any(), any(), any(), any(), any(), any()))
         .thenReturn(twins);
 
     Result result = only(resolve(ExchangeCatalogKind.ITEM, ref(null, null, "twin")));

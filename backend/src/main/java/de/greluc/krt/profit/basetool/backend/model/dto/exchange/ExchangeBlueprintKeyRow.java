@@ -23,7 +23,7 @@ import java.util.UUID;
 
 /**
  * The game identifiers of one active blueprint and its output item, for resolving a blueprint by
- * GUID or UEX id (REQ-XCH-012).
+ * GUID, UEX id or name key (REQ-XCH-012).
  *
  * @param outputName the blueprint's output name, from which its product key is derived
  * @param blueprintScwikiUuid the blueprint's Wiki UUID, or {@code null}
@@ -31,6 +31,7 @@ import java.util.UUID;
  * @param itemExternalUuid the output item's Wiki UUID, or {@code null}
  * @param itemP4kUuid the output item's game-file UUID, or {@code null}
  * @param itemUexId the output item's UEX id, or {@code null}
+ * @param itemNameKey the output item's {@code global.ini} name key, or {@code null}
  */
 public record ExchangeBlueprintKeyRow(
     String outputName,
@@ -38,4 +39,5 @@ public record ExchangeBlueprintKeyRow(
     UUID blueprintP4kUuid,
     UUID itemExternalUuid,
     UUID itemP4kUuid,
-    Integer itemUexId) {}
+    Integer itemUexId,
+    String itemNameKey) {}

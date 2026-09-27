@@ -127,6 +127,7 @@ class ExchangeResolveControllerTest {
     GameItem rifle = item("Xch Resolve Rifle", null);
     rifle.setExternalUuid(RIFLE_ITEM_GUID);
     rifle.setUexItemId(RIFLE_UEX_ID);
+    rifle.setNameKey("item_NameXchResolveRifle");
     gameItemRepository.saveAndFlush(rifle);
     blueprint("BP_XCH_RESOLVE_RIFLE", "Xch Resolve Rifle", rifle);
     blueprint("BP_XCH_SHARED", "Xch Resolve Rifle", null);
@@ -135,6 +136,7 @@ class ExchangeResolveControllerTest {
     widget = item("Xch Resolve Widget", "XCH_Widget_A");
     widget.setP4kUuid(WIDGET_GUID);
     widget.setUexItemId(WIDGET_UEX_ID);
+    widget.setNameKey("item_NameXchWidgetA");
     gameItemRepository.saveAndFlush(widget);
     gameItemRepository.saveAndFlush(item("Xch Resolve Twin", null));
     gameItemRepository.saveAndFlush(item("Xch Resolve Twin", null));
@@ -164,7 +166,8 @@ class ExchangeResolveControllerTest {
           {"name":"Xch Resolve Rifle"},
           {"locKey":"item_NameXchPistol","name":"Xch Resolve Pistol"},
           {"bt":"no such product","scRecord":"BP_XCH_RESOLVE_RIFLE"},
-          {"name":"Qqqq Zzzz Wwww"}
+          {"name":"Qqqq Zzzz Wwww"},
+          {"locKey":"ITEM_NAMEXCHRESOLVERIFLE"}
         ]}
         """
             .formatted(RIFLE_ITEM_GUID, RIFLE_UEX_ID);
@@ -172,7 +175,7 @@ class ExchangeResolveControllerTest {
     mockMvc
         .perform(relayed(body))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.results.length()").value(8))
+        .andExpect(jsonPath("$.results.length()").value(9))
         .andExpect(jsonPath("$.results[0].index").value(0))
         .andExpect(jsonPath("$.results[0].status").value("resolved"))
         .andExpect(jsonPath("$.results[0].ref.bt").value("xch resolve rifle"))
@@ -187,6 +190,7 @@ class ExchangeResolveControllerTest {
         .andExpect(jsonPath("$.results[6].ref.bt").value("xch resolve rifle"))
         .andExpect(jsonPath("$.results[7].status").value("unmatched"))
         .andExpect(jsonPath("$.results[7].candidates").doesNotExist())
+        .andExpect(jsonPath("$.results[8].ref.bt").value("xch resolve rifle"))
         .andExpect(jsonPath("$.warnings.length()").value(1))
         .andExpect(jsonPath("$.warnings[0].pointer").value("/refs/5/locKey"))
         .andExpect(jsonPath("$.warnings[0].code").value("LOC_KEY_UNRESOLVED"));
@@ -203,7 +207,8 @@ class ExchangeResolveControllerTest {
           {"uexId":%d},
           {"name":"XCH RESOLVE WIDGET"},
           {"name":"Xch Resolve Twin"},
-          {"bt":"not-a-uuid"}
+          {"bt":"not-a-uuid"},
+          {"locKey":"item_NameXchWidgetA"}
         ]}
         """
             .formatted(widget.getId(), WIDGET_GUID, WIDGET_UEX_ID);
@@ -219,6 +224,7 @@ class ExchangeResolveControllerTest {
         .andExpect(jsonPath("$.results[5].status").value("ambiguous"))
         .andExpect(jsonPath("$.results[5].candidates.length()").value(2))
         .andExpect(jsonPath("$.results[6].status").value("unmatched"))
+        .andExpect(jsonPath("$.results[7].ref.bt").value(widget.getId().toString()))
         .andExpect(jsonPath("$.warnings").doesNotExist());
   }
 

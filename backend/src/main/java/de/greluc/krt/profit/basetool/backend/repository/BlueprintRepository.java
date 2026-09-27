@@ -236,22 +236,26 @@ public interface BlueprintRepository extends JpaRepository<Blueprint, UUID> {
   List<BlueprintIdNameRow> findActiveIdNameRows();
 
   /**
-   * Projects the active blueprints whose own UUIDs or whose output item's UUIDs or UEX id match,
-   * for the exchange's catalogue resolution (REQ-XCH-012).
+   * Projects the active blueprints whose own UUIDs or whose output item's UUIDs, UEX id or name key
+   * match, for the exchange's catalogue resolution (REQ-XCH-012).
    *
    * @param guids the game GUIDs to match; must not be empty
    * @param uexIds the UEX item ids to match; must not be empty
+   * @param nameKeys the lower-cased name keys to match; must not be empty
    * @return one row per matching active blueprint
    */
   @Query(
       """
       SELECT new de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintKeyRow(
-      b.outputName, b.scwikiUuid, b.p4kUuid, oi.externalUuid, oi.p4kUuid, oi.uexItemId)
+      b.outputName, b.scwikiUuid, b.p4kUuid, oi.externalUuid, oi.p4kUuid, oi.uexItemId,
+      oi.nameKey)
       FROM Blueprint b LEFT JOIN b.outputItem oi
       WHERE b.scwikiDeletedAt IS NULL AND b.outputName IS NOT NULL
       AND (b.scwikiUuid IN :guids OR b.p4kUuid IN :guids OR oi.externalUuid IN :guids
-      OR oi.p4kUuid IN :guids OR oi.uexItemId IN :uexIds)
+      OR oi.p4kUuid IN :guids OR oi.uexItemId IN :uexIds OR LOWER(oi.nameKey) IN :nameKeys)
       """)
   List<ExchangeBlueprintKeyRow> findExchangeKeyRows(
-      @Param("guids") Collection<UUID> guids, @Param("uexIds") Collection<Integer> uexIds);
+      @Param("guids") Collection<UUID> guids,
+      @Param("uexIds") Collection<Integer> uexIds,
+      @Param("nameKeys") Collection<String> nameKeys);
 }

@@ -30,6 +30,13 @@ import java.util.UUID;
  * @param externalUuid the item's Wiki UUID, or {@code null}
  * @param p4kUuid the item's game-file UUID, or {@code null}
  * @param uexId the item's UEX id, or {@code null}
+ * @param nameKey the item's {@code global.ini} name key, or {@code null}
  */
 public record ExchangeItemKeyRow(
-    UUID id, String name, String className, UUID externalUuid, UUID p4kUuid, Integer uexId) {}
+    UUID id,
+    String name,
+    String className,
+    UUID externalUuid,
+    UUID p4kUuid,
+    Integer uexId,
+    String nameKey) {}

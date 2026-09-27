@@ -78,7 +78,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ExchangeResolveService {
 
-  /** Warning code: the catalogue carries no name keys yet, so the name was used instead. */
+  /** Warning code: the name key resolved to no single entry, so the name was tried instead. */
   static final String WARNING_LOC_KEY_UNRESOLVED = "LOC_KEY_UNRESOLVED";
 
   /** Stands in for an empty key list, which a JPQL {@code IN} cannot take. */
@@ -166,7 +166,7 @@ public class ExchangeResolveService {
   }
 
   /**
-   * Resolves one reference by its key fields, {@code name} excluded.
+   * Resolves one reference by its key fields, {@code locKey} included and {@code name} excluded.
    *
    * @param catalog the catalogue
    * @param ref the reference
@@ -186,6 +186,9 @@ public class ExchangeResolveService {
     }
     if (ref.uexId() != null) {
       steps.add(Outcome.of(catalog.byUexId().get(ref.uexId())));
+    }
+    if (ref.locKey() != null) {
+      steps.add(Outcome.of(catalog.byLocKey().get(lower(ref.locKey()))));
     }
     Outcome best = Outcome.UNMATCHED;
     for (Outcome step : steps) {
@@ -272,16 +275,19 @@ public class ExchangeResolveService {
     Map<Integer, Set<Entry>> byUexId = new HashMap<>();
     List<UUID> guids = present(refs, ExchangeItemRef::scGuid);
     List<Integer> uexIds = present(refs, ExchangeItemRef::uexId);
-    if (!guids.isEmpty() || !uexIds.isEmpty()) {
+    List<String> locKeys = present(refs, r -> lower(r.locKey()));
+    Map<String, Set<Entry>> byLocKey = new HashMap<>();
+    if (!guids.isEmpty() || !uexIds.isEmpty() || !locKeys.isEmpty()) {
       for (ExchangeBlueprintKeyRow row :
           blueprintRepository.findExchangeKeyRows(
-              orElse(guids, NO_UUID), orElse(uexIds, NO_UEX_ID))) {
+              orElse(guids, NO_UUID), orElse(uexIds, NO_UEX_ID), orElse(locKeys, NO_TEXT))) {
         Entry entry = products.get(normalizer.normalize(row.outputName()));
         add(byScGuid, row.blueprintScwikiUuid(), entry);
         add(byScGuid, row.blueprintP4kUuid(), entry);
         add(byScGuid, row.itemExternalUuid(), entry);
         add(byScGuid, row.itemP4kUuid(), entry);
         add(byUexId, row.itemUexId(), entry);
+        add(byLocKey, lower(row.itemNameKey()), entry);
       }
     }
 
@@ -290,6 +296,7 @@ public class ExchangeResolveService {
         byScRecord,
         byScGuid,
         byUexId,
+        byLocKey,
         names ->
             blueprintImportService.resolveNames(names).stream()
                 .map(ExchangeResolveService::fromNameResolution)
@@ -328,24 +335,28 @@ public class ExchangeResolveService {
     List<UUID> guids = present(refs, ExchangeItemRef::scGuid);
     List<Integer> uexIds = present(refs, ExchangeItemRef::uexId);
     List<String> names = present(refs, r -> lower(r.name()));
+    List<String> locKeys = present(refs, r -> lower(r.locKey()));
 
     Map<UUID, Set<Entry>> byId = new HashMap<>();
     Map<String, Set<Entry>> byScRecord = new HashMap<>();
     Map<UUID, Set<Entry>> byScGuid = new HashMap<>();
     Map<Integer, Set<Entry>> byUexId = new HashMap<>();
     Map<String, Set<Entry>> byName = new HashMap<>();
+    Map<String, Set<Entry>> byLocKey = new HashMap<>();
     if (!(ids.isEmpty()
         && classNames.isEmpty()
         && guids.isEmpty()
         && uexIds.isEmpty()
-        && names.isEmpty())) {
+        && names.isEmpty()
+        && locKeys.isEmpty())) {
       for (ExchangeItemKeyRow row :
           gameItemRepository.findExchangeKeyRows(
               orElse(ids, NO_UUID),
               orElse(classNames, NO_TEXT),
               orElse(guids, NO_UUID),
               orElse(uexIds, NO_UEX_ID),
-              orElse(names, NO_TEXT))) {
+              orElse(names, NO_TEXT),
+              orElse(locKeys, NO_TEXT))) {
         Entry entry = new Entry(row.id().toString(), row.name());
         add(byId, row.id(), entry);
         add(byScRecord, lower(row.className()), entry);
@@ -353,6 +364,7 @@ public class ExchangeResolveService {
         add(byScGuid, row.p4kUuid(), entry);
         add(byUexId, row.uexId(), entry);
         add(byName, lower(row.name()), entry);
+        add(byLocKey, lower(row.nameKey()), entry);
       }
     }
     return new Catalog(
@@ -360,6 +372,7 @@ public class ExchangeResolveService {
         byScRecord,
         byScGuid,
         byUexId,
+        byLocKey,
         batch -> batch.stream().map(name -> Outcome.of(byName.get(lower(name)))).toList());
   }
 
@@ -384,6 +397,7 @@ public class ExchangeResolveService {
     Map<Integer, Set<Entry>> byUexId = new HashMap<>();
     Map<String, Set<Entry>> byName = new HashMap<>();
     Map<String, Set<Entry>> byCanonical = new HashMap<>();
+    Map<String, Set<Entry>> byLocKey = new HashMap<>();
     for (Material material : materials) {
       Entry entry = toEntry(material);
       add(byId, material.getId(), entry);
@@ -392,6 +406,7 @@ public class ExchangeResolveService {
       add(byScGuid, material.getP4kUuid(), entry);
       add(byUexId, material.getIdCommodity(), entry);
       add(byName, lower(material.getName()), entry);
+      add(byLocKey, lower(material.getNameKey()), entry);
       add(byCanonical, MaterialNameCanonicalizer.canonicalCore(material.getName()), entry);
     }
     Map<String, Set<Entry>> byAlias = new HashMap<>();
@@ -406,6 +421,7 @@ public class ExchangeResolveService {
         byScRecord,
         byScGuid,
         byUexId,
+        byLocKey,
         names ->
             names.stream()
                 .map(name -> materialByName(name, materials, byName, byCanonical, byAlias))
@@ -471,12 +487,14 @@ public class ExchangeResolveService {
     Map<String, Set<Entry>> byScRecord = new HashMap<>();
     Map<UUID, Set<Entry>> byScGuid = new HashMap<>();
     Map<Integer, Set<Entry>> byUexId = new HashMap<>();
+    Map<String, Set<Entry>> byLocKey = new HashMap<>();
     for (ShipType shipType : shipTypes) {
       Entry entry = toEntry(shipType);
       add(byId, shipType.getId(), entry);
       add(byScRecord, lower(shipType.getClassName()), entry);
       add(byScGuid, shipType.getExternalUuid(), entry);
       add(byUexId, shipType.getUexVehicleId(), entry);
+      add(byLocKey, lower(shipType.getNameKey()), entry);
     }
     ShipTypeMatcher.ShipTypeIndex index = ShipTypeMatcher.buildIndex(shipTypes);
     return new Catalog(
@@ -484,6 +502,7 @@ public class ExchangeResolveService {
         byScRecord,
         byScGuid,
         byUexId,
+        byLocKey,
         names ->
             names.stream()
                 .map(name -> ShipTypeMatcher.resolve(index, name, null))
@@ -630,6 +649,7 @@ public class ExchangeResolveService {
    * @param byScRecord entries by lower-cased DataForge record name
    * @param byScGuid entries by game GUID
    * @param byUexId entries by UEX id
+   * @param byLocKey entries by lower-cased {@code global.ini} name key
    * @param byNamesLookup resolves a batch of names, one outcome per name in order
    */
   private record Catalog(
@@ -637,6 +657,7 @@ public class ExchangeResolveService {
       @NotNull Map<String, Set<Entry>> byScRecord,
       @NotNull Map<UUID, Set<Entry>> byScGuid,
       @NotNull Map<Integer, Set<Entry>> byUexId,
+      @NotNull Map<String, Set<Entry>> byLocKey,
       @NotNull Function<List<String>, List<Outcome>> byNamesLookup) {
 
     /**
