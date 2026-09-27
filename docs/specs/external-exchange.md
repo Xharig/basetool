@@ -588,8 +588,8 @@ lowers or removes is audited by that book-out (`MARKET_OFFER_REDUCED`, `MARKET_O
 `reason=stock`, REQ-MARKET-013) and counted in
 `offersReduced` / `offersRemoved`. Each changed lot is journaled.
 
-**Status:** read and write sides built in the backend — WP 4.2 (#2085); the gateway routes are
-built on the gateway stack
+**Status:** read and write sides built in the backend, and the gateway's read route (`GET
+/exchange/v1/me/stock`) — WP 4.2 (#2085); the gateway's write route follows
 
 ### REQ-XCH-017 — Ships sync with a link step before the first create
 
@@ -628,7 +628,8 @@ reports the count as `detachedFromMissions`. The ship type resolves through `cat
 place like a stock lot's; an absent `fitted` keeps the ship's. Every write is audited in the Hangar
 area with the client and journaled.
 
-**Status:** built in the backend — WP 4.4 (#2086); the gateway route is on the gateway stack
+**Status:** built in the backend, and the gateway's read route (`GET /exchange/v1/me/ships`) —
+WP 4.4 (#2086); the gateway's write route follows
 
 ### REQ-XCH-018 — Org demand is anonymised and membership-scoped; locations are the non-hidden list
 

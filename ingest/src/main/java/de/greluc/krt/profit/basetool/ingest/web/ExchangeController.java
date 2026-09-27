@@ -259,6 +259,49 @@ public class ExchangeController {
   }
 
   /**
+   * Returns a snapshot page of the member's personal stock lots, or with {@code cursor} the changes
+   * since it.
+   *
+   * @param cursor the cursor of the last page, or {@code null} for a new snapshot
+   * @param limit the page size, 1 to 1000, or {@code null} for the default
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the page or a problem
+   */
+  @GetMapping("/me/stock")
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> stock(
+      @Nullable @RequestParam(required = false) String cursor,
+      @Nullable @RequestParam(required = false) String limit,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return page(
+        "/me/stock", "page.schema.json#/$defs/stockPage", cursor, limit, request, acceptLanguage);
+  }
+
+  /**
+   * Returns a snapshot page of the member's ships, or with {@code cursor} the changes since it.
+   *
+   * @param cursor the cursor of the last page, or {@code null} for a new snapshot
+   * @param limit the page size, 1 to 1000, or {@code null} for the default
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the page or a problem
+   */
+  @GetMapping("/me/ships")
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> ships(
+      @Nullable @RequestParam(required = false) String cursor,
+      @Nullable @RequestParam(required = false) String limit,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return page(
+        "/me/ships", "page.schema.json#/$defs/shipPage", cursor, limit, request, acceptLanguage);
+  }
+
+  /**
    * Checks the paging parameters, relays a page request and checks the answer.
    *
    * @param path the route below {@code /exchange/v1}

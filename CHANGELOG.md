@@ -7,6 +7,10 @@
 - **Datenaustausch: Blueprints lesen.** Verbundene Anwendungen mit `exchange.blueprints.read` lesen
   über `GET /exchange/v1/me/blueprints` die Blueprints des Mitglieds als Snapshot und danach nur die
   Änderungen seit ihrem Cursor (REQ-XCH-013, REQ-XCH-015).
+- **Datenaustausch: Lager und Hangar lesen.** Verbundene Anwendungen mit `exchange.stock.read` bzw.
+  `exchange.hangar.read` lesen über `GET /exchange/v1/me/stock` und `GET /exchange/v1/me/ships` den
+  persönlichen Bestand und die eigenen Schiffe des Mitglieds als Snapshot und danach die Änderungen
+  (REQ-XCH-016, REQ-XCH-017).
 - **Datenaustausch: Account-Abgleich.** Eine verbundene Anwendung kann fragen, ob ein RSI-Handle aus
   dem Spiel-Log zum angemeldeten Mitglied gehört, und vor einem Zweit-Account warnen; die Antwort ist
   nur `match`, `mismatch` oder `unknown`, der gespeicherte Handle wird nie herausgegeben
