@@ -909,6 +909,11 @@ Every write carries an `Idempotency-Key` (`400 IDEMPOTENCY_KEY_MISSING`), kept 2
 produced after them are cached — never `401`, `403`, `429`, `503`,
 `MASS_CHANGE_CONFIRMATION_REQUIRED` or a `5xx`. A duplicate in flight gets
 `409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different body `422 IDEMPOTENCY_KEY_REUSED`.
+These two and `400 IDEMPOTENCY_KEY_MISSING` are the filter's own answers about the key, written
+before anything is claimed, and are never cached; the cached statuses below are those of the route
+behind the filter (`ExchangeIdempotencyFilter.cacheable`). An answer above
+`app.exchange.store.max-result-bytes` (32 KiB), one the byte budget cannot take or one whose store
+write fails is not cached, and a retry under its key runs again.
 
 The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash, under
 `ingest:xch:idem:<client>:<member>:<sha256>`; a request's fingerprint is the SHA-256 of method, path
