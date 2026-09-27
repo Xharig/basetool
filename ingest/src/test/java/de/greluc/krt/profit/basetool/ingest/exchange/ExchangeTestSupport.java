@@ -70,6 +70,9 @@ public final class ExchangeTestSupport {
   /** The service document, which needs {@code exchange.connect}. */
   public static final String SERVICE_DOCUMENT = "/exchange/v1";
 
+  /** The request header telling the probe what to answer: {@code <status>:<code>}. */
+  public static final String PROBE_ANSWER = "X-Probe-Answer";
+
   /** The account check, which needs {@code exchange.connect} and has its own hourly limit. */
   public static final String ACCOUNT_CHECK = "/exchange/v1/me/account-check";
 
@@ -254,6 +257,9 @@ public final class ExchangeTestSupport {
     if (userAgent != null) {
       request.header(HttpHeaders.USER_AGENT, userAgent);
     }
+    if (method == HttpMethod.POST) {
+      request.header("Idempotency-Key", "test-" + UUID.randomUUID());
+    }
     if (json != null) {
       request.contentType(MediaType.APPLICATION_JSON).content(json);
     }
@@ -288,6 +294,13 @@ public final class ExchangeTestSupport {
      * @return {@code clientId capability capability…}, or {@code none}
      */
     private static ServerResponse context(ServerRequest request) {
+      String answer = request.headers().firstHeader(PROBE_ANSWER);
+      if (answer != null) {
+        int colon = answer.indexOf(':');
+        return ServerResponse.status(Integer.parseInt(answer.substring(0, colon)))
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body("{\"code\":\"" + answer.substring(colon + 1) + "\"}");
+      }
       ExchangeRequestContext context = ExchangeRequestContext.of(request.servletRequest());
       if (context == null) {
         return ServerResponse.ok().body("none");

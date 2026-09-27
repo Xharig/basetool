@@ -466,11 +466,22 @@ produced after them are cached — never `401`, `403`, `429`, `503`,
 `MASS_CHANGE_CONFIRMATION_REQUIRED` or a `5xx`. A duplicate in flight gets
 `409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different body `422 IDEMPOTENCY_KEY_REUSED`.
 
+The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash, under
+`ingest:xch:idem:<client>:<member>:<sha256>`; a request's fingerprint is the SHA-256 of method, path
+and body. The same request under a known key is answered from the cache with `Idempotency-Replayed:
+true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and never a staged mass
+change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
+the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write.
+
 **Acceptance**
 
-- [ ] Replay, cross-member key, in-flight duplicate, uncached `429`.
+- [x] Replay, cross-member key, in-flight duplicate, uncached `429`. *The gates, limits and quota run
+  before the cache, so a refused request never reaches it (`ExchangeIdempotencyFilterTest`: replay,
+  reused key, in-flight duplicate, the cached and uncached statuses, a store that fails; the namespace
+  holds the client and member, so one member's key can never answer another's).*
 
-**Status:** planned — WP 3.2 (#2082)
+**Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest` · **Status:**
+built — WP 3.2 (#2082)
 
 ### REQ-XCH-021 — Mass changes are confirmed by the member in the browser
 
@@ -524,10 +535,22 @@ SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted a
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out);
 the Redis byte budget follows with the idempotency cache.
 
+**The byte budget** (`app.exchange.store.*`): every value the gateway stores for the exchange
+registers `<key>|<bytes>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
+`…:c:<client>` and `…:all` — scored by its expiry, and expired entries are pruned before each count,
+so the count falls as keys expire. Before a write runs, the gateway reserves the largest cacheable
+answer (32 KiB) against all three budgets and refuses with `503 EXCHANGE_BUDGET_EXHAUSTED` when one
+would overflow, so a full budget stops writes before they reach the backend. The quota counters (from
+their first write of the day) and the idempotency locks (while a write is in flight) count too.
+`basetool_ingest_exchange_budget_used_ratio`
+reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
+
 **Acceptance**
 
-- [ ] A load test fills one member's budget, then one client's; sessions and other members keep
-  working.
+- [x] A load test fills one member's budget, then one client's; sessions and other members keep
+  working. *`ExchangeStoreRedisIntegrationTest` fills one member's and then one client's budget in a
+  real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
+  free their bytes. Sessions live under keys the ingest user cannot reach at all.*
 
 **Status:** planned — WP 3.2 (#2082), WP 2.1 (#2092)
 

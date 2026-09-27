@@ -25,19 +25,12 @@ import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.web.ProblemResponseWriter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -164,67 +157,5 @@ public class PayloadSizeLimitFilter extends OncePerRequestFilter {
   @Override
   protected boolean shouldNotFilter(@NotNull HttpServletRequest request) {
     return !IngestPathScope.isProtectedRequest(request);
-  }
-
-  /**
-   * Re-serves an already-read request body from memory so the controller can read it; the buffer is
-   * adopted without copying.
-   */
-  private static final class CachedBodyRequest extends HttpServletRequestWrapper {
-
-    /** The measured body; owned exclusively by this wrapper and never mutated. */
-    private final byte[] body;
-
-    /**
-     * Wraps the request around its already-read body.
-     *
-     * @param request the original request whose stream was consumed
-     * @param body the body bytes, adopted without copying; the caller must not retain or mutate
-     *     them
-     */
-    CachedBodyRequest(@NotNull HttpServletRequest request, byte @NotNull [] body) {
-      super(request);
-      this.body = body;
-    }
-
-    @NotNull
-    @Override
-    public ServletInputStream getInputStream() {
-      ByteArrayInputStream delegate = new ByteArrayInputStream(body);
-      return new ServletInputStream() {
-        @Override
-        public int read() {
-          return delegate.read();
-        }
-
-        @Override
-        public int read(byte @NotNull [] buffer, int offset, int length) {
-          return delegate.read(buffer, offset, length);
-        }
-
-        @Override
-        public boolean isFinished() {
-          return delegate.available() == 0;
-        }
-
-        @Override
-        public boolean isReady() {
-          return true;
-        }
-
-        @Override
-        public void setReadListener(ReadListener readListener) {
-          throw new UnsupportedOperationException(
-              "Async reads are not supported for ingest bodies");
-        }
-      };
-    }
-
-    @NotNull
-    @Override
-    public BufferedReader getReader() {
-      return new BufferedReader(
-          new InputStreamReader(new ByteArrayInputStream(body), StandardCharsets.UTF_8));
-    }
   }
 }

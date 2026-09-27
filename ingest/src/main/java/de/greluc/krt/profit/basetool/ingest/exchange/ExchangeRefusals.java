@@ -82,6 +82,18 @@ public class ExchangeRefusals {
   /** A dependency of the gate, such as the quota counter, is unreachable. */
   public static final String SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
 
+  /** A write carries no usable Idempotency-Key. */
+  public static final String IDEMPOTENCY_KEY_MISSING = "IDEMPOTENCY_KEY_MISSING";
+
+  /** An Idempotency-Key was reused for a different request. */
+  public static final String IDEMPOTENCY_KEY_REUSED = "IDEMPOTENCY_KEY_REUSED";
+
+  /** The first request with this Idempotency-Key is still in flight. */
+  public static final String IDEMPOTENCY_IN_PROGRESS = "IDEMPOTENCY_IN_PROGRESS";
+
+  /** A Redis byte budget of the exchange is full. */
+  public static final String EXCHANGE_BUDGET_EXHAUSTED = "EXCHANGE_BUDGET_EXHAUSTED";
+
   /** Every code this counter knows, registered at zero. */
   static final @Unmodifiable List<String> CODES =
       List.of(
@@ -99,7 +111,11 @@ public class ExchangeRefusals {
           CLIENT_VERSION_UNSUPPORTED,
           RATE_LIMITED,
           QUOTA_EXCEEDED,
-          SERVICE_UNAVAILABLE);
+          SERVICE_UNAVAILABLE,
+          IDEMPOTENCY_KEY_MISSING,
+          IDEMPOTENCY_KEY_REUSED,
+          IDEMPOTENCY_IN_PROGRESS,
+          EXCHANGE_BUDGET_EXHAUSTED);
 
   private final MeterRegistry meterRegistry;
 

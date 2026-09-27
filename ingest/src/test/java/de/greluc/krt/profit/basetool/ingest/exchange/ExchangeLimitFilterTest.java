@@ -24,6 +24,7 @@ import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.CLIENT;
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.STOCK;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -79,6 +80,8 @@ class ExchangeLimitFilterTest {
   @MockitoBean private ExchangeRegistryReader registryReader;
   @MockitoBean private ExchangeRevocationReader revocationReader;
   @MockitoBean private ExchangeQuotas quotas;
+  @MockitoBean private ExchangeIdempotency idempotency;
+  @MockitoBean private ExchangeBudget budget;
 
   private MockMvc mockMvc;
   private ECKey key;
@@ -101,6 +104,8 @@ class ExchangeLimitFilterTest {
     when(registryReader.current())
         .thenReturn(ExchangeTestSupport.registry(true, true, GRANTS, null));
     when(revocationReader.isDenied(anyString())).thenReturn(false);
+    when(idempotency.lock(anyString())).thenReturn(true);
+    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true);
     when(quotas.secondsUntilTomorrow()).thenReturn(3600L);
   }
 
