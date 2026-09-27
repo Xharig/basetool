@@ -19,12 +19,17 @@
 
 package de.greluc.krt.profit.basetool.frontend.controller;
 
+import de.greluc.krt.profit.basetool.frontend.config.GrafanaLinkProperties;
 import de.greluc.krt.profit.basetool.frontend.config.UsesLayoutModel;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientUsageDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeSettingsDto;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import de.greluc.krt.profit.basetool.frontend.support.Roles;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -53,6 +58,9 @@ public class AdminExchangeClientsPageController {
   private static final ParameterizedTypeReference<List<ExchangeClientDto>> LIST_TYPE =
       new ParameterizedTypeReference<>() {};
 
+  private static final ParameterizedTypeReference<List<ExchangeClientUsageDto>> USAGE_TYPE =
+      new ParameterizedTypeReference<>() {};
+
   /** The {@code fragment} value that renders only the registry section, for the in-place swap. */
   static final String REGISTRY_FRAGMENT = "registry";
 
@@ -76,13 +84,16 @@ public class AdminExchangeClientsPageController {
   /** Talks to the backend. */
   private final BackendApiClient backendApiClient;
 
+  /** Where the per-client error rate lives. */
+  private final GrafanaLinkProperties grafanaLinks;
+
   /**
    * Renders the registry page, or with {@code fragment=registry} only its registry section. A
    * failed load renders an empty list with {@code error} set and no switch.
    *
    * @param fragment {@code registry} for the section fragment; anything else renders the page
-   * @param model receives {@code clients}, {@code settings}, {@code capabilities} and, on a failed
-   *     load, {@code error}
+   * @param model receives {@code clients}, {@code settings}, {@code usage} by client id, {@code
+   *     capabilities}, {@code grafanaUrl} and, on a failed load, {@code error}
    * @return {@code admin/exchange-clients}, or its {@code registry} fragment
    */
   @NotNull
@@ -102,9 +113,32 @@ public class AdminExchangeClientsPageController {
       model.addAttribute("settings", null);
       model.addAttribute("error", "admin.exchangeClients.error.load");
     }
+    model.addAttribute("usage", usage());
     model.addAttribute("capabilities", CAPABILITIES);
+    model.addAttribute("grafanaUrl", grafanaLinks.operationsDashboardUrl());
     return REGISTRY_FRAGMENT.equals(fragment)
         ? "admin/exchange-clients :: " + REGISTRY_FRAGMENT
         : "admin/exchange-clients";
+  }
+
+  /**
+   * Loads how widely each client is in use; a failure leaves the usage columns empty rather than
+   * failing the page.
+   *
+   * @return the usage by registry id, empty when it cannot be read
+   */
+  private @NotNull Map<UUID, ExchangeClientUsageDto> usage() {
+    try {
+      List<ExchangeClientUsageDto> rows =
+          backendApiClient.get(AdminExchangeClientsRelayController.CLIENTS + "/usage", USAGE_TYPE);
+      Map<UUID, ExchangeClientUsageDto> byId = new HashMap<>();
+      if (rows != null) {
+        rows.forEach(row -> byId.put(row.id(), row));
+      }
+      return byId;
+    } catch (Exception e) {
+      log.debug("Failed to load the exchange client usage", e);
+      return Map.of();
+    }
   }
 }
