@@ -313,7 +313,7 @@ offline token (scope `offline_access`) issued at or before the timestamp, and an
 carries no `auth_time`. A new connection afterwards works at once; one without `offline_access`
 needs a sign-in after the disconnect, because a device login that joins an older browser session
 keeps that session's `auth_time`. When a member leaves the org (disabled, deleted, membership lost), their exchange
-sessions and consents end — an admin logout, which also makes offline tokens stale — and
+sessions and consents end — an admin logout, which also makes offline tokens stale — and then
 revocations are written at once, not at the next roster sync. The
 gateway reads the deny list and the timestamps per request, bypassing its cache.
 
@@ -350,10 +350,12 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
 - [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
   sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
   every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
-  commit, only while the registry holds a client — writes a revocation for every client (mirror and
-  database), removes the member's consent for each and logs them out of every session, auditing
-  `EXCHANGE_MEMBER_DEPARTED`; a failed step is counted and alerts (`ExchangeDepartureIncomplete`)
-  instead of failing the sync (`ExchangeDepartureIntegrationTest`, `UserReconciliationServiceTest`).
+  commit, only while the registry holds a client — removes the member's consent for each client and
+  logs them out of every session, and only then reads the time and writes a revocation for every
+  client (mirror and database), also when a Keycloak step failed, so no token refreshed meanwhile
+  carries a later `iat`; it audits `EXCHANGE_MEMBER_DEPARTED`. A failed step is counted and alerts
+  (`ExchangeDepartureIncomplete`) instead of failing the sync (`ExchangeDepartureServiceTest`,
+  `ExchangeDepartureIntegrationTest`, `UserReconciliationServiceTest`).
   The gateway refuses the member through the per-client revocations those steps write
   (`ExchangeGateTest`); the end-to-end run follows with the sandbox (WP 2.3).*
 

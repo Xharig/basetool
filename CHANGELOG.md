@@ -290,6 +290,9 @@
   Markierung statt als Auswahl. Die Seite zeigt die geleiteten Einheiten und alles darunter (OL:
   alles), und den eigenen Rang setzt, ändert oder entfernt nur noch ein Admin (REQ-ROLE-004).
   
+- **Datenaustausch: Austritt sperrt erst nach dem Abmelden.** Scheidet ein Mitglied aus, entzieht
+  das Backend zuerst Einwilligungen und Sitzungen in Keycloak und schreibt die Sperren danach – auch
+  wenn Keycloak scheitert –, damit kein zwischendurch erneuerter Token durchkommt (REQ-XCH-008).
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.
