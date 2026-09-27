@@ -63,6 +63,10 @@
 
 ### Fixed
 
+- **Lager: die Org-Einheiten-Auswahl in „Mein Lager“ ist nicht mehr leer.** Beim Sammel-Umbuchen
+  und beim Ändern der Org-Einheit fragte die Seite die eigenen Mitgliedschaften mit dem Benutzernamen
+  statt der Nutzer-ID ab und bot deshalb nur „Keine Einheit“ an; beide Dialoge nutzen jetzt die ID.
+
 - **Keycloak-Provisioner: ein frischer Realm ist nach dem ersten Lauf in Form.** Keycloak 26 übergeht
   beim Anlegen eines Clients `backchannel.logout.session.required`; der Provisioner setzt das Attribut
   jetzt direkt danach, statt erst beim zweiten Lauf (REQ-OPS-033).

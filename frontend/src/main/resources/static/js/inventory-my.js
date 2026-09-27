@@ -323,9 +323,14 @@ function showBulkRebookError(message) {
     }
 }
 
+/**
+ * Reads the caller's app_user.id from the Lager table.
+ *
+ * @returns {string | null} the id, or null when the page carries none
+ */
 function currentInventoryUserId() {
     const table = document.getElementById('inventoryTable');
-    return table ? table.getAttribute('data-user-id') : null;
+    return table ? table.getAttribute('data-member-id') : null;
 }
 
 function refreshBulkRebookOrgUnitPicker() {
