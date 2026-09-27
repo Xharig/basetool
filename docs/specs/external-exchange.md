@@ -1239,7 +1239,10 @@ catalogue) and whether it was undone.
 
 Behind `app.ingest.legacy-endpoints.enabled` (default `true`), `/v1/refinery-extract` and
 `/v1/blueprint-preview` answer `410 LEGACY_ENDPOINT_GONE` with a German update hint once the flag is
-`false` at the go-live. While it is `true` their behaviour is unchanged.
+`false` at the go-live. While it is `true` their behaviour is unchanged, and under `prod` the gateway
+refuses to start with an empty client-id allowlist, so an exchange client's token can never reach
+these relays, which run with the member's stored authorities (REQ-INGEST-011,
+`LegacyClientGateGuard`; production sets the allowlist, so the next deploy is unaffected).
 
 The switch is `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED` on the host. The refusal runs before the security
 chain, so an outdated extractor sees the hint (*„Diese Schnittstelle wurde abgeschaltet. Bitte

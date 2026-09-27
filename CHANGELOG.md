@@ -208,6 +208,12 @@
   frei; `extractor-ingest` und `extractor-ingest-only` entfallen. Ein Extractor-Token gilt damit nicht
   mehr für die Backend-API. Auf Produktion wird das erst nach dem Abschalten der alten
   Extractor-Adressen angewendet, weil Versionen bis 2.9.1 sie noch brauchen.
+  
+- **Ingest: Produktion startet nicht ohne Client-Allowlist.** Solange die alten `/v1`-Endpunkte
+  aktiv sind, verweigert das Gateway unter `prod` den Start, wenn `IRI_INGEST_ALLOWED_CLIENT_IDS`
+  leer ist – sonst erreichte das Token einer verbundenen Anwendung die alten Entwurfs-Relays.
+  Produktion setzt den Wert bereits.
+  
 - **Keycloak: Offline-Sitzung des SC Extractors fest auf 30/90 Tage.** Der Provisioner setzt beim
   Client `basetool-sc-extractor` dieselbe Offline-Sitzung wie bei verbundenen Anwendungen (30 Tage
   ohne Nutzung, 90 Tage insgesamt), weil der Extractor ab 2.10.0 `offline_access` anfordert. Bisher

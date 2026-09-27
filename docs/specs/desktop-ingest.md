@@ -663,6 +663,19 @@ done by a PR, so shipping these pre-enabled would reject every real extractor to
 client population (`basetool_ingest_client_rejected_total` staying at zero) before enforcing — the
 same sequencing discipline `REQ-INGEST-008` imposes on the audience validator.
 
+**One exception: production refuses to start with an empty client-id allowlist while the legacy
+endpoints answer** (`LegacyClientGateGuard`, 2026-09-27). Since exchange clients exist, an empty
+allowlist no longer only admits the extractor: any realm token that passes the audience check — a
+third-party exchange client's included — would reach the legacy draft relays, which run with the
+member's full stored authorities rather than the reduced exchange authentication (REQ-XCH-009). Under
+`prod`, with `app.ingest.legacy-endpoints.enabled` true and `allowed-client-ids` empty, the gateway
+therefore fails its start with a message naming `IRI_INGEST_ALLOWED_CLIENT_IDS`. `dev` and `test` keep
+the inert default, and once the legacy endpoints are off (REQ-XCH-033) the allowlist is no longer
+needed, because both routes answer `410` before the security chain. Production already sets the value
+(`basetool-sc-extractor`, read-only check on 2026-09-27), so the next deploy starts as before. The
+compose files and the Quadlet `env.d` template keep their empty default on purpose: the value is host
+configuration, and a host that lacks it now fails loudly instead of running open.
+
 > **`audit-only` covers these three checks only — not the audience.** The ingest audience lives in
 > `app.security.jwt.expected-audiences` and is enforced by the resource server's `JwtDecoder`, a
 > different mechanism entirely: it starts refusing the moment it is configured, regardless of
@@ -713,6 +726,9 @@ authentication: the field is client-supplied and the contract that documents it 
 **Acceptance**
 
 - [x] With nothing configured the gate is a no-op; a build that ships it does not reject any token.
+- [x] Under `prod`, an empty client-id allowlist refuses the start while the legacy endpoints answer;
+  with an allowlist, with the legacy endpoints off, or under `dev` / `test` the gateway starts
+  (`LegacyClientGateGuardTest`).
 - [x] A token whose `azp` is not on the allowlist is refused `403 CLIENT_NOT_ALLOWED` and never
   reaches the backend relay.
 - [x] A token with **no** `azp` at all is refused under its own `missing_azp` reason.
@@ -742,13 +758,14 @@ authentication: the field is client-supplied and the contract that documents it 
 
 **Enforced by:** `ClientIdentityFilterTest` (all four checks, fail-closed on absent claims, audit-only,
 bounded label, unauthenticated pass-through, non-JWT principal refused, percent-encoded path),
+`LegacyClientGateGuardTest` (the production start refused with an empty allowlist),
 `IngestEndpointSurfaceTest` (the routed surface is exactly the two `/v1` endpoints),
 `IngestGatePostureMetricTest` and `StartupBannerListenerTest` (the posture gauge and log line),
 the promtool test `ingest_audience_gate_off_test.yml`, `IngestPathScopeTest` (decoded
 scope matching), `FiltersTest` / `RequestLoggingFilterTest` (payload cap, rate limit and access log
 on an encoded path), `ProvenanceGuardTest` (allowlist, absent producer,
 audit-only, log sanitisation, no echo-back) · **Code:** `ClientIdentityFilter`,
-`ClientIdentityProperties`, `IngestPathScope`, `ProvenanceGuard`, `Provenance`,
+`ClientIdentityProperties`, `LegacyClientGateGuard`, `IngestPathScope`, `ProvenanceGuard`, `Provenance`,
 `ClientNotAllowedException`, `MetricNames` · **Monitoring:** `basetool_ingest_client_total{client_id}`,
 `basetool_ingest_client_rejected_total{reason}`, `basetool_ingest_gate_enforcing{gate}`, alerts
 `IngestUnknownClient` and `IngestAudienceGateOff`
