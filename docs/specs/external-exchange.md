@@ -102,8 +102,9 @@ document and the schemas beside it and builds the site with Jekyll; a pull reque
 **Status:** the list, the onboarding page, the application template and the documentation site with
 its overview, formats, errors, versioning, changelog and authentication pages, and the MIT-licensed
 DPoP reference `docs/exchange/dpop-reference/` (stdlib Python, CNG and OpenSSL 3 through `ctypes`,
-its tests run by `exchange-docs.yml`), are built — WP 4.6 (#2090); the resource pages, the sync
-guide, the quick start and the sandbox page follow; the terms link and the privacy notice change with the go-live — WP 6 (#2092)
+its tests run by `exchange-docs.yml`), the resource pages, the sync guide, the sandbox page and the
+quick start are built — WP 4.6 (#2090), WP 2.3 (#2099); the terms link and the privacy notice change
+with the go-live — WP 6 (#2092)
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 
