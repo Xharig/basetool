@@ -26,12 +26,14 @@ import de.greluc.krt.profit.basetool.backend.model.AuditEventType;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
+import de.greluc.krt.profit.basetool.backend.model.NotificationType;
 import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedAppDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedInstallationDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeRevocationRow;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRevocationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
+import de.greluc.krt.profit.basetool.backend.repository.NotificationRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.service.KeycloakService;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
@@ -43,6 +45,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +77,10 @@ public class ConnectedAppsService {
   private final KeycloakService keycloakService;
   private final AuditService auditService;
   private final MeterRegistry meterRegistry;
+
+  /** Reads and clears the new-connection notifications that mark an installation unseen. */
+  private final NotificationRepository notificationRepository;
+
   private final Clock clock = Clock.systemUTC();
 
   /** Registers the disconnect counter for both kinds at zero. */
@@ -110,6 +117,10 @@ public class ConnectedAppsService {
           .computeIfAbsent(installation.getClient().getClientId(), k -> new ArrayList<>())
           .add(installation);
     }
+    Set<UUID> unseen =
+        Set.copyOf(
+            notificationRepository.findUnreadEntityIds(
+                member, NotificationType.EXCHANGE_INSTALLATION_CONNECTED));
     List<ConnectedAppDto> apps = new ArrayList<>();
     for (List<ExchangeInstallation> installations : byClient.values()) {
       ExchangeClient client = installations.getFirst().getClient();
@@ -122,11 +133,28 @@ public class ConnectedAppsService {
                   .map(
                       i ->
                           new ConnectedInstallationDto(
-                              i.getId(), i.getLabel(), i.getFirstSeenAt(), i.getLastSeenAt()))
+                              i.getId(),
+                              i.getLabel(),
+                              i.getFirstSeenAt(),
+                              i.getLastSeenAt(),
+                              unseen.contains(i.getId())))
                   .toList()));
     }
     apps.sort((a, b) -> a.clientId().compareTo(b.clientId()));
     return apps;
+  }
+
+  /**
+   * Marks the member's new-connection notifications read, which ends the highlight of every
+   * installation they announced; nothing else changes, so it is not audited.
+   *
+   * @param member the member
+   * @return how many notifications were marked
+   */
+  @Transactional
+  public int markSeen(@NotNull UUID member) {
+    return notificationRepository.markReadOfType(
+        member, NotificationType.EXCHANGE_INSTALLATION_CONNECTED, clock.instant());
   }
 
   /**
