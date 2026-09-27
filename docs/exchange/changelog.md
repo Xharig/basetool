@@ -45,6 +45,11 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **Clarified: which answers are replayed.** `409 IDEMPOTENCY_IN_PROGRESS`, `422
   IDEMPOTENCY_KEY_REUSED`, `400 IDEMPOTENCY_KEY_MISSING` and `413` are never cached, and an answer
   the server could not store is not replayed ([sync guide](sync-guide.md#idempotency-keys)).
+- **Clarified: the label's hyphen and the tombstone channels.** The installation label allows only
+  the ASCII hyphen-minus; `VerseKit – Windows` with an en dash is refused
+  ([connect](resources/connect.md#label-the-installation--post-exchangev1meinstallation)). A
+  tombstone's `removedBy.channel` is `web`, `app`, `client` or `system`
+  ([sync guide](sync-guide.md#tombstones-and-never-re-adding)).
 - **Clarified: after `CLIENT_SUSPENDED`.** A client cannot learn when a suspension ends, so it tries
   again at its next start or when the member asks, never on a timer.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for

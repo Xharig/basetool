@@ -22,7 +22,8 @@ How each step works is on the [authentication](authentication.md) page.
 - Request `exchange.connect` and only the scopes of the features the member enabled.
 - Label each installation (`POST /exchange/v1/me/installation`) so the member can tell two devices
   apart and disconnect one of them. The label is at most 40 characters of letters, digits, spaces,
-  `-`, `_` and `.`, and it is never an automatic host or computer name.
+  the ASCII hyphen-minus `-`, `_` and `.` — no en dash, no other punctuation — and it is never an
+  automatic host or computer name.
 
 ## Credential storage
 
