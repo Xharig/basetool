@@ -11,7 +11,7 @@ groups:
           description: "Prometheus cannot scrape {{ $labels.job }} / {{ $labels.instance }} for 3 minutes. For scratch-image monitoring services this is their only liveness signal. (Blackbox /probe jobs are excluded — their real failures page via probe_success alerts, not this one.)"
 
       - alert: BlackboxProbeFailed
-        expr: probe_success{job=~"blackbox-http|blackbox-http-auth"} == 0
+        expr: probe_success{job=~"blackbox-http|blackbox-http-auth|blackbox-http-401"} == 0
         for: 3m
         labels:
           severity: critical
