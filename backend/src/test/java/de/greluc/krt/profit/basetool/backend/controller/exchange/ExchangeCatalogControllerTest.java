@@ -219,7 +219,8 @@ class ExchangeCatalogControllerTest {
         .with(gateway())
         .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
         .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit-test")
-        .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, capabilities);
+        .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, capabilities)
+        .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "k".repeat(43));
   }
 
   /**

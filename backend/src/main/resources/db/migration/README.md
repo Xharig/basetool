@@ -155,7 +155,8 @@ something broke once.
   - **Profile** — the optional RSI handle with its shape check and case-insensitive
     unique index (V246, REQ-SEC-072).
   - **External exchange** — the client registry, its capabilities, the global switch and the
-    mirror's revision sequence (V248, REQ-XCH-003).
+    mirror's revision sequence (V248, REQ-XCH-003); installations and client revocations (V249,
+    REQ-XCH-007/-008).
 
 This timeline is curated, not exhaustive (checked against the directory on
 2026-09-26, tip V246). `ls | sort -V | tail -1` in this directory is the only reliable

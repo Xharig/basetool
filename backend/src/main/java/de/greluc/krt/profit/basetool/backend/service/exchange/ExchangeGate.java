@@ -23,8 +23,10 @@ import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeSettings;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeSettingsRepository;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import de.greluc.krt.profit.basetool.backend.support.SubjectAuthentication;
@@ -32,6 +34,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -66,8 +69,12 @@ public class ExchangeGate {
   /** Refusal reason: the needed capability was not relayed or not granted to the client. */
   static final String REASON_SCOPE_MISSING = "scope_missing";
 
+  /** Refusal reason: the member disconnected the calling installation. */
+  static final String REASON_INSTALLATION_REVOKED = "installation_revoked";
+
   private final ExchangeClientRepository clientRepository;
   private final ExchangeSettingsRepository settingsRepository;
+  private final ExchangeInstallationRepository installationRepository;
   private final MeterRegistry meterRegistry;
 
   /** Registers the refusal counter for every reason at zero, so a first refusal is an increase. */
@@ -79,7 +86,8 @@ public class ExchangeGate {
           REASON_SWITCH_OFF,
           REASON_CLIENT_UNKNOWN,
           REASON_CLIENT_SUSPENDED,
-          REASON_SCOPE_MISSING
+          REASON_SCOPE_MISSING,
+          REASON_INSTALLATION_REVOKED
         }) {
       meterRegistry.counter(MetricNames.EXCHANGE_GATE_REFUSED, MetricNames.TAG_REASON, reason);
     }
@@ -156,6 +164,10 @@ public class ExchangeGate {
       refuse(REASON_CLIENT_SUSPENDED);
       return Optional.empty();
     }
+    if (installationRevoked(subject)) {
+      refuse(REASON_INSTALLATION_REVOKED);
+      return Optional.empty();
+    }
     Set<String> granted =
         client.get().getCapabilities().stream()
             .map(ExchangeCapability::getScope)
@@ -168,6 +180,23 @@ public class ExchangeGate {
             .filter(granted::contains)
             .collect(Collectors.toSet());
     return Optional.of(relayed);
+  }
+
+  /**
+   * Tells whether the calling installation was disconnected by the member.
+   *
+   * @param subject the acting member's authentication
+   * @return {@code true} when the installation is known and revoked
+   */
+  private boolean installationRevoked(@NotNull SubjectAuthentication subject) {
+    String key = subject.exchangeInstallationKey();
+    if (key == null) {
+      return false;
+    }
+    return installationRepository
+        .findByKey(subject.externalClient(), UUID.fromString(subject.subject()), key)
+        .map(ExchangeInstallation::getRevokedAt)
+        .isPresent();
   }
 
   /**

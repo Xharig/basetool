@@ -684,7 +684,7 @@ public final class MetricNames {
    * #ON_BEHALF_OF_NOT_A_GATEWAY}, {@link #ON_BEHALF_OF_ENDPOINT_NOT_BOUND}, {@link
    * #ON_BEHALF_OF_NO_CALLER}, {@link #ON_BEHALF_OF_MALFORMED}, {@link
    * #ON_BEHALF_OF_MEMBER_NOT_LIVE}, {@link #ON_BEHALF_OF_FORGED_EXCHANGE_HEADER}, {@link
-   * #ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID}).
+   * #ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID}, {@link #ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID}).
    *
    * <p>Counts on-behalf-of headers refused because the presenter is not the ingest gateway or the
    * request is otherwise invalid (ADR-0129).
@@ -732,6 +732,19 @@ public final class MetricNames {
    * backend's {@code ExchangeGate} refused although the gateway had let them through (REQ-XCH-004).
    */
   public static final String EXCHANGE_GATE_REFUSED = "basetool.exchange.gate.refused";
+
+  /**
+   * Counter {@code basetool_exchange_disconnects_total{kind}} — a member disconnecting one
+   * installation or a whole client ({@code installation} / {@code client}, REQ-XCH-008).
+   */
+  public static final String EXCHANGE_DISCONNECTS = "basetool.exchange.disconnects";
+
+  /**
+   * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path
+   * without a well-formed {@code X-Exchange-Installation}.
+   */
+  public static final String ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID =
+      "exchange_installation_invalid";
 
   /**
    * Tag: the Terms-of-Use version a measurement belongs to. Bounded by construction — one process

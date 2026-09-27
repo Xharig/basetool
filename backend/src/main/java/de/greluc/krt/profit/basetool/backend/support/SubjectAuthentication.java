@@ -48,4 +48,14 @@ public interface SubjectAuthentication {
   default String externalClient() {
     return null;
   }
+
+  /**
+   * The DPoP key thumbprint of the installation the request was relayed for, when there is one.
+   *
+   * @return the thumbprint, or {@code null} when the request came from no external client
+   */
+  @Nullable
+  default String exchangeInstallationKey() {
+    return null;
+  }
 }

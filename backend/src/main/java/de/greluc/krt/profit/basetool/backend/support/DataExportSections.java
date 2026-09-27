@@ -148,6 +148,28 @@ public final class DataExportSections {
               WHERE s.owner_id = :userId ORDER BY s.created_at
               """),
           new Section(
+              "connectedApps",
+              ART_15_20,
+              "Recorded when an approved external client connects on the member's behalf; the"
+                  + " label is the client's name for the installation.",
+              """
+              SELECT c.client_id, c.display_name AS client, i.label, i.first_seen_at,
+                     i.last_seen_at, i.revoked_at
+              FROM exchange_installation i
+                JOIN exchange_client c ON c.id = i.exchange_client_id
+              WHERE i.user_id = :userId ORDER BY i.first_seen_at
+              """),
+          new Section(
+              "connectedAppRevocations",
+              ART_15,
+              "Recorded when the member disconnects a whole external client.",
+              """
+              SELECT c.client_id, c.display_name AS client, r.revoked_at
+              FROM exchange_client_revocation r
+                JOIN exchange_client c ON c.id = r.exchange_client_id
+              WHERE r.user_id = :userId ORDER BY r.revoked_at
+              """),
+          new Section(
               "personalInventory",
               ART_15_20,
               "Entered by the member, including free-text notes.",
@@ -354,6 +376,7 @@ public final class DataExportSections {
           Map.entry("deletionRequests", Set.of("decision_note")),
           Map.entry("warehouseContributions", Set.of("note")),
           Map.entry("hangar", Set.of("name")),
+          Map.entry("connectedApps", Set.of("label")),
           Map.entry("personalInventory", Set.of("name", "note")),
           Map.entry("personalBlueprints", Set.of("note")),
           Map.entry("notifications", Set.of("params")),
