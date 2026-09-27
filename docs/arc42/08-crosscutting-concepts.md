@@ -38,7 +38,8 @@ Beyond roles there are three mechanisms that are easy to miss:
 
 - **Approved external clients act with less than the member** *(planned, epic #2078)* — a client
   reaches only `/exchange/v1/**` on the ingest gateway, with consent per capability and DPoP-bound
-  tokens; behind the relay the member holds a reduced exchange authentication, never their stored
+  tokens; behind the relay (`ActingMemberFilter`, an explicit list of exchange routes, gated by
+  `@exchangeGate`) the member holds a reduced exchange authentication, never their stored
   roles, and every write is journaled, undoable and bounded by a mass-change guard
   ([`external-exchange.md`](../specs/external-exchange.md), ADR-0216 … ADR-0218).
 

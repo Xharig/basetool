@@ -24,8 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import java.util.ArrayList;
 import java.util.List;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -45,6 +48,8 @@ class ClientAttributionTest {
   /** The gateway allowlist a test may extend; the properties record reads it by reference. */
   private List<String> gatewayClientIds;
 
+  private KnownExchangeClients knownExchangeClients;
+
   private ClientAttribution attribution;
 
   @BeforeEach
@@ -53,7 +58,8 @@ class ClientAttributionTest {
         new ApiClientMetricsProperties(List.of("basetool-frontend", "basetool-android"));
     gatewayClientIds = new ArrayList<>();
     gatewayProperties = new IngestGatewayProperties(gatewayClientIds);
-    attribution = new ClientAttribution(clientProperties, gatewayProperties);
+    knownExchangeClients = Mockito.mock(KnownExchangeClients.class);
+    attribution = new ClientAttribution(clientProperties, gatewayProperties, knownExchangeClients);
   }
 
   @Test
@@ -92,10 +98,88 @@ class ClientAttributionTest {
   }
 
   @Test
+  void label_keepsAnExchangeRegistryClientVerbatim() {
+    Mockito.when(knownExchangeClients.isRegistered("versekit")).thenReturn(true);
+
+    assertEquals("versekit", attribution.label("versekit"));
+  }
+
+  @Test
+  void labelOf_namesTheExternalClientOfAnActingMember() {
+    Mockito.when(knownExchangeClients.isRegistered("versekit")).thenReturn(true);
+
+    assertEquals("versekit", attribution.labelOf(new ActingToken("versekit")));
+    assertEquals(MetricNames.CLIENT_ID_NONE, attribution.labelOf(new ActingToken(null)));
+  }
+
+  @Test
+  void relayedLabelOf_namesARegisteredClientOnlyFromTheGateway() {
+    gatewayClientIds.add("basetool-ingest");
+    Mockito.when(knownExchangeClients.isRegistered("versekit")).thenReturn(true);
+
+    assertEquals("versekit", attribution.relayedLabelOf(bearer("basetool-ingest"), "versekit"));
+    assertEquals(
+        MetricNames.CLIENT_ID_OTHER,
+        attribution.relayedLabelOf(bearer("basetool-ingest"), "not-registered"));
+    assertEquals(
+        "basetool-frontend",
+        attribution.relayedLabelOf(bearer("basetool-frontend"), "versekit"),
+        "a browser naming a client is labelled by its own token");
+  }
+
+  /**
+   * Builds a bearer authentication issued to a client.
+   *
+   * @param azp the client the token was issued to
+   * @return the authentication
+   */
+  private static JwtAuthenticationToken bearer(String azp) {
+    return new JwtAuthenticationToken(
+        Jwt.withTokenValue("t").header("alg", "none").claim("sub", "s").claim("azp", azp).build());
+  }
+
+  @Test
   void labelOf_answersForTokenlessAndAbsentAuthenticationsInsteadOfThrowing() {
     assertEquals(MetricNames.CLIENT_ID_NONE, attribution.labelOf(null));
     assertEquals(
         MetricNames.CLIENT_ID_NONE,
         attribution.labelOf(new TestingAuthenticationToken("principal", "creds")));
+  }
+
+  /** A token-less authentication that names an external client, like an acting member's. */
+  private static final class ActingToken extends AbstractAuthenticationToken
+      implements SubjectAuthentication {
+
+    private final String externalClient;
+
+    /**
+     * Creates the token.
+     *
+     * @param externalClient the external client, or {@code null}
+     */
+    ActingToken(String externalClient) {
+      super(List.of());
+      this.externalClient = externalClient;
+    }
+
+    @Override
+    public Object getCredentials() {
+      return "";
+    }
+
+    @Override
+    public Object getPrincipal() {
+      return subject();
+    }
+
+    @Override
+    public @NotNull String subject() {
+      return "5f1d2c3b-0000-0000-0000-000000000001";
+    }
+
+    @Override
+    public String externalClient() {
+      return externalClient;
+    }
   }
 }

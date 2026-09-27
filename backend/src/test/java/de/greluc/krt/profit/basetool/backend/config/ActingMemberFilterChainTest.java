@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -52,6 +53,7 @@ class ActingMemberFilterChainTest {
 
   private static final String INGEST_PATH = "/api/v1/refinery-orders/import-extract";
   private static final String OTHER_PATH = "/api/v1/missions";
+  private static final String EXCHANGE_PATH = "/api/v1/exchange/catalog/locations";
   private static final String MEMBER = "44444444-4444-4444-4444-444444444444";
   private static final String GATEWAY = "55555555-5555-5555-5555-555555555555";
 
@@ -225,5 +227,82 @@ class ActingMemberFilterChainTest {
                     403,
                     result.getResponse().getStatus(),
                     "no header must mean no acting-member handling"));
+  }
+
+  /**
+   * A browser session naming an external client is refused and counted, before any handler runs
+   * (REQ-XCH-010).
+   */
+  @Test
+  void refusesAnExchangeClientHeaderFromABrowserSession() throws Exception {
+    double before = refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
+
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(jwt().jwt(token -> token.subject(MEMBER).claim("azp", "basetool-frontend")))
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value(ActingMemberFilter.CODE_ACTING_MEMBER_REFUSED));
+
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER)).isEqualTo(before + 1);
+  }
+
+  /** The app naming capabilities is refused the same way, on any path (REQ-XCH-010). */
+  @Test
+  void refusesAnExchangeCapabilitiesHeaderFromTheApp() throws Exception {
+    double before = refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
+
+    mockMvc
+        .perform(
+            get(OTHER_PATH)
+                .with(jwt().jwt(token -> token.subject(MEMBER).claim("azp", "basetool-android")))
+                .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.stock.write"))
+        .andExpect(status().isForbidden());
+
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER)).isEqualTo(before + 1);
+  }
+
+  /** Even the gateway may not send the exchange headers on an ingest endpoint. */
+  @Test
+  void refusesExchangeHeadersFromTheGatewayOnAnIngestEndpoint() throws Exception {
+    double before = refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
+
+    mockMvc
+        .perform(
+            post(INGEST_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isForbidden());
+
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER)).isEqualTo(before + 1);
+  }
+
+  /** An exchange call from the gateway must name a well-formed client. */
+  @Test
+  void refusesAnExchangeCallWithoutAValidClient() throws Exception {
+    double before = refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID);
+
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "Verse Kit"))
+        .andExpect(status().isForbidden());
+
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID)).isEqualTo(before + 2);
   }
 }

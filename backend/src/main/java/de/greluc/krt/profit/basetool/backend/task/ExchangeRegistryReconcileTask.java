@@ -23,6 +23,7 @@ import de.greluc.krt.profit.basetool.backend.metrics.ScheduledJob;
 import de.greluc.krt.profit.basetool.backend.metrics.TaskMetrics;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeMirrorPhase;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeRegistryMirrorSync;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeRevocationSync;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +34,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Rewrites the exchange registry's Redis mirror at startup and reconciles it on a fixed delay
- * (REQ-XCH-003); active only while the mirror is enabled.
+ * Rewrites the exchange registry's Redis mirror at startup and reconciles it on a fixed delay,
+ * repairing the revocation mirror alongside (REQ-XCH-003, REQ-XCH-008); active only while the
+ * mirror is enabled.
  */
 @Component
 @ConditionalOnProperty(prefix = "app.exchange.mirror", name = "enabled", havingValue = "true")
@@ -43,12 +45,18 @@ import org.springframework.stereotype.Component;
 public class ExchangeRegistryReconcileTask {
 
   private final ExchangeRegistryMirrorSync mirrorSync;
+  private final ExchangeRevocationSync revocationSync;
   private final TaskMetrics taskMetrics;
 
   /** Writes the mirror once the application is ready; a failure is left to the reconcile. */
   @EventListener(ApplicationReadyEvent.class)
   public void writeOnStartup() {
     mirrorSync.resyncQuietly(ExchangeMirrorPhase.STARTUP);
+    try {
+      revocationSync.repair();
+    } catch (RuntimeException e) {
+      log.warn("Exchange revocation mirror repair at startup failed: {}", e.toString());
+    }
   }
 
   /**
@@ -64,6 +72,10 @@ public class ExchangeRegistryReconcileTask {
         () -> {
           if (mirrorSync.resync(ExchangeMirrorPhase.RECONCILE)) {
             log.warn("Exchange registry mirror diverged from the database and was rewritten");
+          }
+          int repaired = revocationSync.repair();
+          if (repaired > 0) {
+            log.warn("Exchange revocation mirror lacked {} entries and was repaired", repaired);
           }
         });
   }
