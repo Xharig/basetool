@@ -335,7 +335,10 @@ without affecting anyone else, and filling a store takes more than 160 members a
 registry `requestsPerMinute` far above the default may need a larger per-member cap. Refusals are
 counted as `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`,
 `full`) and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on
-any `full`.
+any `full`. A proof refused for either cap gets the same answer as a replayed one — `401
+DPOP_INVALID`, `error="invalid_dpop_proof"`, the same `detail` — so a client cannot tell them apart;
+the developer site documents both caps and tells a client to pause a member's requests for at least
+40 s when a proof it knows is fresh is refused (`docs/exchange/authentication.md`).
 
 **Acceptance**
 
@@ -345,8 +348,10 @@ any `full`.
 - [x] A member at the cap is refused while another member and the other path scope still pass; a
   proof without the nonce stores nothing; an unreadable or pathless target needs the nonce
   (`DpopProofReplayStoreTest`).
+- [x] Through the whole gateway, a member over the cap gets exactly the answer of a replayed proof,
+  and another member still passes (`ExchangeDpopMemberCapTest`).
 
-**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest` · **Status:** built — WP 3.2
+**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest`, `ExchangeDpopMemberCapTest` · **Status:** built — WP 3.2
 (#2082); the partitioned replay cache and the fail-closed nonce scope — security review 2 (#2092)
 
 ### REQ-XCH-007 — Installations are identified by their DPoP key and labelled by the client

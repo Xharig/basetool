@@ -19,6 +19,10 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **Corrected: the `docsUrl` example.** The service document's example and its fixture showed
   `https://krt-profit.github.io/basetool/exchange/`, which does not exist. The gateway sends the
   site root, `https://krt-profit.github.io/basetool/`.
+- **Documented: the cap on live DPoP proofs.** A member holds at most 600 live proofs over all
+  clients; a proof over the cap is refused like a replayed one, `401 DPOP_INVALID` with
+  `invalid_dpop_proof` ([authentication](authentication.md#live-proofs-per-member)). The cap existed
+  before; only the page is new.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and

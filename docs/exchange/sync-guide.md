@@ -167,6 +167,7 @@ mass-change window of your client.
 | Requests | 1200 per minute | client, over all its members |
 | Account checks | 10 per hour | client and member |
 | Writes (change sets and drafts) | 500 per UTC day, or `limits.writesPerDay` | client and member |
+| Live DPoP proofs | 600 at a time, each live until about 30 to 40 seconds after its `iat` ([details](authentication.md#live-proofs-per-member)) | member, over all clients |
 
 Every attempt counts, retries and replays included. Admitted answers carry `RateLimit` and
 `RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out.

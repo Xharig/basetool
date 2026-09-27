@@ -29,7 +29,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `SCOPE_MISSING` | 403 | gateway | The route's capability is not in the token or not granted to the client. A missing consent looks the same. | Start a device login requesting the scope, if the member wants it. |
 | `UNAUTHENTICATED` | 401 | gateway | The token is missing, invalid, expired, or not issued for this gateway. | Refresh the token once and retry. Only when the refresh answers `invalid_grant` is the connection over: delete the refresh token and start a device login when the member asks. A freshly refreshed token that is refused again is not retried in a loop. |
 | `DPOP_REQUIRED` | 401 | gateway | The request carries no DPoP proof or an unbound token. | Send `Authorization: DPoP` with a proof. |
-| `DPOP_INVALID` | 401 | gateway | The proof is invalid, replayed, for another key, or lacks the server nonce. | Fix the proof; on a nonce challenge retry once with the `DPoP-Nonce`. |
+| `DPOP_INVALID` | 401 | gateway | The proof is invalid, replayed, for another key, or lacks the server nonce — or the member holds more than 600 live proofs, which answers exactly like a replay ([live proofs](authentication.md#live-proofs-per-member)). | Fix the proof; on a nonce challenge retry once with the `DPoP-Nonce`. A proof you know is fresh: pause the member's requests for at least 40 s. |
 | `TERMS_NOT_ACCEPTED` | 403 | backend | The member has not accepted the current terms. | Ask the member to open the Basetool and accept. |
 | `PENDING_APPROVAL` | 403 | backend | The member's registration awaits approval. | Stop; nothing to sync yet. |
 | `NO_ROLE` | 403 | backend | The member holds no role. | Stop and tell the member. |
