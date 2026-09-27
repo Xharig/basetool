@@ -24,6 +24,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import java.time.Duration;
 import org.hibernate.validator.constraints.URL;
+import org.hibernate.validator.constraints.time.DurationMax;
+import org.hibernate.validator.constraints.time.DurationMin;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -33,7 +35,8 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param registryKey the Redis key of the mirror document; must stay under {@code exchange:}, the
  *     only family the gateway's ACL user may read there
- * @param registryCacheTtl how long a read registry is reused before Redis is asked again
+ * @param registryCacheTtl how long a read registry is reused before Redis is asked again; at most
+ *     {@value #MAX_REGISTRY_CACHE_SECONDS} s, so a suspension reaches the gateway in that time
  * @param docsUrl where the service document sends a client for the documentation
  */
 @Validated
@@ -41,5 +44,13 @@ import org.springframework.validation.annotation.Validated;
 public record ExchangeGatewayProperties(
     @NotBlank @Pattern(regexp = "exchange:[a-z0-9:_-]+") @DefaultValue("exchange:registry")
         String registryKey,
-    @NotNull @DefaultValue("PT5S") Duration registryCacheTtl,
-    @NotBlank @URL @DefaultValue("https://krt-profit.github.io/basetool/") String docsUrl) {}
+    @NotNull
+        @DurationMin(seconds = 0)
+        @DurationMax(seconds = MAX_REGISTRY_CACHE_SECONDS)
+        @DefaultValue("PT5S")
+        Duration registryCacheTtl,
+    @NotBlank @URL @DefaultValue("https://krt-profit.github.io/basetool/") String docsUrl) {
+
+  /** The longest registry cache REQ-XCH-003 allows, in seconds. */
+  public static final long MAX_REGISTRY_CACHE_SECONDS = 5;
+}
