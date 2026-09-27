@@ -726,11 +726,15 @@ mirrored onto the org chart in the same transaction (REQ-ROLE-006).
 | Add / remove Bereichskoordinator, Bereichsoperator (`POST`/`DELETE /api/v1/org-hierarchy/bereiche/{id}/members`)    |              ❌              |              ✅               |     ❌     |   ✅   |
 | Add / remove a **Bereichsleiter** (same endpoints)                                                                  |              ❌              |              ❌               |    ✅²     |   ✅   |
 | Add / remove **OL members**; designate / vacate the **Grand Admiral** (`/api/v1/org-hierarchy/organisationsleitung/{id}/members`, `…/grand-admiral`) |              ❌              |              ❌               |     ❌     |   ✅   |
+| Set, change or clear **one's own** rank on any of the endpoints above (`targetsAnotherUser`)                        |              ❌              |              ❌               |     ❌     |   ✅   |
+| See in the Leitung view                                                                                               |       own Staffel only       | own Bereich + its Staffeln and SKs |  every unit | every unit |
 
 Reading the Kommandogruppen of a Staffel (`GET /api/v1/squadrons/{id}/kommando-groups`) is open to
 every member. ¹ Needs the `OFFICER` realm role in the frontend, which every leader holds
-operationally (§2); the page shows only the units the caller may appoint in. ² A *pure* `OL_MEMBER`
-row — a Bereichsleiter's organisational OL seat (REQ-ROLE-005) does not count.
+operationally (§2); the page shows the units the caller leads and those below them, and renders
+only what the capability flags allow as editable — the caller's own row never, for a non-admin.
+An SK lead sees only their own SK. ² A *pure* `OL_MEMBER` row — a Bereichsleiter's organisational
+OL seat (REQ-ROLE-005) does not count.
 
 ### 3.10 Master data, announcements, system
 

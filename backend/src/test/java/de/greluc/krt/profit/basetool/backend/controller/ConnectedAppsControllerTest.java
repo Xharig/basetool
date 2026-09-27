@@ -243,6 +243,7 @@ class ConnectedAppsControllerTest {
         .andExpect(status().isNoContent());
 
     verify(keycloakService).revokeConsent(MEMBER, "versekit-ca");
+    verify(keycloakService).endSessionsHeldOnlyBy(MEMBER, "versekit-ca");
     assertThat(
             revocationRepository.findById(new ExchangeClientRevocation.Key(client.getId(), MEMBER)))
         .isPresent();

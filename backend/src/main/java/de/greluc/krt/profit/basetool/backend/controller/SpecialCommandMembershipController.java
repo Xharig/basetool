@@ -188,7 +188,8 @@ public class SpecialCommandMembershipController {
   @PreAuthorize(
       "hasRole('"
           + Roles.ADMIN
-          + "') or @orgRoleManagementSecurityService.canAppointSkLead(#id, authentication)")
+          + "') or (@orgRoleManagementSecurityService.canAppointSkLead(#id, authentication) and"
+          + " @orgRoleManagementSecurityService.targetsAnotherUser(#userId, authentication))")
   @Operation(
       summary = "Toggle the SK-Lead flag on a membership",
       description =

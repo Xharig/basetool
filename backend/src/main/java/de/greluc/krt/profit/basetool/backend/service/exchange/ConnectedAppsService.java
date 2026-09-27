@@ -214,27 +214,24 @@ public class ConnectedAppsService {
   }
 
   /**
-   * Disconnects a whole client for the member: the revocation time reaches the mirror, the member's
-   * Keycloak consent for the client and its offline tokens are removed, and the time is stored, so
-   * every token issued before it is refused and a new connection works at once.
+   * Disconnects a whole client for the member: Keycloak first removes the member's consent for the
+   * client with its offline sessions and ends the online sessions only the client holds; then the
+   * revocation time, read afterwards, reaches the mirror and is stored. The gateway so refuses
+   * every token of an earlier connection, and a new connection works at once (REQ-XCH-008).
    *
    * @param member the member
    * @param clientId the Keycloak client id
-   * @throws ExternalServiceException when the mirror or Keycloak could not be reached
+   * @throws ExternalServiceException when Keycloak or the mirror could not be reached
    */
   @Transactional
   public void disconnectClient(@NotNull UUID member, @NotNull String clientId) {
     ExchangeClient client =
         Entities.require(
             clientRepository.findWithCapabilitiesByClientId(clientId), "Exchange client not found");
+    endSessions(member, clientId);
     Instant now = clock.instant();
     mirror(() -> revocationMirror.revoke(clientId, member, now));
     revocationRepository.upsert(client.getId(), member, now);
-    try {
-      keycloakService.revokeConsent(member, clientId);
-    } catch (RuntimeException e) {
-      throw new ExternalServiceException("The client's consent could not be removed", e);
-    }
     auditService.record(
         AuditEventType.EXCHANGE_CLIENT_DISCONNECTED,
         client.getId(),
@@ -242,6 +239,25 @@ public class ConnectedAppsService {
         member,
         AuditDetails.of("by", "member"));
     count(KIND_CLIENT);
+  }
+
+  /**
+   * Removes the member's Keycloak consent for the client with its offline sessions, and ends the
+   * online sessions only the client holds.
+   *
+   * @param member the member
+   * @param clientId the Keycloak client id
+   * @throws ExternalServiceException when Keycloak could not be reached
+   */
+  private void endSessions(@NotNull UUID member, @NotNull String clientId) {
+    int shared;
+    try {
+      keycloakService.revokeConsent(member, clientId);
+      shared = keycloakService.endSessionsHeldOnlyBy(member, clientId);
+    } catch (RuntimeException e) {
+      throw new ExternalServiceException("The client's consent or sessions could not be ended", e);
+    }
+    log.debug("Left {} shared sessions of client {} to the gateway", shared, clientId);
   }
 
   /**

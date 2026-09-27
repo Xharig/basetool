@@ -42,8 +42,8 @@ import org.springframework.web.bind.annotation.RestController;
  * stellvertretender Kommandoleiter, Ensign) of existing Staffel members (REQ-ROLE-003/004).
  *
  * <p>A Staffelleiter is appointed by the parent Bereichsleiter, the lower ranks by the squadron's
- * Staffelleiter, never by the appointee; admins may always act. Response DTOs are projected inside
- * the service transaction.
+ * Staffelleiter, never by the appointee on their own seat; admins may always act. Response DTOs are
+ * projected inside the service transaction.
  */
 @RestController
 @RequiredArgsConstructor
@@ -65,8 +65,9 @@ public class SquadronRoleController {
   @PreAuthorize(
       "hasRole('"
           + Roles.ADMIN
-          + "') or @orgRoleManagementSecurityService.canAssignSquadronRank(#squadronId,"
-          + " #request.role(), authentication)")
+          + "') or (@orgRoleManagementSecurityService.canAssignSquadronRank(#squadronId,"
+          + " #request.role(), authentication) and"
+          + " @orgRoleManagementSecurityService.targetsAnotherUser(#userId, authentication))")
   @Operation(summary = "Assign a squadron leadership rank to a Staffel member")
   public OrgUnitMembershipDto assignRank(
       @PathVariable @NotNull UUID squadronId,
@@ -89,8 +90,9 @@ public class SquadronRoleController {
   @PreAuthorize(
       "hasRole('"
           + Roles.ADMIN
-          + "') or @orgRoleManagementSecurityService.canRemoveSquadronRank(#squadronId, #userId,"
-          + " authentication)")
+          + "') or (@orgRoleManagementSecurityService.canRemoveSquadronRank(#squadronId, #userId,"
+          + " authentication) and"
+          + " @orgRoleManagementSecurityService.targetsAnotherUser(#userId, authentication))")
   @Operation(summary = "Clear a Staffel member's squadron leadership rank")
   public OrgUnitMembershipDto removeRank(
       @PathVariable @NotNull UUID squadronId,

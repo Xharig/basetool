@@ -40,6 +40,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
@@ -73,6 +74,9 @@ public final class ExchangeTestSupport {
   /** The request header telling the probe what to answer: {@code <status>:<code>}. */
   public static final String PROBE_ANSWER = "X-Probe-Answer";
 
+  /** The request header asking the probe to answer with the exchange log fields it sees. */
+  public static final String PROBE_MDC = "X-Probe-Mdc";
+
   /** The account check, which needs {@code exchange.connect} and has its own hourly limit. */
   public static final String ACCOUNT_CHECK = "/exchange/v1/me/account-check";
 
@@ -104,7 +108,7 @@ public final class ExchangeTestSupport {
   }
 
   /**
-   * Builds a decoded access token.
+   * Builds a decoded access token of a sign-in made when it was issued.
    *
    * @param value the token value
    * @param audience the audience
@@ -121,6 +125,30 @@ public final class ExchangeTestSupport {
       @NotNull String member,
       @NotNull String scope,
       @NotNull Instant issuedAt) {
+    return token(value, audience, thumbprint, member, scope, issuedAt, issuedAt);
+  }
+
+  /**
+   * Builds a decoded access token.
+   *
+   * @param value the token value
+   * @param audience the audience
+   * @param thumbprint the bound key's thumbprint, or {@code null} for an unbound token
+   * @param member the subject
+   * @param scope the space-separated scopes
+   * @param issuedAt the issue time
+   * @param authTime the sign-in's time as Keycloak writes it, or {@code null} for no {@code
+   *     auth_time} claim
+   * @return the token
+   */
+  public static @NotNull Jwt token(
+      @NotNull String value,
+      @NotNull String audience,
+      @Nullable String thumbprint,
+      @NotNull String member,
+      @NotNull String scope,
+      @NotNull Instant issuedAt,
+      @Nullable Instant authTime) {
     Jwt.Builder builder =
         Jwt.withTokenValue(value)
             .header("alg", "ES256")
@@ -132,6 +160,9 @@ public final class ExchangeTestSupport {
             .expiresAt(issuedAt.plusSeconds(300));
     if (thumbprint != null) {
       builder.claim("cnf", Map.of("jkt", thumbprint));
+    }
+    if (authTime != null) {
+      builder.claim("auth_time", authTime.getEpochSecond());
     }
     return builder.build();
   }
@@ -301,6 +332,13 @@ public final class ExchangeTestSupport {
         return ServerResponse.status(Integer.parseInt(answer.substring(0, colon)))
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body("{\"code\":\"" + answer.substring(colon + 1) + "\"}");
+      }
+      if (request.headers().firstHeader(PROBE_MDC) != null) {
+        return ServerResponse.ok()
+            .body(
+                MDC.get(ExchangeLogContext.CLIENT_KEY)
+                    + " | "
+                    + MDC.get(ExchangeLogContext.ROUTE_KEY));
       }
       ExchangeRequestContext context = ExchangeRequestContext.of(request.servletRequest());
       if (context == null) {

@@ -1,0 +1,791 @@
+{
+  "schemaVersion": 39,
+  "title": "Exchange",
+  "uid": "basetool-exchange",
+  "tags": [
+    "basetool"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "client_id",
+        "label": "Client",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values({__name__=~\"basetool_ingest_exchange_(refused|relay)_total\", client_id!=\"none\"}, client_id)",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "type": "row",
+      "title": "Traffic and refusals",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "type": "timeseries",
+      "title": "Relayed requests/min per client and outcome",
+      "description": "Admitted exchange requests the gateway relayed to the backend, per registry client: ok, refused by the backend with an exchange error code, or failed (answered 502 BACKEND_RELAY_FAILED; ExchangeRelayFailing). REQ-XCH-011, REQ-XCH-028.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id, outcome) (rate(basetool_ingest_exchange_relay_total{client_id=~\"$client_id\", client_id!=\"none\"}[5m])) * 60",
+          "refId": "A",
+          "legendFormat": "{{client_id}} {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "type": "timeseries",
+      "title": "Gateway refusals/hour per client",
+      "description": "Exchange requests the gateway refused, per client label: a registry client id, 'unregistered' for a token of a client outside the registry, 'unknown' while the registry cannot be read. Refusals before a token names a client ('none') are left out. ExchangeClientRefusalsSpike and ExchangeUnknownClient alert on these. REQ-XCH-028.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id) (increase(basetool_ingest_exchange_refused_total{client_id=~\"$client_id\", client_id!=\"none\"}[1h]))",
+          "refId": "A",
+          "legendFormat": "{{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "type": "timeseries",
+      "title": "Gateway refusals/hour by reason",
+      "description": "The gateway's refusals of the selected clients by problem code in snake case (dpop_invalid, client_suspended, scope_missing, rate_limited, quota_exceeded, registry_unavailable, ...). REQ-XCH-028.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (reason) (increase(basetool_ingest_exchange_refused_total{client_id=~\"$client_id\"}[1h])) > 0",
+          "refId": "A",
+          "legendFormat": "{{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "type": "timeseries",
+      "title": "Idempotent replays/hour",
+      "description": "Exchange writes the gateway answered from the idempotency cache instead of running them again (REQ-XCH-020). Not per client.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(basetool_ingest_exchange_idempotent_replays_total[1h]))",
+          "refId": "A",
+          "legendFormat": "replays",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "type": "row",
+      "title": "Writes to members' data",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 7,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "type": "timeseries",
+      "title": "Writes/day by resource and outcome",
+      "description": "Ops the selected clients sent to members' synced data (REQ-XCH-015 to -017): applied, unchanged, unmatched, ambiguous or rejected, plus 'held' per change set the mass-change guard held back (REQ-XCH-021; ExchangeGuardStorm).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (resource, outcome) (increase(basetool_exchange_writes_total{client_id=~\"$client_id\"}[1d]))",
+          "refId": "A",
+          "legendFormat": "{{resource}} {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "type": "timeseries",
+      "title": "Removals/hour per client and resource",
+      "description": "Removals the selected clients committed to members' entries, counted by the journal after commit. ExchangeRemoveSpike fires above 100 an hour for one client (REQ-XCH-028).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id, resource) (increase(basetool_exchange_removals_total{client_id=~\"$client_id\"}[1h]))",
+          "refId": "A",
+          "legendFormat": "{{client_id}} {{resource}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "type": "timeseries",
+      "title": "Mass changes/day: staged and confirmed",
+      "description": "Change sets the mass-change guard held back and the gateway staged for the member's confirmation, per client, beside the ones members confirmed, per client and resource (REQ-XCH-021).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id) (increase(basetool_ingest_exchange_mass_changes_staged_total{client_id=~\"$client_id\", client_id!=\"none\"}[1d]))",
+          "refId": "A",
+          "legendFormat": "staged {{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (client_id, resource) (increase(basetool_exchange_mass_changes_confirmed_total{client_id=~\"$client_id\"}[1d]))",
+          "refId": "B",
+          "legendFormat": "confirmed {{client_id}} {{resource}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "type": "timeseries",
+      "title": "Undo/day by resource and outcome",
+      "description": "Entries a member's undo of a client's writes restored or skipped, per client and resource (REQ-XCH-022).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id, resource, outcome) (increase(basetool_exchange_undo_total{client_id=~\"$client_id\"}[1d]))",
+          "refId": "A",
+          "legendFormat": "{{client_id}} {{resource}} {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "type": "row",
+      "title": "Connections",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 12,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "type": "timeseries",
+      "title": "Installations created/day per client",
+      "description": "Installations of the selected clients seen for the first time. ExchangeInstallationSurge fires above 20 an hour for one client (REQ-XCH-007, REQ-XCH-028).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id) (increase(basetool_exchange_installations_created_total{client_id=~\"$client_id\"}[1d]))",
+          "refId": "A",
+          "legendFormat": "{{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "type": "timeseries",
+      "title": "Account checks and disconnects/day",
+      "description": "Exchange account checks by answer (match / mismatch / unknown; a rising mismatch share means clients see alt accounts, REQ-XCH-031) and members disconnecting one installation or a whole client (REQ-XCH-008). Not per client.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (increase(basetool_exchange_account_checks_total[1d]))",
+          "refId": "A",
+          "legendFormat": "check {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (kind) (increase(basetool_exchange_disconnects_total[1d]))",
+          "refId": "B",
+          "legendFormat": "disconnect {{kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "type": "row",
+      "title": "Registry and budget",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 15,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 44
+      },
+      "type": "timeseries",
+      "title": "Registry clients by status",
+      "description": "The clients in the exchange registry per status, refreshed by the backend's 60-second reconcile and on every committed registry change (REQ-XCH-003, REQ-XCH-028). Registry changes themselves are announced by ExchangeRegistryChanged.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (status) (basetool_exchange_clients)",
+          "refId": "A",
+          "legendFormat": "{{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 44
+      },
+      "type": "timeseries",
+      "title": "Registry mirror age at the gateway",
+      "description": "Seconds since the ingest gateway last read the registry mirror successfully; it reads it every 30 seconds, so a healthy gateway stays below about 35 s. Empty (NaN) before the first read. ExchangeRegistryMirrorStaleAtGateway fires above 300 s for 10 minutes while the backend's mirror is enabled (REQ-XCH-003, REQ-XCH-028).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max by (instance) (basetool_exchange_registry_mirror_age_seconds)",
+          "refId": "A",
+          "legendFormat": "{{instance}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 44
+      },
+      "type": "timeseries",
+      "title": "Exchange Redis byte budget in use",
+      "description": "The share of the exchange's 64 MiB Redis byte budget the gateway's cached answers, quota counters and locks hold (REQ-XCH-023). ExchangeBudgetHigh fires above 0.8; at 1.0 writes are refused EXCHANGE_BUDGET_EXHAUSTED.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max(basetool_ingest_exchange_budget_used_ratio)",
+          "refId": "A",
+          "legendFormat": "used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "type": "row",
+      "title": "Gateway log",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 19,
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "type": "logs",
+      "title": "Gateway log lines of the selected clients",
+      "description": "Every ingest log line written while handling an exchange request past the token gate carries the registry client (client_id) and the route template (route) as Loki structured metadata, including the access-log line (REQ-XCH-028). Lines before a token names a client carry neither.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "expr": "{app=\"ingest\"} | client_id != \"\" | client_id =~ \"$client_id\"",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          }
+        }
+      ]
+    }
+  ]
+}

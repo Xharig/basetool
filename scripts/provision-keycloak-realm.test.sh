@@ -432,8 +432,10 @@ assert_eq "$(query "$state" "next(s for s in d['scopes'] if s['name']=='extracto
 assert_eq "$(query "$state" "scope_names('default', 'basetool-frontend')")" \
   "['email', 'extractor-ingest', 'profile', 'roles', 'web-origins']" \
   "the frontend carries extractor-ingest and NOT extractor-ingest-only (REQ-INGEST-011)"
-assert_eq "$(query "$state" "'extractor-ingest-only' in scope_names('default', 'basetool-sc-extractor')")" \
-  "True" "the extractor carries the exclusive scope"
+assert_eq "$(query "$state" "scope_names('default', 'basetool-sc-extractor')")" \
+  "['basic']" "the extractor carries only basic by default: no ingest scope, no backend audience (H1)"
+assert_eq "$(query "$state" "[client('basetool-sc-extractor')['consentRequired'], client('basetool-sc-extractor')['attributes']['dpop.bound.access.tokens']]")" \
+  "[True, 'true']" "the extractor asks for consent and binds every token to DPoP (H1)"
 assert_eq "$(query "$state" "scope_names('optional', 'basetool-android')")" \
   "['address', 'microprofile-jwt', 'organization', 'phone']" "offline_access is withheld from the app"
 assert_eq "$(query "$state" "sorted(client('basetool-frontend')['redirectUris'])")" \
@@ -614,9 +616,9 @@ expected="$(printf '%s\n' \
   "  - default scope 'extractor-ingest' withheld (ADR-0131 / ingest scopes retired 2026-09-22)" \
   "  - default scope 'extractor-ingest-only' withheld (ADR-0131 / ingest scopes retired 2026-09-22)" \
   "  - detach 'krt-mobile-dpop-policy' (1 other policy(ies) carried forward)" \
-  "  - redirect URI http://127.0.0.1/* withheld (unused authorization-code flow retired 2026-09-22)" \
+  "  - redirect URI http://127.0.0.1/* withheld (exchange-only since the extractor's 2.10.0 (H1, #2088); unused code flow retired 2026-09-22)" \
   "  - redirect URI http://frontend:18081/* withheld (compose-internal origin retired 2026-09-22)" \
-  "  - redirect URI http://localhost/* withheld (unused authorization-code flow retired 2026-09-22)" \
+  "  - redirect URI http://localhost/* withheld (exchange-only since the extractor's 2.10.0 (H1, #2088); unused code flow retired 2026-09-22)" \
   "  - web origin http://frontend:18081 withheld (compose-internal origin retired 2026-09-22)" \
   "  ~ standardFlowEnabled: true -> false" | sort)"
 assert_eq "$planned" "$expected" "the plan removes exactly the retired entries (and detaches for the app's scopes)"
@@ -630,8 +632,8 @@ assert_eq "$(query "$state" "[n for n in ('extractor-ingest', 'extractor-ingest-
 assert_eq "$(query "$state" "[u for u in client('basetool-frontend')['redirectUris'] + client('basetool-frontend')['webOrigins'] if 'frontend:18081' in u]")" \
   "[]" "the frontend's compose-internal origin is gone"
 assert_eq "$(query "$state" "scope_names('default', 'basetool-sc-extractor')")" \
-  "['acr', 'basic', 'email', 'extractor-ingest', 'extractor-ingest-only', 'profile', 'roles', 'web-origins']" \
-  "the extractor keeps both ingest scopes"
+  "['basic']" \
+  "the extractor keeps only basic"
 assert_eq "$(query "$state" "'krt-mobile-dpop-policy' in [p['name'] for p in d['policies']['policies']]")" "True" "the DPoP policy is attached again"
 output="$(run_provisioner "$state" --apply)"
 assert_contains "$output" "No changes" "a second apply is empty"
@@ -735,8 +737,9 @@ assert_eq "$(query "$state" "[client('basetool-sc-extractor')['attributes'][k] f
   "['2592000', '7776000']" "the extractor's offline session is 30/90 days, as the template's"
 assert_eq "$(query "$state" "'offline_access' in scope_names('optional', 'basetool-sc-extractor')")" \
   "True" "the extractor may request offline_access"
-assert_eq "$(query "$state" "'extractor-ingest' in scope_names('default', 'basetool-sc-extractor')")" \
-  "True" "the extractor keeps extractor-ingest until its migration"
+assert_eq "$(query "$state" "scope_names('optional', 'basetool-sc-extractor')")" \
+  "['exchange.blueprints.read', 'exchange.blueprints.write', 'exchange.connect', 'exchange.drafts.blueprints', 'exchange.drafts.refinery', 'offline_access']" \
+  "the extractor may request nothing but its exchange scopes and offline_access"
 assert_eq "$(query "$state" "[d['realm'].get(k) for k in ('oauth2DeviceCodeLifespan', 'oauth2DevicePollingInterval', 'loginTheme')]")" \
   "[600, 5, 'krt-theme']" "the device code lifespan, polling interval and login theme are pinned"
 output="$(run_provisioner "$state" --apply)"
@@ -764,6 +767,36 @@ output="$(run_provisioner "$state" --apply)"
 assert_eq "$(cat "${state}/rc")" "0" "the apply succeeds and verifies clean"
 assert_eq "$(query "$state" "scope_names('default', 'versekit')")" "['basic']" "only basic is left as a default scope"
 assert_eq "$(query "$state" "client('versekit')['consentRequired']")" "True" "consent is required again"
+rm -rf "$state"
+
+echo "16. the extractor client in its pre-migration production shape converges to exchange-only (H1)"
+state="$(mktemp -d)"
+make_stub "$state" empty
+run_provisioner "$state" --apply >/dev/null
+STUB_STATE="$state" "$PYTHON" -c '
+import json, os, pathlib
+path = pathlib.Path(os.environ["STUB_STATE"]) / "state.json"
+d = json.loads(path.read_text(encoding="utf-8"))
+ex = next(c for c in d["clients"] if c["clientId"] == "basetool-sc-extractor")
+ids = {s["name"]: s["id"] for s in d["scopes"]}
+d["client_default_scopes"][ex["id"]] += [ids[n] for n in ("acr", "email", "profile", "roles", "web-origins", "extractor-ingest", "extractor-ingest-only")]
+d["client_optional_scopes"][ex["id"]] += [ids[n] for n in ("address", "microprofile-jwt", "phone")]
+ex["consentRequired"] = False
+ex["attributes"]["dpop.bound.access.tokens"] = "false"
+path.write_text(json.dumps(d), encoding="utf-8")
+'
+output="$(run_provisioner "$state")"
+assert_contains "$output" "- default scope 'extractor-ingest' withheld" "the dry run plans to drop the backend audience scope"
+assert_contains "$output" "- default scope 'extractor-ingest-only' withheld" "and the legacy ingest scope"
+assert_contains "$output" "- default scope 'profile' withheld" "and the profile claims"
+assert_contains "$output" "- optional scope 'phone' withheld" "and every optional scope that is no exchange scope"
+assert_contains "$output" "~ consentRequired: false -> true" "consent becomes required"
+assert_contains "$output" "~ attribute dpop.bound.access.tokens: false -> 'true'" "tokens become DPoP-bound"
+output="$(run_provisioner "$state" --apply)"
+assert_eq "$(cat "${state}/rc")" "0" "the apply succeeds and verifies clean"
+assert_eq "$(query "$state" "scope_names('default', 'basetool-sc-extractor')")" "['basic']" "only basic is left as a default scope"
+assert_eq "$(query "$state" "[client('basetool-sc-extractor')['consentRequired'], client('basetool-sc-extractor')['attributes']['dpop.bound.access.tokens']]")" \
+  "[True, 'true']" "consent and DPoP binding hold after the apply"
 rm -rf "$state"
 
 echo "15. a malformed third-party client list is refused before anything is read"

@@ -103,3 +103,34 @@ bounds, pinned per client (`client.offline.session.idle.timeout`,
 therefore re-connects a client after 30 days without use, and at the latest every 90 days. The
 installation deny list of decision 4 keeps an entry **at least 90 days**. Shorter windows (14/30,
 7/30 days) were offered and not chosen.
+
+## Amendment — 2026-09-27: what a client revocation compares
+
+The go-live security review (#2092, findings M1 and L1; the owner approved the fix) found decision 4
+incomplete for a client without consent. Keycloak 26.7's consent removal revokes a client's offline
+sessions whether or not a consent exists, but ends its **online** client sessions only when one did;
+the Admin API can end an online session only whole, including every other client in it. An online
+refresh token of such a client therefore survived the disconnect, and each refresh minted a token
+whose `iat` lay after the revocation, which the `iat` comparison admitted. The timestamp was also
+written before the consent removal, so a refresh in that gap passed for up to the access-token
+lifetime.
+
+1. **The disconnect ends what Keycloak lets it end, then stamps.** The consent removal, then every
+   online session of the member whose only client is this one, and only then the revocation time,
+   read after Keycloak answered. A shared session — the usual case, since a device login joins the
+   member's browser session — is left: ending it would sign the member out of the web.
+2. **The gateway compares by the kind of token.** An offline token (scope `offline_access`) by its
+   `iat`: Keycloak revoked every offline session of the client, so a later `iat` is a later
+   connection. Any other token by its `auth_time`, which a refresh keeps; a token without
+   `auth_time` is refused. Every exchange client carries `auth_time` through its default `basic`
+   scope.
+3. **`auth_time` alone was not taken for every token.** Keycloak keeps a user session's `AUTH_TIME`
+   when a login is completed from the SSO cookie (`AuthenticationManager.redirectAfterSuccessfulFlow`,
+   26.7.4), and the device flow honours neither `prompt` nor `max_age`. A reconnect that joins an
+   older browser session would therefore stay refused, breaking „a new connection works at once"
+   for the in-contract clients, which always request `offline_access`. The cost falls on clients
+   that do not request it: after a disconnect they need a sign-in newer than it.
+4. **Not chosen:** ending every session that holds the client (signs the member out of the web on
+   each disconnect); a Keycloak SPI admin endpoint that ends only the client's sessions (precise,
+   but a new privileged surface in Keycloak, left for the owner to decide); refusing tokens without
+   `offline_access` outright (a larger contract change than the finding needs).

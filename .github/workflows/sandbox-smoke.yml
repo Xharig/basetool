@@ -1,0 +1,63 @@
+name: Sandbox Smoke
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Sandbox image tag to pull
+        type: string
+        required: false
+        default: edge
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Sandbox image tag to pull
+        required: false
+        default: edge
+
+permissions: {}
+
+concurrency:
+  group: sandbox-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Pull the public sandbox images anonymously and run the smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      BASETOOL_SANDBOX_VERSION: ${{ inputs.version || 'edge' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Map host.docker.internal to the loopback
+        run: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+
+      - name: Start the sandbox from the public images
+        run: bash scripts/sandbox.sh up
+
+      - name: Device login, DPoP, every resource and the conformance fixtures
+        run: python3 scripts/sandbox-smoke.py --conformance
+
+      - name: A second member sees only their own data
+        run: >-
+          python3 scripts/sandbox-smoke.py --user sandbox-member-2
+          --password sandbox-member-2-pw-do-not-use-in-prod
+
+      - name: Logs of a failed run
+        if: ${{ failure() }}
+        run: >-
+          docker compose --env-file docker/sandbox/sandbox.env -f docker-compose.yml
+          -f docker-compose.test.yml -f docker-compose.sandbox.yml --profile sandbox logs --tail 200
+
+      - name: Stop the sandbox
+        if: ${{ always() }}
+        run: bash scripts/sandbox.sh down
