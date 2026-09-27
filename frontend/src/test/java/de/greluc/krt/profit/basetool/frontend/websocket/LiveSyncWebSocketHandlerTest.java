@@ -127,7 +127,7 @@ class LiveSyncWebSocketHandlerTest {
     fanout = new CapturingFanout();
     authorizer = mock(LiveSyncSubscriptionAuthorizer.class);
     nanoClock = new AtomicLong();
-    when(authorizer.authorize(any(), any(), any(), any()))
+    when(authorizer.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.ALLOW);
     handler =
         new LiveSyncWebSocketHandler(
@@ -475,7 +475,7 @@ class LiveSyncWebSocketHandlerTest {
 
   @Test
   void multiplexedSubscribe_denied_refusesAndCounts() throws Exception {
-    when(authorizer.authorize(any(), any(), any(), any()))
+    when(authorizer.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.DENY);
     FakeSession bob = openMultiplexedSession(oidcUser("user-2", "Bob"));
     subscribe(bob, operationTopic());
@@ -557,7 +557,7 @@ class LiveSyncWebSocketHandlerTest {
     SimpleMeterRegistry reg2 = new SimpleMeterRegistry();
     LiveSyncPresenceService svc2 = new LiveSyncPresenceService(reg2);
     LiveSyncSubscriptionAuthorizer denyAll = mock(LiveSyncSubscriptionAuthorizer.class);
-    when(denyAll.authorize(any(), any(), any(), any()))
+    when(denyAll.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.DENY);
     LiveSyncWebSocketHandler saturated =
         new LiveSyncWebSocketHandler(
@@ -594,7 +594,7 @@ class LiveSyncWebSocketHandlerTest {
 
   @Test
   void multiplexedSubscribe_denied_receivesNoSubsequentPeerChange() throws Exception {
-    when(authorizer.authorize(any(), any(), any(), any()))
+    when(authorizer.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.DENY);
     String topic = operationTopic();
     FakeSession bob = openMultiplexedSession(oidcUser("user-2", "Bob"));
@@ -611,7 +611,7 @@ class LiveSyncWebSocketHandlerTest {
   @Test
   void multiplexedSubscribe_authorizerThrows_failsOpen() throws Exception {
     LiveSyncSubscriptionAuthorizer throwing = mock(LiveSyncSubscriptionAuthorizer.class);
-    when(throwing.authorize(any(), any(), any(), any()))
+    when(throwing.authorize(any(), any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("probe blew up"));
     SimpleMeterRegistry reg = new SimpleMeterRegistry();
     LiveSyncPresenceService svc = new LiveSyncPresenceService(reg);
@@ -634,7 +634,7 @@ class LiveSyncWebSocketHandlerTest {
   @Test
   void multiplexedSubscribe_presenceClassAuthorizerThrows_failsClosed() throws Exception {
     LiveSyncSubscriptionAuthorizer throwing = mock(LiveSyncSubscriptionAuthorizer.class);
-    when(throwing.authorize(any(), any(), any(), any()))
+    when(throwing.authorize(any(), any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("probe blew up"));
     SimpleMeterRegistry reg = new SimpleMeterRegistry();
     LiveSyncPresenceService svc = new LiveSyncPresenceService(reg);
@@ -1146,7 +1146,7 @@ class LiveSyncWebSocketHandlerTest {
 
   @Test
   void multiplexedSubscribe_explicitDeny_tagsTheAuthzReason_andStaysBelowWarn() throws Exception {
-    when(authorizer.authorize(any(), any(), any(), any()))
+    when(authorizer.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.DENY);
     FakeSession bob = openMultiplexedSession(oidcUser("user-2", "Bob"));
     logAppender.list.clear();
@@ -1161,7 +1161,7 @@ class LiveSyncWebSocketHandlerTest {
 
   @Test
   void multiplexedSubscribe_indeterminateDeny_tagsItsOwnReason_andWarnsOnce() throws Exception {
-    when(authorizer.authorize(any(), any(), any(), any()))
+    when(authorizer.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.DENY_INDETERMINATE);
     FakeSession bob = openMultiplexedSession(oidcUser("user-2", "Bob"));
     logAppender.list.clear();
@@ -1187,7 +1187,7 @@ class LiveSyncWebSocketHandlerTest {
   @Test
   void multiplexedSubscribe_presenceClassAuthorizerThrows_warnsOnce() throws Exception {
     LiveSyncSubscriptionAuthorizer throwing = mock(LiveSyncSubscriptionAuthorizer.class);
-    when(throwing.authorize(any(), any(), any(), any()))
+    when(throwing.authorize(any(), any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("probe blew up"));
     SimpleMeterRegistry reg = new SimpleMeterRegistry();
     LiveSyncPresenceService svc = new LiveSyncPresenceService(reg);
@@ -1206,7 +1206,7 @@ class LiveSyncWebSocketHandlerTest {
   @Test
   void multiplexedSubscribe_authorizerThrowsOnFailOpenClass_staysAtDebug() throws Exception {
     LiveSyncSubscriptionAuthorizer throwing = mock(LiveSyncSubscriptionAuthorizer.class);
-    when(throwing.authorize(any(), any(), any(), any()))
+    when(throwing.authorize(any(), any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("probe blew up"));
     SimpleMeterRegistry reg = new SimpleMeterRegistry();
     LiveSyncPresenceService svc = new LiveSyncPresenceService(reg);
@@ -1247,7 +1247,7 @@ class LiveSyncWebSocketHandlerTest {
 
   @Test
   void subscribeFrames_areRateLimitedPerSession() throws Exception {
-    when(authorizer.authorize(any(), any(), any(), any()))
+    when(authorizer.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.DENY);
     String topic = operationTopic();
     FakeSession bob = openMultiplexedSession(oidcUser("user-2", "Bob"));
@@ -1259,7 +1259,7 @@ class LiveSyncWebSocketHandlerTest {
     }
 
     verify(authorizer, times(LiveSyncWebSocketHandler.SUBSCRIBE_BURST))
-        .authorize(any(), any(), any(), any());
+        .authorize(any(), any(), any(), any(), any());
     assertThat(dropCounter(MetricNames.DROPPED_THROTTLED, "operation"))
         .isEqualTo(emitted - LiveSyncWebSocketHandler.SUBSCRIBE_BURST);
     assertThat(bob.sent).hasSize(LiveSyncWebSocketHandler.SUBSCRIBE_BURST);
@@ -1281,7 +1281,7 @@ class LiveSyncWebSocketHandlerTest {
 
   @Test
   void multiplexedSubscribe_indeterminateDeny_isRetryableOnTheWire() throws Exception {
-    when(authorizer.authorize(any(), any(), any(), any()))
+    when(authorizer.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.DENY_INDETERMINATE);
     FakeSession bob = openMultiplexedSession(oidcUser("user-2", "Bob"));
     subscribe(bob, missionTopic());
@@ -1293,7 +1293,7 @@ class LiveSyncWebSocketHandlerTest {
 
   @Test
   void multiplexedSubscribe_explicitDeny_carriesTheTerminalReasonOnTheWire() throws Exception {
-    when(authorizer.authorize(any(), any(), any(), any()))
+    when(authorizer.authorize(any(), any(), any(), any(), any()))
         .thenReturn(LiveSyncSubscriptionAuthorizer.Decision.DENY);
     FakeSession bob = openMultiplexedSession(oidcUser("user-2", "Bob"));
     subscribe(bob, operationTopic());

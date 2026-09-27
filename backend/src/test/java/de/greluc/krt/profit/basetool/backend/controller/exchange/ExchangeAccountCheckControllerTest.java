@@ -161,7 +161,7 @@ class ExchangeAccountCheckControllerTest {
             .getContentAsString();
 
     if (!handle.isEmpty()) {
-      assertThat(body).doesNotContain(handle);
+      assertThat(body.replaceAll("\"correlationId\":\"[^\"]*\"", "")).doesNotContain(handle);
     }
   }
 

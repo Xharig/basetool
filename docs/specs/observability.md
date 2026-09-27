@@ -1254,10 +1254,11 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `basetool_scheduled_job_duration_seconds{task}` timer,
   `basetool_scheduled_job_last_success_timestamp_seconds{task}` gauge,
   `basetool_scheduled_job_enabled{task}` gauge and — for the jobs that
-  process a countable batch — `basetool_scheduled_job_items_total{task}` counter for the ten
+  process a countable batch — `basetool_scheduled_job_items_total{task}` counter for the twelve
   wrapped jobs (`user_sync`, `notification_retention`, `default_blueprint_provisioning`,
   `rejected_registration_retention`, `audit_retention`,
-  `bank_ledger_integrity`, `job_order_integrity`, `uex_sync`, `scwiki_sync`, `business_metrics`) via `TaskMetrics` (`record`
+  `bank_ledger_integrity`, `job_order_integrity`, `uex_sync`, `scwiki_sync`, `business_metrics`,
+  `exchange_registry_reconcile`, `exchange_change_retention`) via `TaskMetrics` (`record`
   / `recordCounting`). The `business_metrics` job wraps `BusinessMetricsCollector.refresh()` (the 60s
   queue-depth sampler) so a wedged sampler surfaces via its frozen last-success (`BusinessMetricsStale`)
   instead of silently freezing every queue gauge under the `*ApprovalOverdue` alerts (#1041 item 3).
@@ -1270,7 +1271,7 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   staleness alerts — `UserSyncStale` (`user_sync`, > 26h — daily 05:00 cadence, see
   `app.keycloak.sync.cron`), `ExternalSyncStale` (the catalogue syncs, more than 48 h),
   `ScheduledJobStale` (`notification_retention` / `default_blueprint_provisioning` /
-  `rejected_registration_retention` / `audit_retention`, > 26 h),
+  `rejected_registration_retention` / `audit_retention` / `exchange_change_retention`, > 26 h),
   `BankLedgerIntegritySweepStale` (`bank_ledger_integrity`, > 6 h, **critical** — while stale the
   violations gauge freezes and `BankLedgerIntegrityViolation` cannot fire),
   `JobOrderIntegritySweepStale` (`job_order_integrity`, > 6 h — same frozen-gauge trap for
@@ -1641,6 +1642,17 @@ the boot run carries the last run's values over and re-reads only the reboot fla
 - `basetool_exchange_account_checks_total{outcome}` counter — exchange account checks by answer
   (`match` / `mismatch` / `unknown`), registered at zero and shown per day beside the disconnects;
   a rising `mismatch` share means clients see alt accounts (REQ-XCH-031).
+- `basetool_exchange_writes_total{resource,outcome}` counter — ops external clients sent to the
+  member's synced data, by resource (`blueprint` / `stock` / `ship`) and outcome (`applied` /
+  `unchanged` / `unmatched` / `ambiguous` / `rejected`), plus `held` per change set the mass-change
+  guard held back; registered at zero and shown per day on panel 80 of the operations dashboard
+  (REQ-XCH-015…-017, REQ-XCH-021).
+- `basetool_exchange_undo_total{resource,outcome}` counter — entries a member's undo of a client's
+  writes restored or skipped (`restored` / `skipped`), by resource; registered at zero and shown on
+  the same panel 80 (REQ-XCH-022).
+- `basetool_exchange_mass_changes_confirmed_total{resource}` counter — held-back change sets members
+  confirmed, by resource; registered at zero and shown on panel 80 beside the gateway's staged count
+  (REQ-XCH-021).
 - `basetool_exchange_disconnects_total{kind}` counter — a member disconnecting one installation or
   a whole client (`installation` / `client`, REQ-XCH-008), registered at zero and shown per day on
   the operations dashboard. The relay's `exchange_installation_invalid` refusal joins
@@ -1904,10 +1916,11 @@ symptom of a section-key skew is one panel going stale while the rest of the pag
 which an all-rejected-only counter would never see. The rejected key is client-supplied and therefore
 never becomes a tag value; it appears once, sanitised, in the `DEBUG` line (REQ-OBS-001) —
 the component that shipped the REQ-FE-010 staleness defect. Since #1102 (REQ-FE-015 / ADR-0094) both
-counters carry a bounded `topic_class` label (one of the fourteen `LiveSyncTopicClass` labels:
+counters carry a bounded `topic_class` label (one of the sixteen `LiveSyncTopicClass` labels:
 `mission`, `operation`, `order_detail`, `orders_queue`, `bank_account`, `bank_staff`, `orgunit_bank`,
 `materialboard`, `inventory_all`, since #1235 `missions_list`, `refinery_queue`, `members_roster`,
-`org_structure`, and since #1238 `refinery_order`), and
+`org_structure`, since #1238 `refinery_order`, and since WP 4.4 of the exchange epic the personal
+`hangar_own` and `blueprints_own`), and
 the meter names stay put — a rename would break the `07` panels and this alert set.
 
 Both drop signals are **alerted** since #1238, on a threshold measured rather than guessed: read on

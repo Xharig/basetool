@@ -101,6 +101,7 @@ in the request thread:
 | `bank:{accountId}`                                                    | the org-unit account read the app's Bank screen performs       |
 | `orders` (queue)                                                      | `ownerScopeService.canViewJobOrders()`                         |
 | `missions`, `inventory`, `materialboard`, `refinery`, `orgunit-bank`  | member role, matching the page gate ADR-0094 gives these rooms |
+| `hangar:{userId}`, `blueprints:{userId}`                              | the id is the caller's own user id                             |
 
 A refused topic is **dropped from the set**, not made fatal: a stream asking for three topics and
 allowed two delivers two and says so in `subscribed`. A stream where nothing is allowed is `403`.
