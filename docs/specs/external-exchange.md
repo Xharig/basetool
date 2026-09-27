@@ -1276,6 +1276,7 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | DoS against Redis (shared with sessions, `noeviction`) or the backend | hard byte budgets, quotas, batch cap, larger Redis (REQ-XCH-023, ADR-0221) |
 | Guard evasion by batching, near-zero cuts or overwriting updates | window counting rules (REQ-XCH-021) |
 | Silent removal of Materialbörse offers by a sync book-out | reported and audited, not undoable — accepted (REQ-XCH-016/-022) |
+| A ship removal through the exchange detaching the ship from its mission units, which are org data | reported (`detachedFromMissions`) and audited (`MISSION_UNIT_UPDATED`), not undoable: undo recreates the ship under a new id without its mission units — accepted (REQ-XCH-017/-022) |
 | The version gate bypassed by a manipulated client | cooperative by design — accepted (REQ-XCH-024) |
 | Data poisoning of org-wide views | own personal rows only, validated through the domain services (REQ-XCH-009/-016) |
 | Token leakage via backups, diagnostics or a problem-report webhook | client security requirements (REQ-XCH-027) |

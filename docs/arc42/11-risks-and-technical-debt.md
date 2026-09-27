@@ -267,6 +267,10 @@ and its global switch stays off until the go-live; the risks hold from then on.
 - **A sync book-out can lower or remove Materialbörse offers**, as a web book-out does, and undo
   does not restore them. The change result reports `offersReduced` / `offersRemoved` and each
   offer change is audited (REQ-XCH-016, -022).
+- **A sync ship removal detaches the ship from its mission units**, as a web delete does. Mission
+  units are org data the client never sees, and undo cannot restore them: it recreates the ship
+  under a new id without its mission units. The change result reports `detachedFromMissions` and
+  each detachment is audited as `MISSION_UNIT_UPDATED` (REQ-XCH-017, -022).
 - **The minimum-version gate is cooperative.** It reads the `User-Agent`, so it stops honest old
   releases, never a client that lies about its version (REQ-XCH-024).
 
