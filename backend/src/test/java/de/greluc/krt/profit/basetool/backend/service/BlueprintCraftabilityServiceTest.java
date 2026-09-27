@@ -309,7 +309,8 @@ class BlueprintCraftabilityServiceTest {
   }
 
   private static PersonalBlueprintResponse owned(String key, String name) {
-    return new PersonalBlueprintResponse(BP_ID, key, name, null, null, null, true, 0L, null, null);
+    return new PersonalBlueprintResponse(
+        BP_ID, key, name, null, null, null, true, 0L, null, null, null, null);
   }
 
   /**

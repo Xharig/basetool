@@ -89,7 +89,9 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             true,
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
-            Instant.parse("2026-01-01T00:00:00Z"));
+            Instant.parse("2026-01-01T00:00:00Z"),
+            "LOG",
+            "versekit");
     PageResponse<PersonalBlueprintDto> page =
         new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(page);
@@ -99,7 +101,9 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
         .andExpect(status().isOk())
         .andExpect(view().name("personal-inventory-blueprints"))
         .andExpect(model().attributeExists("blueprints"))
-        .andExpect(content().string(containsString("ID_PLACEHOLDER")));
+        .andExpect(content().string(containsString("ID_PLACEHOLDER")))
+        .andExpect(content().string(containsString("data-source=\"LOG\"")))
+        .andExpect(content().string(containsString("data-source-client=\"versekit\"")));
   }
 
   @Test
@@ -116,7 +120,9 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             true,
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
-            Instant.parse("2026-01-01T00:00:00Z"));
+            Instant.parse("2026-01-01T00:00:00Z"),
+            null,
+            null);
     PersonalBlueprintDto second =
         new PersonalBlueprintDto(
             UUID.randomUUID(),
@@ -128,7 +134,9 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             true,
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
-            Instant.parse("2026-01-01T00:00:00Z"));
+            Instant.parse("2026-01-01T00:00:00Z"),
+            null,
+            null);
     PageResponse<PersonalBlueprintDto> page0 =
         new PageResponse<>(List.of(first), 0, 500, 2, 2, List.of());
     PageResponse<PersonalBlueprintDto> page1 =
@@ -158,7 +166,9 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             true,
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
-            Instant.parse("2026-01-01T00:00:00Z"));
+            Instant.parse("2026-01-01T00:00:00Z"),
+            null,
+            null);
     PageResponse<PersonalBlueprintDto> page =
         new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(page);
@@ -185,7 +195,9 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             true,
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
-            Instant.parse("2026-01-01T00:00:00Z"));
+            Instant.parse("2026-01-01T00:00:00Z"),
+            null,
+            null);
     PageResponse<PersonalBlueprintDto> page =
         new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(page);
@@ -223,7 +235,9 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             true,
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
-            Instant.parse("2026-01-01T00:00:00Z"));
+            Instant.parse("2026-01-01T00:00:00Z"),
+            null,
+            null);
     PageResponse<PersonalBlueprintDto> page =
         new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(page);
@@ -253,7 +267,9 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             true,
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
-            Instant.parse("2026-01-01T00:00:00Z"));
+            Instant.parse("2026-01-01T00:00:00Z"),
+            null,
+            null);
     PageResponse<PersonalBlueprintDto> page =
         new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(page);

@@ -25,6 +25,7 @@ import de.greluc.krt.profit.basetool.backend.exception.Entities;
 import de.greluc.krt.profit.basetool.backend.exception.NotFoundException;
 import de.greluc.krt.profit.basetool.backend.mapper.PersonalBlueprintMapper;
 import de.greluc.krt.profit.basetool.backend.model.AuditEventType;
+import de.greluc.krt.profit.basetool.backend.model.BlueprintSource;
 import de.greluc.krt.profit.basetool.backend.model.PersonalBlueprint;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintBatchResult;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintCreateRequest;
@@ -114,6 +115,27 @@ public class PersonalBlueprintService {
   @Transactional
   public PersonalBlueprintResponse add(
       @NotNull UUID ownerUserId, @NotNull PersonalBlueprintCreateRequest request) {
+    return add(ownerUserId, request, BlueprintSource.MANUAL, null);
+  }
+
+  /**
+   * Adds a single blueprint as {@link #add(UUID, PersonalBlueprintCreateRequest)} does, recording
+   * where it came from (REQ-INV-054).
+   *
+   * @param ownerUserId {@code app_user.id} of the caller
+   * @param request the add payload (product key + optional acquisition date / note)
+   * @param source where the blueprint came from
+   * @param sourceClientId the exchange client that adds it, or {@code null}
+   * @return the persisted DTO
+   * @throws NotFoundException if the product key matches no active product
+   * @throws DuplicateEntityException if the caller already owns the product
+   */
+  @Transactional
+  public PersonalBlueprintResponse add(
+      @NotNull UUID ownerUserId,
+      @NotNull PersonalBlueprintCreateRequest request,
+      @NotNull BlueprintSource source,
+      @Nullable String sourceClientId) {
     ResolvedProduct product =
         Entities.require(
             blueprintProductService.resolveByProductKey(request.productKey()),
@@ -122,8 +144,10 @@ public class PersonalBlueprintService {
       throw new DuplicateEntityException(
           "Blueprint '" + product.productName() + "' is already owned.");
     }
-    PersonalBlueprint saved =
-        repository.save(newOwned(ownerUserId, product, request.acquiredAt(), request.note()));
+    PersonalBlueprint entity = newOwned(ownerUserId, product, request.acquiredAt(), request.note());
+    entity.setSource(source);
+    entity.setSourceClientId(sourceClientId);
+    PersonalBlueprint saved = repository.save(entity);
     auditService.record(
         AuditEventType.BLUEPRINT_ADDED,
         saved.getId(),
@@ -167,7 +191,9 @@ public class PersonalBlueprintService {
         alreadyOwned++;
         continue;
       }
-      repository.save(newOwned(ownerUserId, product, null, null));
+      PersonalBlueprint entity = newOwned(ownerUserId, product, null, null);
+      entity.setSource(BlueprintSource.MANUAL);
+      repository.save(entity);
       added++;
     }
     if (added > 0) {

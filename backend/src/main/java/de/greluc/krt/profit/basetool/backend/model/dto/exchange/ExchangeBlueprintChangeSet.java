@@ -45,6 +45,7 @@ public record ExchangeBlueprintChangeSet(
    * @param ref the product, for an add and optionally a remove
    * @param key the feed key of the product to remove, or {@code null}
    * @param acquiredAt when the member acquired it, for an add, or {@code null}
+   * @param provenance where the client has it from, for an add, or {@code null}
    * @param override whether an add may re-add an entry removed elsewhere, after asking the member
    */
   public record Op(
@@ -53,5 +54,16 @@ public record ExchangeBlueprintChangeSet(
       @Nullable @Valid ExchangeItemRef ref,
       @Nullable @Size(min = 1, max = 128) String key,
       @Nullable Instant acquiredAt,
+      @Nullable @Valid Provenance provenance,
       @Nullable Boolean override) {}
+
+  /**
+   * Where a client has an entry from, in the shape of {@code provenance.schema.json}.
+   *
+   * @param source {@code log}, {@code manual}, {@code import}, {@code default} or {@code other}
+   * @param observedAt when the client observed it, or {@code null}
+   */
+  public record Provenance(
+      @NotNull @Pattern(regexp = "^(log|manual|import|default|other)$") String source,
+      @Nullable Instant observedAt) {}
 }

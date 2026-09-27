@@ -17,6 +17,8 @@
     /** @type {HTMLElement | null} */
     let acquiredEl = null;
     /** @type {HTMLElement | null} */
+    let sourceEl = null;
+    /** @type {HTMLElement | null} */
     let recipeEl = null;
     /** @type {HTMLElement | null} */
     let noteSection = null;
@@ -172,6 +174,32 @@
         }
     }
 
+    /**
+     * Describes where a blueprint came from, naming the exchange client that added it.
+     *
+     * @param {string} source the recorded source, or an empty string
+     * @param {string} client the exchange client, or an empty string
+     * @returns {string} the text, empty when no source was recorded
+     */
+    function describeSource(source, client) {
+        if (!source) {
+            return '';
+        }
+        const dict = i18n();
+        const label = window.krtI18nText(dict.sourceLabel, 'krtBlueprintsRecipeI18n.sourceLabel');
+        const name = window.krtI18nText(
+            dict['source' + source],
+            'krtBlueprintsRecipeI18n.source' + source,
+        );
+        const via = client
+            ? ' ' +
+              window.krtI18nText(dict.sourceVia, 'krtBlueprintsRecipeI18n.sourceVia') +
+              ' ' +
+              client
+            : '';
+        return label + ': ' + name + via;
+    }
+
     function renderDetailHead(row) {
         if (!detailContent || !detailEmpty || !nameEl || !acquiredEl || !noteEl || !noteSection) {
             return;
@@ -184,6 +212,8 @@
         const note = attr(row, 'data-note');
         const version = attr(row, 'data-version');
         const acquired = attr(row, 'data-acquired-at');
+        const source = attr(row, 'data-source');
+        const sourceClient = attr(row, 'data-source-client');
 
         nameEl.textContent = name;
         const formatted = formatAcquired(acquired);
@@ -192,6 +222,11 @@
               ' ' +
               formatted
             : '';
+        if (sourceEl) {
+            const sourceText = describeSource(source, sourceClient);
+            sourceEl.textContent = sourceText;
+            sourceEl.hidden = !sourceText;
+        }
 
         [editBtn, deleteBtn].forEach(function (btn) {
             if (!btn) {
@@ -902,6 +937,7 @@
         detailContent = document.getElementById('krt-bp-detail-content');
         nameEl = document.getElementById('krt-bp-detail-name');
         acquiredEl = document.getElementById('krt-bp-detail-acquired');
+        sourceEl = document.getElementById('krt-bp-detail-source');
         recipeEl = document.getElementById('krt-bp-detail-recipe');
         noteSection = document.getElementById('krt-bp-detail-note-section');
         noteEl = document.getElementById('krt-bp-detail-note');

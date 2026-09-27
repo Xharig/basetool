@@ -37,6 +37,9 @@ import java.util.UUID;
  * @param version optimistic-lock version echoed back on update
  * @param createdAt row creation timestamp
  * @param updatedAt row last-update timestamp
+ * @param source where the entry came from ({@code LOG}, {@code MANUAL}, {@code IMPORT}, {@code
+ *     DEFAULT}, {@code OTHER}), or {@code null} when that was not recorded
+ * @param sourceClientId the exchange client that added it, or {@code null}
  */
 public record PersonalBlueprintDto(
     UUID id,
@@ -48,4 +51,6 @@ public record PersonalBlueprintDto(
     boolean removable,
     Long version,
     Instant createdAt,
-    Instant updatedAt) {}
+    Instant updatedAt,
+    String source,
+    String sourceClientId) {}

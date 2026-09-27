@@ -4,6 +4,9 @@
 
 ### Added
 
+- **Blueprints: Herkunft.** Jeder Blueprint merkt sich, woher er kam (von Hand, Datei-Import,
+  Standard, Spiel-Log einer verbundenen Anwendung), und „Meine Blueprints“ zeigt das in der
+  Detailansicht. Migration `V255`; ältere Einträge bleiben ohne Herkunft.
 - **Datenaustausch: Entwürfe über das Gateway.** `POST /exchange/v1/me/drafts/blueprints` und
   `…/drafts/refinery-orders` legen Blueprints bzw. Raffinerieaufträge wie der Extractor-Upload zur
   Prüfung im Browser ab; nichts wird geschrieben, bevor das Mitglied bestätigt.

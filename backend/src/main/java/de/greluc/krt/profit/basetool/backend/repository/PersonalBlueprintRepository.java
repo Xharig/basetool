@@ -290,8 +290,10 @@ public interface PersonalBlueprintRepository extends JpaRepository<PersonalBluep
   @Query(
       value =
           """
-          INSERT INTO personal_blueprint (id, owner_user_id, product_key, product_name, output_item_id)
-          SELECT gen_random_uuid(), CAST(:ownerUserId AS uuid), d.product_key, d.product_name, d.output_item_id
+          INSERT INTO personal_blueprint (id, owner_user_id, product_key, product_name, output_item_id,
+                                          source)
+          SELECT gen_random_uuid(), CAST(:ownerUserId AS uuid), d.product_key, d.product_name,
+                 d.output_item_id, 'DEFAULT'
           FROM default_blueprint d
           ON CONFLICT (owner_user_id, product_key) DO NOTHING
           """,
@@ -310,8 +312,9 @@ public interface PersonalBlueprintRepository extends JpaRepository<PersonalBluep
   @Query(
       value =
           """
-          INSERT INTO personal_blueprint (id, owner_user_id, product_key, product_name, output_item_id)
-          SELECT gen_random_uuid(), u.id, d.product_key, d.product_name, d.output_item_id
+          INSERT INTO personal_blueprint (id, owner_user_id, product_key, product_name, output_item_id,
+                                          source)
+          SELECT gen_random_uuid(), u.id, d.product_key, d.product_name, d.output_item_id, 'DEFAULT'
           FROM app_user u
           CROSS JOIN default_blueprint d
           WHERE u.in_keycloak = true

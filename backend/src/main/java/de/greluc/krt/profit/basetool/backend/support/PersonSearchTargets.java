@@ -232,6 +232,8 @@ public final class PersonSearchTargets {
           "blueprint_external_alias.product_name",
           "personal_blueprint.product_key",
           "personal_blueprint.product_name",
+          "personal_blueprint.source",
+          "personal_blueprint.source_client_id",
           "personal_inventory_item.location_name_snapshot",
           "material_exchange_offer.item_name",
           "material_exchange_offer.item_product_key",

@@ -184,6 +184,29 @@ class ExchangeBlueprintWriteControllerTest {
   }
 
   @Test
+  void anAddRecordsTheClientAndTheSourceItNames() throws Exception {
+    String rifle = product("Arrowhead Rifle");
+    String pistol = product("Arclight Pistol");
+
+    change(
+            """
+            {"ops":[{"op":"add","ref":{"bt":"%s"},"provenance":{"source":"log"}},
+                    {"op":"add","ref":{"bt":"%s"},"provenance":{"source":"default"}}]}
+            """
+                .formatted(rifle, pistol),
+            KEY)
+        .andExpect(jsonPath("$.applied").value(2));
+
+    assertThat(
+            jdbc.queryForList(
+                "SELECT product_key || ':' || source || ':' || source_client_id"
+                    + " FROM personal_blueprint WHERE owner_user_id = ?",
+                String.class,
+                member))
+        .containsExactlyInAnyOrder(rifle + ":LOG:" + client, pistol + ":OTHER:" + client);
+  }
+
+  @Test
   void opsThatFindTheirStateOrNoProductAreReportedWithoutWriting() throws Exception {
     String rifle = product("Arrowhead Rifle");
     owns(rifle);

@@ -309,6 +309,23 @@ class ExchangeBlueprintControllerTest {
   }
 
   @Test
+  void aRecordedSourceIsPublishedAsTheProvenanceAndAnUnrecordedOneIsLeftOut() throws Exception {
+    jdbc.update(
+        """
+        INSERT INTO personal_blueprint (id, owner_user_id, product_key, product_name, source,
+                                        source_client_id)
+        VALUES (?, ?, 'a-logged', 'A logged', 'LOG', 'versekit')
+        """,
+        UUID.randomUUID(),
+        member);
+    blueprint(member, "b-unrecorded");
+
+    read(relayed(get(PATH), "exchange.blueprints.read"))
+        .andExpect(jsonPath("$.items[?(@.key == 'a-logged')].provenance.source").value("log"))
+        .andExpect(jsonPath("$.items[?(@.key == 'b-unrecorded')].provenance").isEmpty());
+  }
+
+  @Test
   void aDefaultBlueprintIsMarkedAndItsSetChangeReachesTheFeed() throws Exception {
     blueprint(member, DEFAULT_PRODUCT);
     String cursor = snapshotEnd();

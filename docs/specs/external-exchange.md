@@ -522,7 +522,8 @@ also covers a removal in the web.*
 
 Ops are `add` and `remove` of products. Default-granted blueprints cannot be removed
 (`DEFAULT_NOT_REMOVABLE`). A blueprint's `note` is read-only in v1. Writes are audited in the
-Blueprints domain with the external client.
+Blueprints domain with the external client. An `add` records the client and the source its
+`provenance` names, and the feed publishes a recorded source as `provenance.source` (REQ-INV-054).
 
 A blueprint's `key` and its `ref.bt` are the same value: the normalised product key, or `h:` and
 its SHA-256 in hex when that is longer than 128 characters. The display name is cut to 200. The
