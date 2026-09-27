@@ -209,6 +209,12 @@ just joined.
 > permission to name a member in `X-Ingest-On-Behalf-Of`, whose *own* authorities then apply for
 > that request. A named authority rather than an empty set on purpose, so a misconfiguration reads
 > as "authenticated as a machine" rather than as "not authenticated".
+>
+> On the **exchange** routes (`/api/v1/exchange/**`, REQ-XCH-009) the named member does **not** get
+> their own authorities: they hold only `ROLE_EXCHANGE_MEMBER` and the capabilities the gateway
+> relayed, and every route is gated by `@exchangeGate` against the client registry. An `ADMIN`
+> therefore has no admin authority there. A browser or app session reaches none of these routes,
+> and one that sends `X-Exchange-Client` / `X-Exchange-Capabilities` is refused.
 
 ---
 
@@ -742,6 +748,7 @@ row — a Bereichsleiter's organisational OL seat (REQ-ROLE-005) does not count.
 | Write system setting (`PUT /settings/{key}`, `hasRole('ADMIN')`)                                                                                                                                                                           |   ❌    |  ❌   | ❌  |    ❌    |   ✅   |
 | Role/permission management, member attributes/rank, Staffel memberships + flags, Keycloak roster sync now (`/api/v1/admin/**`, `/api/v1/users/*/...`, `POST /api/v1/users/sync`, `/members`, `hasRole('ADMIN')`)                          |   ❌    |  ❌   | ❌  |    ❌    |   ✅   |
 | Discord registration queue — approve / reject / reopen / link / merge (`/api/v1/admin/registrations/**`, `/admin/discord-registrations`, `hasRole('ADMIN')`) |   ❌    |  ❌   | ❌  |    ❌    |   ✅   |
+| Own exchange connections — list them, disconnect a client or one installation (`/api/v1/connected-apps/**`, REQ-XCH-008/-032); only from the member's own web session, never the app or the gateway |   ✅    |  ✅   | ✅  |    ✅    |   ✅   |
 | Exchange client registry and the global exchange switch (`/api/v1/admin/exchange-clients/**`, `/api/v1/admin/exchange-settings`, REQ-XCH-003) — register, edit, suspend and activate approved third-party clients; audited as „Verbundene Anwendungen“ |   ❌    |  ❌   | ❌  |    ❌    |   ✅   |
 | Terms-of-Use acceptance overview (`/api/v1/admin/terms/**`, `/admin/terms`), notification rules (`/api/v1/notification-rules/**`), default blueprints (`/api/v1/admin/default-blueprints/**`), P4K game-data import (`/api/v1/admin/import/p4k/**`), UEX data (`/admin/uex-data`) — all `hasRole('ADMIN')` |   ❌    |  ❌   | ❌  |    ❌    |   ✅   |
 | **Hard-delete a user account** (`DELETE /api/v1/users/{id}`, `hasRole('ADMIN')`) — irreversible, and only for an account already gone from Keycloak                                                                                        |   ❌    |  ❌   | ❌  |    ❌    |   ✅   |

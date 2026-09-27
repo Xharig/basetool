@@ -218,8 +218,11 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   scopes), editing it (`EXCHANGE_CLIENT_UPDATED`, only when a field changed; the details name the
   changed fields and the added and removed scopes), suspending and activating it
   (`EXCHANGE_CLIENT_SUSPENDED` / `_ACTIVATED`, only on a change) and the global exchange switch
-  (`EXCHANGE_SWITCH_CHANGED`, the new state). The subject is the registry client, labelled by its
-  **client id**; there is no target member. A change that failed because the mirror could not be
+  (`EXCHANGE_SWITCH_CHANGED`, the new state), and a member disconnecting a whole client
+  (`EXCHANGE_CLIENT_DISCONNECTED`) or one installation (`EXCHANGE_INSTALLATION_DISCONNECTED`,
+  REQ-XCH-008; the installation's label never enters the row). The subject is the registry client
+  or the installation, labelled by the **client id**; a member's disconnect names the member as
+  target, a registry change names none. A change that failed because the mirror could not be
   written rolls back and records nothing.
 - **Datenschutz / Betroffenenrechte** (`AuditDomain.ROLE`, REQ-SEC-058 / -060 / -061 / -062) — the
   data-subject-rights surfaces, added 2026-09-16. Eight event types, and two of them audit a
@@ -454,7 +457,7 @@ sweep"; that was true when written and is no longer.
 ### REQ-AUDIT-005 — The trail records which client a mutation came through
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> On the ingest relay hop the audit row names the external client asserted by the gateway (`X-Exchange-Client`) instead of `none`, with the vocabulary taken from the client registry (REQ-XCH-010, ADR-0217). Existing rows keep „Ohne Client (System)“. Ships with WP 3.1 (#2083), live before the first registry entry.
+> On the ingest relay hop the audit row names the external client asserted by the gateway (`X-Exchange-Client`) instead of `none`, with the vocabulary taken from the client registry (REQ-XCH-010, ADR-0217). Existing rows keep „Ohne Client (System)“. **Built with WP 3.1 (#2083)**: the viewer's client filter offers the registry's clients by their product names; a relayed client the registry does not hold is recorded as `other`. The extractor's relay hop keeps recording `none`.
 
 Every row **either** audit trail writes carries the **originating client**: which client software
 the request that caused the mutation was made from, stored in `audit_event.client_id` and

@@ -604,6 +604,32 @@ public class KeycloakService {
   }
 
   /**
+   * Removes a member's consent for a client, which also revokes the client's offline tokens for
+   * that member (REQ-XCH-008). Idempotent: a {@code 404} is success.
+   *
+   * @param keycloakUserId the member
+   * @param clientId the Keycloak client id
+   * @throws ExternalServiceException when the admin URL is unconfigured
+   */
+  public void revokeConsent(@NotNull UUID keycloakUserId, @NotNull String clientId) {
+    requireAdminUrl();
+    try {
+      adminClient
+          .delete()
+          .uri(
+              "/admin/realms/{realm}/users/{id}/consents/{client}",
+              properties.realm(),
+              keycloakUserId,
+              clientId)
+          .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + getAccessToken())
+          .retrieve()
+          .toBodilessEntity();
+    } catch (HttpClientErrorException.NotFound notFound) {
+      log.debug("Member had no consent for client {} to revoke", clientId);
+    }
+  }
+
+  /**
    * Live check whether a Keycloak user still exists. Fail-closed: only a {@code 404} reports
    * absence; every other failure propagates.
    *

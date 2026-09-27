@@ -167,6 +167,8 @@ app:
     mirror:
       enabled: ${APP_EXCHANGE_MIRROR_ENABLED:false}
       reconcile-interval: ${APP_EXCHANGE_MIRROR_RECONCILE_INTERVAL:PT60S}
+    connected-apps:
+      web-client-ids: ${APP_EXCHANGE_CONNECTED_APPS_WEB_CLIENT_IDS:basetool-frontend}
   android:
     minimum-version-code: ${APP_ANDROID_MINIMUM_VERSION_CODE:0}
     latest-version-code: ${APP_ANDROID_LATEST_VERSION_CODE:0}

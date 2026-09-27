@@ -22,7 +22,10 @@ package de.greluc.krt.profit.basetool.backend.service;
 import de.greluc.krt.profit.basetool.backend.model.User;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberAuthorities;
+import de.greluc.krt.profit.basetool.backend.support.Roles;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +49,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class DatabaseActingMemberAuthorities implements ActingMemberAuthorities {
+
+  /** The marker authority of an account awaiting approval, which the approval gate refuses. */
+  private static final String PENDING_APPROVAL = "ROLE_PENDING_APPROVAL";
 
   private final UserRepository userRepository;
   private final CustomJwtGrantedAuthoritiesConverter authorityAssembler;
@@ -67,5 +74,29 @@ public class DatabaseActingMemberAuthorities implements ActingMemberAuthorities 
       throw new AccessDeniedException("The named member is no longer active.");
     }
     return authorityAssembler.assembleFor(user);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public @NotNull Collection<GrantedAuthority> exchangeAuthoritiesFor(
+      @NotNull UUID member, @NotNull Collection<String> capabilityScopes) {
+    Collection<GrantedAuthority> stored = authoritiesFor(member);
+    boolean gated =
+        stored.stream()
+            .map(GrantedAuthority::getAuthority)
+            .anyMatch(
+                authority ->
+                    PENDING_APPROVAL.equals(authority) || Roles.NO_ROLE_MARKER.equals(authority));
+    if (gated) {
+      return stored;
+    }
+    List<GrantedAuthority> reduced = new ArrayList<>();
+    reduced.add(new SimpleGrantedAuthority(Roles.authority(Roles.EXCHANGE_MEMBER)));
+    capabilityScopes.stream()
+        .distinct()
+        .sorted()
+        .map(scope -> new SimpleGrantedAuthority(Roles.EXCHANGE_CAPABILITY_PREFIX + scope))
+        .forEach(reduced::add);
+    return List.copyOf(reduced);
   }
 }

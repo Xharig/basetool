@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.config;
 
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.AuthenticatedSubject;
 import de.greluc.krt.profit.basetool.backend.support.ClientAttribution;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -77,7 +78,8 @@ public class ApiClientMetricsFilter extends OncePerRequestFilter {
           .counter(
               MetricNames.API_CLIENT_REQUESTS,
               MetricNames.TAG_CLIENT_ID,
-              clientAttribution.labelOf(authentication))
+              clientAttribution.relayedLabelOf(
+                  authentication, request.getHeader(ActingMemberHeader.EXCHANGE_CLIENT_HEADER)))
           .increment();
     }
     chain.doFilter(request, response);
