@@ -655,10 +655,11 @@ variants). Lines with nothing open are left out; `bt` is the material's or game 
 
 - [x] An overseer who is not a member of a unit does not see its demand.
   *`ExchangeDemandServiceTest` — only the member's own units are asked.*
-- [ ] The response schema admits no name or free-text field.
+- [x] The response schema admits no name or free-text field.
+  *`ExchangeOrgDemandRouteTest` pins the schema's field sets; the only names are catalogue names.*
 
-**Status:** the backend location list is built — WP 3.1 (#2083); the backend's demand is built — WP
-4.3 (#2095); the gateway route follows
+**Status:** the backend location list is built — WP 3.1 (#2083); the backend's demand and the
+gateway's demand route (`GET /exchange/v1/me/org-demand`) are built — WP 4.3 (#2095)
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 
