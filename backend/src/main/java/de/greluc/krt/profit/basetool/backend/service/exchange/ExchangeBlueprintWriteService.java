@@ -38,7 +38,6 @@ import de.greluc.krt.profit.basetool.backend.service.BlueprintProductService;
 import de.greluc.krt.profit.basetool.backend.service.DefaultBlueprintKeyService;
 import de.greluc.krt.profit.basetool.backend.service.PersonalBlueprintService;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -105,16 +104,6 @@ public class ExchangeBlueprintWriteService {
   private final MeterRegistry meterRegistry;
   private final ExchangeLiveSync liveSync;
 
-  /** Registers the write counter at zero for every resource and outcome. */
-  @PostConstruct
-  void registerCounters() {
-    for (ExchangeResource resource : ExchangeResource.values()) {
-      for (String outcome : List.of(APPLIED, UNCHANGED, UNMATCHED, AMBIGUOUS, REJECTED, HELD)) {
-        counter(resource, outcome);
-      }
-    }
-  }
-
   /**
    * Plans and applies one change set in one transaction.
    *
@@ -165,7 +154,7 @@ public class ExchangeBlueprintWriteService {
             ExchangeResource.BLUEPRINT,
             blueprintRepository.countByOwnerUserId(caller.member()),
             removals)) {
-      counter(ExchangeResource.BLUEPRINT, HELD).increment();
+      counter(caller, HELD).increment();
       throw ExchangeProblemException.massChangeConfirmationRequired();
     }
     UUID batch = UUID.randomUUID();
@@ -177,7 +166,7 @@ public class ExchangeBlueprintWriteService {
       if (plan.get(i) instanceof Change change) {
         if (!changeSet.dryRun()) {
           execute(caller, batch, change);
-          counter(ExchangeResource.BLUEPRINT, APPLIED).increment();
+          counter(caller, APPLIED).increment();
         }
         applied++;
       } else if (plan.get(i) instanceof Skip skip) {
@@ -185,7 +174,7 @@ public class ExchangeBlueprintWriteService {
           unchanged++;
         }
         if (!changeSet.dryRun()) {
-          counter(ExchangeResource.BLUEPRINT, skip.result()).increment();
+          counter(caller, skip.result()).increment();
         }
         results.add(new ExchangeChangeResultDto.OpResult(i, opId, skip.result(), skip.reason()));
       }
@@ -408,18 +397,20 @@ public class ExchangeBlueprintWriteService {
   }
 
   /**
-   * Returns the write counter of one resource and outcome.
+   * Returns the write counter of the caller's client and one outcome.
    *
-   * @param resource the resource
+   * @param caller the caller, whose client the relay bounded by the registry
    * @param outcome the outcome
    * @return the counter
    */
   private io.micrometer.core.instrument.Counter counter(
-      @NotNull ExchangeResource resource, @NotNull String outcome) {
+      @NotNull ExchangeCaller caller, @NotNull String outcome) {
     return meterRegistry.counter(
         MetricNames.EXCHANGE_WRITES,
+        MetricNames.TAG_CLIENT_ID,
+        caller.clientId(),
         MetricNames.TAG_RESOURCE,
-        resource.name().toLowerCase(java.util.Locale.ROOT),
+        ExchangeResource.BLUEPRINT.name().toLowerCase(java.util.Locale.ROOT),
         MetricNames.TAG_OUTCOME,
         outcome);
   }

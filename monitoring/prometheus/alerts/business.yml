@@ -217,6 +217,42 @@ groups:
           summary: "Exchange registry reconcile stale >10m"
           description: "The 60-second reconcile of the exchange registry mirror last succeeded more than 10 minutes ago. While it is stale a mirror that fell behind the database is not repaired; the gateway stays fail-closed but may keep refusing a client that was re-activated (REQ-XCH-003)."
 
+      - alert: ExchangeRemoveSpike
+        expr: sum by (client_id) (increase(basetool_exchange_removals_total[1h])) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "An exchange client removed unusually many entries"
+          description: "One registered client (client_id) removed more than 100 blueprints, stock lots or ships across its members in the last hour. The mass-change guard stops one member losing much at once, but not a faulty release doing it to many members. Follow the vault runbook \"Suspending an exchange client\": suspend the client under Administration - Verbundene Anwendungen, then let the affected members undo its changes (REQ-XCH-021, REQ-XCH-028)."
+
+      - alert: ExchangeGuardStorm
+        expr: sum by (client_id) (increase(basetool_exchange_writes_total{outcome="held"}[1h])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The mass-change guard keeps holding one client's batches"
+          description: "The mass-change guard held back more than 10 change sets of one registered client (client_id) in the last hour. Members will see many confirmation links; a client that deletes by mistake, or a release that sends removals where it should not, looks like this. Check the client's recent writes and consider suspending it (vault runbook \"Suspending an exchange client\", REQ-XCH-021)."
+
+      - alert: ExchangeInstallationSurge
+        expr: sum by (client_id) (increase(basetool_exchange_installations_created_total[1h])) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Many new installations of one exchange client"
+          description: "More than 20 new installations of one registered client (client_id) connected in the last hour. A release day can explain it; a device-code phishing wave or a leaked client cannot. Check the new-connection notifications and the installations on the admin page, and suspend the client if the connections are not expected (REQ-XCH-007, REQ-XCH-028)."
+
+      - alert: ExchangeUnknownClient
+        expr: sum(increase(basetool_ingest_exchange_refused_total{client_id="unregistered"}[15m])) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exchange tokens of a client outside the registry"
+          description: "The ingest gateway refused more than 10 exchange requests in 15 minutes that carried a valid token of a Keycloak client the registry does not list. Either a client was provisioned in Keycloak but not registered yet, or a client id is being used that should not be. Register the client deliberately or remove it from Keycloak (REQ-XCH-003, REQ-XCH-028)."
+
       - alert: BusinessMetricsStale
         expr: (time() - (basetool_scheduled_job_last_success_timestamp_seconds{task="business_metrics"} > 0)) > 600 or (absent(basetool_scheduled_job_last_success_timestamp_seconds{task="business_metrics"}) and on() (time() - max(process_start_time_seconds{job="basetool-backend"})) > 600 and on() (basetool_scheduled_job_enabled{task="business_metrics"} == 1))
         for: 5m

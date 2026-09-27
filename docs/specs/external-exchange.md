@@ -888,11 +888,13 @@ tombstones and journal reports task metrics.
 - [x] Registry changes and the Redis budget alert (`ExchangeRegistryChanged`, `ExchangeBudgetHigh`).
 - [x] A blackbox probe checks `GET /exchange/v1` for exactly `401` (`blackbox-http-401`, module
   `http_401`; `BlackboxProbeFailed` covers it).
-- [ ] Per-client write metrics with the WP 3.3 journal, and the tombstone and journal purge task
-  metrics.
+- [x] Per-client write metrics with the WP 3.3 journal, and the tombstone and journal purge task
+  metrics. *The writes, undo, confirmation, removal and installation counters carry `client_id`;
+  `ExchangeRemoveSpike`, `ExchangeGuardStorm`, `ExchangeInstallationSurge` and `ExchangeUnknownClient`
+  alert on them (`exchange_write_alerts_test.yml`); `exchange_change_retention` purges feed and
+  journal under `ScheduledJobStale`.*
 
-**Status:** partly built — the gateway's per-client counters and alerts; the rest with WP 3.3 and
-#2091
+**Status:** built — WP 3.3 (#2083), #2091; the runbooks live in the knowledge base
 
 ### REQ-XCH-029 — Third parties get a local sandbox
 

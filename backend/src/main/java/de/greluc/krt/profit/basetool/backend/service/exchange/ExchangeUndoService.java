@@ -47,7 +47,6 @@ import de.greluc.krt.profit.basetool.backend.service.PersonalBlueprintService;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -110,15 +109,6 @@ public class ExchangeUndoService {
   private final ObjectMapper objectMapper;
   private final Clock clock = Clock.systemUTC();
 
-  /** Registers the undo counter at zero for every resource and outcome. */
-  @PostConstruct
-  void registerCounters() {
-    for (ExchangeResource resource : ExchangeResource.values()) {
-      counter(resource, RESTORED);
-      counter(resource, SKIPPED);
-    }
-  }
-
   /**
    * Undoes a client's writes to the member's entries since a point in time, in one transaction.
    *
@@ -157,13 +147,13 @@ public class ExchangeUndoService {
       if (reason != null) {
         skippedEntries.add(newest);
         skippedReasons.add(reason);
-        counter(resource, SKIPPED).increment();
+        counter(clientId, resource, SKIPPED).increment();
         continue;
       }
       group.forEach(entry -> entry.setUndoneAt(now));
       restored++;
       touched.add(resource);
-      counter(resource, RESTORED).increment();
+      counter(clientId, resource, RESTORED).increment();
     }
     Map<UUID, String> labels = entryLabels.label(skippedEntries);
     List<ExchangeUndoResultDto.Skipped> skipped = new ArrayList<>();
@@ -401,15 +391,19 @@ public class ExchangeUndoService {
   }
 
   /**
-   * Returns the undo counter of one resource and outcome.
+   * Returns the undo counter of one client, resource and outcome.
    *
+   * @param clientId the client, a registered one
    * @param resource the resource
    * @param outcome {@code restored} or {@code skipped}
    * @return the counter
    */
-  private @NotNull Counter counter(@NotNull ExchangeResource resource, @NotNull String outcome) {
+  private @NotNull Counter counter(
+      @NotNull String clientId, @NotNull ExchangeResource resource, @NotNull String outcome) {
     return meterRegistry.counter(
         MetricNames.EXCHANGE_UNDO,
+        MetricNames.TAG_CLIENT_ID,
+        clientId,
         MetricNames.TAG_RESOURCE,
         resource.name().toLowerCase(Locale.ROOT),
         MetricNames.TAG_OUTCOME,

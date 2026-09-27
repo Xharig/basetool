@@ -21,11 +21,13 @@ package de.greluc.krt.profit.basetool.backend.service.exchange;
 
 import de.greluc.krt.profit.basetool.backend.event.ExchangeInstallationConnectedEvent;
 import de.greluc.krt.profit.basetool.backend.exception.BadRequestException;
+import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeInstallationDto;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
@@ -65,6 +67,9 @@ public class ExchangeInstallationService {
   /** Publishes the new-connection event, which the notification engine handles after commit. */
   private final ApplicationEventPublisher eventPublisher;
 
+  /** Counts the installations created, for the installation-surge alert. */
+  private final MeterRegistry meterRegistry;
+
   private final Clock clock = Clock.systemUTC();
 
   /**
@@ -94,6 +99,10 @@ public class ExchangeInstallationService {
         installationRepository.touch(
             clientId, member, keyThumbprint, now, now.minus(TOUCH_INTERVAL))) {
       if (touched.getInserted()) {
+        meterRegistry
+            .counter(
+                MetricNames.EXCHANGE_INSTALLATIONS_CREATED, MetricNames.TAG_CLIENT_ID, clientId)
+            .increment();
         String clientName =
             clientRepository
                 .findWithCapabilitiesByClientId(clientId)

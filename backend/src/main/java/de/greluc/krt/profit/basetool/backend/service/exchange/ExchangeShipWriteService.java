@@ -159,7 +159,7 @@ public class ExchangeShipWriteService {
             ExchangeResource.SHIP,
             shipRepository.countOwnedBy(caller.member()),
             removals)) {
-      counter(HELD).increment();
+      counter(caller, HELD).increment();
       throw ExchangeProblemException.massChangeConfirmationRequired();
     }
     UUID batch = UUID.randomUUID();
@@ -174,14 +174,14 @@ public class ExchangeShipWriteService {
           unchanged++;
         }
         if (!changeSet.dryRun()) {
-          counter(skip.result()).increment();
+          counter(caller, skip.result()).increment();
         }
         results.add(new ExchangeChangeResultDto.OpResult(i, opId, skip.result(), skip.reason()));
         continue;
       }
       if (!changeSet.dryRun()) {
         detached += execute(caller, batch, plan.get(i));
-        counter(APPLIED).increment();
+        counter(caller, APPLIED).increment();
       }
       applied++;
     }
@@ -711,14 +711,17 @@ public class ExchangeShipWriteService {
   }
 
   /**
-   * Returns the write counter of one outcome.
+   * Returns the write counter of the caller's client and one outcome.
    *
+   * @param caller the caller, whose client the relay bounded by the registry
    * @param outcome the outcome
    * @return the counter
    */
-  private @NotNull Counter counter(@NotNull String outcome) {
+  private @NotNull Counter counter(@NotNull ExchangeCaller caller, @NotNull String outcome) {
     return meterRegistry.counter(
         MetricNames.EXCHANGE_WRITES,
+        MetricNames.TAG_CLIENT_ID,
+        caller.clientId(),
         MetricNames.TAG_RESOURCE,
         ExchangeResource.SHIP.name().toLowerCase(Locale.ROOT),
         MetricNames.TAG_OUTCOME,

@@ -169,6 +169,8 @@ class ExchangeBlueprintWriteControllerTest {
 
     assertThat(owned()).containsExactly(rifle);
     assertThat(frames("blueprints_own")).isEqualTo(framesBefore + 1);
+    assertThat(clientCount(MetricNames.EXCHANGE_WRITES, "outcome", "applied")).isEqualTo(2);
+    assertThat(clientCount(MetricNames.EXCHANGE_REMOVALS, "resource", "blueprint")).isEqualTo(1);
     List<ExchangeJournalEntry> journal =
         journalRepository.findAllByUserIdOrderByRecordedAtAsc(member);
     assertThat(journal)
@@ -389,6 +391,20 @@ class ExchangeBlueprintWriteControllerTest {
             .find(MetricNames.LIVESYNC_PUBLISH_ACCEPTED)
             .tag(MetricNames.TAG_TOPIC_CLASS, topicClass)
             .counter();
+    return counter == null ? 0 : counter.count();
+  }
+
+  /**
+   * Reads one of this test client's exchange counters.
+   *
+   * @param name the meter name
+   * @param tag a further tag to narrow by
+   * @param value its value
+   * @return the count, 0 before the first
+   */
+  private double clientCount(@NotNull String name, @NotNull String tag, @NotNull String value) {
+    io.micrometer.core.instrument.Counter counter =
+        meterRegistry.find(name).tag(MetricNames.TAG_CLIENT_ID, client).tag(tag, value).counter();
     return counter == null ? 0 : counter.count();
   }
 }

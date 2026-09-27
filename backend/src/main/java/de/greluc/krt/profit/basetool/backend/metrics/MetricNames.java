@@ -756,23 +756,37 @@ public final class MetricNames {
   public static final String EXCHANGE_ACCOUNT_CHECKS = "basetool.exchange.account.checks";
 
   /**
-   * Counter {@code basetool_exchange_writes_total{resource,outcome}} — exchange ops by resource
-   * ({@code blueprint} / {@code stock} / {@code ship}) and outcome ({@code applied} / {@code
-   * unchanged} / {@code unmatched} / {@code ambiguous} / {@code rejected}), plus {@code held} per
-   * change set the mass-change guard held back (REQ-XCH-015…-017, REQ-XCH-021).
+   * Counter {@code basetool_exchange_writes_total{client_id,resource,outcome}} — exchange ops by
+   * registered client, resource ({@code blueprint} / {@code stock} / {@code ship}) and outcome
+   * ({@code applied} / {@code unchanged} / {@code unmatched} / {@code ambiguous} / {@code
+   * rejected}), plus {@code held} per change set the mass-change guard held back (REQ-XCH-015…-017,
+   * REQ-XCH-021, REQ-XCH-028).
    */
   public static final String EXCHANGE_WRITES = "basetool.exchange.writes";
 
   /**
    * Counter of the entries a member's undo of a client's writes restored or skipped, tagged by
-   * resource ({@code blueprint} / {@code stock} / {@code ship}) and outcome ({@code restored} /
-   * {@code skipped}) (REQ-XCH-022).
+   * client, resource ({@code blueprint} / {@code stock} / {@code ship}) and outcome ({@code
+   * restored} / {@code skipped}) (REQ-XCH-022).
    */
   public static final String EXCHANGE_UNDO = "basetool.exchange.undo";
 
   /**
-   * Counter of the held-back change sets members confirmed, tagged by resource ({@code blueprint} /
-   * {@code stock} / {@code ship}) (REQ-XCH-021).
+   * Counter of the removals exchange clients committed to members' entries, tagged by client and
+   * resource; feeds {@code ExchangeRemoveSpike} (REQ-XCH-028).
+   */
+  public static final String EXCHANGE_REMOVALS = "basetool.exchange.removals";
+
+  /**
+   * Counter of the installations the exchange saw for the first time, tagged by client; feeds
+   * {@code ExchangeInstallationSurge} (REQ-XCH-028).
+   */
+  public static final String EXCHANGE_INSTALLATIONS_CREATED =
+      "basetool.exchange.installations.created";
+
+  /**
+   * Counter of the held-back change sets members confirmed, tagged by client and resource ({@code
+   * blueprint} / {@code stock} / {@code ship}) (REQ-XCH-021).
    */
   public static final String EXCHANGE_MASS_CHANGES_CONFIRMED =
       "basetool.exchange.mass.changes.confirmed";

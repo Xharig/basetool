@@ -187,7 +187,7 @@ public class ExchangeStockWriteService {
             ExchangeResource.STOCK,
             lotCount(caller.member()),
             removals(caller, plan, rising))) {
-      counter(HELD).increment();
+      counter(caller, HELD).increment();
       throw ExchangeProblemException.massChangeConfirmationRequired();
     }
     UUID batch = UUID.randomUUID();
@@ -200,7 +200,7 @@ public class ExchangeStockWriteService {
       if (plan.get(i) instanceof Change change) {
         if (!changeSet.dryRun()) {
           execute(caller, batch, change, rising, offers);
-          counter(APPLIED).increment();
+          counter(caller, APPLIED).increment();
         }
         applied++;
       } else if (plan.get(i) instanceof Skip skip) {
@@ -208,7 +208,7 @@ public class ExchangeStockWriteService {
           unchanged++;
         }
         if (!changeSet.dryRun()) {
-          counter(skip.result()).increment();
+          counter(caller, skip.result()).increment();
         }
         results.add(new ExchangeChangeResultDto.OpResult(i, opId, skip.result(), skip.reason()));
       }
@@ -720,14 +720,18 @@ public class ExchangeStockWriteService {
   }
 
   /**
-   * Returns the write counter of one outcome.
+   * Returns the write counter of the caller's client and one outcome.
    *
+   * @param caller the caller, whose client the relay bounded by the registry
    * @param outcome the outcome
    * @return the counter
    */
-  private io.micrometer.core.instrument.Counter counter(@NotNull String outcome) {
+  private io.micrometer.core.instrument.Counter counter(
+      @NotNull ExchangeCaller caller, @NotNull String outcome) {
     return meterRegistry.counter(
         MetricNames.EXCHANGE_WRITES,
+        MetricNames.TAG_CLIENT_ID,
+        caller.clientId(),
         MetricNames.TAG_RESOURCE,
         ExchangeResource.STOCK.name().toLowerCase(Locale.ROOT),
         MetricNames.TAG_OUTCOME,
