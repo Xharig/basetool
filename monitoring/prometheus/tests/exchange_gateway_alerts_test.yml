@@ -30,3 +30,28 @@ tests:
       - eval_time: 20m
         alertname: ExchangeRegistryUnreadableAtGateway
         exp_alerts: []
+
+  - name: fires - relays keep failing
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_relay_total{job="basetool-ingest", instance="ingest:11272", outcome="failed"}'
+        values: "0+1x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRelayFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Exchange relays to the backend keep failing"
+              description: "The ingest gateway relayed admitted exchange requests but the backend answered unusably - 5xx, a refusal outside the exchange error registry, or an answer that breaks the v1 schema - and the client got 502 BACKEND_RELAY_FAILED (REQ-XCH-011). Check the backend's exchange layer and the gateway log line 'Exchange relay to' or 'Exchange answer breaks'."
+
+  - name: silent - backend refusals with a registry code are the member's own
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_relay_total{job="basetool-ingest", instance="ingest:11272", outcome="refused"}'
+        values: "0+5x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRelayFailing
+        exp_alerts: []

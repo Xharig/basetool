@@ -23,6 +23,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import java.time.Duration;
+import org.hibernate.validator.constraints.URL;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -33,10 +34,13 @@ import org.springframework.validation.annotation.Validated;
  * @param registryKey the Redis key of the mirror document; must stay under {@code exchange:}, the
  *     only family the gateway's ACL user may read there
  * @param registryCacheTtl how long a read registry is reused before Redis is asked again
+ * @param docsUrl where the service document sends a client for the documentation
  */
 @Validated
 @ConfigurationProperties(prefix = "app.exchange")
 public record ExchangeGatewayProperties(
     @NotBlank @Pattern(regexp = "exchange:[a-z0-9:_-]+") @DefaultValue("exchange:registry")
         String registryKey,
-    @NotNull @DefaultValue("PT5S") Duration registryCacheTtl) {}
+    @NotNull @DefaultValue("PT5S") Duration registryCacheTtl,
+    @NotBlank @URL @DefaultValue("https://ingest.profit-base.online/exchange/v1/openapi.json")
+        String docsUrl) {}

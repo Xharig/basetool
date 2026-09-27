@@ -172,6 +172,15 @@ groups:
           summary: "Exchange registry mirror write failed ({{ $labels.phase }})"
           description: "The backend could not write the exchange registry mirror to Redis ({{ $labels.phase }}). A failed pre_commit write refused an admin's restriction; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
 
+      - alert: ExchangeRelayFailing
+        expr: sum(increase(basetool_ingest_exchange_relay_total{outcome="failed"}[15m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exchange relays to the backend keep failing"
+          description: "The ingest gateway relayed admitted exchange requests but the backend answered unusably - 5xx, a refusal outside the exchange error registry, or an answer that breaks the v1 schema - and the client got 502 BACKEND_RELAY_FAILED (REQ-XCH-011). Check the backend's exchange layer and the gateway log line 'Exchange relay to' or 'Exchange answer breaks'."
+
       - alert: ExchangeRegistryUnreadableAtGateway
         expr: sum(increase(basetool_ingest_exchange_refused_total{reason="registry_unavailable"}[5m])) > 0
         for: 5m

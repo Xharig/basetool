@@ -19,7 +19,7 @@
 
 package de.greluc.krt.profit.basetool.ingest.exchange;
 
-import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.LOCATIONS;
+import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.STOCK;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -87,17 +87,34 @@ class ExchangeDpopGateTest {
     when(jwtDecoder.decode(TOKEN))
         .thenReturn(
             ExchangeTestSupport.token(
-                TOKEN, "basetool-ingest", thumbprint, member, "exchange.connect", issued));
+                TOKEN,
+                "basetool-ingest",
+                thumbprint,
+                member,
+                "exchange.connect exchange.stock.read",
+                issued));
     when(jwtDecoder.decode(UNBOUND_TOKEN))
         .thenReturn(
             ExchangeTestSupport.token(
-                UNBOUND_TOKEN, "basetool-ingest", null, member, "exchange.connect", issued));
+                UNBOUND_TOKEN,
+                "basetool-ingest",
+                null,
+                member,
+                "exchange.connect exchange.stock.read",
+                issued));
     when(jwtDecoder.decode(FOREIGN_TOKEN))
         .thenReturn(
             ExchangeTestSupport.token(
-                FOREIGN_TOKEN, "basetool-backend", thumbprint, member, "exchange.connect", issued));
+                FOREIGN_TOKEN,
+                "basetool-backend",
+                thumbprint,
+                member,
+                "exchange.connect exchange.stock.read",
+                issued));
     when(registryReader.current())
-        .thenReturn(ExchangeTestSupport.registry(true, true, Set.of("exchange.connect"), null));
+        .thenReturn(
+            ExchangeTestSupport.registry(
+                true, true, Set.of("exchange.connect", "exchange.stock.read"), null));
     when(revocationReader.isDenied(any())).thenReturn(false);
   }
 
@@ -106,7 +123,7 @@ class ExchangeDpopGateTest {
     double before = refused("dpop_required");
 
     mockMvc
-        .perform(get(LOCATIONS).header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
+        .perform(get(STOCK).header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
         .andExpect(status().isUnauthorized())
         .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, Matchers.startsWith("DPoP algs=")))
         .andExpect(jsonPath("$.code").value("DPOP_REQUIRED"));
@@ -161,7 +178,7 @@ class ExchangeDpopGateTest {
   @Test
   void anUnboundTokenIsRefusedAsDpopRequired() throws Exception {
     mockMvc
-        .perform(get(LOCATIONS).header(HttpHeaders.AUTHORIZATION, "Bearer " + UNBOUND_TOKEN))
+        .perform(get(STOCK).header(HttpHeaders.AUTHORIZATION, "Bearer " + UNBOUND_TOKEN))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("DPOP_REQUIRED"));
   }
@@ -181,7 +198,7 @@ class ExchangeDpopGateTest {
   @Test
   void anAnonymousExchangeRequestIsChallengedForDpop() throws Exception {
     mockMvc
-        .perform(get(LOCATIONS))
+        .perform(get(STOCK))
         .andExpect(status().isUnauthorized())
         .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, Matchers.startsWith("DPoP")))
         .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
@@ -238,7 +255,7 @@ class ExchangeDpopGateTest {
    */
   private static @NotNull String proof(
       @NotNull ECKey signer, @NotNull String token, @Nullable String nonce) throws Exception {
-    return ExchangeTestSupport.proof(signer, token, "GET", LOCATIONS, nonce);
+    return ExchangeTestSupport.proof(signer, token, "GET", STOCK, nonce);
   }
 
   /**
@@ -250,7 +267,7 @@ class ExchangeDpopGateTest {
    */
   private static @NotNull MockHttpServletRequestBuilder dpop(
       @NotNull String token, @NotNull String proof) {
-    return get(LOCATIONS).header(HttpHeaders.AUTHORIZATION, "DPoP " + token).header("DPoP", proof);
+    return get(STOCK).header(HttpHeaders.AUTHORIZATION, "DPoP " + token).header("DPoP", proof);
   }
 
   /**

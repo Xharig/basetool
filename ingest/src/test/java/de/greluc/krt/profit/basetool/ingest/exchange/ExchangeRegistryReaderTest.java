@@ -83,7 +83,8 @@ class ExchangeRegistryReaderTest {
         new ExchangeRegistryReader(
             template,
             JsonMapper.builder().build(),
-            new ExchangeGatewayProperties(KEY, Duration.ofSeconds(5)),
+            new ExchangeGatewayProperties(
+                KEY, Duration.ofSeconds(5), "https://docs.example/exchange"),
             clock);
   }
 

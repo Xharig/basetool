@@ -229,9 +229,13 @@ author, owner decision 2026-09-26).
 - [ ] Label validation tests, including control, bidi and homoglyph-only input.
 - [ ] Log-capture test: the label never appears in any log line.
 - [ ] The installation response and the service document carry the same `installationId`, and a
-  tombstone written by that installation names it.
+  tombstone written by that installation names it. *The gateway half is in: `POST
+  /exchange/v1/me/installation` checks the label against `installation.schema.json` before the relay
+  (a rule-breaking label never reaches the backend), and the service document takes
+  `installationId` from the backend's installation of the relayed key (`ExchangeControllerTest`).*
 
-**Status:** planned — WP 3.2 (#2082), WP 3.3 (#2083)
+**Status:** gateway routes built — WP 3.2 (#2082); the backend's installations with WP 3.1 (#2083),
+tombstones with WP 3.3
 
 ### REQ-XCH-008 — Revocation takes effect on the next request
 
@@ -315,7 +319,16 @@ offline-file `envelope` (`format`, `formatVersion`, `generator`, `generatedAt`, 
 
 - [x] CI validates every conformance fixture in `docs/exchange/examples/v1/` against its schema, and
   every schema the OpenAPI document names exists and has valid and invalid fixtures.
-- [ ] A test fails when a served route and the OpenAPI document diverge (with the routes, WP 3.2).
+- [x] A test fails when a served route and the OpenAPI document diverge: `ExchangeRoutesContractTest`
+  holds the gate's route table equal to the document, route for route and scope for scope, and
+  `IngestEndpointSurfaceTest` fails for any served exchange route outside that table.
+
+The gateway checks each request body against its schema before relaying it and answers a violation
+`400 SCHEMA_INVALID` with `errors[]` (JSON Pointer and the violated keyword, at most 50); it checks
+the backend's answer against the response schema too, and an answer that breaks it is `502
+BACKEND_RELAY_FAILED`, never passed on (`ExchangeSchemas`, `ExchangeSchemasTest` over every
+conformance fixture, `ExchangeControllerTest`). The validator is `com.networknt:json-schema-validator`,
+the library the contract test already used, without its YAML module.
 
 The gateway serves both anonymously and unchanged, with `Cache-Control: public, max-age=3600`:
 `GET /exchange/v1/openapi.json` and `GET /exchange/v1/schemas/<name>.schema.json` (as
@@ -529,6 +542,11 @@ Within `v1` only additive changes are allowed; a breaking change is `v2`, served
 least 12 months with `Deprecation` and `Sunset` headers. Readers are tolerant both ways (unknown
 fields ignored and reported as `warnings`, unknown enum values `UNKNOWN`), published schemas stay
 open, extensions are namespaced, identifiers and cursors are opaque (ADR-0219).
+
+The gateway finds the fields a request body carries that its schema does not declare — at any
+depth, following `$ref`, `allOf`, `anyOf` and `oneOf`, and leaving objects that accept any field
+(`extensions`) alone — and reports each as an `UNKNOWN_FIELD` warning with its JSON Pointer in answers
+that carry `warnings` (the resolve and change results); elsewhere they are ignored.
 
 **Acceptance**
 
