@@ -237,4 +237,12 @@ public interface MaterialRepository extends JpaRepository<Material, UUID> {
   @Query(
       "SELECT e.idCommodity AS uexId, e.id AS id FROM Material e WHERE e.idCommodity IS NOT NULL")
   List<UexKeyRef> findUexCommodityRefs();
+
+  /**
+   * Lists the materials that refine into any of the given materials.
+   *
+   * @param refinedMaterialIds the refined materials
+   * @return the raw materials, in no particular order
+   */
+  List<Material> findAllByRefinedMaterialIdIn(Collection<UUID> refinedMaterialIds);
 }
