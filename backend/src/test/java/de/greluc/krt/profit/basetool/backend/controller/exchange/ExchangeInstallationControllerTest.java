@@ -47,6 +47,7 @@ import de.greluc.krt.profit.basetool.backend.support.Roles;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
@@ -112,6 +113,30 @@ class ExchangeInstallationControllerTest {
         settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
     settings.setEnabled(true);
     settingsRepository.saveAndFlush(settings);
+  }
+
+  @Test
+  void theUpsertTellsWhetherItCreatedTheInstallation() {
+    Instant now = Instant.now();
+    List<ExchangeInstallationRepository.Touched> first =
+        installationRepository.touch("versekit-inst", MEMBER, KEY, now, now.minusSeconds(300));
+    assertThat(first).singleElement().satisfies(t -> assertThat(t.getInserted()).isTrue());
+
+    assertThat(
+            installationRepository.touch("versekit-inst", MEMBER, KEY, now, now.minusSeconds(300)))
+        .as("seen again within the interval: nothing written")
+        .isEmpty();
+
+    Instant later = now.plusSeconds(600);
+    assertThat(
+            installationRepository.touch(
+                "versekit-inst", MEMBER, KEY, later, later.minusSeconds(1)))
+        .singleElement()
+        .satisfies(
+            t -> {
+              assertThat(t.getInserted()).as("a later touch updates, it does not create").isFalse();
+              assertThat(t.getId()).isEqualTo(first.getFirst().getId());
+            });
   }
 
   @Test

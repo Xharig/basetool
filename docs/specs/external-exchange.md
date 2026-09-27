@@ -55,7 +55,9 @@ is ever on the `api.*` allowlist (ADR-0135), and nothing of the exchange lives u
 **Acceptance**
 
 - [ ] `IngestEndpointSurfaceTest` pins the exchange routes and methods; a test checks every route
-  against `BotProtectionFilter`'s method, prefix and suffix lists.
+  against `BotProtectionFilter`'s method, prefix and suffix lists. *The second half is in
+  (`ExchangeRouteBotCompatibilityTest`, every route of the committed OpenAPI document and every schema
+  URL); the surface test pins the two anonymous document routes so far and grows with each route.*
 - [x] A test proves the gateway identity cannot reach `/api/v1/connected-apps/**`, and a browser
   session cannot reach `/api/v1/exchange/**` (`ConnectedAppsControllerTest`: the gateway and the app
   are refused; `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the
@@ -354,8 +356,14 @@ offline-file `envelope` (`format`, `formatVersion`, `generator`, `generatedAt`, 
   every schema the OpenAPI document names exists and has valid and invalid fixtures.
 - [ ] A test fails when a served route and the OpenAPI document diverge (with the routes, WP 3.2).
 
-**Enforced by:** `ExchangeContractTest` · **Status:** schemas, OpenAPI document and fixtures
-committed and validated — WP 0.2 (#2080); served by the gateway with WP 3.2 (#2082)
+The gateway serves both anonymously and unchanged, with `Cache-Control: public, max-age=3600`:
+`GET /exchange/v1/openapi.json` and `GET /exchange/v1/schemas/<name>.schema.json` (as
+`application/schema+json`; an unknown name is `404 NOT_FOUND`). The extractor's own OpenAPI document
+does not list them.
+
+**Enforced by:** `ExchangeContractTest`, `ExchangeDocumentsControllerTest` · **Status:** schemas,
+OpenAPI document and fixtures committed and validated — WP 0.2 (#2080); served by the gateway since
+WP 3.2 (#2082)
 
 ### REQ-XCH-012 — Names resolve through the web import's own matching
 
@@ -363,17 +371,40 @@ committed and validated — WP 0.2 (#2080); served by the gateway with WP 3.2 (#
 compared case-insensitively with `blueprint.scwiki_key`, which is not unique; `scGuid` is matched
 against blueprint records and output items, and duplicates resolve `ambiguous`. Names resolve
 through `BlueprintImportService.resolve()` — REQ-INV-006, REQ-INV-019, REQ-INV-021, REQ-INV-050 —
-never through a second logic. `locKey` resolves once the catalogue carries name keys and until then
-falls through to the name with a warning. Places resolve against the Lager's `location` table; a
+never through a second logic. `locKey` is compared case-insensitively with the catalogue's
+`name_key` — the `global.ini` name key without its `@`, which the P4K import stores for items,
+materials and ship types (migration `V250`; `LOC_` placeholders are not stored), and which a
+blueprint takes from its output item; a `locKey` that resolves to no single entry falls through to
+the name with a warning. Places resolve against the Lager's `location` table; a
 place without a row is `LOCATION_UNKNOWN`.
+
+A reference takes the first of its fields, in the order `bt`, `scRecord`, `scGuid`, `uexId`,
+`locKey`, `name`, that resolves to exactly one entry; if none does, the first that resolved to
+several is the answer, so an ambiguous `scRecord` still yields to a name that resolves. `ambiguous`
+lists at most ten candidates as `{bt, name}`; fuzzy suggestions are always `ambiguous`, even when
+there is only one, because they are never taken without the member. `LOC_KEY_UNRESOLVED` points at
+`/refs/<i>/locKey` of every reference that carries a `locKey` and whose keys, `locKey` included, did
+not resolve; a response carries at most 50 warnings. Per catalogue:
+
+| `kind` | `bt` | `scRecord` | `scGuid` | `uexId` | `locKey` | `name` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `BLUEPRINT` | the product key (normalized output name) | `blueprint.scwiki_key` | the blueprint's Wiki or game-file UUID, or its output item's | the output item's UEX id | the output item's `name_key` | the web import's chain: exact, alias, pack-tag strip, fuzzy |
+| `ITEM` | the item id | `class_name` | Wiki or game-file UUID | UEX item id | `name_key` | exact, case-insensitive; duplicates `ambiguous` |
+| `MATERIAL` | the material id | `scwiki_key` | Wiki or game-file UUID | UEX commodity id | `name_key` | exact, canonical (`MaterialNameCanonicalizer`), external alias, fuzzy — visible materials only |
+| `SHIP_TYPE` | the ship type id | `class_name` | Wiki UUID | UEX vehicle id | `name_key` | the hangar import's `ShipTypeMatcher` |
+
+The backend answers on `POST /api/v1/exchange/catalog/resolve` for any exchange capability; the
+gateway reports unknown request fields as `UNKNOWN_FIELD` warnings (WP 3.2).
 
 **Acceptance**
 
-- [ ] The anonymised corpus fixture
+- [x] The anonymised corpus fixture
   (`backend/src/test/resources/fixtures/blueprint-corpus/game-log-corpus-v1.json`) resolves the same
-  through the exchange and through the web import.
+  through the exchange and through the web import (`ExchangeResolveCorpusTest`).
 
-**Status:** planned — WP 3.3 (#2083)
+**Enforced by:** `ExchangeResolveCorpusTest`, `ExchangeResolveServiceTest`,
+`ExchangeResolveControllerTest` · **Status:** backend built — WP 3.1 (#2083); served by the gateway
+with WP 3.2 (#2082)
 
 ### REQ-XCH-013 — Each resource has a snapshot and a database-sequenced change feed
 
@@ -648,7 +679,17 @@ offers changed).
 the member's profile (REQ-SEC-072, stored since WP 1.4), case-insensitively, and answers `match`, `mismatch` or `unknown` (no handle
 stored). It never returns or logs the stored handle and is rate-limited tightly.
 
-**Status:** planned — WP 3.4 (#2106)
+The backend answers the relayed call at `POST /api/v1/exchange/me/account-check` under
+`exchange.connect`, validates the handle with the profile's own pattern (`^[A-Za-z0-9_-]{3,60}$`,
+`400` otherwise, without echoing it) and counts every answer in
+`basetool_exchange_account_checks_total{outcome}`.
+
+- [x] Match, mismatch and unknown, the match case-insensitive; the stored handle is in no answer and
+  neither handle in a log line. *`ExchangeAccountCheckControllerTest`.*
+- [ ] The gateway relays the route inside its own ten-per-hour limit.
+- [ ] End to end on the sandbox (WP 2.3, #2099).
+
+**Status:** backend built — WP 3.4 (#2106); the gateway relay follows
 
 ### REQ-XCH-032 — „Verbundene Anwendungen" shows and controls every connection
 
@@ -658,7 +699,19 @@ installation or a whole client, undo, and confirm a staged mass change. Every ne
 installation raises a notification and stays highlighted until seen. `ADMIN` manages the registry
 on an admin page with a suspend switch. The page is web-only; the app links to it.
 
-**Status:** planned — WP 4.5 (#2087)
+The notification is the rule-engine event `EXCHANGE_INSTALLATION_CONNECTED` (seed `V251`,
+`EVENT_RECIPIENT`), published when the installation upsert reports that it created the row, so two
+concurrent first calls announce one installation once. It names the client by its registry display
+name only: the client-supplied label arrives with a later call and could pose as the Basetool. An
+installation counts as unseen while its notification is unread, `GET /api/v1/connected-apps` says so
+per installation (`unseen`), and `POST /api/v1/connected-apps/seen` marks them read — a notification
+change only, not audited.
+
+- [x] A new installation notifies its member once, by the client's name; the list reports it
+  unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
+  `ConnectedAppsControllerTest`.*
+
+**Status:** planned — WP 4.5 (#2087); the new-connection notification and the unseen state are built
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 
@@ -666,7 +719,20 @@ Behind `app.ingest.legacy-endpoints.enabled` (default `true`), `/v1/refinery-ext
 `/v1/blueprint-preview` answer `410 LEGACY_ENDPOINT_GONE` with a German update hint once the flag is
 `false` at the go-live. While it is `true` their behaviour is unchanged.
 
-**Status:** planned — WP 3.2 (#2082), WP 6 (#2092)
+The switch is `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED` on the host. The refusal runs before the security
+chain, so an outdated extractor sees the hint (*„Diese Schnittstelle wurde abgeschaltet. Bitte
+aktualisiere den SC Extractor auf die neueste Version."*) whether or not its token is still
+accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
+`basetool_ingest_legacy_gone_total` counts the refusals.
+
+**Acceptance**
+
+- [x] With the flag off both legacy routes answer `410 LEGACY_ENDPOINT_GONE` with the German hint,
+  before authentication; with it on they reach the security chain as before
+  (`LegacyEndpointGoneFilterTest`).
+- [ ] The flag is switched off on production at the go-live (a gated write, WP 6).
+
+**Status:** switch built — WP 3.2 (#2082); switched off with WP 6 (#2092)
 
 ## Threat model
 
