@@ -86,10 +86,10 @@ decision) — the cross-unit/OL widening applies only when no unit is pinned, ex
 scoped surface. The per-ship owner/location/fitted drill-down stays ADMIN/OFFICER-only, so a member /
 BL / OL sees the complete counts but not the per-owner breakdown.
 
-A ship created through the exchange (REQ-XCH-017) takes its owning unit from the Hangar's own
-create-time stamping with no picker output (REQ-ORG-004): the member's single membership, or no unit
-for a member without one, whose ship only the OL widening and an admin count. It then enters these
-scopes like a ship created in the web.
+A ship created through the exchange (REQ-XCH-017) belongs to the member's single direct membership,
+or to no unit for a member of none or of several (owner decision 2026-09-27), and a ship without a
+unit is counted only by the OL widening and an admin until the member assigns one. It then enters
+these scopes like a ship created in the web.
 
 **Acceptance**
 
