@@ -13,6 +13,9 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Datenaustausch: Seiten aktualisieren sich live.** Schreibt eine verbundene Anwendung, laden
+  Hangar, „Meine Blueprints", Lager und Materialbörse ohne Neuladen nach; Hangar und Blueprints
+  haben dafür je einen persönlichen Live-Sync-Raum, den nur das Mitglied selbst abonnieren kann.
 - **Datenaustausch: Schiffe schreiben.** Verbundene Anwendungen verknüpfen ihre Schiffe zuerst mit
   den vorhandenen – je Installation –, legen danach neue an, ändern und löschen mit der zuletzt
   gesehenen Version (`/api/v1/exchange/me/ships/changes`); ein Fleetview-Import wird so nicht

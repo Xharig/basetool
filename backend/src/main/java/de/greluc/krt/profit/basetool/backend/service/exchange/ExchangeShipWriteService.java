@@ -107,6 +107,7 @@ public class ExchangeShipWriteService {
   private final ExchangeJournalService journalService;
   private final ExchangeMassChangeGuard guard;
   private final MeterRegistry meterRegistry;
+  private final ExchangeLiveSync liveSync;
 
   /**
    * Plans and applies one change set in one transaction.
@@ -155,6 +156,9 @@ public class ExchangeShipWriteService {
         counter(APPLIED).increment();
       }
       applied++;
+    }
+    if (!changeSet.dryRun() && applied > 0) {
+      liveSync.hangarChanged(caller.member());
     }
     return new ExchangeChangeResultDto(
         changeSet.dryRun(),

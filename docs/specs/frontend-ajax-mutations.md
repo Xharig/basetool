@@ -1136,6 +1136,14 @@ this requirement exists to prevent, #1102). Covered topics and their section whi
 | `refinery` (global)      | queue                                                                                                                         | no            | authenticated (the `/refinery-orders` list gate; the `onlyMine` filter is applied per viewer)         |
 | `members` (global)       | roster                                                                                                                        | no            | `ROLE_ADMIN` (local check — the `/members` class-level page gate)                                     |
 | `org-structure` (global) | units, forms, chart                                                                                                           | no            | authenticated (the Organigramm is member-visible; the admin sections stay protected per fragment)     |
+| `hangar:{userId}`        | ships                                                                                                                         | no            | the member whose id it is, and nobody else (local check against the socket's subject, fails closed)   |
+| `blueprints:{userId}`    | list                                                                                                                          | no            | the member whose id it is, and nobody else (local check against the socket's subject, fails closed)   |
+
+The two personal rooms carry a member's own pages, `/hangar` and „Meine Blueprints": the page
+names its room from the model (`hangarLiveSyncTopic`, `blueprintsLiveSyncTopic`), sends `changed` on
+its own writes so the member's other tabs follow, and re-pulls its fragment when the backend reports
+that a connected application wrote there (REQ-XCH-013). No probe is asked — the id must be the
+socket's own subject, captured at the handshake.
 
 The `inventory` room is the squadron Lager (#1307/#1309): a single opaque `stock` section stands for
 "the inventory changed". **All** inventory views subscribe and re-pull their own fragment on a peer's

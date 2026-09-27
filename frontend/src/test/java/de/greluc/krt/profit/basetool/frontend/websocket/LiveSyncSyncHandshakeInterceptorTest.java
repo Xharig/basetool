@@ -48,6 +48,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.socket.WebSocketHandler;
 
 /**
@@ -127,6 +130,26 @@ class LiveSyncSyncHandshakeInterceptorTest {
     assertThat((Set<?>) captured)
         .extracting(Object::toString)
         .containsExactlyInAnyOrder("ROLE_BANK_EMPLOYEE", "ROLE_KRT_MEMBER");
+  }
+
+  @Test
+  void capturesTheMembersOwnIdForThePersonalRooms() {
+    UUID member = UUID.randomUUID();
+    OidcUser principal =
+        new DefaultOidcUser(
+            List.of(new SimpleGrantedAuthority("ROLE_KRT_MEMBER")),
+            OidcIdToken.withTokenValue("id-token")
+                .subject(member.toString())
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build());
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(principal, "n/a", principal.getAuthorities()));
+
+    interceptor.beforeHandshake(request, response, wsHandler, attributes);
+
+    assertThat(attributes.get(LiveSyncWebSocketHandler.ATTR_SUBJECT)).isEqualTo(member);
   }
 
   @Test
