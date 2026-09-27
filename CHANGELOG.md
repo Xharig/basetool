@@ -155,6 +155,10 @@
 
 ### Changed
 
+- **Keycloak: Offline-Sitzung des SC Extractors fest auf 30/90 Tage.** Der Provisioner setzt beim
+  Client `basetool-sc-extractor` dieselbe Offline-Sitzung wie bei verbundenen Anwendungen (30 Tage
+  ohne Nutzung, 90 Tage insgesamt), weil der Extractor ab 2.10.0 `offline_access` anfordert. Bisher
+  galten nur die Realm-Werte.
 - **Datenaustausch: Lager-Änderungen wie im Web.** Ein Umbuchen auf „gestohlen“ oder zurück markiert
   die Zeilen wie im Lager (Teilmengen werden abgespalten) statt aus- und neu einzubuchen; Stück-Einbuchungen
   werden mit der vorhandenen Zeile zusammengeführt. Als Verschiebung zählt ein Abbau nur noch, wenn
