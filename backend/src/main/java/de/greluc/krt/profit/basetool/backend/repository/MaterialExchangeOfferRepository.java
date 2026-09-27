@@ -248,20 +248,49 @@ public interface MaterialExchangeOfferRepository
       @Param("inventoryItemIds") Collection<UUID> inventoryItemIds);
 
   /**
-   * Reads what offers offer now.
+   * Reads the active offers standing on the non-personal rows the global wipe deletes in the given
+   * scope.
    *
-   * @param ids the offers
-   * @return the offers that still exist
+   * @param isAdminAllScope {@code true} for an admin without an active org unit
+   * @param activeOrgUnitId the single org unit the wipe is scoped to, or {@code null}
+   * @param memberOrgUnitIds the caller's org units on the non-admin path
+   * @return the offers with what they offer
    */
   @Query(
       """
-      SELECT o.id AS id, o.offeredAmount AS offeredAmount, o.itemQuantity AS itemQuantity
-      FROM MaterialExchangeOffer o WHERE o.id IN :ids
-      """)
-  List<OfferAmount> findAmountsByIds(@Param("ids") Collection<UUID> ids);
+      SELECT o.id AS id, o.kind AS kind, o.offeredAmount AS offeredAmount,
+             o.itemQuantity AS itemQuantity, o.itemName AS itemName, o.owner.id AS ownerId,
+             m.name AS materialName
+      FROM MaterialExchangeOffer o JOIN o.inventoryItem i LEFT JOIN i.material m
+      WHERE i.personal = false
+        AND o.status = de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferStatus.ACTIVE
+        AND
+      """
+          + ScopeSpecifications.INVENTORY_ITEM_SCOPE_TRIPLE)
+  List<OfferStock> findActiveStockOnNonPersonalRows(
+      @Param("isAdminAllScope") boolean isAdminAllScope,
+      @Param("activeOrgUnitId") UUID activeOrgUnitId,
+      @Param("memberOrgUnitIds") Collection<UUID> memberOrgUnitIds);
 
-  /** What an offer offers now. */
-  interface OfferAmount {
+  /**
+   * Reads the active offers standing on the Lager rows of one member.
+   *
+   * @param userId the rows' owner
+   * @return the offers with what they offer
+   */
+  @Query(
+      """
+      SELECT o.id AS id, o.kind AS kind, o.offeredAmount AS offeredAmount,
+             o.itemQuantity AS itemQuantity, o.itemName AS itemName, o.owner.id AS ownerId,
+             m.name AS materialName
+      FROM MaterialExchangeOffer o JOIN o.inventoryItem i LEFT JOIN i.material m
+      WHERE i.user.id = :userId
+        AND o.status = de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferStatus.ACTIVE
+      """)
+  List<OfferStock> findActiveStockByRowOwner(@Param("userId") UUID userId);
+
+  /** An active offer standing on a Lager row, before its stock changes. */
+  interface OfferStock {
 
     /**
      * The offer.
@@ -283,10 +312,6 @@ public interface MaterialExchangeOfferRepository
      * @return the quantity, or {@code null}
      */
     Integer getItemQuantity();
-  }
-
-  /** An active offer standing on a Lager row, before a book-out. */
-  interface OfferStock extends OfferAmount {
 
     /**
      * The offer's kind.

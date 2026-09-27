@@ -38,7 +38,6 @@ import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderHandoverRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderMaterialRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderRepository;
-import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
 import java.time.Instant;
 import java.util.List;
@@ -58,7 +57,7 @@ class JobOrderHandoverServiceTest {
   @Mock private JobOrderRepository jobOrderRepository;
   @Mock private JobOrderHandoverRepository jobOrderHandoverRepository;
   @Mock private InventoryItemRepository inventoryItemRepository;
-  @Mock private MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private JobOrderHandoverMapper jobOrderHandoverMapper;
   @Mock private JobOrderMaterialRepository jobOrderMaterialRepository;
   @Mock private JobOrderService jobOrderService;
@@ -143,7 +142,7 @@ class JobOrderHandoverServiceTest {
     verify(jobOrderService, never()).completeJobOrderWithinTransaction(any());
     verify(jobOrderHandoverRepository).save(any(JobOrderHandover.class));
     verify(jobOrderRepository, times(2)).findById(orderId);
-    verify(materialExchangeOfferRepository).clampOfferedAmountToStock(eq(inventoryId), eq(6.0));
+    verify(offerRatchet).lower(inventoryId, 6.0, MaterialExchangeOfferRatchet.Reason.HANDOVER);
   }
 
   @Test
@@ -270,7 +269,9 @@ class JobOrderHandoverServiceTest {
     assertEquals(0.0, jobOrderMaterial.getAmount());
     verify(inventoryItemRepository).delete(inventoryItem);
     verify(inventoryItemRepository, never()).save(any());
-    verify(materialExchangeOfferRepository, never()).clampOfferedAmountToStock(any(), anyDouble());
+    verify(offerRatchet)
+        .beforeDelete(List.of(inventoryItem.getId()), MaterialExchangeOfferRatchet.Reason.HANDOVER);
+    verify(offerRatchet, never()).lower(any(), anyDouble(), any());
     verify(inventoryItemRepository)
         .deleteJobOrderAllocationsByJobOrderAndMaterial(orderId, materialId);
     verify(jobOrderService).completeJobOrderWithinTransaction(order);
