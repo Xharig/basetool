@@ -210,6 +210,14 @@ logout would otherwise disconnect every client (owner decision 2026-09-26). Cons
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
 The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
 
+The first-party SC Extractor is held to the same shape once it has migrated (security finding H1,
+owner decision 2026-09-27): its client `basetool-sc-extractor` requires consent, binds access and
+refresh tokens to DPoP, carries only `basic` by default and offers only its exchange scopes and
+`offline_access`. It loses both ingest scopes, so no extractor token carries `aud=basetool-backend`
+any more; before, a phished device code yielded an unbound, refreshable bearer token the backend API
+accepted. The provisioner applies this on production only **after** the legacy switch-off
+(REQ-XCH-033), because released extractors up to 2.9.1 still need `extractor-ingest-only` on `/v1/*`.
+
 **Acceptance**
 
 - [x] The provisioner's self-test covers the third-party template (withheld scopes removed from an
@@ -218,6 +226,10 @@ The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
   (owner decision 2026-09-27).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
+  *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
+  only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
+  the self-test converges a client in today's production shape to it. The box closes with the
+  production apply after the legacy switch-off (WP 6, #2092).*
 - [x] The theme renders both pages with the phishing warning (`login-oauth-grant.ftl`,
   `login-oauth2-device-verify-user-code.ftl`).
 - [x] Keycloak 26.7.4's behaviour is observed (WP 0.4, 2026-09-26, a throwaway local Keycloak of the
@@ -969,8 +981,24 @@ tombstones and journal reports task metrics.
   `ExchangeRemoveSpike`, `ExchangeGuardStorm`, `ExchangeInstallationSurge` and `ExchangeUnknownClient`
   alert on them (`exchange_write_alerts_test.yml`); `exchange_change_retention` purges feed and
   journal under `ScheduledJobStale`.*
+- [x] Every gateway log line of an exchange request carries the registry-bounded client label and
+  the route template (`exchangeClientId`, `exchangeRoute`; Loki structured metadata `client_id`,
+  `route`). *`ExchangeGateTest`, `CorrelationIdFilterTest`.*
+- [x] `basetool_exchange_clients{status}` counts the registry clients per status from the snapshot
+  the mirror sync reads, without a query per scrape. *`ExchangeClientGaugesTest`,
+  `ExchangeRegistryMirrorIntegrationTest`.*
+- [x] `basetool_exchange_registry_mirror_age_seconds` is the time since the gateway's last good read
+  of the mirror, which it reads every 30 s; `ExchangeRegistryMirrorStaleAtGateway` alerts above
+  5 minutes while the mirror is enabled. The document's `writtenAt` is not used, because the backend
+  rewrites the mirror only on a change. *`ExchangeRegistryReaderTest`,
+  `exchange_mirror_age_alerts_test.yml`.*
+- [x] A dedicated Grafana dashboard „Exchange" (`15-exchange.json`) shows all of the above per
+  client, with the gateway's log lines filtered by client.
+- `basetool_ingest_gate_enforcing` is not extended to the exchange gates, since they cannot be
+  switched off (owner decision 2026-09-27).
 
-**Status:** built — WP 3.3 (#2083), #2091; the runbooks live in the knowledge base
+**Status:** built — WP 3.3 (#2083), #2091 (the monitoring extras of 2026-09-27 included); the
+runbooks live in the knowledge base
 
 ### REQ-XCH-029 — Third parties get a local sandbox
 
@@ -998,10 +1026,21 @@ backend is healthy, idempotently. It publishes loopback ports only
       the marker under `prod`) and fails on any secret Trivy finds. It publishes `edge` when run by
       hand on `main` and the version and `latest` on a release tag; the production packages stay
       private and untouched. The packages' public visibility is set once by the owner.*
-- [ ] The CI job that pulls them anonymously and runs the conformance fixtures and the
-      device-grant + DPoP smoke test; the E2E extension with ingest.
+- [x] The CI job that pulls them anonymously and runs the conformance fixtures and the
+      device-grant + DPoP smoke test.
+      *`.github/workflows/sandbox-smoke.yml` runs after every publish (called by
+      `sandbox-images.yml`), weekly and by hand, with `contents: read` only, so every image is
+      pulled without a registry login. It starts the sandbox with `scripts/sandbox.sh up` and runs
+      `scripts/sandbox-smoke.py`: device login with DPoP through the sandbox Keycloak, a token bound
+      to the key (`cnf.jkt`) for `basetool-ingest`, the service document, the installation, every
+      read resource, a resolve per kind, one blueprint, stock and ship sync, and with
+      `--conformance` every change-set fixture of `docs/exchange/examples/v1` (valid ones as dry
+      runs accepted, invalid ones refused); then the same without the fixtures as the second
+      member.*
+- [ ] The E2E extension with ingest.
 
-**Status:** local sandbox and the image pipeline built — WP 2.3 (#2099); the CI job follows
+**Status:** local sandbox, the image pipeline and its smoke job built — WP 2.3 (#2099); the E2E
+extension follows
 
 ### REQ-XCH-030 — Exchange writes appear live
 

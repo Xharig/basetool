@@ -52,6 +52,7 @@ public class ExchangeRegistryMirrorSync {
   private final ExchangeClientRepository clientRepository;
   private final ExchangeSettingsRepository settingsRepository;
   private final MeterRegistry meterRegistry;
+  private final ExchangeClientGauges clientGauges;
   private final TransactionTemplate requiresNew;
 
   /**
@@ -61,6 +62,7 @@ public class ExchangeRegistryMirrorSync {
    * @param clientRepository the registry rows
    * @param settingsRepository the switch, its lock and the revision counter
    * @param meterRegistry the registry the write counter binds to
+   * @param clientGauges the per-status client gauges every read of the registry refreshes
    * @param transactionManager the manager the resync's own transactions run in
    */
   public ExchangeRegistryMirrorSync(
@@ -68,11 +70,13 @@ public class ExchangeRegistryMirrorSync {
       @NotNull ExchangeClientRepository clientRepository,
       @NotNull ExchangeSettingsRepository settingsRepository,
       @NotNull MeterRegistry meterRegistry,
+      @NotNull ExchangeClientGauges clientGauges,
       @NotNull PlatformTransactionManager transactionManager) {
     this.mirror = mirror;
     this.clientRepository = clientRepository;
     this.settingsRepository = settingsRepository;
     this.meterRegistry = meterRegistry;
+    this.clientGauges = clientGauges;
     this.requiresNew = new TransactionTemplate(transactionManager);
     this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
   }
@@ -177,6 +181,9 @@ public class ExchangeRegistryMirrorSync {
         new TransactionSynchronization() {
           @Override
           public void afterCompletion(int status) {
+            if (status == STATUS_COMMITTED) {
+              clientGauges.update(after);
+            }
             resyncQuietly(
                 status == STATUS_COMMITTED
                     ? ExchangeMirrorPhase.POST_COMMIT
@@ -219,6 +226,7 @@ public class ExchangeRegistryMirrorSync {
               status -> {
                 lockSettings();
                 ExchangeRegistrySnapshot truth = load();
+                clientGauges.update(truth);
                 Optional<ExchangeRegistrySnapshot> mirrored = mirror.read();
                 if (mirrored.isPresent() && mirrored.get().equals(truth)) {
                   return false;

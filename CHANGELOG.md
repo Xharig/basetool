@@ -4,10 +4,15 @@
 
 ### Added
 
+- **Datenaustausch: Monitoring je Anwendung.** Neues Grafana-Dashboard „Exchange“ mit Filter nach
+  verbundener Anwendung (Metriken und Gateway-Logs); Gateway-Logzeilen tragen Client und Route,
+  neue Metriken `basetool_exchange_clients` und `basetool_exchange_registry_mirror_age_seconds` samt
+  Alarm `ExchangeRegistryMirrorStaleAtGateway`.
 - **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
   `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
   das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Die
-  Produktions-Images bleiben privat.
+  Produktions-Images bleiben privat. Ein Smoke-Test (`scripts/sandbox-smoke.py`) zieht sie danach
+  ohne Anmeldung und prüft Geräte-Login, DPoP, alle Ressourcen und die Konformitäts-Beispiele.
 - **Datenaustausch: lokale Sandbox für Fremd-Anwendungen.** `scripts/sandbox.sh` bzw.
   `scripts/sandbox.ps1` starten Gateway, Backend, Frontend und einen Keycloak-Realm mit Testclient
   `sandbox-client`, synthetischen Mitgliedern und Beispieldaten nur auf `127.0.0.1` – ausschließlich
@@ -193,6 +198,12 @@
 
 ### Changed
 
+- **Keycloak: der SC Extractor wird zum reinen Austausch-Client (Sicherheitsbefund H1).** Der
+  Provisioner verlangt für `basetool-sc-extractor` künftig eine Zustimmung im Browser, bindet Zugriffs-
+  und Auffrischungs-Token an DPoP und gibt nur noch die Austausch-Berechtigungen und `offline_access`
+  frei; `extractor-ingest` und `extractor-ingest-only` entfallen. Ein Extractor-Token gilt damit nicht
+  mehr für die Backend-API. Auf Produktion wird das erst nach dem Abschalten der alten
+  Extractor-Adressen angewendet, weil Versionen bis 2.9.1 sie noch brauchen.
 - **Keycloak: Offline-Sitzung des SC Extractors fest auf 30/90 Tage.** Der Provisioner setzt beim
   Client `basetool-sc-extractor` dieselbe Offline-Sitzung wie bei verbundenen Anwendungen (30 Tage
   ohne Nutzung, 90 Tage insgesamt), weil der Extractor ab 2.10.0 `offline_access` anfordert. Bisher
@@ -246,6 +257,10 @@
 
 ### Fixed
 
+- **Leitung: eigener Rang korrekt angezeigt, Sichtbarkeit nach Leitung.** Ein Staffelleiter sah sich
+  in seiner Staffel als „Mitglied“; Ränge, die man nicht vergeben darf, erscheinen jetzt als
+  Markierung statt als Auswahl. Die Seite zeigt die geleiteten Einheiten und alles darunter (OL:
+  alles), und den eigenen Rang setzt, ändert oder entfernt nur noch ein Admin (REQ-ROLE-004).
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.
