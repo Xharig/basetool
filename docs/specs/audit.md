@@ -218,8 +218,11 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   scopes), editing it (`EXCHANGE_CLIENT_UPDATED`, only when a field changed; the details name the
   changed fields and the added and removed scopes), suspending and activating it
   (`EXCHANGE_CLIENT_SUSPENDED` / `_ACTIVATED`, only on a change) and the global exchange switch
-  (`EXCHANGE_SWITCH_CHANGED`, the new state). The subject is the registry client, labelled by its
-  **client id**; there is no target member. A change that failed because the mirror could not be
+  (`EXCHANGE_SWITCH_CHANGED`, the new state), and a member disconnecting a whole client
+  (`EXCHANGE_CLIENT_DISCONNECTED`) or one installation (`EXCHANGE_INSTALLATION_DISCONNECTED`,
+  REQ-XCH-008; the installation's label never enters the row). The subject is the registry client
+  or the installation, labelled by the **client id**; a member's disconnect names the member as
+  target, a registry change names none. A change that failed because the mirror could not be
   written rolls back and records nothing.
 - **Datenschutz / Betroffenenrechte** (`AuditDomain.ROLE`, REQ-SEC-058 / -060 / -061 / -062) — the
   data-subject-rights surfaces, added 2026-09-16. Eight event types, and two of them audit a

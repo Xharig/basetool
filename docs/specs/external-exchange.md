@@ -58,10 +58,10 @@ is ever on the `api.*` allowlist (ADR-0135), and nothing of the exchange lives u
   against `BotProtectionFilter`'s method, prefix and suffix lists. *The second half is in
   (`ExchangeRouteBotCompatibilityTest`, every route of the committed OpenAPI document and every schema
   URL); the surface test pins the two anonymous document routes so far and grows with each route.*
-- [ ] A test proves the gateway identity cannot reach `/api/v1/connected-apps/**`, and a browser
-  session cannot reach `/api/v1/exchange/**`. *The second half is in (WP 3.1,
-  `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the gateway
-  without an acting member); the first follows with the connected-apps endpoints.*
+- [x] A test proves the gateway identity cannot reach `/api/v1/connected-apps/**`, and a browser
+  session cannot reach `/api/v1/exchange/**` (`ConnectedAppsControllerTest`: the gateway and the app
+  are refused; `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the
+  gateway without an acting member).
 - [ ] The `api.*` allowlist test fails if an exchange or connected-apps path is added.
 
 **Status:** planned — WP 3.2 (#2082), WP 3.1 (#2083)
@@ -215,10 +215,20 @@ never the thumbprint — which the installation response and the service documen
 client recognises its own removals in a tombstone's `removedBy.installationId` (asked by the VerseKit
 author, owner decision 2026-09-26).
 
+**How it is built** (WP 3.1). The gateway relays the verified key thumbprint as
+`X-Exchange-Installation` (honoured like the other relay headers; an exchange call without a
+well-formed one is refused as `exchange_installation_invalid`). The backend creates
+`exchange_installation` on first sight, moves `last_seen_at` forward at most every five minutes after
+each admitted exchange request, and serves `GET` / `POST /api/v1/exchange/me/installation` (the
+opaque `installationId`, never the thumbprint). Leading and trailing spaces and controls are trimmed
+by the global JSON normalisation; what is left must match the schema's rule after NFC. Homoglyph-only
+labels are letters and are accepted: the label is always shown after the registered client name.
+
 **Acceptance**
 
-- [ ] Label validation tests, including control, bidi and homoglyph-only input.
-- [ ] Log-capture test: the label never appears in any log line.
+- [x] Label validation tests, including control, bidi and homoglyph-only input
+  (`ExchangeInstallationControllerTest`).
+- [x] Log-capture test: the label never appears in any log line (`ExchangeInstallationControllerTest`).
 - [ ] The installation response and the service document carry the same `installationId`, and a
   tombstone written by that installation names it.
 
@@ -237,10 +247,21 @@ sessions and consents end — an admin logout, which also makes offline tokens s
 revocations are written at once, not at the next roster sync. The
 gateway reads the deny list and the timestamps per request, bypassing its cache.
 
+**How it is built** (WP 3.1). A revoked installation row is the deny-list entry for its key; a
+member's disconnect of a whole client is a row in `exchange_client_revocation` (V249). Both reach the
+Redis mirror before the commit — `exchange:deny:<thumbprint>` and
+`exchange:revoked:<clientId>:<member>`, each holding the revocation's epoch second and expiring 90 days
+after it — and a failed write fails the disconnect with `502`. Disconnecting a client also removes the
+member's Keycloak consent for it, which revokes its offline tokens. The 60-second reconcile writes
+back any enforced entry the mirror lacks. The backend's `@exchangeGate` refuses a revoked installation
+itself (`installation_revoked`). The member's controls are `/api/v1/connected-apps` (list,
+`DELETE /{clientId}`, `DELETE /installations/{id}`), reachable only from the member's own web session.
+
 **Acceptance**
 
 - [ ] A revoked installation is refused after a token refresh; another installation of the same
-  client keeps working.
+  client keeps working. *The backend half is in (`ExchangeInstallationControllerTest`,
+  `ExchangeRevocationMirrorIntegrationTest`); the gateway's refusal follows with WP 3.2.*
 - [ ] A revoked client is refused, and a fresh connection right after works.
 - [ ] A departed member is refused on the next request.
 

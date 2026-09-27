@@ -1612,9 +1612,13 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `0` once switched off) and `basetool_ingest_legacy_gone_total` counter (legacy requests refused
   with `410 LEGACY_ENDPOINT_GONE`, registered at zero). No alert: after the go-live a trickle of
   refusals is outdated extractors, which the hint tells to update (REQ-XCH-033).
+- `basetool_exchange_disconnects_total{kind}` counter — a member disconnecting one installation or
+  a whole client (`installation` / `client`, REQ-XCH-008), registered at zero and shown per day on
+  the operations dashboard. The relay's `exchange_installation_invalid` refusal joins
+  `basetool_on_behalf_of_refused_total`.
 - `basetool_exchange_gate_refused_total{reason}` counter for every exchange-layer request the
   backend's `ExchangeGate` refused (`not_relayed` / `switch_off` / `client_unknown` /
-  `client_suspended` / `scope_missing`), registered at zero. The gateway checks first, so a
+  `client_suspended` / `scope_missing` / `installation_revoked`), registered at zero. The gateway checks first, so a
   sustained rate means the two disagree: `ExchangeGateRefusing` (warning, 15 m). The relay's
   own refusals join `basetool_on_behalf_of_refused_total` as `forged_exchange_header` and
   `exchange_client_invalid`; the first backs `ExchangeRelayHeaderForged` (warning, 15 m). Relayed
