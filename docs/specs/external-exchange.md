@@ -635,10 +635,14 @@ member and resource in the last 24 hours plus the batch's, a batch trips above 2
 is at least 5 and more than a fifth of the current count plus the window's removals. Each resource's
 write service decides what in its batch is a removal.
 
-**Status:** the counting rule and the blueprint removals are built — WP 3.3 (#2083), WP 4.1 (#2084):
-a blueprint batch that trips the rule answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED` and writes
-nothing, and the gateway stages it; the stock and ship removal rules, the confirmation page and the
-apply follow — WP 3.3, WP 3.2 (#2082), WP 4.5 (#2087)
+A stock lot counts as removed when it is set to 0 or cut to at most a tenth of what it held when the
+client's window opened, taken from the lot's first journal entry in the window; a lot of a material
+that rises elsewhere in the same batch is a move and does not count.
+
+**Status:** the counting rule and the blueprint and stock removals are built — WP 3.3 (#2083), WP 4.1
+(#2084), WP 4.2 (#2085): a batch that trips the rule answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED`
+and writes nothing, and the gateway stages it; the ship removal rule, the confirmation page and the
+apply follow — WP 4.4 (#2086), WP 3.2 (#2082), WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 
@@ -656,8 +660,8 @@ writing transaction's id and the time. It is written in the write's own transact
 change feed after 90 days by `exchange_change_retention`, exported under Art. 15, stays with the
 source account on a merge, and its states are searched by the Personensuche.
 
-**Status:** journal built and filled by the blueprint writes — WP 3.3 (#2083), WP 4.1 (#2084); the
-stock and ship writes and the undo follow — WP 4.2–4.4, WP 4.5 (#2087)
+**Status:** journal built and filled by the blueprint and stock writes — WP 3.3 (#2083), WP 4.1
+(#2084), WP 4.2 (#2085); the ship writes and the undo follow — WP 4.4 (#2086), WP 4.5 (#2087)
 
 ### REQ-XCH-023 — Rate limits, quotas and a hard Redis budget
 
