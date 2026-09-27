@@ -3,7 +3,7 @@
 StartLimitIntervalSec=0
 
 [Container]
-Image=docker.io/goacme/lego:v5.5.1@sha256:9c446e8ce05155f87475ce87392a5c55472a7ecd06e244752f762d2f4b162e8d
+Image=docker.io/goacme/lego:v5.5.2@sha256:1944e8c36055beec47c7de6f15202b41128be75eea0ffa257f0c14d93c5155fd
 ContainerName=acme
 LogDriver=journald
 ReadOnly=true
