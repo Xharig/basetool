@@ -579,6 +579,10 @@ public class ExchangeController {
       return schemaInvalid(violations);
     }
     List<String> unknown = schemas.unknownFields(schema, body);
+    ResponseEntity<?> unreportable = unreportable(unknown);
+    if (unreportable != null) {
+      return unreportable;
+    }
     ExchangeRelay.Result result =
         relay.forward(
             HttpMethod.POST,
@@ -809,6 +813,10 @@ public class ExchangeController {
       return schemaInvalid(violations);
     }
     List<String> unknown = schemas.unknownFields(requestSchema, body);
+    ResponseEntity<?> unreportable = unreportable(unknown);
+    if (unreportable != null) {
+      return unreportable;
+    }
     return relayed(
         relay.forward(HttpMethod.POST, BACKEND + path, body, context, acceptLanguage),
         responseSchema,
@@ -879,7 +887,30 @@ public class ExchangeController {
   }
 
   /**
-   * Answers a request body that breaks its schema.
+   * Refuses a body whose undeclared field could not be reported as a warning, because its JSON
+   * Pointer exceeds {@link ExchangeSchemas#MAX_POINTER} characters; checked before the relay, so a
+   * write the backend committed always gets an answer that matches its schema.
+   *
+   * @param unknown the request's undeclared fields
+   * @return {@code 400 SCHEMA_INVALID} naming the fields' parents, or {@code null} when every field
+   *     can be reported
+   */
+  private @Nullable ResponseEntity<?> unreportable(@NotNull List<String> unknown) {
+    List<ExchangeSchemas.Violation> violations =
+        unknown.stream()
+            .filter(pointer -> pointer.length() > ExchangeSchemas.MAX_POINTER)
+            .map(
+                pointer ->
+                    new ExchangeSchemas.Violation(
+                        ExchangeSchemas.reportable(pointer), "holds a property name too long"))
+            .distinct()
+            .toList();
+    return violations.isEmpty() ? null : schemaInvalid(violations);
+  }
+
+  /**
+   * Answers a request body that breaks its schema; every pointer is shortened to one the problem
+   * schema can carry.
    *
    * @param violations the violations
    * @return {@code 400 SCHEMA_INVALID} with {@code errors[]}
@@ -896,7 +927,10 @@ public class ExchangeController {
     problem.setProperty(
         "errors",
         violations.stream()
-            .map(v -> Map.of("pointer", v.pointer(), "message", v.message()))
+            .map(
+                v ->
+                    Map.of(
+                        "pointer", ExchangeSchemas.reportable(v.pointer()), "message", v.message()))
             .toList());
     return ResponseEntity.badRequest()
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)

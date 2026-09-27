@@ -290,6 +290,9 @@
   Markierung statt als Auswahl. Die Seite zeigt die geleiteten Einheiten und alles darunter (OL:
   alles), und den eigenen Rang setzt, ändert oder entfernt nur noch ein Admin (REQ-ROLE-004).
   
+- **Datenaustausch: überlange unbekannte Feldnamen.** Ein Schreibvorgang mit einem unbekannten Feld,
+  dessen Pfad länger als 200 Zeichen wäre, wird vorab mit `400 SCHEMA_INVALID` abgelehnt, statt
+  geschrieben und mit `502` beantwortet zu werden.
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.

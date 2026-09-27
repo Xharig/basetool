@@ -8,6 +8,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **`CLIENT_REVOKED` counts from the sign-in.** After the member disconnects a client, a token
   without `offline_access` is refused while its `auth_time` lies before the disconnect, also when it
   was refreshed afterwards; a client that requests `offline_access`, as it must, is unaffected.
+- **Overlong unknown field names.** A request whose undeclared field has a JSON Pointer longer than
+  200 characters is refused with `400 SCHEMA_INVALID` (`errors[]` names its parent) instead of being
+  written and answered `502 BACKEND_RELAY_FAILED`.
 - **OpenAPI document matches the gateway.** The `Idempotency-Key` takes 8 to 128 characters of
   `[A-Za-z0-9._~-]`; `POST /exchange/v1/me/installation` needs none; `catalog/resolve` and
   `catalog/locations` accept any exchange scope, `exchange.connect` included.

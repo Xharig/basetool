@@ -111,6 +111,15 @@ class ExchangeSchemasTest {
   }
 
   @Test
+  void aPointerTooLongToReportIsShortenedToItsLongestFittingAncestor() {
+    String fitting = "/ops/0/" + "a".repeat(193);
+
+    assertThat(ExchangeSchemas.reportable(fitting)).isEqualTo(fitting);
+    assertThat(ExchangeSchemas.reportable(fitting + "b")).isEqualTo("/ops/0");
+    assertThat(ExchangeSchemas.reportable("/" + "c".repeat(300))).isEmpty();
+  }
+
+  @Test
   void anUnknownSchemaIsAProgrammingError() {
     JsonNode empty = mapper.readTree("{}");
 

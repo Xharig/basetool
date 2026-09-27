@@ -166,6 +166,33 @@ class ExchangeChangeRouteTest {
   }
 
   @Test
+  void anUnknownFieldTooLongToReportIsRefusedBeforeTheRelay() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+    String name = "x".repeat(250);
+    String body =
+        "{\"ops\":[{\"op\":\"add\",\"ref\":{\"name\":\"Arrowhead\"},\"" + name + "\":1}]}";
+
+    post("/exchange/v1/me/blueprints/changes", body)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("SCHEMA_INVALID"))
+        .andExpect(jsonPath("$.errors[0].pointer").value("/ops/0"));
+
+    verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void anUnknownFieldAtTheLongestReportablePointerIsStillAWarning() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+    String name = "y".repeat(200 - "/ops/0/".length());
+
+    post(
+            "/exchange/v1/me/blueprints/changes",
+            "{\"ops\":[{\"op\":\"add\",\"ref\":{\"name\":\"Arrowhead\"},\"" + name + "\":1}]}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.warnings[0].pointer").value("/ops/0/" + name));
+  }
+
+  @Test
   void anOpOutsideTheSchemaIsRefusedBeforeTheRelay() throws Exception {
     post("/exchange/v1/me/blueprints/changes", "{\"ops\":[{\"op\":\"rename\"}]}")
         .andExpect(status().isBadRequest())

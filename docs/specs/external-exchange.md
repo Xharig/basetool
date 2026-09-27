@@ -1007,7 +1007,12 @@ open, extensions are namespaced, identifiers and cursors are opaque (ADR-0219).
 The gateway finds the fields a request body carries that its schema does not declare — at any
 depth, following `$ref`, `allOf`, `anyOf` and `oneOf`, and leaving objects that accept any field
 (`extensions`) alone — and reports each as an `UNKNOWN_FIELD` warning with its JSON Pointer in answers
-that carry `warnings` (the resolve and change results); elsewhere they are ignored.
+that carry `warnings` (the resolve and change results); elsewhere they are ignored. A warning's
+pointer holds at most 200 characters, so a body whose undeclared field's pointer is longer is
+refused before the relay with `400 SCHEMA_INVALID`, `errors[]` naming the field's parent — otherwise
+a write the backend had committed would have ended in a `502` for an answer breaking its own schema,
+and never been cached. Every `errors[]` pointer is likewise shortened to its longest ancestor of at
+most 200 characters.
 
 **Acceptance**
 
