@@ -58,6 +58,12 @@ public class HandoffStagingService {
   /** Prefix of the per-subject index of staged mass changes, a slot apart from the drafts. */
   static final String MASS_CHANGE_INDEX_PREFIX = "ingest:handoff-index:mass:";
 
+  /**
+   * Prefix of the index of an exchange client's drafts, {@code
+   * ingest:handoff-index:drafts:<client>:<sub>}, apart from the extractor's uploads.
+   */
+  static final String DRAFT_INDEX_PREFIX = "ingest:handoff-index:drafts:";
+
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
@@ -87,25 +93,31 @@ public class HandoffStagingService {
   }
 
   /**
-   * Stages an exchange client's draft for one-time pickup in the same per-subject slots as the
-   * extractor's uploads, and says how large it is so the exchange's byte budget can count it
-   * (REQ-XCH-019).
+   * Stages an exchange client's draft for one-time pickup in slots of its own per client and
+   * member, so no client evicts the extractor's uploads or another client's drafts, and says how
+   * large it is so the exchange's byte budget can count it (REQ-XCH-019).
    *
+   * @param clientId the registry client that sent the draft
    * @param sub the member's subject
    * @param kind which draft is being staged
    * @param draftJson the backend draft response, stored verbatim
+   * @param cap the most live drafts of this client for this member; the oldest are evicted
    * @return where it is staged and how large it is
    * @throws BadRequestException if the draft exceeds the handoff size cap
    */
   public @NotNull Staged stageDraft(
-      @NotNull String sub, @NotNull HandoffKind kind, @NotNull String draftJson) {
+      @NotNull String clientId,
+      @NotNull String sub,
+      @NotNull HandoffKind kind,
+      @NotNull String draftJson,
+      int cap) {
     return store(
         sub,
         kind,
         draftJson,
         ingestProperties.maxHandoffBytes(),
-        INDEX_PREFIX + sub,
-        ingestProperties.maxHandoffsPerSubject());
+        DRAFT_INDEX_PREFIX + clientId + ":" + sub,
+        cap);
   }
 
   /**

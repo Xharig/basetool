@@ -199,6 +199,36 @@ class HandoffStagingServiceTest {
     assertThat(consume("user-mass", draft)).isPresent();
   }
 
+  /**
+   * Exchange drafts have slots of their own per client and member: a client flooding drafts evicts
+   * only its own oldest ones, never the extractor's uploads or another client's drafts.
+   */
+  @Test
+  void shouldKeepExchangeDraftsApartFromTheExtractorAndFromOtherClients() {
+    HandoffStagingService service = service(TestProperties.ingest("max-handoffs-per-subject", "2"));
+    String upload = service.stage("user-x", HandoffKind.BLUEPRINT, "{\"upload\":1}");
+    HandoffStagingService.Staged other =
+        service.stageDraft("sc-extractor", "user-x", HandoffKind.REFINERY, "{\"other\":1}", 3);
+    List<HandoffStagingService.Staged> flood = new java.util.ArrayList<>();
+    for (int i = 0; i < 5; i++) {
+      flood.add(
+          service.stageDraft("versekit", "user-x", HandoffKind.BLUEPRINT, "{\"n\":" + i + "}", 3));
+    }
+
+    assertThat(consume("user-x", upload)).isPresent();
+    assertThat(consume("user-x", other.handoffId())).isPresent();
+    assertThat(consume("user-x", flood.get(0).handoffId())).isEmpty();
+    assertThat(consume("user-x", flood.get(1).handoffId())).isEmpty();
+    assertThat(consume("user-x", flood.get(4).handoffId())).isPresent();
+    assertThat(
+            redisTemplate
+                .opsForList()
+                .size(HandoffStagingService.DRAFT_INDEX_PREFIX + "versekit:user-x"))
+        .isEqualTo(3L);
+    assertThat(redisTemplate.opsForList().size(HandoffStagingService.INDEX_PREFIX + "user-x"))
+        .isEqualTo(1L);
+  }
+
   /** A staged mass change above its own cap is refused. */
   @Test
   void shouldRefuseAMassChangeAboveItsCap() {

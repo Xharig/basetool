@@ -522,7 +522,15 @@ public class ExchangeController {
     try {
       staged =
           stageWithinBudget(
-              context, bytes, () -> stagingService.stageDraft(context.member(), kind, json));
+              context,
+              bytes,
+              () ->
+                  stagingService.stageDraft(
+                      context.clientId(),
+                      context.member(),
+                      kind,
+                      json,
+                      storeProperties.maxDraftsPerClientMember()));
       if (staged == null) {
         return unavailable(
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,

@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.ingest.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -131,7 +132,8 @@ class ExchangeDraftRouteTest {
     when(relay.forward(
             eq(HttpMethod.POST), eq("/api/v1/exchange/me/drafts/blueprints"), any(), any(), any()))
         .thenReturn(ok(PREVIEW));
-    when(stagingService.stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), anyString()))
+    when(stagingService.stageDraft(
+            eq("versekit"), eq(member), eq(HandoffKind.BLUEPRINT), anyString(), eq(10)))
         .thenReturn(new HandoffStagingService.Staged("hid-b", "ingest:handoff:x:hid-b", 222L));
     when(stagingService.stagedBytes(eq(HandoffKind.BLUEPRINT), anyString())).thenReturn(222L);
     double before = handoffs(HandoffKind.BLUEPRINT);
@@ -145,7 +147,9 @@ class ExchangeDraftRouteTest {
                 .value("http://localhost:18081/personal-inventory/blueprints?handoff=hid-b"));
 
     ArgumentCaptor<String> staged = ArgumentCaptor.forClass(String.class);
-    verify(stagingService).stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), staged.capture());
+    verify(stagingService)
+        .stageDraft(
+            eq("versekit"), eq(member), eq(HandoffKind.BLUEPRINT), staged.capture(), eq(10));
     assertThat(MAPPER.readTree(staged.getValue()).get("matched").intValue()).isEqualTo(1);
     verify(budget)
         .reserve(
@@ -166,7 +170,8 @@ class ExchangeDraftRouteTest {
   void aDraftThatCannotBeStagedFreesItsReservation() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
     when(stagingService.stagedBytes(eq(HandoffKind.BLUEPRINT), anyString())).thenReturn(222L);
-    when(stagingService.stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), anyString()))
+    when(stagingService.stageDraft(
+            eq("versekit"), eq(member), eq(HandoffKind.BLUEPRINT), anyString(), eq(10)))
         .thenThrow(new RedisSystemException("down", null));
 
     post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
@@ -189,7 +194,8 @@ class ExchangeDraftRouteTest {
   @Test
   void aLostRedisConnectionWhileStagingIsARetryable503WithTheRegistryCode() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
-    when(stagingService.stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), anyString()))
+    when(stagingService.stageDraft(
+            eq("versekit"), eq(member), eq(HandoffKind.BLUEPRINT), anyString(), eq(10)))
         .thenThrow(new RedisConnectionFailureException("refused"));
 
     post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
@@ -213,7 +219,8 @@ class ExchangeDraftRouteTest {
   @Test
   void aStagingStoreFailureOfAnyDataAccessKindIsA503() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
-    when(stagingService.stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), anyString()))
+    when(stagingService.stageDraft(
+            eq("versekit"), eq(member), eq(HandoffKind.BLUEPRINT), anyString(), eq(10)))
         .thenThrow(new QueryTimeoutException("slow"));
 
     post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
@@ -230,7 +237,8 @@ class ExchangeDraftRouteTest {
             any(),
             any()))
         .thenReturn(ok("{\"goodsTotal\":0}"));
-    when(stagingService.stageDraft(eq(member), eq(HandoffKind.REFINERY), anyString()))
+    when(stagingService.stageDraft(
+            eq("versekit"), eq(member), eq(HandoffKind.REFINERY), anyString(), eq(10)))
         .thenReturn(new HandoffStagingService.Staged("hid-r", "ingest:handoff:x:hid-r", 20L));
 
     post("/exchange/v1/me/drafts/refinery-orders", example("refinery-draft/valid/minimal.json"))
@@ -261,7 +269,8 @@ class ExchangeDraftRouteTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("SCHEMA_INVALID"));
 
-    verify(stagingService, never()).stageDraft(anyString(), any(), anyString());
+    verify(stagingService, never())
+        .stageDraft(anyString(), anyString(), any(), anyString(), anyInt());
   }
 
   @Test
@@ -274,7 +283,8 @@ class ExchangeDraftRouteTest {
         .andExpect(status().isContentTooLarge())
         .andExpect(jsonPath("$.code").value("PAYLOAD_TOO_LARGE"));
 
-    verify(stagingService, never()).stageDraft(anyString(), any(), anyString());
+    verify(stagingService, never())
+        .stageDraft(anyString(), anyString(), any(), anyString(), anyInt());
     verify(idempotency, never()).store(anyString(), any());
   }
 
@@ -289,7 +299,8 @@ class ExchangeDraftRouteTest {
         .andExpect(header().exists("Retry-After"))
         .andExpect(jsonPath("$.code").value("EXCHANGE_BUDGET_EXHAUSTED"));
 
-    verify(stagingService, never()).stageDraft(anyString(), any(), anyString());
+    verify(stagingService, never())
+        .stageDraft(anyString(), anyString(), any(), anyString(), anyInt());
   }
 
   @Test

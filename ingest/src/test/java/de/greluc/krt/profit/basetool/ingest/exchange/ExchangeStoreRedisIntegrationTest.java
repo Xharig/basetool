@@ -83,7 +83,7 @@ class ExchangeStoreRedisIntegrationTest {
 
   private static final ExchangeStoreProperties SMALL =
       new ExchangeStoreProperties(
-          4096L, 8192L, 12288L, 1024, Duration.ofHours(24), Duration.ofMinutes(2), 1024L);
+          4096L, 8192L, 12288L, 1024, Duration.ofHours(24), Duration.ofMinutes(2), 1024L, 10);
 
   private static final ExchangeStoreProperties DEFAULTS =
       new ExchangeStoreProperties(
@@ -93,7 +93,8 @@ class ExchangeStoreRedisIntegrationTest {
           32768,
           Duration.ofHours(24),
           Duration.ofMinutes(2),
-          524_288L);
+          524_288L,
+          10);
 
   private static final int THREADS = 16;
 

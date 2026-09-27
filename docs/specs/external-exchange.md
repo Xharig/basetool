@@ -762,6 +762,8 @@ REQ-INGEST-004 requires today; nothing is written until the member confirms.
 - [ ] The SC Extractor's draft flows pass unchanged through the exchange routes.
 - [x] A draft is checked against its schema, relayed, staged and answered with its handoff; a
   refused one stages nothing. *`ExchangeDraftRouteTest`.*
+- [x] A client's drafts evict only its own oldest drafts for that member, never the extractor's
+  uploads or another client's drafts. *`HandoffStagingServiceTest`.*
 - [x] The backend previews a blueprint draft as an upload would and writes nothing; each draft
   needs its own capability. *`ExchangeDraftControllerTest`.*
 
@@ -773,12 +775,15 @@ exactly what the extractor's upload builds: for blueprints it resolves each `ref
 name sent — or its first key when it has none — so it lands among the unmatched rows for a manual
 pick; repeats collapse to the earliest `acquiredAt`. For refinery orders it is the refinery import's
 draft. A draft the backend refuses as malformed is `400 SCHEMA_INVALID`. The gateway stages the
-answer in the member's extractor draft slots (`HandoffKind.BLUEPRINT` / `REFINERY`, at most
-`app.ingest.max-handoff-bytes`, measured as the staged value with its handoff wrapper; a larger one
-is `413 PAYLOAD_TOO_LARGE`, checked before staging and never cached), counts it against the
-exchange's byte budget and answers `draft-result` with the `frontendUrl` of the blueprint import
-review or the refinery create form. As write routes they take an `Idempotency-Key` and count
-against the daily quota.
+answer as a handoff (`HandoffKind.BLUEPRINT` / `REFINERY`, at most `app.ingest.max-handoff-bytes`,
+measured as the staged value with its handoff wrapper; a larger one is `413 PAYLOAD_TOO_LARGE`,
+checked before staging and never cached), counts it against the exchange's byte budget and answers
+`draft-result` with the `frontendUrl` of the blueprint import review or the refinery create form.
+The handoffs sit in slots of their own per client and member — at most
+`app.exchange.store.max-drafts-per-client-member` (10) live drafts, the oldest evicted — apart from
+the legacy extractor uploads' per-member slots, so a client with a drafts scope can never evict the
+member's pending extractor handoffs or another client's drafts (security review 2026-09-27). As
+write routes they take an `Idempotency-Key` and count against the daily quota.
 
 The web blueprint import reads the same `basetool.blueprints` envelope as an upload, so a client's
 offline file and its draft end in the same review (owner decision 2026-09-27, REQ-INV-014).

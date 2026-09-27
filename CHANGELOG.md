@@ -209,6 +209,10 @@
   mehr für die Backend-API. Auf Produktion wird das erst nach dem Abschalten der alten
   Extractor-Adressen angewendet, weil Versionen bis 2.9.1 sie noch brauchen.
   
+- **Datenaustausch: Entwürfe in eigenen Plätzen.** Entwürfe einer verbundenen Anwendung liegen je
+  Anwendung und Mitglied in eigenen Plätzen (höchstens 10); sie verdrängen keine offenen Uploads des
+  SC Extractors und keine Entwürfe anderer Anwendungen mehr.
+  
 - **Ingest: Produktion startet nicht ohne Client-Allowlist.** Solange die alten `/v1`-Endpunkte
   aktiv sind, verweigert das Gateway unter `prod` den Start, wenn `IRI_INGEST_ALLOWED_CLIENT_IDS`
   leer ist – sonst erreichte das Token einer verbundenen Anwendung die alten Entwurfs-Relays.

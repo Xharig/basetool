@@ -271,8 +271,10 @@ slow import but a login outage for everybody. The single-use consume is triggere
 navigational pre-fill GET, so a browser prefetch or a duplicate page load cannot burn the token
 before the real pickup (REQ-INGEST-004, ADR-0110).
 
-The same staging serves the exchange. Its drafts land in the extractor's draft slots
-(`HandoffKind.BLUEPRINT` / `REFINERY`, REQ-XCH-019). A change set the mass-change guard holds back
+The same staging serves the exchange. Its drafts (`HandoffKind.BLUEPRINT` / `REFINERY`,
+REQ-XCH-019) land in slots of their own per client and member (`app.exchange.store.max-drafts-per-client-member`,
+default 10, the oldest evicted), so a client's drafts never evict the extractor's uploads above or
+another client's drafts. A change set the mass-change guard holds back
 is staged as `HandoffKind.MASS_CHANGE` (REQ-XCH-021) under its own size cap
 (`app.exchange.store.max-mass-change-bytes`, 512 KiB) in a per-subject slot of one: it never
 evicts a pending extractor draft, and a newer one replaces it. The member confirms or discards it
