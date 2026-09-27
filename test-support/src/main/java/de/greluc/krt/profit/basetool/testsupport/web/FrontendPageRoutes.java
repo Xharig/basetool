@@ -98,6 +98,7 @@ public final class FrontendPageRoutes {
           "/admin/blueprints",
           "/admin/default-blueprints",
           "/admin/discord-registrations",
+          "/admin/exchange-clients",
           "/admin/material-aliases",
           "/admin/materials",
           "/admin/mission-data",

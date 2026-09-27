@@ -19,9 +19,12 @@
 
 package de.greluc.krt.profit.basetool.backend.service.exchange;
 
+import de.greluc.krt.profit.basetool.backend.event.ExchangeInstallationConnectedEvent;
 import de.greluc.krt.profit.basetool.backend.exception.BadRequestException;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeInstallationDto;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
 import java.text.Normalizer;
 import java.time.Clock;
@@ -32,6 +35,7 @@ import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +58,13 @@ public class ExchangeInstallationService {
   static final Pattern LABEL = Pattern.compile("^[\\p{L}\\p{N}._-][\\p{L}\\p{N} ._-]{0,39}$");
 
   private final ExchangeInstallationRepository installationRepository;
+
+  /** Names the client in the new-connection notification. */
+  private final ExchangeClientRepository clientRepository;
+
+  /** Publishes the new-connection event, which the notification engine handles after commit. */
+  private final ApplicationEventPublisher eventPublisher;
+
   private final Clock clock = Clock.systemUTC();
 
   /**
@@ -65,8 +76,33 @@ public class ExchangeInstallationService {
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void touch(@NotNull String clientId, @NotNull UUID member, @NotNull String keyThumbprint) {
+    record(clientId, member, keyThumbprint);
+  }
+
+  /**
+   * Upserts the installation and, when this call created it, announces the new connection to the
+   * member (REQ-XCH-032); the upsert decides, so two concurrent first calls announce it once.
+   *
+   * @param clientId the Keycloak client id
+   * @param member the member
+   * @param keyThumbprint the DPoP key thumbprint
+   */
+  private void record(
+      @NotNull String clientId, @NotNull UUID member, @NotNull String keyThumbprint) {
     Instant now = clock.instant();
-    installationRepository.touch(clientId, member, keyThumbprint, now, now.minus(TOUCH_INTERVAL));
+    for (ExchangeInstallationRepository.Touched touched :
+        installationRepository.touch(
+            clientId, member, keyThumbprint, now, now.minus(TOUCH_INTERVAL))) {
+      if (touched.getInserted()) {
+        String clientName =
+            clientRepository
+                .findWithCapabilitiesByClientId(clientId)
+                .map(ExchangeClient::getDisplayName)
+                .orElse(clientId);
+        eventPublisher.publishEvent(
+            new ExchangeInstallationConnectedEvent(member, touched.getId(), clientName));
+      }
+    }
   }
 
   /**
@@ -137,8 +173,7 @@ public class ExchangeInstallationService {
   @NotNull
   private ExchangeInstallation load(
       @NotNull String clientId, @NotNull UUID member, @NotNull String keyThumbprint) {
-    Instant now = clock.instant();
-    installationRepository.touch(clientId, member, keyThumbprint, now, now.minus(TOUCH_INTERVAL));
+    record(clientId, member, keyThumbprint);
     return installationRepository
         .findByKey(clientId, member, keyThumbprint)
         .orElseThrow(() -> new IllegalStateException("installation missing after upsert"));

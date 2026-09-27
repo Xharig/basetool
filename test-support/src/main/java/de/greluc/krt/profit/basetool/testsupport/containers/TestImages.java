@@ -37,5 +37,5 @@ public final class TestImages {
    * digest for the reader; the digest is what Docker resolves.
    */
   public static final String REDIS =
-      "redis:8-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576";
+      "redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0";
 }
