@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Datenaustausch: Vertrag öffentlich abrufbar.** Das Ingest-Gateway liefert das OpenAPI-Dokument
+  und die JSON-Schemas der Exchange-API anonym unter `/exchange/v1/openapi.json` und
+  `/exchange/v1/schemas/<name>.schema.json` aus (REQ-XCH-011). Die alten Extractor-Endpunkte lassen
+  sich zum Go-live mit `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED=false` abschalten und antworten dann mit
+  `410` und einem Update-Hinweis (REQ-XCH-033).
 - **Datenaustausch: Verzeichnis zugelassener Anwendungen.** Admins verwalten zugelassene
   Fremd-Anwendungen samt Fähigkeiten und den globalen Schalter (`/api/v1/admin/exchange-clients`,
   `/api/v1/admin/exchange-settings`, Migration `V248`); jede Änderung steht im neuen Audit-Bereich
