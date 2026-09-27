@@ -293,9 +293,26 @@
 - **Datenaustausch: Austritt sperrt erst nach dem Abmelden.** Scheidet ein Mitglied aus, entzieht
   das Backend zuerst Einwilligungen und Sitzungen in Keycloak und schreibt die Sperren danach – auch
   wenn Keycloak scheitert –, damit kein zwischendurch erneuerter Token durchkommt (REQ-XCH-008).
+  
 - **Datenaustausch: Trennen beendet die Anwendung auch in geteilten Sitzungen.** Eine neue
   Admin-Erweiterung im Keycloak-SPI (`basetool-exchange`) meldet beim Trennen nur diese Anwendung
   ab; die Web-Anmeldung des Mitglieds bleibt bestehen (REQ-XCH-008, ADR-0226).
+  
+- **Datenaustausch: überlange unbekannte Feldnamen.** Ein Schreibvorgang mit einem unbekannten Feld,
+  dessen Pfad länger als 200 Zeichen wäre, wird vorab mit `400 SCHEMA_INVALID` abgelehnt, statt
+  geschrieben und mit `502` beantwortet zu werden.
+  
+- **Datenaustausch: zu große Entwürfe.** Ein Entwurf oder zurückgehaltener Änderungssatz, der
+  verpackt über der Grenze liegt, wird mit `413` und dem Registry-Code abgelehnt statt mit
+  `400 BAD_REQUEST`, und diese Antwort wird nicht mehr zwischengespeichert.
+  
+- **Datenaustausch: Redis-Ausfälle.** Jeder Redis-Fehler auf einer Austausch-Route antwortet mit
+  `503 SERVICE_UNAVAILABLE` und `Retry-After: 60`, nie mit `500`.
+  
+- **Datenaustausch: Tageszähler ohne Ablauf.** Der Zähler des Schreibkontingents entsteht mit seinem
+  Ablaufdatum in einem Befehl und kann es nicht mehr verlieren; er zählt dabei genau einmal im
+  Redis-Budget.
+  
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.

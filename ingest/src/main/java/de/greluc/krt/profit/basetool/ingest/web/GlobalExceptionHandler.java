@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.ingest.web;
 
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeUnavailableException;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.ratelimit.RateLimitedException;
 import de.greluc.krt.profit.basetool.ingest.service.ServiceAccountTokenProvider;
@@ -84,6 +85,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   /** {@code Retry-After} advertised for a transient handoff-staging (Redis) outage, in seconds. */
   private static final String STAGING_RETRY_AFTER_SECONDS = "5";
+
+  /** {@code Retry-After} of an exchange store outage, in seconds, as the exchange answers it. */
+  private static final String EXCHANGE_RETRY_AFTER_SECONDS = "60";
 
   /** Generic detail used when no safe backend detail can be relayed. */
   private static final String GENERIC_BACKEND_REJECT = "The import backend rejected the request.";
@@ -297,6 +301,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         "Backend unavailable",
         CODE_UPSTREAM,
         "The import backend could not be reached. Please try again.");
+  }
+
+  /**
+   * Answers an exchange store that cannot be reached, whichever route it escaped from, with the
+   * exchange's retryable {@code 503 SERVICE_UNAVAILABLE} and {@code Retry-After: 60} instead of a
+   * {@code 500} (REQ-XCH-023).
+   *
+   * @param ex the failure
+   * @return a 503 problem carrying {@code Retry-After}
+   */
+  @ExceptionHandler(ExchangeUnavailableException.class)
+  public @NotNull ResponseEntity<ProblemDetail> handleExchangeUnavailable(
+      @NotNull ExchangeUnavailableException ex) {
+    log.warn("Exchange store unavailable: {}", ex.getClass().getSimpleName());
+    meterRegistry
+        .counter(MetricNames.HTTP_ERROR, MetricNames.TAG_CODE, MetricNames.CODE_SERVICE_UNAVAILABLE)
+        .increment();
+    ProblemDetail problem =
+        problem(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "Service unavailable",
+            MetricNames.CODE_SERVICE_UNAVAILABLE,
+            "A store the exchange needs cannot be reached; try again later.");
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .header(HttpHeaders.RETRY_AFTER, EXCHANGE_RETRY_AFTER_SECONDS)
+        .body(problem);
   }
 
   /**

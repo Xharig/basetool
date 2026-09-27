@@ -53,6 +53,9 @@ public class ExchangeSchemas {
   /** The most violations one answer lists, as the problem schema allows. */
   public static final int MAX_REPORTED = 50;
 
+  /** The longest JSON Pointer a warning or a violation carries, as the schemas allow. */
+  public static final int MAX_POINTER = 200;
+
   /** How deep the unknown-field walk follows nested schemas. */
   private static final int MAX_DEPTH = 32;
 
@@ -289,6 +292,21 @@ public class ExchangeSchemas {
       pointer.append('/').append(escape(String.valueOf(path.getElement(i))));
     }
     return pointer.toString();
+  }
+
+  /**
+   * Shortens a JSON Pointer to one the contract can carry: the pointer itself when it has at most
+   * {@link #MAX_POINTER} characters, otherwise its longest ancestor that does.
+   *
+   * @param pointer the pointer
+   * @return a pointer of at most {@link #MAX_POINTER} characters, empty for the root
+   */
+  public static @NotNull String reportable(@NotNull String pointer) {
+    String shortened = pointer;
+    while (shortened.length() > MAX_POINTER) {
+      shortened = shortened.substring(0, shortened.lastIndexOf('/'));
+    }
+    return shortened;
   }
 
   /**

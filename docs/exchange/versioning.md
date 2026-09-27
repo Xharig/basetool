@@ -23,7 +23,8 @@ Write a client that keeps working as `v1` grows:
 
 The gateway is tolerant in the other direction too: a request field its schema does not declare is
 ignored and, in the resolve and change results, reported as an `UNKNOWN_FIELD` warning with its JSON
-Pointer, so a client notices a typo.
+Pointer, so a client notices a typo. A field whose pointer would exceed 200 characters cannot be
+reported; such a body is refused with `400 SCHEMA_INVALID` before anything is written.
 
 ## Extensions
 
