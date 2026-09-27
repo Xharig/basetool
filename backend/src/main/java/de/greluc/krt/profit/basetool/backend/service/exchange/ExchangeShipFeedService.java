@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.service.exchange;
 
 import de.greluc.krt.profit.basetool.backend.exception.ExchangeProblemException;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeShipLink;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeInsuranceDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeItemRefDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeLocationDto;
@@ -28,8 +29,10 @@ import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeShipDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeShipPageDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeShipRow;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeTombstoneDto;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeShipLinkRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ShipRepository;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -67,12 +70,13 @@ public class ExchangeShipFeedService {
   private static final int MAX_NAME = 200;
 
   private final ShipRepository shipRepository;
+  private final ExchangeShipLinkRepository linkRepository;
   private final ExchangeFeedReader feedReader;
 
   /**
-   * Returns one page of the member's ships.
+   * Returns one page of the member's ships, each with the id the calling installation linked it to.
    *
-   * @param member the member
+   * @param caller the client, installation and member
    * @param cursor the cursor the client echoed, or {@code null} for a new snapshot
    * @param limit the page size, clamped to {@code 1..}{@value ExchangeFeedReader#MAX_LIMIT}
    * @return the page
@@ -81,52 +85,60 @@ public class ExchangeShipFeedService {
    */
   @Transactional(readOnly = true)
   public @NotNull ExchangeShipPageDto page(
-      @NotNull UUID member, @Nullable String cursor, int limit) {
+      @NotNull ExchangeCaller caller, @Nullable String cursor, int limit) {
     int size = ExchangeFeedReader.pageSize(limit);
     if (cursor == null) {
-      return snapshot(member, feedReader.snapshotStart(), FIRST, size);
+      return snapshot(caller, feedReader.snapshotStart(), FIRST, size);
     }
     ExchangeFeedCursor position = feedReader.resume(cursor);
     UUID afterId = position.afterId();
     return afterId != null
-        ? snapshot(member, position.position(), afterId, size)
-        : feed(member, position.position(), size);
+        ? snapshot(caller, position.position(), afterId, size)
+        : feed(caller, position.position(), size);
   }
 
   /**
    * Reads one snapshot page.
    *
-   * @param member the member
+   * @param caller the caller
    * @param at the feed position the snapshot was taken at
    * @param afterId the last ship delivered
    * @param size the page size
    * @return the page
    */
   private @NotNull ExchangeShipPageDto snapshot(
-      @NotNull UUID member, @NotNull ExchangeFeedPosition at, @NotNull UUID afterId, int size) {
+      @NotNull ExchangeCaller caller,
+      @NotNull ExchangeFeedPosition at,
+      @NotNull UUID afterId,
+      int size) {
     List<ExchangeShipRow> rows =
-        shipRepository.findExchangeShips(member, afterId, PageRequest.of(0, size + 1));
+        shipRepository.findExchangeShips(caller.member(), afterId, PageRequest.of(0, size + 1));
     boolean more = rows.size() > size;
     List<ExchangeShipRow> delivered = more ? rows.subList(0, size) : rows;
     String next =
         more
             ? ExchangeFeedCursor.snapshot(at, delivered.getLast().id()).format()
             : ExchangeFeedCursor.feed(at).format();
+    Map<UUID, String> linked = links(caller, delivered);
     return new ExchangeShipPageDto(
-        delivered.stream().map(ExchangeShipFeedService::toDto).toList(), List.of(), next, more);
+        delivered.stream().map(ship -> toDto(ship, linked.get(ship.id()))).toList(),
+        List.of(),
+        next,
+        more);
   }
 
   /**
    * Reads one feed page: each ship changed after the position, once, with its current state or a
    * tombstone.
    *
-   * @param member the member
+   * @param caller the caller
    * @param after the position
    * @param size the page size
    * @return the page
    */
   private @NotNull ExchangeShipPageDto feed(
-      @NotNull UUID member, @NotNull ExchangeFeedPosition after, int size) {
+      @NotNull ExchangeCaller caller, @NotNull ExchangeFeedPosition after, int size) {
+    UUID member = caller.member();
     ExchangeFeedReader.Changes changes =
         feedReader.changes(member, ExchangeResource.SHIP, after, size);
     Map<String, ExchangeShipRow> current =
@@ -137,12 +149,13 @@ public class ExchangeShipFeedService {
                     member, changes.keys().stream().map(UUID::fromString).toList())
                 .stream()
                 .collect(Collectors.toMap(row -> row.id().toString(), Function.identity()));
+    Map<UUID, String> linked = links(caller, current.values());
     List<ExchangeShipDto> items = new ArrayList<>();
     List<ExchangeTombstoneDto> removed = new ArrayList<>();
     for (String key : changes.keys()) {
       ExchangeShipRow ship = current.get(key);
       if (ship != null) {
-        items.add(toDto(ship));
+        items.add(toDto(ship, linked.get(ship.id())));
       } else {
         removed.add(changes.tombstone(key, key));
       }
@@ -151,14 +164,39 @@ public class ExchangeShipFeedService {
   }
 
   /**
+   * Reads the calling installation's ids of the given ships.
+   *
+   * @param caller the caller
+   * @param ships the ships
+   * @return the linked id by ship
+   */
+  private @NotNull Map<UUID, String> links(
+      @NotNull ExchangeCaller caller, @NotNull Collection<ExchangeShipRow> ships) {
+    if (ships.isEmpty()) {
+      return Map.of();
+    }
+    return linkRepository
+        .findByUserIdAndClientIdAndInstallationKeyAndShipIdIn(
+            caller.member(),
+            caller.clientId(),
+            caller.installationKey(),
+            ships.stream().map(ExchangeShipRow::id).toList())
+        .stream()
+        .collect(Collectors.toMap(ExchangeShipLink::getShipId, ExchangeShipLink::getExternalId));
+  }
+
+  /**
    * Maps a ship.
    *
    * @param ship the ship
+   * @param externalId the calling installation's id for it, or {@code null}
    * @return the feed entry
    */
-  private static @NotNull ExchangeShipDto toDto(@NotNull ExchangeShipRow ship) {
+  private static @NotNull ExchangeShipDto toDto(
+      @NotNull ExchangeShipRow ship, @Nullable String externalId) {
     return new ExchangeShipDto(
         ship.id().toString(),
+        externalId,
         ship.version() == null ? 0 : ship.version(),
         new ExchangeItemRefDto(ship.shipTypeId().toString(), cut(ship.shipTypeName())),
         ship.name() == null || ship.name().isBlank() ? null : ship.name(),

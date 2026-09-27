@@ -28,6 +28,7 @@ import org.jetbrains.annotations.Nullable;
  * Absent optional fields are left out.
  *
  * @param shipId the opaque ship id
+ * @param externalId the calling installation's id for the ship, or {@code null} until it links one
  * @param version the version an update or removal echoes
  * @param shipType the ship type, with its id as {@code bt}
  * @param name the member's name for the ship, or {@code null} when it has none
@@ -38,6 +39,7 @@ import org.jetbrains.annotations.Nullable;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ExchangeShipDto(
     @NotNull String shipId,
+    @Nullable String externalId,
     long version,
     @NotNull ExchangeItemRefDto shipType,
     @Nullable String name,

@@ -43,7 +43,6 @@ import de.greluc.krt.profit.basetool.backend.repository.ExchangeChangeRepository
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeJournalRepository;
 import de.greluc.krt.profit.basetool.backend.repository.GameItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
-import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.MaterialRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
@@ -121,7 +120,7 @@ public class ExchangeStockWriteService {
   private final ExchangeResolveService resolveService;
   private final MaterialRepository materialRepository;
   private final GameItemRepository gameItemRepository;
-  private final LocationRepository locationRepository;
+  private final ExchangeLocationResolver locationResolver;
   private final InventoryItemRepository inventoryRepository;
   private final InventoryCheckoutService checkoutService;
   private final UserRepository userRepository;
@@ -189,7 +188,8 @@ public class ExchangeStockWriteService {
         plan.size() - applied - unchanged,
         results,
         offers.reduced,
-        offers.removed);
+        offers.removed,
+        null);
   }
 
   /**
@@ -211,7 +211,7 @@ public class ExchangeStockWriteService {
         plan.add(new Skip(entry.result(), entry.reason()));
         continue;
       }
-      Optional<Location> location = location(op.location());
+      Optional<Location> location = locationResolver.resolve(op.location());
       if (location.isEmpty()) {
         plan.add(new Skip(REJECTED, LOCATION_UNKNOWN));
         continue;
@@ -299,29 +299,6 @@ public class ExchangeStockWriteService {
       }
     }
     return byIndex;
-  }
-
-  /**
-   * Finds the non-hidden Lager location a client means: by its UEX place first, then by its exact
-   * name.
-   *
-   * @param ref the client's reference
-   * @return the location, or empty when the place has none
-   */
-  private @NotNull Optional<Location> location(@NotNull ExchangeStockChangeSet.LocationRef ref) {
-    if (ref.uex() != null) {
-      List<Location> byPlace =
-          "CITY".equals(ref.uex().kind())
-              ? locationRepository.findExchangeByCity(ref.uex().id())
-              : locationRepository.findExchangeBySpaceStation(ref.uex().id());
-      if (!byPlace.isEmpty()) {
-        return Optional.of(byPlace.getFirst());
-      }
-    }
-    if (ref.name() != null) {
-      return locationRepository.findFirstByNameAndHiddenFalseOrderByIdAsc(ref.name());
-    }
-    return Optional.empty();
   }
 
   /**

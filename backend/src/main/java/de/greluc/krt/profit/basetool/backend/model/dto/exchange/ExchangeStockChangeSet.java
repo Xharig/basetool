@@ -56,32 +56,12 @@ public record ExchangeStockChangeSet(
       @Nullable @Size(min = 1, max = 64) String opId,
       @NotNull @Pattern(regexp = "^set-quantity$") String op,
       @NotNull @Valid ExchangeItemRef material,
-      @NotNull @Valid LocationRef location,
+      @NotNull @Valid ExchangeLocationRef location,
       @NotNull @Min(0) @Max(1000) Integer quality,
       @NotNull Boolean stolen,
       @NotNull @Valid Quantity quantity,
       @NotNull @Valid Quantity expectedQuantity,
       @Nullable Boolean override) {}
-
-  /**
-   * A Lager location as a client names it: first by its UEX place, then by its exact name.
-   *
-   * @param name the location's name, or {@code null}
-   * @param uex the UEX place, or {@code null}
-   */
-  public record LocationRef(
-      @Nullable @Size(min = 1, max = 200) String name, @Nullable @Valid Uex uex) {
-
-    /**
-     * A UEX place.
-     *
-     * @param kind {@code CITY} or {@code SPACE_STATION}
-     * @param id the UEX id
-     */
-    public record Uex(
-        @NotNull @Pattern(regexp = "^(CITY|SPACE_STATION)$") String kind,
-        @NotNull @Min(1) Integer id) {}
-  }
 
   /**
    * An amount with its unit.

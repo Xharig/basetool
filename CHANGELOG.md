@@ -13,6 +13,11 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Datenaustausch: Schiffe schreiben.** Verbundene Anwendungen verknüpfen ihre Schiffe zuerst mit
+  den vorhandenen – je Installation –, legen danach neue an, ändern und löschen mit der zuletzt
+  gesehenen Version (`/api/v1/exchange/me/ships/changes`); ein Fleetview-Import wird so nicht
+  verdoppelt, und eine Löschung meldet, aus wie vielen Missionseinheiten das Schiff genommen wurde
+  (REQ-XCH-017, Migration V254).
 - **Datenaustausch: Lager schreiben.** Verbundene Anwendungen setzen die Menge eines persönlichen
   Postens gegen die zuletzt gesehene Menge (`/api/v1/exchange/me/stock/changes`); die Differenz wird
   wie im Lager ein- oder ausgebucht, gekürzte oder entfernte Materialbörse-Angebote stehen im Audit

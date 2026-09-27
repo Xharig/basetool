@@ -113,6 +113,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           PATH_PARSER.parse("/api/v1/exchange/me/installation"),
           PATH_PARSER.parse("/api/v1/exchange/me/org-demand"),
           PATH_PARSER.parse("/api/v1/exchange/me/ships"),
+          PATH_PARSER.parse("/api/v1/exchange/me/ships/changes"),
           PATH_PARSER.parse("/api/v1/exchange/me/stock"),
           PATH_PARSER.parse("/api/v1/exchange/me/stock/changes"));
 

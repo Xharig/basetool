@@ -570,7 +570,8 @@ with the external client.
 
 **Acceptance**
 
-- [ ] First sync against a Fleetview-imported hangar creates no duplicate.
+- [x] First sync against a Fleetview-imported hangar creates no duplicate.
+  *`ExchangeShipWriteControllerTest`.*
 - [x] The feed carries the member's own ships only, without purchase data, and answers a ship given
   to another member as a tombstone. *`ExchangeShipControllerTest`.*
 
@@ -578,8 +579,25 @@ The ship feed keys a ship by its id and sends its `version`, the ship type's id 
 insurance as `LTI` or a number of months, and the location when it has one. A ship stored without
 insurance, which the web's validation does not allow, reads as zero months.
 
-**Status:** read side built in the backend (`/api/v1/exchange/me/ships`) — WP 4.4 (#2086); the link
-step, the gateway route and the writes follow
+The backend applies a change set at `POST /api/v1/exchange/me/ships/changes`
+(`exchange.hangar.write`) in one transaction; the feed carries each ship's `externalId` for the
+calling installation. A link belongs to one **installation** (owner decision 2026-09-27): each
+installation links its own ids, so two installations with separate local databases never mistake
+each other's ids, and a server ship is linked at most once per installation (`LINK_TARGET_TAKEN`);
+re-linking an id moves it. `link` needs the member's own ship; `upsert` without `shipId` creates the
+ship through the Hangar's own create and links it, unless the id is already linked, which answers
+`VERSION_CONFLICT` so the client pulls first; `upsert` with `shipId` requires the ship's `version`
+(`VERSION_CONFLICT`), writes through the Hangar's own update and links the id if it is not yet. An
+`upsert` naming a ship the server no longer has brings it back as a new ship only when the calling
+installation removed it or with `override` after asking the member (`REMOVED_ELSEWHERE`, owner
+decision 2026-09-27); a ship the member never had is `unmatched`. `remove` requires the `version`,
+detaches the ship from its mission units through the Hangar's delete (`MISSION_UNIT_UPDATED`) and
+reports the count as `detachedFromMissions`. The ship type resolves through `catalog/resolve`, the
+place like a stock lot's; an absent `fitted` keeps the ship's. Every write is audited in the Hangar
+area with the client and journaled.
+
+**Status:** built in the backend — WP 4.4 (#2086); the gateway route is on the gateway stack; the
+member's open `/hangar` page does not yet refresh on a client write
 
 ### REQ-XCH-018 — Org demand is anonymised and membership-scoped; locations are the non-hidden list
 
@@ -657,10 +675,12 @@ A stock lot counts as removed when it is set to 0 or cut to at most a tenth of w
 client's window opened, taken from the lot's first journal entry in the window; a lot of a material
 that rises elsewhere in the same batch is a move and does not count.
 
-**Status:** the counting rule and the blueprint and stock removals are built — WP 3.3 (#2083), WP 4.1
-(#2084), WP 4.2 (#2085): a batch that trips the rule answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED`
-and writes nothing, and the gateway stages it; the ship removal rule, the confirmation page and the
-apply follow — WP 4.4 (#2086), WP 3.2 (#2082), WP 4.5 (#2087)
+A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
+
+**Status:** the counting rule and the blueprint, stock and ship removals are built — WP 3.3 (#2083),
+WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086): a batch that trips the rule answers `409
+MASS_CHANGE_CONFIRMATION_REQUIRED` and writes nothing, and the gateway stages it; the confirmation
+page and the apply follow — WP 3.2 (#2082), WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 
@@ -678,8 +698,8 @@ writing transaction's id and the time. It is written in the write's own transact
 change feed after 90 days by `exchange_change_retention`, exported under Art. 15, stays with the
 source account on a merge, and its states are searched by the Personensuche.
 
-**Status:** journal built and filled by the blueprint and stock writes — WP 3.3 (#2083), WP 4.1
-(#2084), WP 4.2 (#2085); the ship writes and the undo follow — WP 4.4 (#2086), WP 4.5 (#2087)
+**Status:** journal built and filled by the blueprint, stock and ship writes — WP 3.3 (#2083), WP
+4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086); the undo follows — WP 4.5 (#2087)
 
 ### REQ-XCH-023 — Rate limits, quotas and a hard Redis budget
 

@@ -38,6 +38,8 @@ import org.jetbrains.annotations.Unmodifiable;
  *     resources
  * @param offersRemoved the Materialbörse offers a stock book-out removed, or {@code null} for other
  *     resources
+ * @param detachedFromMissions the mission units the removed ships were detached from, or {@code
+ *     null} for other resources
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ExchangeChangeResultDto(
@@ -47,7 +49,8 @@ public record ExchangeChangeResultDto(
     int notApplied,
     @NotNull @Unmodifiable List<OpResult> results,
     @Nullable Integer offersReduced,
-    @Nullable Integer offersRemoved) {
+    @Nullable Integer offersRemoved,
+    @Nullable Integer detachedFromMissions) {
 
   /**
    * The outcome of one op that was not applied.
