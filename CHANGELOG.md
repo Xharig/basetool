@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: Monitoring je Anwendung.** Neues Grafana-Dashboard „Exchange“ mit Filter nach
+  verbundener Anwendung (Metriken und Gateway-Logs); Gateway-Logzeilen tragen Client und Route,
+  neue Metriken `basetool_exchange_clients` und `basetool_exchange_registry_mirror_age_seconds` samt
+  Alarm `ExchangeRegistryMirrorStaleAtGateway`.
 - **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
   `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
   das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Die
