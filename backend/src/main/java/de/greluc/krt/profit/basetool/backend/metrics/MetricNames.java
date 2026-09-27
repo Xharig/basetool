@@ -746,6 +746,12 @@ public final class MetricNames {
   public static final String EXCHANGE_DEPARTURES = "basetool.exchange.departures";
 
   /**
+   * Counter {@code basetool_exchange_account_checks_total{outcome}} — exchange account checks by
+   * answer ({@code match} / {@code mismatch} / {@code unknown}, REQ-XCH-031).
+   */
+  public static final String EXCHANGE_ACCOUNT_CHECKS = "basetool.exchange.account.checks";
+
+  /**
    * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path
    * without a well-formed {@code X-Exchange-Installation}.
    */

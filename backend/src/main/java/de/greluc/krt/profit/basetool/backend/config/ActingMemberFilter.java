@@ -106,6 +106,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
   private static final List<PathPattern> EXCHANGE_PATHS =
       List.of(
           PATH_PARSER.parse("/api/v1/exchange/catalog/locations"),
+          PATH_PARSER.parse("/api/v1/exchange/me/account-check"),
           PATH_PARSER.parse("/api/v1/exchange/me/installation"));
 
   /** The shape of a registry client id, identical to the database check. */
