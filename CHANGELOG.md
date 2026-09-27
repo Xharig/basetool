@@ -9,6 +9,9 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Verbundene Anwendungen: große Änderungen bestätigen.** Will eine Anwendung auf einmal viele
+  Einträge entfernen, zeigt der Bestätigungslink, was passieren würde; erst „Bestätigen" wendet es an,
+  „Verwerfen" lässt alles, wie es ist (REQ-XCH-021).
 - **Verbundene Anwendungen: Änderungen zurücknehmen.** Auf der Seite setzt „Änderungen
   zurücknehmen" alles zurück, was eine Anwendung im gewählten Zeitraum (bis 90 Tage) an Blueprints,
   Lager und Hangar geändert hat; danach anders Geändertes bleibt und wird aufgelistet,

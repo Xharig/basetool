@@ -370,6 +370,7 @@ public class AdminAuditLogPageController {
                   "EXCHANGE_INSTALLATION_DISCONNECTED",
                   "EXCHANGE_MEMBER_DEPARTED",
                   "EXCHANGE_CHANGES_UNDONE",
+                  "EXCHANGE_MASS_CHANGE_CONFIRMED",
                   "CONNECTED_APPS_AUDIT_EXPORTED",
                   "CONNECTED_APPS_AUDIT_PURGED")));
 

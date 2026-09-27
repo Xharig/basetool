@@ -19,20 +19,22 @@
 
 package de.greluc.krt.profit.basetool.frontend.model.dto;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
- * Kind of draft a one-click ingest handoff carries, mirroring the ingest gateway's {@code
- * HandoffKind}; tells the frontend which review surface to pre-fill.
+ * What a staged change set does, or did, as the backend reports it (REQ-XCH-021).
+ *
+ * @param clientName the client's registered display name
+ * @param resource {@code blueprints}, {@code stock} or {@code ships}
+ * @param dryRun whether this is the preview, which wrote nothing
+ * @param applied the ops that change, or changed, something
+ * @param unchanged the ops that find their state already
+ * @param notApplied the ops refused or not matched
  */
-public enum HandoffKind {
-  /** A refinery-order draft; pre-fills the refinery create form. */
-  REFINERY,
-
-  /** A personal-blueprint import preview; pre-fills the blueprint import preview. */
-  BLUEPRINT,
-
-  /**
-   * A change set the mass-change guard held back; opens its confirmation on the connected-apps
-   * page.
-   */
-  MASS_CHANGE
-}
+public record ConnectedAppMassChangeResultDto(
+    @NotNull String clientName,
+    @NotNull String resource,
+    boolean dryRun,
+    int applied,
+    int unchanged,
+    int notApplied) {}

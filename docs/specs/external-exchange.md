@@ -664,10 +664,20 @@ that rises elsewhere in the same batch is a move and does not count.
 
 A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
 
-**Status:** the counting rule and the blueprint, stock and ship removals are built — WP 3.3 (#2083),
-WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086): a batch that trips the rule answers `409
-MASS_CHANGE_CONFIRMATION_REQUIRED` and writes nothing, and the gateway stages it; the confirmation
-page and the apply follow — WP 3.2 (#2082), WP 4.5 (#2087)
+The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
+page consumes nothing: its script strips the id from the address bar and consumes the staged batch
+with an explicit request, after which the batch waits in the member's server session and the
+browser names it only by its handoff id, so it cannot alter the batch or its client. The backend
+checks again what the gateway checked — the global switch, the client active with the write
+capability, the client not disconnected by the member within the staging lifetime (30 minutes),
+the installation not disconnected — then previews the batch as a dry run and, on „Bestätigen",
+applies it without asking the guard again, in one transaction recorded in the change log as the
+installation's own write and audited as `EXCHANGE_MASS_CHANGE_CONFIRMED`
+(`POST /api/v1/connected-apps/mass-changes/preview|confirm`, member session only). „Verwerfen"
+drops it; a batch confirmed or dropped once is gone.
+
+**Status:** built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086), WP 3.2 (#2082),
+WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 
@@ -835,7 +845,9 @@ change only, not audited.
 - [ ] The page highlights an unseen installation until it is seen.
 - [x] Undo a client's changes since a chosen span, with the skipped entries listed.
   *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
-- [ ] Recent activity and the staged mass-change confirmation (WP 3.3's journal and guard).
+- [x] Confirm or discard a staged mass change. *`ExchangeMassChangeControllerTest`,
+  `ConnectedAppsConfirmControllerMvcTest`.*
+- [ ] Recent activity (WP 3.3's journal).
 - [ ] The end-to-end run on the sandbox (WP 2.3, #2099).
 
 **Status:** list, disconnects, the admin page, the new-connection notification and the unseen state
