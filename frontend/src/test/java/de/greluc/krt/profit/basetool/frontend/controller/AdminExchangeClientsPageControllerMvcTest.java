@@ -41,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientCreateRequest;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientStatusRequest;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientUsageDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeSettingsDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeSettingsUpdateRequest;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
@@ -127,6 +128,41 @@ class AdminExchangeClientsPageControllerMvcTest {
         .andExpect(content().string(containsString("value=\"exchange.drafts.refinery\"")))
         .andExpect(content().string(not(containsString("??exchange.capability"))))
         .andExpect(content().string(not(containsString("??admin.exchangeClients"))));
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void eachClientShowsItsConnectedMembersLastActivityAndTheGrafanaLink() throws Exception {
+    stubRegistry();
+    when(backendApiClient.get(eq("/api/v1/admin/exchange-clients/usage"), anyTypeRef()))
+        .thenReturn(
+            List.of(new ExchangeClientUsageDto(ID, 7L, Instant.parse("2026-09-27T09:30:00Z"))));
+
+    mockMvc
+        .perform(get("/admin/exchange-clients"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("class=\"xc-members\">7<")))
+        .andExpect(content().string(containsString("27.09.2026 09:30 UTC")))
+        .andExpect(
+            content()
+                .string(
+                    containsString(
+                        "href=\"https://grafana.profit-base.online/d/basetool-operations\"")));
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMIN")
+  void anUnreadableUsageLeavesThePageStanding() throws Exception {
+    stubRegistry();
+    when(backendApiClient.get(eq("/api/v1/admin/exchange-clients/usage"), anyTypeRef()))
+        .thenThrow(new BackendServiceException("usage down", null, 503));
+
+    mockMvc
+        .perform(get("/admin/exchange-clients"))
+        .andExpect(status().isOk())
+        .andExpect(model().attributeDoesNotExist("error"))
+        .andExpect(content().string(containsString("class=\"xc-members\">0<")))
+        .andExpect(content().string(containsString(">VerseKit<")));
   }
 
   @Test

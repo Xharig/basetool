@@ -129,6 +129,11 @@ finds no document, refuses every exchange request.
   registers, edits, suspends and activates clients and flips the switch in place; suspending, either
   direction of the switch and granting a client more capabilities each ask for confirmation first.
   *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`.*
+- [x] Each client shows its connected members and last activity, counted over live installations
+  only (`GET /api/v1/admin/exchange-clients/usage`: not revoked, and not seen last before the
+  member disconnected the client); the error rate per client is linked in Grafana
+  (`APP_GRAFANA_OPERATIONS_DASHBOARD_URL`, owner decision 2026-09-27). *`AdminExchangeClientUsageTest`,
+  `AdminExchangeClientsPageControllerMvcTest`.*
 
 **Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
 `AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `RedisAclBackendIntegrationTest`,

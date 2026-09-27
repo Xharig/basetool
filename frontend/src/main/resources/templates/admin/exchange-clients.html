@@ -60,6 +60,8 @@
                             <th th:text="#{admin.exchangeClients.column.name}">Anwendung</th>
                             <th th:text="#{admin.exchangeClients.column.clientId}">Client-ID</th>
                             <th th:text="#{admin.exchangeClients.column.status}">Status</th>
+                            <th th:text="#{admin.exchangeClients.column.members}">Verbundene Mitglieder</th>
+                            <th th:text="#{admin.exchangeClients.column.lastActivity}">Zuletzt aktiv</th>
                             <th th:text="#{admin.exchangeClients.column.capabilities}">Berechtigungen</th>
                             <th th:text="#{admin.exchangeClients.column.minVersion}">Mindestversion</th>
                             <th th:text="#{admin.exchangeClients.column.limits}">Limits</th>
@@ -76,6 +78,9 @@
                                 <span th:if="${c.status == 'ACTIVE'}" class="chip chip--success" th:text="#{admin.exchangeClients.status.ACTIVE}">Freigegeben</span>
                                 <span th:unless="${c.status == 'ACTIVE'}" class="chip chip--danger" th:text="#{admin.exchangeClients.status.SUSPENDED}">Gesperrt</span>
                             </td>
+                            <td class="xc-members" th:with="u=${usage[c.id]}" th:text="${u != null} ? ${u.connectedMembers} : 0">3</td>
+                            <td th:with="u=${usage[c.id]}"
+                                th:text="${u != null and u.lastSeenAt != null} ? #{admin.exchangeClients.utc(${#temporals.format(u.lastSeenAt, 'dd.MM.yyyy HH:mm', 'UTC')})} : '–'">27.09.2026 09:30 UTC</td>
                             <td>
                                 <ul class="xc-capabilities">
                                     <li th:each="cap : ${c.capabilities}"
@@ -107,11 +112,16 @@
                             </td>
                         </tr>
                         <tr th:if="${error == null and #lists.isEmpty(clients)}">
-                            <td colspan="8" th:text="#{admin.exchangeClients.empty}">Noch keine Anwendung registriert.</td>
+                            <td colspan="10" th:text="#{admin.exchangeClients.empty}">Noch keine Anwendung registriert.</td>
                         </tr>
                         </tbody>
                     </table>
                 </div>
+                <p class="form-hint xc-grafana-hint">
+                    <span th:text="#{admin.exchangeClients.errorRate.hint}">Die Fehlerrate je Anwendung steht in Grafana.</span>
+                    <a th:if="${grafanaUrl != null and !#strings.isEmpty(grafanaUrl)}" th:href="${grafanaUrl}" target="_blank" rel="noopener noreferrer"
+                       th:text="#{admin.exchangeClients.errorRate.link}">Zum Dashboard</a>
+                </p>
             </div>
         </th:block>
     </div>
