@@ -544,7 +544,7 @@ The formats are JSON Schema 2020-12 files. Their source is
 permanent `$id`, `https://ingest.profit-base.online/exchange/v1/schemas/<name>.schema.json` (owner
 decision 2026-09-26), and a `$id` is never changed once published. The schemas are:
 `item-ref` (precedence `bt` › `scRecord` › `scGuid` › `uexId` › `locKey` › `name` + `nameLocale`),
-`quantity` (`{amount, unit: SCU|PIECE}`, SCU ≤ 3 decimals, PIECE whole), `quality` (integer
+`quantity` (`{amount, unit: SCU|PIECE}`, PIECE whole; an SCU amount is not limited in its decimals — the backend rounds it half-up to three, and so does every comparison with `expectedQuantity`), `quality` (integer
 0–1000; trade goods fixed 0), `location-ref`, `provenance` (`log|manual|import|default|other`,
 `observedAt`), `material-kind` (`RAW|REFINED|NO_REFINE` plus `commodity`), `blueprint`, `stock-lot`
 (material, location, quality, `stolen`, quantity — no org unit, no row id), `ship` (with required

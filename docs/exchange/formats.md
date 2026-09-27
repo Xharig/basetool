@@ -36,8 +36,9 @@ name and adds a `LOC_KEY_UNRESOLVED` warning at `/refs/<i>/locKey`.
 ## Quantity — `quantity`
 
 `{amount, unit}`. `unit` is `SCU` or `PIECE` and must match the material's own unit
-(`UNIT_MISMATCH` otherwise). The server rounds an SCU amount half-up to three decimals; a PIECE
-amount is whole.
+(`UNIT_MISMATCH` otherwise). A PIECE amount is whole. An SCU amount may carry any number of
+decimals: the server rounds it half-up to three before it stores or compares it, so `expectedQuantity`
+`12.3456` matches a stored `12.346`. Send three decimals at most to see in the feed what you sent.
 
 ## Quality — `quality`
 

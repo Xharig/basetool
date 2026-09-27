@@ -36,6 +36,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   `import`.
 - **Documented: offline files.** The web import takes a file of at most 8 MiB, checks only
   `format` and the items, and does not read `formatVersion` ([formats](formats.md#offline-file--envelope)).
+- **Clarified: SCU decimals.** `quantity.schema.json` read like a limit of three decimals, which
+  nothing checks. An SCU amount may carry any number; the server rounds it half-up to three before
+  storing or comparing it ([formats](formats.md#quantity--quantity)).
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and
