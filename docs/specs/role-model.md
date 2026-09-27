@@ -159,6 +159,25 @@ computed from the caller's own membership ranks only (never from the admin-pin h
 authorities, or `isAdmin()` inside the verdict); admin short-circuits only at the `@PreAuthorize`
 layer.
 
+**No write on one's own seat.** Every delegated rank write — assign / clear a squadron rank, add /
+remove a Bereich role, toggle an SK lead — additionally requires that the target is not the caller
+(`OrgRoleManagementSecurityService.targetsAnotherUser`, ANDed into each endpoint's delegated
+branch). Only an admin sets, changes or clears their own rank; a Bereichsleiter cannot make
+themselves Staffelleiter, a Staffelleiter cannot demote themselves to Kommandoleiter. (Since
+2026-09-27.)
+
+**What the view shows.** `GET /api/v1/leitung/view` lists the units the caller **leads and those
+below them**, independent of what they may change: a squadron rank or `SK_LEAD` shows its own unit,
+an area rank its Bereich with the Bereich's direct children (`OrgUnitCascadeService`), an
+`OL_MEMBER` seat every unit including the OL, an admin everything; a plain `MEMBER` seat shows
+nothing. The capability flags `canAppointLead` / `canManageRoster` alone decide what renders as
+editable; each roster row carries `self`, and the caller's own row is never editable for a
+non-admin. A row whose current rank the caller may not change renders as a read-only rank chip, so
+a Staffelleiter sees their own seat as „Staffelleiter" rather than an unselectable dropdown that fell
+back to „Mitglied". (Since 2026-09-27; before that a unit was listed only when a capability flag
+held, an OL member saw no Staffel or SK, and the rank dropdown showed „Mitglied" for any rank the
+caller could not assign.)
+
 The frontend Leitung page (`/organisation/leitung`) and its write proxies are role-gated to
 `ADMIN` / `OFFICER` only (`Roles.ADMIN_OR_OFFICER`). Every functional leader carries the operative
 `OFFICER` grant (see the "Operational OFFICER grant" section of
@@ -167,9 +186,9 @@ a delegated leader; `LOGISTICIAN` / `MISSION_MANAGER` are deliberately **not** a
 capability-only holder with no appointment reach (empty view) cannot open the surface. The per-unit
 appointment authority remains the delegated verdict above, re-checked on every backend write.
 
-The page's **Spezialkommandos** section lists every SK the caller may either appoint the lead of
-(`canAppointLead`, the Bereichsleiter rung above) **or** manage the members of (`canManageRoster` =
-`SpecialCommandSecurityService.canManageMembers` — admin, or the SK's own `SK_LEAD`, REQ-ORG-005).
+In the page's **Spezialkommandos** section the two flags mean different people: `canAppointLead`
+is the Bereichsleiter rung above, `canManageRoster` is
+`SpecialCommandSecurityService.canManageMembers` — admin, or the SK's own `SK_LEAD`, REQ-ORG-005.
 The lead toggle renders only with `canAppointLead`; `canManageRoster` renders a „Mitglieder verwalten"
 link to the SK member page `/organisation/special-commands/{id}`. So an SK lead sees their own SK
 here without being able to touch its lead seat. (Since 2026-09-22; before that an SK was listed only
@@ -179,8 +198,11 @@ for a caller who could appoint its lead, and an SK lead had no web path to their
 
 - [x] Each tier can appoint exactly the rung below it, within its own scope; a foreign-unit or
   same-tier appointment is denied; the verdict never satisfies `isAdmin()` (Phase 3).
+- [x] A delegated write targeting the caller's own seat is denied; an admin may write their own.
+- [x] The Leitung view shows a Staffelleiter only their Staffel, a Bereichsleiter their Bereich with
+  its Staffeln and SKs, an OL member every unit; the caller's own seat renders read-only.
 
-**Enforced by:** `OrgRoleManagementSecurityServiceTest`, `DelegatedAppointmentControllerSecurityTest`, `ArchitectureTest` (`delegatedRoleAuthoriserMustNotConsultOwnerScope`) · **Code:** `OrgRoleManagementSecurityService`, `SquadronRoleController`, `KommandoGroupController`, `OrgHierarchyController` (Bereich gates), `SpecialCommandMembershipController` (SK-lead gate) · **Decision:** ADR-0042 · **Issues:** #800
+**Enforced by:** `OrgRoleManagementSecurityServiceTest`, `DelegatedAppointmentControllerSecurityTest`, `LeitungViewServiceTest`, `LeitungPageControllerMvcTest`, `ArchitectureTest` (`delegatedRoleAuthoriserMustNotConsultOwnerScope`) · **Code:** `OrgRoleManagementSecurityService`, `LeitungViewService`, `SquadronRoleController`, `KommandoGroupController`, `OrgHierarchyController` (Bereich gates), `SpecialCommandMembershipController` (SK-lead gate) · **Decision:** ADR-0042 · **Issues:** #800
 
 ### REQ-ROLE-005 — Bereichsleiter auto-OL membership is organisational only
 

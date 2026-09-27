@@ -89,7 +89,7 @@
                 <div class="hud-box mt-2 leitung-unit" th:each="b : ${leitung.bereiche()}" th:data-unit-id="${b.id()}">
                     <div class="leitung-unit-head">
                         <h3 class="leitung-unit-title" th:text="${b.name()}">Bereich</h3>
-                        <button type="button" class="btn btn--cta"
+                        <button type="button" class="btn btn--cta" th:if="${b.canAppointLead() or b.canManageRoster()}"
                                 data-leitung-open="add-bereich" th:data-unit-id="${b.id()}" th:data-unit-name="${b.name()}"
                                 th:data-can-lead="${b.canAppointLead()}" th:data-can-roster="${b.canManageRoster()}"
                                 th:text="#{leitung.bereich.add}">Mitglied hinzufügen</button>
@@ -110,6 +110,7 @@
                                     <td><span class="chip chip--primary" th:text="#{'leitung.rank.' + ${m.role()}}">Bereichsleiter</span></td>
                                     <td class="leitung-col-action">
                                         <button type="button" class="btn btn-quiet-danger btn-icon"
+                                                th:if="${(leitung.admin() or !m.self()) and ((m.role() == 'BEREICHSLEITER' and b.canAppointLead()) or ((m.role() == 'BEREICHSKOORDINATOR' or m.role() == 'BEREICHSOPERATOR') and b.canManageRoster()))}"
                                                 data-leitung-action="remove-bereich-role" th:data-unit-id="${b.id()}" th:data-user-id="${m.userId()}"
                                                 th:title="#{leitung.action.remove}" th:aria-label="#{leitung.action.remove}">
                                             <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-trash"/></svg>
@@ -167,9 +168,19 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr th:each="m : ${s.members()}" class="leitung-rank-row" th:data-user-id="${m.userId()}" th:data-version="${m.version()}">
+                                <tr th:each="m : ${s.members()}"
+                                    th:with="lowerRank=${m.role() == 'KOMMANDOLEITER' or m.role() == 'STELLV_KOMMANDOLEITER' or m.role() == 'ENSIGN'},
+                                             editable=${(leitung.admin() or !m.self()) and ((m.role() == 'MEMBER' and (s.canAppointLead() or s.canManageRoster())) or (m.role() == 'STAFFELLEITER' and s.canAppointLead()) or (lowerRank and s.canManageRoster()))}"
+                                    th:class="${editable} ? 'leitung-rank-row' : null" th:data-user-id="${m.userId()}" th:data-version="${m.version()}">
                                     <td th:text="${m.userDisplayName()}">Name</td>
-                                    <td>
+                                    <td th:unless="${editable}">
+                                        <span class="chip" th:classappend="${m.role() == 'MEMBER'} ? 'chip--muted' : 'chip--primary'" th:text="#{'leitung.rank.' + ${m.role()}}">Staffelleiter</span>
+                                    </td>
+                                    <td th:unless="${editable}">
+                                        <th:block th:each="g : ${s.groups()}" th:if="${g.id().equals(m.kommandoGroupId())}" th:text="${g.name()}">Gruppe</th:block>
+                                    </td>
+                                    <td class="leitung-col-action" th:unless="${editable}"></td>
+                                    <td th:if="${editable}">
                                         <select class="leitung-rank-select" th:aria-label="#{leitung.column.rank}">
                                             <option value="MEMBER" th:selected="${m.role() == 'MEMBER'}" th:text="#{leitung.rank.MEMBER}">Mitglied</option>
                                             <option value="STAFFELLEITER" th:if="${s.canAppointLead()}" th:selected="${m.role() == 'STAFFELLEITER'}" th:text="#{leitung.rank.STAFFELLEITER}">Staffelleiter</option>
@@ -178,13 +189,13 @@
                                             <option value="ENSIGN" th:if="${s.canManageRoster()}" th:selected="${m.role() == 'ENSIGN'}" th:text="#{leitung.rank.ENSIGN}">Ensign</option>
                                         </select>
                                     </td>
-                                    <td>
+                                    <td th:if="${editable}">
                                         <select class="leitung-group-select" th:aria-label="#{leitung.column.group}">
                                             <option value="" th:text="#{leitung.group.none}">— allgemein —</option>
                                             <option th:each="g : ${s.groups()}" th:value="${g.id()}" th:selected="${g.id().toString() == (m.kommandoGroupId() != null ? m.kommandoGroupId().toString() : '')}" th:text="${g.name()}">Gruppe</option>
                                         </select>
                                     </td>
-                                    <td class="leitung-col-action">
+                                    <td class="leitung-col-action" th:if="${editable}">
                                         <button type="button" class="btn btn-ghost btn-icon" data-leitung-action="save-rank" th:data-unit-id="${s.id()}"
                                                 th:title="#{leitung.action.save}" th:aria-label="#{leitung.action.save}">
                                             <svg class="krt-icon" aria-hidden="true"><use href="#krt-icon-save"/></svg>
@@ -225,6 +236,7 @@
                                     </td>
                                     <td class="leitung-col-action" th:if="${sk.canAppointLead()}">
                                         <button type="button" class="btn btn-ghost" data-leitung-action="toggle-sk-lead" th:data-unit-id="${sk.id()}"
+                                                th:if="${leitung.admin() or !m.self()}"
                                                 th:data-lead="${m.role() == 'SK_LEAD'}"
                                                 th:text="${m.role() == 'SK_LEAD'} ? #{leitung.sk.demote} : #{leitung.sk.promote}">Leiter umschalten</button>
                                     </td>
