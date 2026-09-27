@@ -36,7 +36,10 @@ Request, space-separated:
   [capabilities](README.md#capabilities). A capability the member turns on later needs a new device
   login with the larger set.
 - **`offline_access`** — always. A device login joins the member's browser session; without an
-  offline session, signing out of the Basetool in the browser would end the connection too.
+  offline session, signing out of the Basetool in the browser would end the connection too. And
+  after the member disconnected the client, a token without `offline_access` counts from the
+  browser session's sign-in, which a device login that joins it does not renew: it stays
+  `CLIENT_REVOKED` until the member signs in again.
 
 Do not request `openid`, `profile` or `email`: the client receives no personal data. The token
 response's `scope` lists what was granted. A route passes only when its scope is in the token
@@ -268,7 +271,7 @@ a `code` from the [error registry](errors.md).
 | `DPOP_INVALID` with `use_dpop_nonce` | 401 | The proof lacks the current server nonce | Retry once with a new proof carrying the `DPoP-Nonce` of the answer. |
 | `DPOP_INVALID` with `invalid_dpop_proof` | 401 | The proof is malformed, signed by another key than `cnf.jkt`, replayed, outside the `iat` window, for another method or URL, or has the wrong `ath` | Fix the proof; correct the clock once; do not loop. |
 | `SCOPE_MISSING` | 403 | The route's capability is not in the token, or not granted to the client | Start a device login with the scope, if the member wants the feature. |
-| `CLIENT_REVOKED` | 401 | The member disconnected the client after the token was issued | Discard the tokens; start a device login only when the member asks. |
+| `CLIENT_REVOKED` | 401 | The member disconnected the client after this connection was made | Discard the tokens; start a device login only when the member asks. |
 | `INSTALLATION_REVOKED` | 401 | The member disconnected this installation | Discard the tokens **and** the key; reconnecting needs a new key. |
 | `CLIENT_NOT_ALLOWED` | 403 | The client is not in the registry | Stop; the client is not approved. |
 | `CLIENT_SUSPENDED` | 403 | The client is suspended | Stop and tell the member. |

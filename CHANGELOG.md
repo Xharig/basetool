@@ -257,16 +257,24 @@
 
 ### Fixed
 
+- **Datenaustausch: Trennen einer Anwendung wirkt auch ohne Einwilligung.** Das Trennen beendet
+  jetzt die Keycloak-Sitzungen, die nur dieser Anwendung gehören, und stempelt die Trennung erst
+  danach; der Gateway verweigert Tokens ohne `offline_access` nach ihrer Anmeldezeit (`auth_time`).
+  Ein nach der Trennung erneuerter Token kommt so nicht mehr durch (REQ-XCH-008).
+  
 - **Leitung: eigener Rang korrekt angezeigt, Sichtbarkeit nach Leitung.** Ein Staffelleiter sah sich
   in seiner Staffel als „Mitglied“; Ränge, die man nicht vergeben darf, erscheinen jetzt als
   Markierung statt als Auswahl. Die Seite zeigt die geleiteten Einheiten und alles darunter (OL:
   alles), und den eigenen Rang setzt, ändert oder entfernt nur noch ein Admin (REQ-ROLE-004).
+  
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.
+  
 - **Datenaustausch: Schiffe von Mitgliedern mehrerer Einheiten.** Legt eine verbundene Anwendung
   für ein Mitglied mehrerer Einheiten ein Schiff an, entsteht es ohne Einheit, statt dass der ganze
   Abgleich abbricht; bei genau einer Einheit bekommt es diese.
+  
 - **Benachrichtigungen kommen nach einer Pause wieder sofort an.** Der Live-Stream der
   Benachrichtigungen (`/notifications/stream`) holt sein Zugriffstoken jetzt über den
   Single-Flight-Manager und erneuert es beim Öffnen, statt nach fünf Minuten Leerlauf ein abgelaufenes
