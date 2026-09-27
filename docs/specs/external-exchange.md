@@ -762,7 +762,8 @@ name sent — or its first key when it has none — so it lands among the unmatc
 pick; repeats collapse to the earliest `acquiredAt`. For refinery orders it is the refinery import's
 draft. A draft the backend refuses as malformed is `400 SCHEMA_INVALID`. The gateway stages the
 answer in the member's extractor draft slots (`HandoffKind.BLUEPRINT` / `REFINERY`, at most
-`app.ingest.max-handoff-bytes`, a larger one `413 PAYLOAD_TOO_LARGE`), counts it against the
+`app.ingest.max-handoff-bytes`, measured as the staged value with its handoff wrapper; a larger one
+is `413 PAYLOAD_TOO_LARGE`, checked before staging and never cached), counts it against the
 exchange's byte budget and answers `draft-result` with the `frontendUrl` of the blueprint import
 review or the refinery create form. As write routes they take an `Idempotency-Key` and count
 against the daily quota.
@@ -846,7 +847,9 @@ its client, installation, resource and `stagedAt` (the gateway's clock) in the h
 (`HandoffKind.MASS_CHANGE`, one slot
 per member apart from the extractor drafts, at most `app.exchange.store.max-mass-change-bytes`,
 512 KiB, counted against the exchange's Redis budget) and answers `409` with a `confirmationUrl` to
-`/connected-apps/confirm?handoff=<id>`. A change set too large to hold is `413 BATCH_TOO_LARGE`.
+`/connected-apps/confirm?handoff=<id>`. A change set too large to hold — measured, like a draft, as
+the staged value with its wrapper — is `413 BATCH_TOO_LARGE`, checked before staging and never
+cached.
 
 The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
 page consumes nothing: its script strips the id from the address bar and consumes the staged batch

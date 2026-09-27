@@ -293,6 +293,9 @@
 - **Datenaustausch: überlange unbekannte Feldnamen.** Ein Schreibvorgang mit einem unbekannten Feld,
   dessen Pfad länger als 200 Zeichen wäre, wird vorab mit `400 SCHEMA_INVALID` abgelehnt, statt
   geschrieben und mit `502` beantwortet zu werden.
+- **Datenaustausch: zu große Entwürfe.** Ein Entwurf oder zurückgehaltener Änderungssatz, der
+  verpackt über der Grenze liegt, wird mit `413` und dem Registry-Code abgelehnt statt mit
+  `400 BAD_REQUEST`, und diese Antwort wird nicht mehr zwischengespeichert.
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.

@@ -8,6 +8,10 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **`CLIENT_REVOKED` counts from the sign-in.** After the member disconnects a client, a token
   without `offline_access` is refused while its `auth_time` lies before the disconnect, also when it
   was refreshed afterwards; a client that requests `offline_access`, as it must, is unaffected.
+- **Oversize drafts.** A draft or a held-back change set whose staged form exceeds the cap answered
+  `400 BAD_REQUEST`, a code outside the registry, and the answer was replayed for its key. It now
+  answers `413 PAYLOAD_TOO_LARGE` (draft) or `413 BATCH_TOO_LARGE` (change set), which is not
+  cached.
 - **Overlong unknown field names.** A request whose undeclared field has a JSON Pointer longer than
   200 characters is refused with `400 SCHEMA_INVALID` (`errors[]` names its parent) instead of being
   written and answered `502 BACKEND_RELAY_FAILED`.

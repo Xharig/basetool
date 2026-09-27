@@ -510,8 +510,9 @@ public class ExchangeController {
       return problem(result.status(), result.code(), result.detail());
     }
     String json = objectMapper.writeValueAsString(result.body());
-    long bytes = json.getBytes(StandardCharsets.UTF_8).length;
-    if (bytes > ingestProperties.maxHandoffBytes()) {
+    long bytes = stagingService.stagedBytes(kind, json);
+    if (json.getBytes(StandardCharsets.UTF_8).length > ingestProperties.maxHandoffBytes()
+        || bytes > ingestProperties.maxHandoffBytes()) {
       return problem(
           HttpStatus.CONTENT_TOO_LARGE.value(),
           PAYLOAD_TOO_LARGE,
@@ -521,9 +522,7 @@ public class ExchangeController {
     try {
       staged =
           stageWithinBudget(
-              context,
-              stagingService.stagedBytes(kind, json),
-              () -> stagingService.stageDraft(context.member(), kind, json));
+              context, bytes, () -> stagingService.stageDraft(context.member(), kind, json));
       if (staged == null) {
         return unavailable(
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
@@ -619,8 +618,9 @@ public class ExchangeController {
     document.put("stagedAt", Instant.now().toString());
     document.set("changeSet", body);
     String json = objectMapper.writeValueAsString(document);
-    long bytes = json.getBytes(StandardCharsets.UTF_8).length;
-    if (bytes > storeProperties.maxMassChangeBytes()) {
+    long bytes = stagingService.stagedBytes(HandoffKind.MASS_CHANGE, json);
+    if (json.getBytes(StandardCharsets.UTF_8).length > storeProperties.maxMassChangeBytes()
+        || bytes > storeProperties.maxMassChangeBytes()) {
       return problem(
           HttpStatus.CONTENT_TOO_LARGE.value(),
           BATCH_TOO_LARGE,
@@ -631,7 +631,7 @@ public class ExchangeController {
       staged =
           stageWithinBudget(
               context,
-              stagingService.stagedBytes(HandoffKind.MASS_CHANGE, json),
+              bytes,
               () ->
                   stagingService.stageMassChange(
                       context.member(), json, storeProperties.maxMassChangeBytes()));

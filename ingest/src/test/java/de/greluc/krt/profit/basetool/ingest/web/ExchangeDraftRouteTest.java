@@ -227,6 +227,20 @@ class ExchangeDraftRouteTest {
   }
 
   @Test
+  void aDraftWhoseStagedFormIsTooLargeIsRefusedWith413AndNotCached() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
+    when(stagingService.stagedBytes(eq(HandoffKind.BLUEPRINT), anyString()))
+        .thenReturn(100_000_000L);
+
+    post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
+        .andExpect(status().isContentTooLarge())
+        .andExpect(jsonPath("$.code").value("PAYLOAD_TOO_LARGE"));
+
+    verify(stagingService, never()).stageDraft(anyString(), any(), anyString());
+    verify(idempotency, never()).store(anyString(), any());
+  }
+
+  @Test
   void aFullBudgetRefusesTheDraftWithRetryAfter() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
     when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any()))

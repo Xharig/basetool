@@ -247,6 +247,21 @@ class ExchangeChangeRouteTest {
   }
 
   @Test
+  void aMassChangeWhoseStagedFormIsTooLargeIsRefusedWith413AndNotCached() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any()))
+        .thenReturn(new ExchangeRelay.Result(409, null, "MASS_CHANGE_CONFIRMATION_REQUIRED", ""));
+    when(stagingService.stagedBytes(eq(HandoffKind.MASS_CHANGE), anyString()))
+        .thenReturn(100_000_000L);
+
+    post("/exchange/v1/me/blueprints/changes", ADD)
+        .andExpect(status().isContentTooLarge())
+        .andExpect(jsonPath("$.code").value("BATCH_TOO_LARGE"));
+
+    verify(stagingService, never()).stageMassChange(anyString(), anyString(), anyLong());
+    verify(idempotency, never()).store(anyString(), any());
+  }
+
+  @Test
   void aFullBudgetRefusesTheStagingWithRetryAfter() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any()))
         .thenReturn(new ExchangeRelay.Result(409, null, "MASS_CHANGE_CONFIRMATION_REQUIRED", ""));
