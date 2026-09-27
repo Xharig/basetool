@@ -102,6 +102,8 @@ login / entry surfaces. `color-scheme: dark`; there is **no light theme**.
   rules and font files were removed. `--font-headline` is kept as a Lato alias so existing
   `var(--font-headline)` references keep resolving.)
 - The brand ships no monospace face; "mono" contexts use Lato with tabular figures.
+  **Exception, owner decision 2026-09-27:** the Exchange API docs site's code blocks and Redoc
+  code samples use the generic system `monospace`; its inline code stays Lato (REQ-XCH-002).
 
 ### REQ-UI-005 — Department colours (Bereichsfarben) — values are frozen
 

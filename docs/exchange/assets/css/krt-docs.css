@@ -47,6 +47,7 @@
   --font-headline: "Lato", sans-serif;
   --font-body: "Lato", sans-serif;
   --font-mono: "Lato", sans-serif;
+  --font-code: monospace;
   --fs-h1: 2rem;
   --fs-h2: 1.5rem;
   --fs-h3: 1.17rem;
@@ -576,7 +577,7 @@ b {
   border: var(--border-hairline);
   background-color: var(--color-bg-dark-gray);
   color: var(--color-gray-1);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: 0.9rem;
   font-weight: var(--fw-regular);
   line-height: 1.55;
@@ -590,7 +591,10 @@ b {
   border: none;
   background: none;
   color: inherit;
+  font-family: inherit;
   font-size: inherit;
+  font-variant-numeric: normal;
+  letter-spacing: normal;
   overflow-wrap: normal;
 }
 
@@ -844,9 +848,14 @@ b {
   color: var(--data-fg);
 }
 
-.reference-page :is(code, pre, kbd, samp) {
+.reference-page .redoc-wrap :is(code, kbd, samp) {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.reference-page .redoc-wrap :is(pre, pre *, .redoc-json, .redoc-json *) {
+  font-family: var(--font-code);
+  font-variant-numeric: normal;
 }
 
 .reference-page [role="search"] input {

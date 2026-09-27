@@ -110,7 +110,10 @@ policy and the issue tracker. It is dark-only and loads nothing from another ori
 files and the `basetool-*` marks are copied from the frontend at build time, so the repository holds
 one copy of each. The reference is a Jekyll page (`layout: reference`) whose Redoc theme is built at
 runtime from the stylesheet's design tokens (`docs/exchange/assets/js/reference.js`).
-`check_exchange_docs_links.py` also fails a navigation entry whose page does not exist, and the
+**One owner-approved deviation from REQ-UI-004** (@greluc, 2026-09-27): code blocks (`pre`) and
+Redoc's JSON and code samples use the generic system `monospace` (the `--font-code` token), because
+column-aligned code does not read in a proportional face; inline code and everything else stay
+Lato. `check_exchange_docs_links.py` also fails a navigation entry whose page does not exist, and the
 preparation script's self-test fails when the reference layout stops loading the bundle or the theme
 reads a token the stylesheet does not define.
 

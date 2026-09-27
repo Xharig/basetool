@@ -73,7 +73,7 @@
         fontFamily: font,
         smoothing: "antialiased",
         headings: { fontFamily: font, fontWeight: "700", lineHeight: "1.3" },
-        code: { fontSize: "14px", fontFamily: token("--font-mono"), fontWeight: "400", color: token("--color-white"), backgroundColor: input, wrap: true },
+        code: { fontSize: "14px", fontFamily: token("--font-code"), fontWeight: "400", color: token("--color-white"), backgroundColor: input, wrap: true },
         links: { color: primary, visited: primary, hover: token("--color-accent-light") }
       },
       sidebar: {
