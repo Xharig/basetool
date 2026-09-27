@@ -1,0 +1,406 @@
+{
+  "realm": "iri",
+  "displayName": "IRI (E2E TEST REALM - throwaway, do not use in prod)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 3600,
+  "ssoSessionIdleTimeout": 36000,
+  "ssoSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 5,
+  "requiredActions": [
+    {
+      "alias": "VERIFY_PROFILE",
+      "name": "Verify Profile",
+      "providerId": "VERIFY_PROFILE",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 90,
+      "config": {}
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "Admin",
+        "description": "E2E test role"
+      },
+      {
+        "name": "Officer",
+        "description": "E2E test role"
+      },
+      {
+        "name": "Logistician",
+        "description": "E2E test role"
+      },
+      {
+        "name": "Mission Manager",
+        "description": "E2E test role"
+      },
+      {
+        "name": "KRT Member",
+        "description": "E2E test role"
+      },
+      {
+        "name": "Bank Employee",
+        "description": "E2E test role"
+      },
+      {
+        "name": "Bank Management",
+        "description": "E2E test role"
+      },
+      {
+        "name": "offline_access",
+        "description": "${role_offline-access}",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "iri"
+      },
+      {
+        "name": "uma_authorization",
+        "description": "${role_uma_authorization}",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "iri"
+      },
+      {
+        "name": "default-roles-iri",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "KRT Member",
+            "offline_access",
+            "uma_authorization"
+          ]
+        }
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "basetool-frontend",
+      "name": "Basetool Frontend (E2E)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "e2e-frontend-client-secret-do-not-use-in-prod",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "https://localhost:18081/*",
+        "https://frontend:18081/*",
+        "https://host.docker.internal:18081/*",
+        "http://localhost:18081/*",
+        "http://frontend:18081/*",
+        "http://host.docker.internal:18081/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "protocolMappers": [
+        {
+          "name": "rank",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "rank",
+            "claim.name": "rank",
+            "jsonType.label": "int",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "description",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "description",
+            "claim.name": "description",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "aud-basetool-backend",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "basetool-backend",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true",
+            "lightweight.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "backend-service",
+      "name": "Backend Service Account (E2E)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "e2e-client-secret-do-not-use-in-prod",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true
+    }
+  ],
+  "users": [
+    {
+      "username": "test-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-admin@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-admin-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Admin",
+        "Officer",
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-officer",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-officer@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-officer-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Officer",
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-member",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-member@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-member-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-sk",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-sk@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-sk-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-none",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-none@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-none-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-both",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-both@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-both-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-bereich",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-bereich@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-bereich-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-bank-employee",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-bank-employee@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-bank-employee-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Bank Employee",
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-bank-management",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-bank-management@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-bank-management-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Bank Management",
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-bank-member",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-bank-member@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-bank-member-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Bank Employee",
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-appoint-bl",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-appoint-bl@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-appoint-bl-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-appoint-tgt",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-appoint-tgt@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-appoint-tgt-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-norole",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-norole@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-norole-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [],
+      "clientRoles": {}
+    },
+    {
+      "username": "test-exchange",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-exchange@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-exchange-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ]
+    }
+  ],
+  "defaultRole": {
+    "name": "default-roles-iri",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false,
+    "containerId": "iri"
+  }
+}

@@ -60,13 +60,17 @@ public final class E2eStackExtension implements BeforeAllCallback {
   private static final String IMAGE_TAG = "e2e-local";
 
   /**
-   * The two images {@code docker-compose.build.yml} builds, named as compose names them under
-   * {@link #IMAGE_TAG}; in prebuilt mode they must already be in the local Docker store.
+   * The four images the stack builds, named as compose names them under {@link #IMAGE_TAG}: the
+   * three applications from {@code docker-compose.build.yml} and the sandbox Keycloak (SPI, theme)
+   * from {@code docker-compose.e2e.yml}; in prebuilt mode they must already be in the local Docker
+   * store.
    */
   static final List<String> BUILT_IMAGES =
       List.of(
           "ghcr.io/krt-profit/basetool-backend:" + IMAGE_TAG,
-          "ghcr.io/krt-profit/basetool-frontend:" + IMAGE_TAG);
+          "ghcr.io/krt-profit/basetool-frontend:" + IMAGE_TAG,
+          "ghcr.io/krt-profit/basetool-ingest:" + IMAGE_TAG,
+          "ghcr.io/krt-profit/basetool-sandbox-keycloak:" + IMAGE_TAG);
 
   /**
    * The JWT {@code aud} value the stack's backend enforces (REQ-SEC-024), passed as {@code
@@ -144,8 +148,8 @@ public final class E2eStackExtension implements BeforeAllCallback {
           "docker-compose.e2e.yml");
 
   /**
-   * The dev-profile services the E2E stack needs. {@code ingest-dev}, the one other dev-profile
-   * service, is not started; the edge and its ACME client are prod-profile only.
+   * Every dev-profile service: the two databases, the sandbox Keycloak, Redis, the backend, the
+   * frontend and the ingest gateway (ADR-0225); the edge and its ACME client are prod-profile only.
    */
   private static final List<String> SERVICES =
       List.of(
@@ -154,16 +158,30 @@ public final class E2eStackExtension implements BeforeAllCallback {
           "keycloak-dev",
           "redis-dev",
           "backend-dev",
-          "frontend-dev");
+          "frontend-dev",
+          "ingest-dev");
 
   /**
-   * The external services whose images are pulled from a registry ({@code db-backend-dev}, {@code
-   * db-keycloak-dev}, {@code keycloak-dev}, {@code redis-dev}). {@code backend-dev} / {@code
-   * frontend-dev} are deliberately excluded: they are built from local Dockerfiles and tagged with
-   * {@link #imageTag()}, so {@code docker compose pull} of them would fail against the registry.
+   * The services whose images are pulled from a registry: the two databases and Redis. The
+   * applications and the sandbox Keycloak are built from this checkout and tagged with {@link
+   * #imageTag()}, so {@code docker compose pull} of them would fail against the registry.
    */
   private static final List<String> PULLED_SERVICES =
-      List.of("db-backend-dev", "db-keycloak-dev", "keycloak-dev", "redis-dev");
+      List.of("db-backend-dev", "db-keycloak-dev", "redis-dev");
+
+  /**
+   * The throwaway client secret of {@code basetool-ingest-gateway} in {@code
+   * realm-export.e2e.json}, handed to the ingest gateway for its service-account token. Obviously
+   * synthetic and published on purpose; never a production value.
+   */
+  static final String GATEWAY_CLIENT_SECRET = "e2e-ingest-gateway-secret-do-not-use-in-prod";
+
+  /** The token endpoint the ingest gateway's service account uses, inside the compose network. */
+  private static final String GATEWAY_TOKEN_URI =
+      "http://host.docker.internal:18080/auth/realms/iri/protocol/openid-connect/token";
+
+  /** The JWT {@code aud} value the stack's ingest gateway enforces on exchange tokens. */
+  static final String INGEST_AUDIENCE = "basetool-ingest";
 
   /**
    * The throwaway client secret of {@code basetool-frontend} in {@code realm-export.e2e.json},
@@ -480,6 +498,8 @@ public final class E2eStackExtension implements BeforeAllCallback {
   private void composeDown(Path root) {
     captureServiceLog(root, "backend-dev", "backend");
     captureServiceLog(root, "frontend-dev", "frontend");
+    captureServiceLog(root, "ingest-dev", "ingest");
+    captureServiceLog(root, "keycloak-dev", "keycloak");
     try {
       runProcess(
           root,
@@ -570,6 +590,10 @@ public final class E2eStackExtension implements BeforeAllCallback {
     env.put("IRI_BASETOOL_VERSION", imageTag());
     env.put("COMPOSE_PROJECT_NAME", ServedBuildCheck.composeProjectName(repoRoot()));
     env.put("IRI_BACKEND_EXPECTED_AUDIENCES", EXPECTED_AUDIENCE);
+    env.put("IRI_INGEST_EXPECTED_AUDIENCES", INGEST_AUDIENCE);
+    env.put("IRI_INGEST_SERVICE_ACCOUNT_TOKEN_URI", GATEWAY_TOKEN_URI);
+    env.put("IRI_INGEST_SERVICE_ACCOUNT_CLIENT_ID", "basetool-ingest-gateway");
+    env.put("IRI_INGEST_SERVICE_ACCOUNT_CLIENT_SECRET", GATEWAY_CLIENT_SECRET);
     return env;
   }
 

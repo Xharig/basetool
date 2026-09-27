@@ -7,6 +7,7 @@ on:
     paths:
       - docker/sandbox/**
       - scripts/build-sandbox-realm.py
+      - scripts/keycloak/**
       - .github/workflows/sandbox-images.yml
   workflow_dispatch:
 

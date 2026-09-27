@@ -399,8 +399,11 @@ does.
 Locally, `./gradlew :frontend:e2eTest` builds and boots its own stack under an image tag and a
 compose project name derived from your checkout's path, so parallel checkouts never test each
 other's code, and it refuses to start if the page the stack serves is not your checkout's build
-(`ServedBuildCheck`). Ports are fixed, so only one E2E stack runs on a machine at a time; a second
-one fails at start-up and names the stack holding port 18081.
+(`ServedBuildCheck`). The stack is the dev profile's seven services — both databases, Redis, the
+backend, the frontend, the ingest gateway and the sandbox Keycloak with the SPI and the login theme —
+with the realm `scripts/build-sandbox-realm.py` generates (ADR-0225). Ports are fixed, so only one
+E2E stack (or the exchange sandbox) runs on a machine at a time; a second one fails at start-up and
+names the stack holding port 18081.
 
 The CycloneDX SBOMs are a release artefact, not a build output: they are
 regenerated and committed only by the
