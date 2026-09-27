@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.ingest.filter;
 
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeLogContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,7 +39,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Owns the per-request MDC of the gateway (REQ-OBS-001/-002): reads or mints a sanitized
  * correlation id, seeds {@code userId} with {@value #ANONYMOUS}, echoes the id on the response and
- * removes both keys when the request ends. Runs first so every later filter logs with the id.
+ * removes both keys, and the exchange gate's {@link ExchangeLogContext} fields, when the request
+ * ends. Runs first so every later filter logs with the id.
  */
 @Component
 @Order(CorrelationIdFilter.ORDER)
@@ -74,6 +76,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     } finally {
       MDC.remove(loggingProperties.correlationIdMdcKey());
       MDC.remove(loggingProperties.userIdMdcKey());
+      ExchangeLogContext.clear();
     }
   }
 }

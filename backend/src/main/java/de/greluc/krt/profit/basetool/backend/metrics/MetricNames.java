@@ -982,6 +982,12 @@ public final class MetricNames {
   public static final String EXCHANGE_MIRROR_WRITES = "basetool.exchange.mirror.writes";
 
   /**
+   * Gauge {@code basetool_exchange_clients{status}} — the registry clients per {@code
+   * ExchangeClientStatus}, refreshed from the registry the mirror sync reads (REQ-XCH-028).
+   */
+  public static final String EXCHANGE_CLIENTS = "basetool.exchange.clients";
+
+  /**
    * Counter {@code basetool_exchange_resolve_refs_total{kind,status}} — one per reference {@code
    * catalog/resolve} answered, by catalogue and outcome (REQ-XCH-012).
    */

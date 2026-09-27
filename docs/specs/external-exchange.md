@@ -980,8 +980,24 @@ tombstones and journal reports task metrics.
   `ExchangeRemoveSpike`, `ExchangeGuardStorm`, `ExchangeInstallationSurge` and `ExchangeUnknownClient`
   alert on them (`exchange_write_alerts_test.yml`); `exchange_change_retention` purges feed and
   journal under `ScheduledJobStale`.*
+- [x] Every gateway log line of an exchange request carries the registry-bounded client label and
+  the route template (`exchangeClientId`, `exchangeRoute`; Loki structured metadata `client_id`,
+  `route`). *`ExchangeGateTest`, `CorrelationIdFilterTest`.*
+- [x] `basetool_exchange_clients{status}` counts the registry clients per status from the snapshot
+  the mirror sync reads, without a query per scrape. *`ExchangeClientGaugesTest`,
+  `ExchangeRegistryMirrorIntegrationTest`.*
+- [x] `basetool_exchange_registry_mirror_age_seconds` is the time since the gateway's last good read
+  of the mirror, which it reads every 30 s; `ExchangeRegistryMirrorStaleAtGateway` alerts above
+  5 minutes while the mirror is enabled. The document's `writtenAt` is not used, because the backend
+  rewrites the mirror only on a change. *`ExchangeRegistryReaderTest`,
+  `exchange_mirror_age_alerts_test.yml`.*
+- [x] A dedicated Grafana dashboard „Exchange" (`15-exchange.json`) shows all of the above per
+  client, with the gateway's log lines filtered by client.
+- `basetool_ingest_gate_enforcing` is not extended to the exchange gates, since they cannot be
+  switched off (owner decision 2026-09-27).
 
-**Status:** built — WP 3.3 (#2083), #2091; the runbooks live in the knowledge base
+**Status:** built — WP 3.3 (#2083), #2091 (the monitoring extras of 2026-09-27 included); the
+runbooks live in the knowledge base
 
 ### REQ-XCH-029 — Third parties get a local sandbox
 

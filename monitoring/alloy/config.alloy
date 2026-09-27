@@ -64,11 +64,22 @@ loki.process "app_json" {
 	forward_to = [loki.write.default.receiver]
 
 	stage.json {
-		expressions = {level = "level"}
+		expressions = {
+			level     = "level",
+			client_id = "exchangeClientId",
+			route     = "exchangeRoute",
+		}
 	}
 
 	stage.labels {
 		values = {level = ""}
+	}
+
+	stage.structured_metadata {
+		values = {
+			client_id = "",
+			route     = "",
+		}
 	}
 }
 
