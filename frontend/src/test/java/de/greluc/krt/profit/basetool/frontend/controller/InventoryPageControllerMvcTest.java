@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -65,6 +66,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -113,6 +115,24 @@ class InventoryPageControllerMvcTest {
         .andExpect(view().name("inventory-index"))
         .andExpect(model().attributeExists("aggregated"))
         .andExpect(content().string(containsString("colspan=\"4\"")));
+  }
+
+  @Test
+  void myInventoryCarriesTheCallersUserIdForTheMembershipLookups() throws Exception {
+    UUID me = UUID.fromString("5f1d2c3b-0000-0000-0000-00000000c0de");
+    when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(Collections.emptyList());
+    when(backendApiClient.getCached(any(CachedCatalog.class), anyTypeRef()))
+        .thenReturn(Collections.emptyList());
+
+    mockMvc
+        .perform(
+            get("/inventory/my")
+                .with(
+                    oidcLogin()
+                        .idToken(token -> token.subject(me.toString()))
+                        .authorities(new SimpleGrantedAuthority("ROLE_KRT_MEMBER"))))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("data-member-id=\"" + me + "\"")));
   }
 
   @Test
@@ -332,6 +352,29 @@ class InventoryPageControllerMvcTest {
                 .string(
                     stringContainsInOrder(
                         List.of("id=\"bulkCheckoutBtn\"", "id=\"bulkRebookBtn\""))));
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void viewMyInventory_rendersTheOrgUnitChangeButtonAndDialog() throws Exception {
+    when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(Collections.emptyList());
+    when(backendApiClient.getCached(any(CachedCatalog.class), anyTypeRef()))
+        .thenReturn(Collections.emptyList());
+
+    mockMvc
+        .perform(get("/inventory/my"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("id=\"bulkOrgUnitBtn\"")))
+        .andExpect(content().string(containsString("data-trigger=\"inv-my-open-bulk-org-unit\"")))
+        .andExpect(content().string(containsString("id=\"orgUnitChangeModal\"")))
+        .andExpect(content().string(containsString("id=\"orgUnitChangeForm\"")))
+        .andExpect(content().string(containsString("id=\"orgUnitChangeTarget\"")))
+        .andExpect(content().string(containsString("var orgUnitChangeI18n")))
+        .andExpect(
+            content()
+                .string(
+                    stringContainsInOrder(
+                        List.of("id=\"bulkRebookBtn\"", "id=\"bulkOrgUnitBtn\""))));
   }
 
   @Test
