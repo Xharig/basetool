@@ -925,6 +925,64 @@ class ExternalContractTest {
                       "page:integer",
                       "size:integer")),
           new ContractOperation(
+                  "/api/v1/inventory/my-inventory/grouped",
+                  "get",
+                  Set.of(
+                      "material",
+                      "totalAmount",
+                      "averageQuality",
+                      "maxQuality",
+                      "stacks",
+                      "user",
+                      "location",
+                      "quality",
+                      "personal",
+                      "stolen",
+                      "owningSquadron",
+                      "entryCount"))
+              .addressedBy(
+                  Set.of(
+                      "materialIds:array",
+                      "locationIds:array",
+                      "personalOnly:boolean",
+                      "nonPersonalOnly:boolean")),
+          new ContractOperation(
+                  "/api/v1/inventory/my-inventory/stack/entries",
+                  "get",
+                  Set.of(
+                      "content",
+                      "page",
+                      "totalElements",
+                      "totalPages",
+                      "id",
+                      "material",
+                      "location",
+                      "amount",
+                      "quality",
+                      "personal",
+                      "stolen",
+                      "owningSquadron",
+                      "canEdit",
+                      "note",
+                      "version"))
+              .addressedBy(
+                  Set.of(
+                      "materialId:string",
+                      "locationId:string",
+                      "quality:integer",
+                      "personal:boolean",
+                      "stolen:boolean",
+                      "owningOrgUnitId:string",
+                      "page:integer",
+                      "size:integer")),
+          new ContractOperation("/api/v1/inventory/my-inventory/entry-ids", "get", Set.of())
+              .addressedBy(
+                  Set.of(
+                      "materialIds:array",
+                      "locationIds:array",
+                      "personalOnly:boolean",
+                      "nonPersonalOnly:boolean")),
+          new ContractOperation(
               "/api/v1/inventory",
               "post",
               Set.of("id", "material", "location", "amount", "quality", "personal"),
