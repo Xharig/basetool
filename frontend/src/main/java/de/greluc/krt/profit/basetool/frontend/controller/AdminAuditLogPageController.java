@@ -347,7 +347,17 @@ public class AdminAuditLogPageController {
                   "BLUEPRINT_DEFAULT_REMOVED",
                   "BLUEPRINT_DEFAULTS_GRANTED",
                   "BLUEPRINT_AUDIT_EXPORTED",
-                  "BLUEPRINT_AUDIT_PURGED")));
+                  "BLUEPRINT_AUDIT_PURGED")),
+          Map.entry(
+              "CONNECTED_APPS",
+              List.of(
+                  "EXCHANGE_CLIENT_CREATED",
+                  "EXCHANGE_CLIENT_UPDATED",
+                  "EXCHANGE_CLIENT_SUSPENDED",
+                  "EXCHANGE_CLIENT_ACTIVATED",
+                  "EXCHANGE_SWITCH_CHANGED",
+                  "CONNECTED_APPS_AUDIT_EXPORTED",
+                  "CONNECTED_APPS_AUDIT_PURGED")));
 
   /**
    * Response type for one page of the bank audit trail ({@code /api/v1/bank/admin/audit}), read for

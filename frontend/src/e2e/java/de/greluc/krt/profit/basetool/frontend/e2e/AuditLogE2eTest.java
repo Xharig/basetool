@@ -166,6 +166,14 @@ class AuditLogE2eTest {
         assertThat(
                 page.locator("[data-testid='audit-filter-event'] option[value='BLUEPRINT_ADDED']"))
             .hasCount(1);
+
+        page.locator("[data-testid='audit-tab-CONNECTED_APPS']").click();
+        page.waitForLoadState();
+        assertThat(page).hasURL(Pattern.compile(".*[?&]domain=CONNECTED_APPS.*"));
+        assertThat(
+                page.locator(
+                    "[data-testid='audit-filter-event'] option[value='EXCHANGE_CLIENT_SUSPENDED']"))
+            .hasCount(1);
       } catch (RuntimeException | AssertionError failure) {
         E2eSupport.dump(page, "audit-log-viewer");
         throw failure;

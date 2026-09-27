@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Datenaustausch: Verzeichnis zugelassener Anwendungen.** Admins verwalten zugelassene
+  Fremd-Anwendungen samt Fähigkeiten und den globalen Schalter (`/api/v1/admin/exchange-clients`,
+  `/api/v1/admin/exchange-settings`, Migration `V248`); jede Änderung steht im neuen Audit-Bereich
+  „Verbundene Anwendungen“ und wird für das Gateway ausfallsicher nach Redis gespiegelt
+  (`APP_EXCHANGE_MIRROR_ENABLED`, vorerst aus; REQ-XCH-003).
 - **Lager: Markierung „gestohlen“.** Bestand kann als gestohlen eingebucht oder nachträglich — auch
   teilweise — markiert werden; gestohlene und reguläre Ware bilden getrennte Stapel, jede Umbuchung
   behält die Markierung, Lager, Aufträge, Einsätze und Materialbörse zeigen sie an und filtern danach

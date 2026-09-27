@@ -97,6 +97,19 @@ class RedisAclIngestIntegrationTest {
   }
 
   @Test
+  void theExchangeRegistryIsReadOnlyForTheIngestUser() {
+    template(admin).opsForValue().set("exchange:registry", "{}");
+    StringRedisTemplate template = template(ingest);
+
+    assertThat(template.opsForValue().get("exchange:registry")).isEqualTo("{}");
+    assertThatThrownBy(() -> template.opsForValue().set("exchange:registry", "{\"enabled\":true}"))
+        .as("the gateway must never rewrite its own registry")
+        .isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(() -> template.delete("exchange:registry"))
+        .isInstanceOf(DataAccessException.class);
+  }
+
+  @Test
   void everythingBeyondItsOwnKeysIsRefused() {
     StringRedisTemplate template = template(ingest);
 

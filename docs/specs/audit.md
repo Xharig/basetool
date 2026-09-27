@@ -8,14 +8,15 @@ Area: `AUDIT` · Related: [`bank.md`](bank.md) (the bank's own audit trail, REQ-
 ## Context
 
 The Kartell bank already keeps an immutable, admin-only audit trail (REQ-BANK-012). The same
-guarantee is extended to eleven more areas — **Lagerverwaltung** (`InventoryItem`),
+guarantee is extended to twelve more areas — **Lagerverwaltung** (`InventoryItem`),
 **Auftragsverwaltung** (`JobOrder`), **Raffinerieverwaltung** (`RefineryOrder`), **Mein
 Inventar** (`PersonalInventoryItem`), **Missionen** (`Mission`), **Operationen** (`Operation`),
 **Rollen & Mitglieder** (`org_unit_membership`, epic #800), **Beförderung** (the promotion
 catalogue + member gradings), **Materialbörse** (`MaterialExchangeOffer` /
-`MaterialExchangeInterest`), **Hangar** (`Ship`) and **Blueprints** (`PersonalBlueprint`,
-`DefaultBlueprint`). Every activity in each area is captured into a separate, admin-only
-log; all twelve logs (the eleven here plus the bank's) are read on one page with a tab switcher, and
+`MaterialExchangeInterest`), **Hangar** (`Ship`), **Blueprints** (`PersonalBlueprint`,
+`DefaultBlueprint`) and **Verbundene Anwendungen** (`ExchangeClient`, `ExchangeSettings`). Every
+activity in each area is captured into a separate, admin-only
+log; all thirteen logs (the twelve here plus the bank's) are read on one page with a tab switcher, and
 each can be exported as a PDF or JSON for a chosen period.
 
 The generic areas share **one** physical table (`audit_event`) with a `domain` discriminator; the
@@ -28,7 +29,7 @@ first). The storage choice and the unified-viewer architecture are recorded in
 ### REQ-AUDIT-001 — Immutable, complete, admin-only activity audit log
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> **Hangar** and **Blueprints** are audited since WP 1.1 (#2098, the coverage list below). Still to come: „Verbundene Anwendungen“ (registry changes, revocations, undo, mass-change confirmations; WP 3.1, #2083) — the viewer then shows thirteen tabs, and CLAUDE.md's audited-area list follows.
+> **Hangar** and **Blueprints** are audited since WP 1.1 (#2098), **Verbundene Anwendungen** since WP 3.1 with the registry changes and the global switch (the coverage list below). Still to come in that area: members' revocations per client and per installation, undo and mass-change confirmations (WP 3.1, #2083).
 
 Every state-mutating activity in the generic areas writes exactly **one** row to an **append-only**
 audit table (`audit_event`, modeled after `bank_audit_event` — no `@Version`, never updated except
@@ -212,6 +213,14 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   per granted row). The admin paths on another member's set write the same events. The subject is
   the owned or default blueprint, labelled by its **catalogue product name**; the owner is the
   target; the details hold the product key and counts, never the note.
+- **Verbundene Anwendungen** (`ExchangeClient`, `ExchangeSettings`, `AuditDomain.CONNECTED_APPS`,
+  `ADMIN` only, REQ-XCH-003) — registering a client (`EXCHANGE_CLIENT_CREATED`, the granted
+  scopes), editing it (`EXCHANGE_CLIENT_UPDATED`, only when a field changed; the details name the
+  changed fields and the added and removed scopes), suspending and activating it
+  (`EXCHANGE_CLIENT_SUSPENDED` / `_ACTIVATED`, only on a change) and the global exchange switch
+  (`EXCHANGE_SWITCH_CHANGED`, the new state). The subject is the registry client, labelled by its
+  **client id**; there is no target member. A change that failed because the mirror could not be
+  written rolls back and records nothing.
 - **Datenschutz / Betroffenenrechte** (`AuditDomain.ROLE`, REQ-SEC-058 / -060 / -061 / -062) — the
   data-subject-rights surfaces, added 2026-09-16. Eight event types, and two of them audit a
   **read** (the deliberate exception above). This sentence said "Six" while listing seven
@@ -346,9 +355,9 @@ per-domain emission assertions in the service tests · **Code:** `service/AuditS
 
 ### REQ-AUDIT-002 — Unified admin audit viewer
 
-All twelve logs are read on **one** admin page (`/admin/audit-log`) with a **tab switcher**
+All thirteen logs are read on **one** admin page (`/admin/audit-log`) with a **tab switcher**
 (Bank · Lager · Aufträge · Raffinerie · Mein Inventar · Missionen · Operationen · Rollen ·
-Beförderung · Materialbörse · Hangar · Blueprints) built from the design-system `.tab-nav` component. The bank tab reads
+Beförderung · Materialbörse · Hangar · Blueprints · Verbundene Anwendungen) built from the design-system `.tab-nav` component. The bank tab reads
 the existing `/api/v1/bank/admin/audit` endpoint; the generic area tabs read `/api/v1/audit/{domain}`;
 both DTO
 shapes are adapted into one uniform row view so a single
@@ -361,7 +370,7 @@ redirects here with the bank tab preselected.
 
 **Acceptance**
 
-- [ ] An admin sees one tab per audited area (twelve); switching a tab loads that area's log; filtering/paging stays in place.
+- [ ] An admin sees one tab per audited area (thirteen); switching a tab loads that area's log; filtering/paging stays in place.
 - [ ] `/admin/bank-audit` redirects to `/admin/audit-log?domain=BANK`.
 - [x] The client filter is offered on **every** tab, the bank included; selecting it reaches the
   backend as a query parameter and survives paging.

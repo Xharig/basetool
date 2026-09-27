@@ -79,5 +79,12 @@ public enum AuditDomain {
    * the owned or default blueprint with its catalogue product name as label; the owner is the
    * target.
    */
-  BLUEPRINT
+  BLUEPRINT,
+
+  /**
+   * Connected applications (Verbundene Anwendungen): the third-party exchange client registry and
+   * the global exchange switch (REQ-XCH-003). The subject is the registry client with its client id
+   * as label.
+   */
+  CONNECTED_APPS
 }
