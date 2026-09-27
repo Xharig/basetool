@@ -37,6 +37,7 @@ import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -592,7 +593,8 @@ public class ExchangeController {
   }
 
   /**
-   * Stages a change set the mass-change guard held back and answers where the member confirms it.
+   * Stages a change set the mass-change guard held back, stamped with the time it was staged, and
+   * answers where the member confirms it.
    *
    * @param context the admitted request
    * @param resource the resource's path segment
@@ -610,6 +612,7 @@ public class ExchangeController {
     document.put("clientId", context.clientId());
     document.put("installationKey", context.keyThumbprint());
     document.put("resource", resource);
+    document.put("stagedAt", Instant.now().toString());
     document.set("changeSet", body);
     String json = objectMapper.writeValueAsString(document);
     long bytes = json.getBytes(StandardCharsets.UTF_8).length;

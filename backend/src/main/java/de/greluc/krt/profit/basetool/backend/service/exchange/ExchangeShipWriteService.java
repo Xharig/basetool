@@ -303,15 +303,15 @@ public class ExchangeShipWriteService {
               null));
     }
     UUID shipId = parse(op.shipId());
-    Optional<Ship> locked = shipId == null ? Optional.empty() : shipRepository.lockById(shipId);
+    Optional<Ship> locked = lockOwn(caller, shipId);
     if (locked.isEmpty()) {
-      return planReturn(caller, op, externalId, shipId, type, insurance, locationId, links);
+      return shipId != null && shipRepository.existsById(shipId)
+          ? new Skip(UNMATCHED, UNMATCHED_REASON)
+          : planReturn(caller, op, externalId, shipId, type, insurance, locationId, links);
     }
     Ship ship = locked.get();
-    if (!ownedBy(ship, caller.member()) || touched.contains(shipId)) {
-      return touched.contains(shipId)
-          ? new Skip(REJECTED, VERSION_CONFLICT)
-          : new Skip(UNMATCHED, UNMATCHED_REASON);
+    if (touched.contains(shipId)) {
+      return new Skip(REJECTED, VERSION_CONFLICT);
     }
     if (op.version() == null || !op.version().equals(ship.getVersion())) {
       return new Skip(REJECTED, VERSION_CONFLICT);
@@ -407,19 +407,17 @@ public class ExchangeShipWriteService {
     String rawId = require(op.shipId(), "shipId");
     Long version = require(op.version(), "version");
     UUID shipId = parse(rawId);
-    Optional<Ship> locked = shipId == null ? Optional.empty() : shipRepository.lockById(shipId);
+    Optional<Ship> locked = lockOwn(caller, shipId);
     if (locked.isEmpty()) {
       boolean known =
           shipId != null
+              && !shipRepository.existsById(shipId)
               && changeRepository
                   .findLatestForKey(caller.member(), ExchangeResource.SHIP.name(), rawId)
                   .isPresent();
       return known ? new Skip(UNCHANGED, null) : new Skip(UNMATCHED, UNMATCHED_REASON);
     }
     Ship ship = locked.get();
-    if (!ownedBy(ship, caller.member())) {
-      return new Skip(UNMATCHED, UNMATCHED_REASON);
-    }
     if (touched.contains(shipId) || !version.equals(ship.getVersion())) {
       return new Skip(REJECTED, VERSION_CONFLICT);
     }
@@ -579,7 +577,21 @@ public class ExchangeShipWriteService {
     if (shipId == null || touched.contains(shipId)) {
       return Optional.empty();
     }
-    return shipRepository.lockById(shipId).filter(ship -> ownedBy(ship, caller.member()));
+    return lockOwn(caller, shipId);
+  }
+
+  /**
+   * Locks a ship only when it is the member's, so another member's ship named in a batch stays
+   * unlocked.
+   *
+   * @param caller the caller
+   * @param shipId the ship's id, or {@code null} when the client's id is none
+   * @return the ship, locked for this transaction, or empty when it is unknown or another member's
+   */
+  private @NotNull Optional<Ship> lockOwn(@NotNull ExchangeCaller caller, @Nullable UUID shipId) {
+    return shipId == null
+        ? Optional.empty()
+        : shipRepository.lockOwnedById(shipId, caller.member());
   }
 
   /**
@@ -603,17 +615,6 @@ public class ExchangeShipWriteService {
    */
   private static boolean isRemoval(@NotNull Planned planned) {
     return planned instanceof Remove || planned instanceof Update update && update.removal();
-  }
-
-  /**
-   * Whether a ship belongs to the member.
-   *
-   * @param ship the ship
-   * @param member the member
-   * @return whether the member owns it
-   */
-  private static boolean ownedBy(@NotNull Ship ship, @NotNull UUID member) {
-    return ship.getOwner() != null && member.equals(ship.getOwner().getId());
   }
 
   /**

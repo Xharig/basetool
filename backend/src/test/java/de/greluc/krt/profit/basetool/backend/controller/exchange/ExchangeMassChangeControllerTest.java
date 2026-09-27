@@ -41,6 +41,9 @@ import de.greluc.krt.profit.basetool.backend.service.BlueprintNameNormalizer;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -89,6 +92,7 @@ class ExchangeMassChangeControllerTest {
   private MockMvc mockMvc;
   private UUID member;
   private String client;
+  private UUID clientUuid;
   private boolean wasEnabled;
   private final List<UUID> blueprints = new ArrayList<>();
   private final List<UUID> materials = new ArrayList<>();
@@ -119,7 +123,7 @@ class ExchangeMassChangeControllerTest {
             ExchangeCapability.BLUEPRINTS_WRITE,
             ExchangeCapability.STOCK_WRITE,
             ExchangeCapability.HANGAR_WRITE));
-    clientRepository.saveAndFlush(registered);
+    clientUuid = clientRepository.saveAndFlush(registered).getId();
     knownClients.invalidate();
     ExchangeSettings settings =
         settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
@@ -130,6 +134,7 @@ class ExchangeMassChangeControllerTest {
 
   @AfterEach
   void tearDown() {
+    jdbc.update("DELETE FROM audit_event WHERE subject_id = ?", clientUuid);
     jdbc.update("DELETE FROM exchange_client WHERE client_id = ?", client);
     jdbc.update("DELETE FROM personal_blueprint WHERE owner_user_id = ?", member);
     jdbc.update("DELETE FROM inventory_item WHERE user_id = ?", member);
@@ -219,6 +224,83 @@ class ExchangeMassChangeControllerTest {
   }
 
   @Test
+  void aBatchCannotBeConfirmedAfterTheClientWasDisconnectedSinceItsStaging() throws Exception {
+    String rifle = ownedViaClient("Arrowhead Rifle");
+    String changeSet = removeAll(List.of(rifle));
+    Instant stagedAt = Instant.now().minus(Duration.ofMinutes(10));
+
+    jdbc.update(
+        "INSERT INTO exchange_client_revocation (exchange_client_id, user_id, revoked_at)"
+            + " VALUES (?, ?, ?)",
+        clientUuid,
+        member,
+        Timestamp.from(stagedAt.plus(Duration.ofMinutes(4))));
+
+    massChange("preview", staged("blueprints", changeSet, stagedAt))
+        .andExpect(status().isForbidden());
+    massChange("confirm", staged("blueprints", changeSet, stagedAt))
+        .andExpect(status().isForbidden());
+    assertThat(owned()).containsExactly(rifle);
+  }
+
+  @Test
+  void aDisconnectBeforeTheStagingDoesNotRefuseTheBatch() throws Exception {
+    String rifle = ownedViaClient("Arrowhead Rifle");
+    String changeSet = removeAll(List.of(rifle));
+    Instant stagedAt = Instant.now().minus(Duration.ofMinutes(10));
+
+    jdbc.update(
+        "INSERT INTO exchange_client_revocation (exchange_client_id, user_id, revoked_at)"
+            + " VALUES (?, ?, ?)",
+        clientUuid,
+        member,
+        Timestamp.from(stagedAt.minus(Duration.ofMinutes(5))));
+
+    massChange("confirm", staged("blueprints", changeSet, stagedAt))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.applied").value(1));
+    assertThat(owned()).isEmpty();
+  }
+
+  @Test
+  void aClientSuspendedSinceTheStagingIsRefusedEvenWhenActiveAgain() throws Exception {
+    String rifle = ownedViaClient("Arrowhead Rifle");
+    String changeSet = removeAll(List.of(rifle));
+    Instant stagedAt = Instant.now().minus(Duration.ofMinutes(10));
+
+    jdbc.update(
+        "INSERT INTO audit_event (id, occurred_at, domain, event_type, actor_handle, subject_id)"
+            + " VALUES (?, ?, 'CONNECTED_APPS', 'EXCHANGE_CLIENT_SUSPENDED', 'system', ?)",
+        UUID.randomUUID(),
+        Timestamp.from(stagedAt.plus(Duration.ofMinutes(2))),
+        clientUuid);
+
+    massChange("confirm", staged("blueprints", changeSet, stagedAt))
+        .andExpect(status().isForbidden());
+    assertThat(owned()).containsExactly(rifle);
+  }
+
+  @Test
+  void aBatchPastItsStagingLifetimeOrStagedInTheFutureIsRefused() throws Exception {
+    String rifle = ownedViaClient("Arrowhead Rifle");
+    String changeSet = removeAll(List.of(rifle));
+
+    massChange(
+            "confirm", staged("blueprints", changeSet, Instant.now().minus(Duration.ofMinutes(31))))
+        .andExpect(status().isForbidden());
+    massChange(
+            "confirm", staged("blueprints", changeSet, Instant.now().plus(Duration.ofMinutes(5))))
+        .andExpect(status().isBadRequest());
+    massChange(
+            "confirm",
+            ("{\"clientId\":\"%s\",\"installationKey\":\"%s\","
+                    + "\"resource\":\"blueprints\",\"changeSet\":%s}")
+                .formatted(client, KEY, quote(changeSet)))
+        .andExpect(status().isBadRequest());
+    assertThat(owned()).containsExactly(rifle);
+  }
+
+  @Test
   void aChangeSetThatDoesNotReadIsABadRequest() throws Exception {
     String rifle = product("Arrowhead Rifle");
     mockMvc
@@ -253,8 +335,39 @@ class ExchangeMassChangeControllerTest {
   }
 
   private @NotNull String staged(@NotNull String resource, @NotNull String changeSet) {
-    return "{\"clientId\":\"%s\",\"installationKey\":\"%s\",\"resource\":\"%s\",\"changeSet\":%s}"
-        .formatted(client, KEY, resource, quote(changeSet));
+    return staged(resource, changeSet, Instant.now());
+  }
+
+  /**
+   * Builds the staged change set the page hands back.
+   *
+   * @param resource the resource
+   * @param changeSet the change set
+   * @param stagedAt when the gateway staged it
+   * @return the request as JSON
+   */
+  private @NotNull String staged(
+      @NotNull String resource, @NotNull String changeSet, @NotNull Instant stagedAt) {
+    return ("{\"clientId\":\"%s\",\"installationKey\":\"%s\",\"resource\":\"%s\","
+            + "\"changeSet\":%s,\"stagedAt\":\"%s\"}")
+        .formatted(client, KEY, resource, quote(changeSet), stagedAt);
+  }
+
+  /**
+   * Adds a blueprint through the client, which also registers the test installation.
+   *
+   * @param name the blueprint's name
+   * @return its product key
+   * @throws Exception if the request fails
+   */
+  private @NotNull String ownedViaClient(@NotNull String name) throws Exception {
+    String key = product(name);
+    mockMvc
+        .perform(
+            clientWrite(
+                "blueprints", "{\"ops\":[{\"op\":\"add\",\"ref\":{\"bt\":\"" + key + "\"}}]}"))
+        .andExpect(status().isOk());
+    return key;
   }
 
   private static @NotNull String quote(@NotNull String raw) {

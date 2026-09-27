@@ -113,7 +113,8 @@ public class HandoffStagingService {
    * so it never evicts an extractor draft and a newer one replaces it (REQ-XCH-021).
    *
    * @param sub the member's subject
-   * @param changeJson the staged change set with its client, installation and resource
+   * @param changeJson the staged change set with its client, installation, resource and staging
+   *     time
    * @param maxBytes the largest staged document
    * @return where it is staged and how large it is
    * @throws BadRequestException if the document exceeds {@code maxBytes}

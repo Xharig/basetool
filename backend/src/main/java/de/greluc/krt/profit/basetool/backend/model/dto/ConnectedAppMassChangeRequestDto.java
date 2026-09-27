@@ -20,8 +20,10 @@
 package de.greluc.krt.profit.basetool.backend.model.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 
 /**
  * A change set the ingest gateway staged because the mass-change guard held it back, as the
@@ -31,9 +33,11 @@ import jakarta.validation.constraints.Size;
  * @param installationKey the installation that sent it
  * @param resource {@code blueprints}, {@code stock} or {@code ships}
  * @param changeSet the change set as the client sent it, as JSON
+ * @param stagedAt when the gateway staged it, in UTC
  */
 public record ConnectedAppMassChangeRequestDto(
     @NotBlank @Size(max = 64) String clientId,
     @NotBlank @Size(max = 64) String installationKey,
     @NotBlank @Pattern(regexp = "^(blueprints|stock|ships)$") String resource,
-    @NotBlank @Size(max = 524288) String changeSet) {}
+    @NotBlank @Size(max = 524288) String changeSet,
+    @NotNull Instant stagedAt) {}

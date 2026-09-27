@@ -75,14 +75,16 @@ public interface ShipRepository extends JpaRepository<Ship, UUID> {
       @Param("member") UUID member, @Param("ids") Collection<UUID> ids);
 
   /**
-   * Locks one ship for an exchange write.
+   * Locks one of a member's ships for an exchange write; another member's ship is neither returned
+   * nor locked.
    *
    * @param id the ship's id
-   * @return the ship, locked for this transaction, if it exists
+   * @param owner the member
+   * @return the ship, locked for this transaction, if it exists and the member owns it
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("SELECT s FROM Ship s WHERE s.id = :id")
-  Optional<Ship> lockById(@Param("id") UUID id);
+  @Query("SELECT s FROM Ship s WHERE s.id = :id AND s.owner.id = :owner")
+  Optional<Ship> lockOwnedById(@Param("id") UUID id, @Param("owner") UUID owner);
 
   /**
    * Counts a member's ships.

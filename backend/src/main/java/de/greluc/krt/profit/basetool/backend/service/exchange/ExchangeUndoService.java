@@ -269,9 +269,8 @@ public class ExchangeUndoService {
   private boolean restoreShip(
       @NotNull UUID member, @NotNull String rawId, @Nullable JsonNode before) {
     UUID shipId = UUID.fromString(rawId);
-    Optional<Ship> ship = shipRepository.lockById(shipId);
-    if (ship.isPresent()
-        && (ship.get().getOwner() == null || !member.equals(ship.get().getOwner().getId()))) {
+    Optional<Ship> ship = shipRepository.lockOwnedById(shipId, member);
+    if (ship.isEmpty() && shipRepository.existsById(shipId)) {
       return false;
     }
     if (before == null) {

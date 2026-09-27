@@ -261,6 +261,15 @@
 
 ### Fixed
 
+- **Datenaustausch: Massenänderung nach dem Trennen nicht mehr bestätigbar.** Eine
+  zurückgehaltene Massenänderung gilt nur 30 Minuten ab dem Zurückhalten, auch in der Sitzung;
+  wurde die Anwendung oder Installation seitdem getrennt oder die Anwendung gesperrt, lehnt das
+  Backend die Bestätigung ab.
+  
+- **Datenaustausch: fremde Schiffe werden nicht mehr gesperrt.** Nennt eine Anwendung das Schiff
+  eines anderen Mitglieds, sperrt das Backend dessen Zeile nicht mehr und blockiert so keine
+  Bearbeitung im Hangar.
+  
 - **Datenaustausch: Doppelte Schreibvorgänge und Budget-Überlauf verhindert.** Eine Wiederholung mit
   demselben `Idempotency-Key`, die das erste Ergebnis knapp verpasst, liefert es jetzt aus, statt
   erneut zu schreiben; eine Sperre gibt nur ihr eigener Halter frei. Das Redis-Budget wird per

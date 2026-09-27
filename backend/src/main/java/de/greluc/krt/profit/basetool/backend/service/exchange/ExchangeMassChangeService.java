@@ -61,17 +61,18 @@ import tools.jackson.databind.ObjectMapper;
  * Previews and applies a change set the ingest gateway staged because the mass-change guard held it
  * back, once the member has seen it in the browser (REQ-XCH-021). Before either it checks again
  * what the gateway checked when the batch arrived: the global switch, the client's status and
- * capability, and that neither the client nor the installation was disconnected since.
+ * capability, that the batch is within its staging lifetime, and that since its staging the client
+ * was neither suspended nor disconnected and the installation was not disconnected.
  */
 @Service
 @RequiredArgsConstructor
 public class ExchangeMassChangeService {
 
-  /**
-   * How long before now a disconnect still refuses a staged batch: the gateway keeps a staged batch
-   * at most this long, so a batch staged before the disconnect cannot be older.
-   */
+  /** How long after its staging a batch can still be previewed or confirmed: the staging TTL. */
   static final Duration STAGING_REACH = Duration.ofMinutes(30);
+
+  /** How far a staging time may lie ahead of the backend's clock. */
+  static final Duration CLOCK_SKEW = Duration.ofMinutes(1);
 
   private static final String BLUEPRINTS = "blueprints";
   private static final String STOCK = "stock";
@@ -98,8 +99,10 @@ public class ExchangeMassChangeService {
    * @return what it would apply
    * @throws NotFoundException when the client is not registered
    * @throws AccessDeniedException when the exchange is off, the client is suspended or lacks the
-   *     write capability, or the client or installation was disconnected
-   * @throws BadRequestException when the change set does not read as one of the resource
+   *     write capability, the batch is past its staging lifetime, or since its staging the client
+   *     was suspended or the client or installation was disconnected
+   * @throws BadRequestException when the change set does not read as one of the resource, or its
+   *     staging time lies in the future
    */
   public @NotNull ConnectedAppMassChangeResultDto preview(
       @NotNull UUID member, @NotNull ConnectedAppMassChangeRequestDto request) {
@@ -119,8 +122,10 @@ public class ExchangeMassChangeService {
    * @return what it applied
    * @throws NotFoundException when the client is not registered
    * @throws AccessDeniedException when the exchange is off, the client is suspended or lacks the
-   *     write capability, or the client or installation was disconnected
-   * @throws BadRequestException when the change set does not read as one of the resource
+   *     write capability, the batch is past its staging lifetime, or since its staging the client
+   *     was suspended or the client or installation was disconnected
+   * @throws BadRequestException when the change set does not read as one of the resource, or its
+   *     staging time lies in the future
    */
   public @NotNull ConnectedAppMassChangeResultDto confirm(
       @NotNull UUID member, @NotNull ConnectedAppMassChangeRequestDto request) {
@@ -177,10 +182,22 @@ public class ExchangeMassChangeService {
         || !client.getCapabilities().contains(capability(request.resource()))) {
       throw new AccessDeniedException("The client may not write this");
     }
-    Instant reach = clock.instant().minus(STAGING_REACH);
+    Instant stagedAt = request.stagedAt();
+    Instant now = clock.instant();
+    if (stagedAt.isBefore(now.minus(STAGING_REACH))) {
+      throw new AccessDeniedException("The staged change set has expired");
+    }
+    if (stagedAt.isAfter(now.plus(CLOCK_SKEW))) {
+      throw new BadRequestException("The staged change set's staging time lies in the future");
+    }
+    if (auditService.recordedSince(
+        AuditEventType.EXCHANGE_CLIENT_SUSPENDED, client.getId(), stagedAt)) {
+      throw new AccessDeniedException("The client was suspended after the batch was staged");
+    }
     boolean clientRevoked =
         revocationRepository.findAllByUserId(member).stream()
-            .anyMatch(r -> r.clientId().equals(request.clientId()) && r.revokedAt().isAfter(reach));
+            .anyMatch(
+                r -> r.clientId().equals(request.clientId()) && !r.revokedAt().isBefore(stagedAt));
     boolean installationRevoked =
         installationRepository
             .findByKey(request.clientId(), member, request.installationKey())
