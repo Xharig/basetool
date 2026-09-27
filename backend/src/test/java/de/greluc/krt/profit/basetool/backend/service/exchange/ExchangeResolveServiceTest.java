@@ -128,6 +128,21 @@ class ExchangeResolveServiceTest {
   }
 
   @Test
+  void aProductKeyBeyondThePublishedLimitIsAnsweredAndAcceptedAsTheFeedsHash() {
+    String longKey = "k".repeat(200);
+    String hashed = ExchangeBlueprintFeedService.keyOf(longKey);
+    products(longKey, "n".repeat(255));
+
+    Result byHash = only(resolve(ExchangeCatalogKind.BLUEPRINT, ref(hashed, null, null)));
+    Result byRawKey = only(resolve(ExchangeCatalogKind.BLUEPRINT, ref(longKey, null, null)));
+
+    assertThat(byHash.status()).isEqualTo(Status.RESOLVED);
+    assertThat(byHash.ref().bt()).isEqualTo(hashed);
+    assertThat(byHash.ref().name()).hasSize(200);
+    assertThat(byRawKey.status()).isEqualTo(Status.UNMATCHED);
+  }
+
+  @Test
   void anAmbiguousRecordFallsThroughToAResolvingName() {
     products("arclight pistol", "Arclight Pistol", "gallant rifle", "Gallant Rifle");
     when(blueprintProductService.scwikiKeyToProductKeys())

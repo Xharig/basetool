@@ -469,7 +469,8 @@ Ops are `add` and `remove` of products. Default-granted blueprints cannot be rem
 Blueprints domain with the external client.
 
 A blueprint's `key` and its `ref.bt` are the same value: the normalised product key, or `h:` and
-its SHA-256 in hex when that is longer than 128 characters. The display name is cut to 200.
+its SHA-256 in hex when that is longer than 128 characters. The display name is cut to 200. The
+resolver (REQ-XCH-012) answers a blueprint with the same `bt` and accepts it back.
 
 **Acceptance**
 
