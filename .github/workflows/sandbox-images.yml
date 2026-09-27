@@ -178,3 +178,13 @@ jobs:
             docker tag basetool-sandbox-keycloak:local "$tag"
             docker push "$tag"
           done <<< "$TAGS"
+
+  smoke:
+    name: Smoke-test the published images
+    if: github.event_name != 'pull_request'
+    needs: [apps, keycloak]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sandbox-smoke.yml
+    with:
+      version: ${{ github.ref_type == 'tag' && 'latest' || 'edge' }}
