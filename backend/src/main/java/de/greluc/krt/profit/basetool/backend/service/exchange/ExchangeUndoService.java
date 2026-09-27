@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.backend.service.exchange;
 
+import de.greluc.krt.profit.basetool.backend.exception.Entities;
 import de.greluc.krt.profit.basetool.backend.exception.NotFoundException;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.AuditEventType;
@@ -123,9 +124,8 @@ public class ExchangeUndoService {
   public @NotNull ExchangeUndoResultDto undo(
       @NotNull UUID member, @NotNull String clientId, @NotNull Instant since) {
     final ExchangeClient client =
-        clientRepository
-            .findWithCapabilitiesByClientId(clientId)
-            .orElseThrow(() -> new NotFoundException("Client not found"));
+        Entities.require(
+            clientRepository.findWithCapabilitiesByClientId(clientId), () -> "Client not found");
     Instant floor = clock.instant().minus(REACH);
     Instant from = since.isBefore(floor) ? floor : since;
     Map<String, List<ExchangeJournalEntry>> groups = new LinkedHashMap<>();

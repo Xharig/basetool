@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.service.exchange;
 
 import de.greluc.krt.profit.basetool.backend.exception.BadRequestException;
+import de.greluc.krt.profit.basetool.backend.exception.Entities;
 import de.greluc.krt.profit.basetool.backend.exception.NotFoundException;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.AuditEventType;
@@ -169,9 +170,9 @@ public class ExchangeMassChangeService {
       throw new AccessDeniedException("The exchange is switched off");
     }
     ExchangeClient client =
-        clientRepository
-            .findWithCapabilitiesByClientId(request.clientId())
-            .orElseThrow(() -> new NotFoundException("Client not found"));
+        Entities.require(
+            clientRepository.findWithCapabilitiesByClientId(request.clientId()),
+            () -> "Client not found");
     if (client.getStatus() != ExchangeClientStatus.ACTIVE
         || !client.getCapabilities().contains(capability(request.resource()))) {
       throw new AccessDeniedException("The client may not write this");
