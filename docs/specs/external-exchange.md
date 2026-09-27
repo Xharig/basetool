@@ -842,16 +842,22 @@ change only, not audited.
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
-- [ ] The page highlights an unseen installation until it is seen.
+- [x] The page highlights an unseen installation („Neu") and then reports it seen; the highlight
+  ends with the next load. *`ConnectedAppsPageControllerMvcTest`.*
 - [x] Undo a client's changes since a chosen span, with the skipped entries listed.
   *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
 - [x] Confirm or discard a staged mass change. *`ExchangeMassChangeControllerTest`,
   `ConnectedAppsConfirmControllerMvcTest`.*
-- [ ] Recent activity (WP 3.3's journal).
+- [x] Recent activity: each client's last ten writes to the member's data, newest first, named by
+  blueprint, material or item, or ship type, undone ones marked. *`ConnectedAppsControllerTest`,
+  `ConnectedAppsPageControllerMvcTest`.*
 - [ ] The end-to-end run on the sandbox (WP 2.3, #2099).
 
-**Status:** list, disconnects, the admin page, the new-connection notification and the unseen state
-built — WP 4.5 (#2087); the page's highlight and the rest follow
+Each client in `GET /api/v1/connected-apps` carries `activity`: its last ten journal rows for the
+member, newest first, each with the time, resource, action, the entry's name (read in one lookup per
+catalogue) and whether it was undone.
+
+**Status:** built — WP 4.5 (#2087); the end-to-end run on the sandbox follows with WP 2.3 (#2099)
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 

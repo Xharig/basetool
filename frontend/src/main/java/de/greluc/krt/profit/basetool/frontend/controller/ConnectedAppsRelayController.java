@@ -80,6 +80,22 @@ public class ConnectedAppsRelayController {
   }
 
   /**
+   * Marks the member's new connections seen, so their highlight ends on the next load.
+   *
+   * @return {@code 204}, or the relayed backend error
+   */
+  @PostMapping(value = "/seen", headers = "X-Requested-With=XMLHttpRequest")
+  public ResponseEntity<Object> markSeen() {
+    return relay(
+        log,
+        "mark exchange connections seen (ajax)",
+        () -> {
+          backendApiClient.post(BACKEND + "/seen", null, Void.class);
+          return ResponseEntity.noContent().build();
+        });
+  }
+
+  /**
    * Undoes a client's writes to the member's blueprints, stock and ships since a point in time.
    *
    * @param clientId the client id; anything outside the registry's shape is refused here

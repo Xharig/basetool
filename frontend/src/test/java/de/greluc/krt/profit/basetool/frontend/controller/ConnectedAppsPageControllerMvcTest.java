@@ -38,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedAppActivityDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedAppDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedInstallationDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeUndoRequestDto;
@@ -97,7 +98,14 @@ class ConnectedAppsPageControllerMvcTest {
                     Instant.parse("2026-09-27T08:00:00Z"),
                     Instant.parse("2026-09-27T09:30:00Z"),
                     false),
-                new ConnectedInstallationDto(UUID.randomUUID(), null, null, null, false)));
+                new ConnectedInstallationDto(UUID.randomUUID(), null, null, null, true)),
+            List.of(
+                new ConnectedAppActivityDto(
+                    Instant.parse("2026-09-27T10:00:00Z"),
+                    "BLUEPRINT",
+                    "BLUEPRINT_REMOVE",
+                    "Arclight <i>Pistol</i>",
+                    true)));
     when(backendApiClient.get(eq("/api/v1/connected-apps"), anyTypeRef())).thenReturn(List.of(app));
   }
 
@@ -118,6 +126,34 @@ class ConnectedAppsPageControllerMvcTest {
         .andExpect(content().string(containsString("27.09.2026 08:00 UTC")))
         .andExpect(content().string(containsString("data-installation-id=\"" + INSTALLATION)))
         .andExpect(content().string(not(containsString("??"))));
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void theListShowsTheLatestChangesEscapedAndHighlightsANewInstallation() throws Exception {
+    stubApps();
+
+    mockMvc
+        .perform(get("/connected-apps"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("data-testid=\"ca-activity\"")))
+        .andExpect(content().string(containsString("Blueprint entfernt")))
+        .andExpect(content().string(containsString("(zurückgenommen)")))
+        .andExpect(content().string(containsString("Arclight &lt;i&gt;Pistol&lt;/i&gt;")))
+        .andExpect(content().string(containsString("27.09.2026 10:00 UTC")))
+        .andExpect(content().string(containsString("data-ca-unseen")))
+        .andExpect(content().string(containsString("ca-unseen")));
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void markingSeenIsRelayed() throws Exception {
+    mockMvc
+        .perform(
+            post("/connected-apps/seen").header("X-Requested-With", "XMLHttpRequest").with(csrf()))
+        .andExpect(status().isNoContent());
+
+    verify(backendApiClient).post("/api/v1/connected-apps/seen", null, Void.class);
   }
 
   @Test

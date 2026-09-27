@@ -19,20 +19,16 @@
 
 package de.greluc.krt.profit.basetool.frontend.model.dto;
 
-import java.util.List;
+import java.time.Instant;
 
 /**
- * Mirror of one of the member's connected exchange clients (REQ-XCH-008, REQ-XCH-032).
+ * Mirror of one recent write of a connected client to the member's data (REQ-XCH-032).
  *
- * @param clientId the Keycloak client id
- * @param displayName the product name, always shown before an installation's label
- * @param capabilities the scopes the registry grants the client
- * @param installations the live installations, newest first
- * @param activity the client's latest writes to the member's data, newest first
+ * @param recordedAt when it was written
+ * @param resource {@code BLUEPRINT}, {@code STOCK} or {@code SHIP}
+ * @param action the journal action, such as {@code BLUEPRINT_ADD} or {@code SHIP_REMOVE}
+ * @param label the entry's name, or {@code null} when it is no longer known
+ * @param undone whether the member has undone it
  */
-public record ConnectedAppDto(
-    String clientId,
-    String displayName,
-    List<String> capabilities,
-    List<ConnectedInstallationDto> installations,
-    List<ConnectedAppActivityDto> activity) {}
+public record ConnectedAppActivityDto(
+    Instant recordedAt, String resource, String action, String label, boolean undone) {}

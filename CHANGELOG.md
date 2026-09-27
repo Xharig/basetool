@@ -9,6 +9,9 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Verbundene Anwendungen: letzte Änderungen und neue Verbindungen.** Jede Anwendung zeigt ihre zehn
+  letzten Änderungen an deinen Daten (zurückgenommene markiert); eine neue Installation ist bis zum
+  nächsten Aufruf als „Neu" hervorgehoben (REQ-XCH-032).
 - **Verbundene Anwendungen: große Änderungen bestätigen.** Will eine Anwendung auf einmal viele
   Einträge entfernen, zeigt der Bestätigungslink, was passieren würde; erst „Bestätigen" wendet es an,
   „Verwerfen" lässt alles, wie es ist (REQ-XCH-021).

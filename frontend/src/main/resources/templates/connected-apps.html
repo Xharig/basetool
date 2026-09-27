@@ -73,8 +73,13 @@
                         </tr>
                         </thead>
                         <tbody>
-                        <tr th:each="inst : ${app.installations}" th:attr="data-installation-id=${inst.id}">
-                            <td th:text="${inst.label != null} ? #{connectedApps.installation.named(${app.displayName}, ${inst.label})} : #{connectedApps.installation.unnamed(${app.displayName})}">VerseKit &ndash; &bdquo;Gaming-PC&ldquo;</td>
+                        <tr th:each="inst : ${app.installations}" th:attr="data-installation-id=${inst.id}"
+                            th:classappend="${inst.unseen} ? 'ca-unseen'">
+                            <td>
+                                <span th:text="${inst.label != null} ? #{connectedApps.installation.named(${app.displayName}, ${inst.label})} : #{connectedApps.installation.unnamed(${app.displayName})}">VerseKit &ndash; &bdquo;Gaming-PC&ldquo;</span>
+                                <span class="ca-new-badge" th:if="${inst.unseen}" data-ca-unseen
+                                      th:text="#{connectedApps.installation.new}">Neu</span>
+                            </td>
                             <td th:text="${inst.firstSeenAt != null} ? #{connectedApps.utc(${#temporals.format(inst.firstSeenAt, 'dd.MM.yyyy HH:mm', 'UTC')})} : '–'">27.09.2026 08:00 UTC</td>
                             <td th:text="${inst.lastSeenAt != null} ? #{connectedApps.utc(${#temporals.format(inst.lastSeenAt, 'dd.MM.yyyy HH:mm', 'UTC')})} : '–'">27.09.2026 09:00 UTC</td>
                             <td>
@@ -84,6 +89,29 @@
                         </tr>
                         <tr th:if="${#lists.isEmpty(app.installations)}">
                             <td colspan="4" th:text="#{connectedApps.installations.empty}">Keine aktive Installation.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <h3 th:text="#{connectedApps.activity}">Letzte &Auml;nderungen</h3>
+                <p th:if="${#lists.isEmpty(app.activity)}" th:text="#{connectedApps.activity.empty}">Diese Anwendung hat noch nichts ge&auml;ndert.</p>
+                <div class="table-responsive" th:unless="${#lists.isEmpty(app.activity)}">
+                    <table class="ca-activity" data-testid="ca-activity">
+                        <thead>
+                        <tr>
+                            <th th:text="#{connectedApps.activity.when}">Wann</th>
+                            <th th:text="#{connectedApps.activity.what}">Was</th>
+                            <th th:text="#{connectedApps.activity.entry}">Eintrag</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="act : ${app.activity}" th:classappend="${act.undone} ? 'ca-undone'">
+                            <td th:text="${act.recordedAt != null} ? #{connectedApps.utc(${#temporals.format(act.recordedAt, 'dd.MM.yyyy HH:mm', 'UTC')})} : '–'">27.09.2026 10:00 UTC</td>
+                            <td>
+                                <span th:text="${#messages.msgOrNull('connectedApps.activity.action.' + act.action) ?: act.action}">Blueprint hinzugef&uuml;gt</span>
+                                <span th:if="${act.undone}" th:text="#{connectedApps.activity.undone}">(zur&uuml;ckgenommen)</span>
+                            </td>
+                            <td th:text="${act.label != null} ? ${act.label} : #{connectedApps.undo.unnamed}">Arrowhead Rifle</td>
                         </tr>
                         </tbody>
                     </table>
