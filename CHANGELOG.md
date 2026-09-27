@@ -209,6 +209,10 @@
   mehr für die Backend-API. Auf Produktion wird das erst nach dem Abschalten der alten
   Extractor-Adressen angewendet, weil Versionen bis 2.9.1 sie noch brauchen.
   
+- **Datenaustausch: Backend prüft „Trennen“ selbst.** Hat ein Mitglied eine Anwendung getrennt,
+  lehnt jetzt auch das Backend deren ältere Tokens ab, nicht nur das Gateway; ist der Sperrspiegel in
+  Redis nicht lesbar, wird die Anfrage abgelehnt statt durchgelassen.
+  
 - **Datenaustausch: feste Fehlertexte.** Lehnt das Backend eine Anfrage einer verbundenen Anwendung
   ab, erhält die Anwendung nur noch den Fehlercode mit einem festen englischen Text je Code, nie den
   internen Text des Backends (REQ-XCH-025).

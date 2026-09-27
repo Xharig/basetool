@@ -475,7 +475,8 @@ class ExchangeStoreRedisIntegrationTest {
             "m1",
             "thumbprint",
             Set.of("exchange.blueprints.write"),
-            new ExchangeRegistry.Client("A", true, Set.of(), null, null, null)));
+            new ExchangeRegistry.Client("A", true, Set.of(), null, null, null),
+            null));
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain =
         (req, res) -> {

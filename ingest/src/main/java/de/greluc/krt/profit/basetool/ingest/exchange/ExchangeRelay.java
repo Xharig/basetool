@@ -71,6 +71,12 @@ public class ExchangeRelay {
   /** The header carrying the installation's DPoP key thumbprint. */
   public static final String INSTALLATION_HEADER = "X-Exchange-Installation";
 
+  /**
+   * The header carrying the member token's {@code iat} in epoch seconds, so the backend can check a
+   * client revocation itself (REQ-XCH-008); absent when the token has none.
+   */
+  public static final String TOKEN_ISSUED_AT_HEADER = "X-Exchange-Token-Issued-At";
+
   /** The code of a relay failure. */
   public static final String RELAY_FAILED = "BACKEND_RELAY_FAILED";
 
@@ -240,6 +246,9 @@ public class ExchangeRelay {
                             CAPABILITIES_HEADER,
                             String.join(",", new TreeSet<>(context.capabilities())));
                         headers.set(INSTALLATION_HEADER, context.keyThumbprint());
+                        if (context.issuedAt() != null) {
+                          headers.set(TOKEN_ISSUED_AT_HEADER, Long.toString(context.issuedAt()));
+                        }
                         headers.setAccept(
                             List.of(
                                 MediaType.APPLICATION_JSON, MediaType.APPLICATION_PROBLEM_JSON));

@@ -229,7 +229,13 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           "This client version is no longer supported; please update.");
       return null;
     }
-    return new ExchangeRequestContext(clientId, member, thumbprint, granted, client);
+    return new ExchangeRequestContext(
+        clientId,
+        member,
+        thumbprint,
+        granted,
+        client,
+        jwt.getIssuedAt() == null ? null : jwt.getIssuedAt().getEpochSecond());
   }
 
   /**

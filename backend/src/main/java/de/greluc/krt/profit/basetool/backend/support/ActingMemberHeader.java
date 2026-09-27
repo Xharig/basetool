@@ -49,6 +49,13 @@ public final class ActingMemberHeader {
    */
   public static final String EXCHANGE_INSTALLATION_HEADER = "X-Exchange-Installation";
 
+  /**
+   * Carries the member token's {@code iat} in epoch seconds, which the exchange gate compares with
+   * the member's disconnect of the client (REQ-XCH-008); honoured under the same conditions as
+   * {@link #EXCHANGE_CLIENT_HEADER}.
+   */
+  public static final String EXCHANGE_TOKEN_ISSUED_AT_HEADER = "X-Exchange-Token-Issued-At";
+
   /** Not instantiable: a constant holder, not a component. */
   private ActingMemberHeader() {}
 }

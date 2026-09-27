@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Where denied installation keys and client revocations are mirrored for the gateway, which reads
@@ -79,4 +80,15 @@ public interface ExchangeRevocationMirror {
    * @throws RuntimeException when Redis could not be read
    */
   boolean isRevoked(@NotNull String clientId, @NotNull UUID member, @NotNull Instant revokedAt);
+
+  /**
+   * Reads when a member last disconnected a client, as the gateway reads it.
+   *
+   * @param clientId the Keycloak client id
+   * @param member the member
+   * @return the mirrored revocation time, or {@code null} when none is mirrored
+   * @throws RuntimeException when Redis could not be read or holds an unreadable entry
+   */
+  @Nullable
+  Instant revokedAt(@NotNull String clientId, @NotNull UUID member);
 }

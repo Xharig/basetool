@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -80,6 +81,7 @@ class ExchangeRelayTest {
         .andExpect(
             header(ExchangeRelay.CAPABILITIES_HEADER, "exchange.connect,exchange.stock.read"))
         .andExpect(header(ExchangeRelay.INSTALLATION_HEADER, "jkt-1"))
+        .andExpect(header(ExchangeRelay.TOKEN_ISSUED_AT_HEADER, "1790000000"))
         .andExpect(header("Accept-Language", "de-DE"))
         .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
 
@@ -91,6 +93,28 @@ class ExchangeRelayTest {
     assertThat(result.isOk()).isTrue();
     assertThat(result.body().get("items").isArray()).isTrue();
     assertThat(count("ok")).isEqualTo(1.0d);
+  }
+
+  @Test
+  void aTokenWithoutIssuedAtIsRelayedWithoutTheHeader() {
+    backend
+        .expect(requestTo("https://backend/api/v1/exchange/catalog/locations"))
+        .andExpect(headerDoesNotExist(ExchangeRelay.TOKEN_ISSUED_AT_HEADER))
+        .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
+    ExchangeRequestContext admitted = context();
+    ExchangeRequestContext withoutIssuedAt =
+        new ExchangeRequestContext(
+            admitted.clientId(),
+            admitted.member(),
+            admitted.keyThumbprint(),
+            admitted.capabilities(),
+            admitted.client(),
+            null);
+
+    relay.forward(
+        HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, withoutIssuedAt, null);
+
+    backend.verify();
   }
 
   @Test
@@ -271,7 +295,8 @@ class ExchangeRelayTest {
         "jkt-1",
         Set.of("exchange.stock.read", "exchange.connect"),
         new ExchangeRegistry.Client(
-            "VerseKit", true, Set.of("exchange.connect", "exchange.stock.read"), null, null, null));
+            "VerseKit", true, Set.of("exchange.connect", "exchange.stock.read"), null, null, null),
+        1_790_000_000L);
   }
 
   /**

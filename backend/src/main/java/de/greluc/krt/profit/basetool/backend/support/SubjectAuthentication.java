@@ -58,4 +58,15 @@ public interface SubjectAuthentication {
   default String exchangeInstallationKey() {
     return null;
   }
+
+  /**
+   * When the member's token behind a relayed exchange request was issued, as the gateway relayed
+   * it.
+   *
+   * @return the token's {@code iat} in epoch seconds, or {@code null} when none was relayed
+   */
+  @Nullable
+  default Long exchangeTokenIssuedAt() {
+    return null;
+  }
 }
