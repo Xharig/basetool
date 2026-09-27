@@ -380,12 +380,26 @@ change of the default blueprint set — appear in it. Removals leave tombstones 
 (`web`, `app`, `client` with client id and installation id, `system`) and `removedAt`, kept 90 days
 and purged nightly. A cursor older than the tombstones answers `410 CURSOR_EXPIRED`.
 
+The sequence is `exchange_change` (ADR-0224): an `AFTER` row trigger on every synced table records
+`(member, resource, key)` with `seq` as the cursor, and the feed reads each changed key's current
+state, or a tombstone when it is gone. Who wrote it comes from the transaction variable
+`basetool.change_source`, which the backend's transaction manager sets at the start of every writing
+transaction (`web`, `app`, `client|<id>|<installation key>`, otherwise `system`). A nightly job
+(`exchange_change_retention`, 03:30 UTC) purges entries older than 90 days and records the highest
+purged `seq` as the horizon, below which a cursor has expired.
+
 **Acceptance**
 
-- [ ] A test fails for any write path to the synced tables that bypasses the sequence.
-- [ ] A default-set change emits entries for every affected member.
+- [x] A test fails for any write path to the synced tables that bypasses the sequence.
+  *`ExchangeChangeFeedTriggerIntegrationTest` pins the synced tables to their triggers and runs bulk
+  deletes, owner reassignment and user deletion through them; blueprints so far, stock and ships
+  join with their slices.*
+- [x] A default-set change emits entries for every affected member.
+  *`ExchangeChangeFeedTriggerIntegrationTest`.*
+- [x] Every writing transaction is attributed to its channel. *`ChangeSourceTransactionManagerIntegrationTest`.*
 
-**Status:** planned — WP 3.3 (#2083)
+**Status:** sequence, attribution and retention built for blueprints — WP 3.3 (#2083); stock, ships
+and the feed routes follow
 
 ### REQ-XCH-014 — A client never re-adds what the member removed elsewhere
 
