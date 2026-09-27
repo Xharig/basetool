@@ -172,6 +172,15 @@ groups:
           summary: "Exchange registry mirror write failed ({{ $labels.phase }})"
           description: "The backend could not write the exchange registry mirror to Redis ({{ $labels.phase }}). A failed pre_commit write refused an admin's restriction; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
 
+      - alert: ExchangeRegistryUnreadableAtGateway
+        expr: sum(increase(basetool_ingest_exchange_refused_total{reason="registry_unavailable"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The ingest gateway cannot read the exchange registry"
+          description: "The ingest gateway cannot read the exchange registry mirror or the revocations in Redis and refuses exchange requests with 503 REGISTRY_UNAVAILABLE (fail-closed, REQ-XCH-003). Check that the backend writes exchange:registry (APP_EXCHANGE_MIRROR_ENABLED, ExchangeMirrorWriteFailed), that Redis is up, and that the ingest ACL user still reads ~exchange:*."
+
       - alert: ExchangeRegistryReconcileStale
         expr: (time() - (basetool_scheduled_job_last_success_timestamp_seconds{task="exchange_registry_reconcile"} > 0)) > 600 or (absent(basetool_scheduled_job_last_success_timestamp_seconds{task="exchange_registry_reconcile"}) and on() (time() - max(process_start_time_seconds{job="basetool-backend"})) > 600 and on() (basetool_scheduled_job_enabled{task="exchange_registry_reconcile"} == 1))
         for: 5m

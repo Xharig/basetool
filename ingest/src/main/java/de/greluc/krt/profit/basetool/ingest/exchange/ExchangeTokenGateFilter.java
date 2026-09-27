@@ -131,6 +131,17 @@ public class ExchangeTokenGateFilter extends OncePerRequestFilter {
    */
   @Override
   protected boolean shouldNotFilter(@NotNull HttpServletRequest request) {
+    return isUngated(request);
+  }
+
+  /**
+   * Whether a request lies outside the exchange gates: every path outside {@code /exchange}, and a
+   * read of the anonymous contract documents.
+   *
+   * @param request the request
+   * @return {@code true} when neither exchange gate applies
+   */
+  public static boolean isUngated(@NotNull HttpServletRequest request) {
     if (!IngestPathScope.isExchangeRequest(request)) {
       return true;
     }

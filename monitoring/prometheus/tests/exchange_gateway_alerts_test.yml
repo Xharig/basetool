@@ -1,0 +1,32 @@
+rule_files:
+  - ../alerts/business.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - the gateway keeps failing closed
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="registry_unavailable"}'
+        values: "0+2x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeRegistryUnreadableAtGateway
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "The ingest gateway cannot read the exchange registry"
+              description: "The ingest gateway cannot read the exchange registry mirror or the revocations in Redis and refuses exchange requests with 503 REGISTRY_UNAVAILABLE (fail-closed, REQ-XCH-003). Check that the backend writes exchange:registry (APP_EXCHANGE_MIRROR_ENABLED, ExchangeMirrorWriteFailed), that Redis is up, and that the ingest ACL user still reads ~exchange:*."
+
+  - name: silent - other refusals are the clients' own
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="scope_missing"}'
+        values: "0+5x30"
+      - series: 'basetool_ingest_exchange_refused_total{job="basetool-ingest", instance="ingest:11272", reason="registry_unavailable"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRegistryUnreadableAtGateway
+        exp_alerts: []
