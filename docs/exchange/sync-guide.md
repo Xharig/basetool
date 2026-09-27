@@ -144,6 +144,10 @@ A held batch writes nothing and answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED` 
 }
 ```
 
+The URL carries a one-time handoff id, like a draft's `frontendUrl`: only the member the batch was
+held for can open it, but treat the id and the URL as a secret all the same — never log, store
+beyond the 30 minutes or share them, and redact them from diagnostics.
+
 Show the member the URL and **do not resend the batch**. The member reviews it in the browser within
 30 minutes and confirms or discards it; a newer held batch of your client replaces your older one for
 that member, while other clients' held batches stay. A held batch is

@@ -997,7 +997,10 @@ cached.
 The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
 page consumes nothing: its script strips the id from the address bar and consumes the staged batch
 with an explicit request, after which the batch waits in the member's server session and the
-browser names it only by its handoff id, so it cannot alter the batch or its client. The batch
+browser names it only by its handoff id, so it cannot alter the batch or its client. The staged
+entry is keyed by the member's subject (`ingest:handoff:<sub>:<id>`), so only that member can open
+it; the developer site still tells a client to treat the link like a draft's `frontendUrl`, as a
+secret it never logs or shares (`docs/exchange/sync-guide.md`). The batch
 carries its `stagedAt` through the frontend to the backend, and the staging lifetime of 30 minutes
 counts from it everywhere: the frontend neither loads nor applies a batch older than that (`404`)
 and drops expired session entries, and the backend refuses it (`403`; a `stagedAt` more than a
