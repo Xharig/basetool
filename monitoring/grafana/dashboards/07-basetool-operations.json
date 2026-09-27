@@ -3639,7 +3639,7 @@
         "y": 232
       },
       "type": "timeseries",
-      "title": "Exchange disconnects/day by kind",
+      "title": "Exchange disconnects and departures/day",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3671,6 +3671,15 @@
           "expr": "sum by (kind) (increase(basetool_exchange_disconnects_total[1d]))",
           "refId": "A",
           "legendFormat": "{{kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (outcome) (increase(basetool_exchange_departures_total[1d]))",
+          "refId": "B",
+          "legendFormat": "departure {{outcome}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
