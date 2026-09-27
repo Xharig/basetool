@@ -503,6 +503,10 @@ register, edit, suspend, activate and switch re-swaps its `admin/exchange-client
 fragment (`?fragment=registry`), which holds the global switch and the client table, so the switch,
 each row's status and its echoed `data-version` move together. It joins no peer sync either.
 
+The member's **connected applications** page (`/connected-apps`, REQ-XCH-032) re-swaps its
+`connected-apps :: apps` fragment after either disconnect. It shows only the member's own
+connections, so no other viewer shares it and it joins no peer sync.
+
 The **admin materials** create (2026-09-22, FE-PERF-06) dropped the `setTimeout(location.reload)`
 that followed a successful create: the page has no `?fragment=` render, so it re-reads itself and
 swaps the table body, the name datalist and the create modal's refined-material select in place,

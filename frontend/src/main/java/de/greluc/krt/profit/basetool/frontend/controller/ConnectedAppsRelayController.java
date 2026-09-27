@@ -1,0 +1,95 @@
+/*
+ * Profit Basetool - squadron-management web app.
+ * Copyright (C) 2026 Lucas Greuloch
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package de.greluc.krt.profit.basetool.frontend.controller;
+
+import static de.greluc.krt.profit.basetool.frontend.support.BackendErrorResponses.relay;
+
+import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
+import java.util.UUID;
+import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * AJAX relay of the member's disconnects to {@code /api/v1/connected-apps} (REQ-XCH-008); a backend
+ * failure is relayed as {@code application/problem+json}.
+ */
+@RestController
+@RequestMapping("/connected-apps")
+@RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
+@Slf4j
+public class ConnectedAppsRelayController {
+
+  /** The backend's connected-apps endpoints. */
+  static final String BACKEND = "/api/v1/connected-apps";
+
+  /** The shape of a registry client id, identical to the backend's rule. */
+  private static final Pattern CLIENT_ID = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
+
+  /** Talks to the backend. */
+  private final BackendApiClient backendApiClient;
+
+  /**
+   * Disconnects a whole client for the member.
+   *
+   * @param clientId the client id; anything outside the registry's shape is refused here
+   * @return {@code 204}, {@code 400} for a malformed id, or the relayed backend error
+   */
+  @DeleteMapping(value = "/{clientId}", headers = "X-Requested-With=XMLHttpRequest")
+  public ResponseEntity<Object> disconnectClient(@PathVariable @NotNull String clientId) {
+    if (!CLIENT_ID.matcher(clientId).matches()) {
+      return ResponseEntity.badRequest().build();
+    }
+    return relay(
+        log,
+        "disconnect exchange client (ajax)",
+        () -> {
+          backendApiClient.delete(BACKEND + "/" + clientId, Void.class);
+          return ResponseEntity.noContent().build();
+        });
+  }
+
+  /**
+   * Disconnects one of the member's installations.
+   *
+   * @param installationId the installation
+   * @return {@code 204}, or the relayed backend error
+   */
+  @DeleteMapping(
+      value = "/installations/{installationId}",
+      headers = "X-Requested-With=XMLHttpRequest")
+  public ResponseEntity<Object> disconnectInstallation(@PathVariable @NotNull UUID installationId) {
+    return relay(
+        log,
+        "disconnect exchange installation (ajax)",
+        () -> {
+          backendApiClient.delete(BACKEND + "/installations/" + installationId, Void.class);
+          return ResponseEntity.noContent().build();
+        });
+  }
+}

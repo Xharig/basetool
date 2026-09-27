@@ -80,12 +80,16 @@ need no new consent (REQ-SEC-028).
 
 - [ ] `docs/legal/approved-clients.md` exists, is linked from the terms clause (REQ-SEC-027) and
   lists client id, product, maintainer contact, capabilities and the approval issue and PR.
-- [ ] `docs/exchange/onboarding.md` states the criteria, the issue template and the fix deadline.
+  *The list exists with these columns and no client yet; the terms clause links it at the go-live
+  (WP 6). It records the approved capabilities, not the registry's runtime state.*
+- [x] `docs/exchange/onboarding.md` states the criteria, the issue template and the fix deadline.
+  *The template is `.github/ISSUE_TEMPLATE/exchange-client-application.yml`.*
 - [ ] The privacy notice (the frontend's `privacy.*` keys, DE and EN) states which data flows to an
   approved client on the member's own device, that the client's own privacy statement governs it
   there, and how to disconnect and undo; it changes with the go-live.
 
-**Status:** planned — WP 4.6 (#2090), WP 6 (#2092)
+**Status:** the list, the onboarding page and the application template are built — WP 4.6 (#2090);
+the terms link and the privacy notice change with the go-live — WP 6 (#2092)
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 
@@ -131,6 +135,11 @@ finds no document, refuses every exchange request.
   registers, edits, suspends and activates clients and flips the switch in place; suspending, either
   direction of the switch and granting a client more capabilities each ask for confirmation first.
   *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`.*
+- [x] Each client shows its connected members and last activity, counted over live installations
+  only (`GET /api/v1/admin/exchange-clients/usage`: not revoked, and not seen last before the
+  member disconnected the client); the error rate per client is linked in Grafana
+  (`APP_GRAFANA_OPERATIONS_DASHBOARD_URL`, owner decision 2026-09-27). *`AdminExchangeClientUsageTest`,
+  `AdminExchangeClientsPageControllerMvcTest`.*
 
 **Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
 `AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `RedisAclBackendIntegrationTest`,
@@ -440,12 +449,39 @@ change of the default blueprint set — appear in it. Removals leave tombstones 
 (`web`, `app`, `client` with client id and installation id, `system`) and `removedAt`, kept 90 days
 and purged nightly. A cursor older than the tombstones answers `410 CURSOR_EXPIRED`.
 
+The sequence is `exchange_change` (ADR-0224): an `AFTER` row trigger on every synced table records
+`(member, resource, key)` with its writing transaction's id and a sequence number, and the feed reads
+each changed key's current state, or a tombstone when it is gone. A feed position is `(transaction id,
+seq)`, and a reader passes only transactions below the oldest one still running, so an entry committed
+late can never land behind a position a client has already passed. Who wrote it comes from the transaction variable
+`basetool.change_source`, which the backend's transaction manager sets at the start of every writing
+transaction (`web`, `app`, `client|<id>|<installation key>`, otherwise `system`). A nightly job
+(`exchange_change_retention`, 03:30 UTC) purges entries older than 90 days and records the highest
+purged position as the horizon, below which a cursor has expired.
+
 **Acceptance**
 
-- [ ] A test fails for any write path to the synced tables that bypasses the sequence.
-- [ ] A default-set change emits entries for every affected member.
+- [x] A test fails for any write path to the synced tables that bypasses the sequence.
+  *`ExchangeChangeFeedTriggerIntegrationTest` pins the synced tables — `personal_blueprint`,
+  `default_blueprint`, `inventory_item` (the member's personal rows only, keyed by lot) and `ship` —
+  to their triggers and runs bulk deletes, owner reassignment, a rebooking to the shared pool and
+  user deletion through them.*
+- [x] A default-set change emits entries for every affected member.
+  *`ExchangeChangeFeedTriggerIntegrationTest`.*
+- [x] Every writing transaction is attributed to its channel. *`ChangeSourceTransactionManagerIntegrationTest`.*
+- [x] A writer that commits after a later one stays ahead of the readers' watermark.
+  *`ExchangeChangeWatermarkIntegrationTest`.*
 
-**Status:** planned — WP 3.3 (#2083)
+A snapshot pages by row id and ends with the feed cursor it was taken at, so nothing written during
+it is lost. A feed page answers each key changed after the cursor once, with its current state or a
+tombstone whose `installationId` is the removing installation's id. A feed page that reaches the end
+moves the cursor up to the watermark, so an idle client's cursor never falls behind the horizon.
+Cursors are `s1.<tx>.<seq>.<id>` and `f1.<tx>.<seq>` and stay opaque to clients; one the server did not
+issue also answers `CURSOR_EXPIRED`.
+
+**Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
+(#2083); the backend's blueprint feed (`/api/v1/exchange/me/blueprints`) is built, the gateway route
+and the stock and ship feeds follow with WP 4.1–4.4
 
 ### REQ-XCH-014 — A client never re-adds what the member removed elsewhere
 
@@ -466,12 +502,19 @@ Ops are `add` and `remove` of products. Default-granted blueprints cannot be rem
 (`DEFAULT_NOT_REMOVABLE`). A blueprint's `note` is read-only in v1. Writes are audited in the
 Blueprints domain with the external client.
 
+A blueprint's `key` and its `ref.bt` are the same value: the normalised product key, or `h:` and
+its SHA-256 in hex when that is longer than 128 characters. The display name is cut to 200. The
+resolver (REQ-XCH-012) answers a blueprint with the same `bt` and accepts it back.
+
 **Acceptance**
 
 - [ ] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
   in the feed of another installation.
+- [x] The feed marks default-granted blueprints and follows a change of the default set.
+  *`ExchangeBlueprintControllerTest`.*
 
-**Status:** planned — WP 4.1 (#2084)
+**Status:** read side built in the backend — WP 4.1 (#2084); the gateway route and the writes
+follow
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -641,7 +684,8 @@ problem-report channel, pins the production issuer and allows another only throu
 environment variable, and sends a descriptive `User-Agent`. The checklist is
 `docs/exchange/client-security.md`.
 
-**Status:** planned — WP 4.6 (#2090), WP 5.1 (#2088), WP 5.2 (#2089)
+**Status:** the checklist `docs/exchange/client-security.md` is written — WP 4.6 (#2090); the
+clients' implementations with WP 5.1 (#2088), WP 5.2 (#2089)
 
 ### REQ-XCH-028 — The exchange is observable per client
 
@@ -694,6 +738,11 @@ installation or a whole client, undo, and confirm a staged mass change. Every ne
 installation raises a notification and stays highlighted until seen. `ADMIN` manages the registry
 on an admin page with a suspend switch. The page is web-only; the app links to it.
 
+The page is `/connected-apps` (sidebar *Persönlich*, every member), over `/api/v1/connected-apps`.
+An installation is always named as `‹client name› – „‹label›"`, the client-supplied label escaped
+and never first, so a label cannot pose as the Basetool. Both disconnects ask first and re-swap the
+`connected-apps :: apps` fragment; the page is the member's own and joins no peer sync.
+
 The notification is the rule-engine event `EXCHANGE_INSTALLATION_CONNECTED` (seed `V251`,
 `EVENT_RECIPIENT`), published when the installation upsert reports that it created the row, so two
 concurrent first calls announce one installation once. It names the client by its registry display
@@ -702,11 +751,18 @@ installation counts as unseen while its notification is unread, `GET /api/v1/con
 per installation (`unseen`), and `POST /api/v1/connected-apps/seen` marks them read — a notification
 change only, not audited.
 
+- [x] List the clients with their capabilities and installations (label, first and last seen), and
+  disconnect one installation or a whole client. *`ConnectedAppsPageControllerMvcTest`.*
+- [x] The admin registry page. *See REQ-XCH-003.*
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
+- [ ] The page highlights an unseen installation until it is seen.
+- [ ] Recent activity, undo and the staged mass-change confirmation (WP 3.3's journal and guard).
+- [ ] The end-to-end run on the sandbox (WP 2.3, #2099).
 
-**Status:** planned — WP 4.5 (#2087); the new-connection notification and the unseen state are built
+**Status:** list, disconnects, the admin page, the new-connection notification and the unseen state
+built — WP 4.5 (#2087); the page's highlight and the rest follow
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 

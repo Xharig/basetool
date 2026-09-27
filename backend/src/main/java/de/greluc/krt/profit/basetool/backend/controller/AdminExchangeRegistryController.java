@@ -24,6 +24,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientCreateReque
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientStatusRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientUpdateRequest;
+import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientUsageDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeSettingsDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeSettingsUpdateRequest;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeRegistryService;
@@ -71,6 +72,21 @@ public class AdminExchangeRegistryController {
   @ApiResponse(responseCode = "200", description = "Every registry client")
   public ResponseEntity<List<ExchangeClientDto>> listClients() {
     return ResponseEntity.ok(registryService.listClients().stream().map(mapper::toDto).toList());
+  }
+
+  /**
+   * Reports how widely each client is in use.
+   *
+   * @return connected members and last activity per client in use; unused clients have no row
+   */
+  @NotNull
+  @GetMapping("/exchange-clients/usage")
+  @Operation(
+      summary = "Exchange client usage",
+      description = "Connected members and last activity per client, over live installations.")
+  @ApiResponse(responseCode = "200", description = "One row per client in use")
+  public ResponseEntity<List<ExchangeClientUsageDto>> usage() {
+    return ResponseEntity.ok(registryService.usage());
   }
 
   /**
