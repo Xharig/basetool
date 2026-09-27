@@ -23,9 +23,9 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `CLIENT_REVOKED` | 401 | gateway | The member disconnected this client after this connection was made: an offline token issued before the disconnect, or a token without `offline_access` whose sign-in (`auth_time`) came before it. | Discard tokens; start a new device login only when the member asks. |
 | `INSTALLATION_REVOKED` | 401 | gateway | The member disconnected this installation; its DPoP key is refused for good. | Discard tokens **and** the DPoP key; reconnecting needs a new key. |
 | `CLIENT_VERSION_UNSUPPORTED` | 403 | gateway | The `User-Agent` version is below the client's minimum. | Ask the member to update. |
-| `EXCHANGE_DISABLED` | 503 | gateway | The exchange is switched off globally. | Back off; retry later. |
-| `REGISTRY_UNAVAILABLE` | 503 | gateway | The gateway cannot read the client registry and fails closed. | Back off; retry later. |
-| `EXCHANGE_BUDGET_EXHAUSTED` | 503 | gateway | A Redis byte budget of the exchange is full. | Back off; honour `Retry-After`. |
+| `EXCHANGE_DISABLED` | 503 | gateway | The exchange is switched off globally. `Retry-After: 30`. | Wait at least `Retry-After`, then retry. |
+| `REGISTRY_UNAVAILABLE` | 503 | gateway | The gateway cannot read the client registry or the revocations and fails closed. `Retry-After: 30`. | Wait at least `Retry-After`, then retry. |
+| `EXCHANGE_BUDGET_EXHAUSTED` | 503 | gateway | A Redis byte budget of the exchange is full. `Retry-After: 60`. | Wait at least `Retry-After`, then retry the same request under the same key. |
 | `SCOPE_MISSING` | 403 | gateway | The route's capability is not in the token or not granted to the client. A missing consent looks the same. | Start a device login requesting the scope, if the member wants it. |
 | `UNAUTHENTICATED` | 401 | gateway | The token is missing, invalid, expired, or not issued for this gateway. | Start a device login again. |
 | `DPOP_REQUIRED` | 401 | gateway | The request carries no DPoP proof or an unbound token. | Send `Authorization: DPoP` with a proof. |
@@ -47,7 +47,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `RATE_LIMITED` | 429 | gateway | A per-minute limit is exhausted. | Honour `Retry-After`. |
 | `QUOTA_EXCEEDED` | 429 | gateway | The daily write quota is exhausted. | Retry after `Retry-After`, the next day at the latest. |
 | `BACKEND_RELAY_FAILED` | 502 | gateway | The backend did not answer usably: an error, a refusal the contract does not name, or an answer that breaks the v1 schema. | Back off; retry with the same key. |
-| `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable. | Back off; retry with the same key. |
+| `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable: a store the exchange needs cannot be reached (`Retry-After: 60`), the daily write quota cannot be counted (`Retry-After: 30`), or the identity provider cannot be reached to check the token (`Retry-After: 5`). | Wait at least `Retry-After`, then retry the same request under the same key. |
 | `NOT_FOUND` | 404 | gateway | The requested document, such as a schema name, does not exist. | Check the name. |
 | `LEGACY_ENDPOINT_GONE` | 410 | gateway | A legacy `/v1/*` extractor endpoint after the go-live. | Update the client. |
 

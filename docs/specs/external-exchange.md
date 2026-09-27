@@ -138,8 +138,9 @@ mirrors them into Redis under `exchange:*` with a version and a timestamp, rewri
 startup and reconciles it every 60 s. Restrictive changes (suspend, capability removal, global
 switch off, revocations) are written to Redis **before** the database commit and fail the action if
 the mirror write fails; permissive changes are written **after** the commit. The gateway reads the
-mirror through a cache of at most 5 s and refuses every exchange request when it cannot read it
-(`503 REGISTRY_UNAVAILABLE`) or when the switch is off (`503 EXCHANGE_DISABLED`).
+mirror through a cache of at most 5 s and refuses every exchange request when it cannot read it or
+the revocations (`503 REGISTRY_UNAVAILABLE`) or when the switch is off (`503 EXCHANGE_DISABLED`),
+each with `Retry-After: 30`.
 
 **How the backend keeps the mirror** (WP 3.1). The tables are `exchange_client`,
 `exchange_client_capability` and the single-row `exchange_settings` (`V248`); the switch starts
@@ -910,7 +911,12 @@ change. The lock of a key in flight lives two minutes, so a crashed request cann
 the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write. That
 holds on every exchange route and for every kind of Redis failure — a lost connection, a timeout, a
 refused command while staging a draft or a mass change, or a store failure escaping a route — each
-answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`.
+answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`. Two Redis reads answer
+otherwise: an unreadable registry or revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003)
+and a write quota that cannot be counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with
+`Retry-After: 30`; a full byte budget is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`.
+*Corrected 2026-09-27: this paragraph said every Redis failure answered `Retry-After: 60`; the
+registry and quota reads have answered 30 since they were built.*
 
 The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
 per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
@@ -1053,7 +1059,7 @@ Redis (`ingest:xch:quota:*`). All gateway-written exchange data in Redis is boun
 client and member, 16 MB per client and 64 MB in total, counted per stored value with a fixed
 per-entry overhead (an estimate of Redis's own bookkeeping, not a measurement of its memory — see
 *The byte budget* below); above a limit the gateway
-answers `503 EXCHANGE_BUDGET_EXHAUSTED`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
+answers `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
 Responses carry `RateLimit` and `Retry-After` headers. The account check has its own tight limit.
 
 **The limits** (owner decision 2026-09-27; `app.exchange.limits.*`):

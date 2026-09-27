@@ -5,6 +5,11 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-27
 
+- **Corrected: `Retry-After` per code.** The pages said every Redis failure answers
+  `Retry-After: 60`. The gateway sends 30 with `EXCHANGE_DISABLED`, `REGISTRY_UNAVAILABLE` and a
+  `SERVICE_UNAVAILABLE` whose daily write quota cannot be counted; 60 with
+  `EXCHANGE_BUDGET_EXHAUSTED` and a `SERVICE_UNAVAILABLE` for a store it cannot reach; 5 when the
+  identity provider cannot be reached ([errors](errors.md)). The behaviour is unchanged.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and
@@ -13,8 +18,8 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **`CLIENT_REVOKED` counts from the sign-in.** After the member disconnects a client, a token
   without `offline_access` is refused while its `auth_time` lies before the disconnect, also when it
   was refreshed afterwards; a client that requests `offline_access`, as it must, is unaffected.
-- **Store outages.** Every Redis failure on an exchange route answers `503 SERVICE_UNAVAILABLE`
-  with `Retry-After: 60`. A lost Redis connection while staging a draft answered with the extractor
+- **Store outages.** A store the exchange cannot reach answers `503 SERVICE_UNAVAILABLE` with
+  `Retry-After: 60` on every exchange route. A lost Redis connection while staging a draft answered with the extractor
   upload's `Retry-After: 5`, and a store failure outside the staging could answer `500`.
 - **Oversize drafts.** A draft or a held-back change set whose staged form exceeds the cap answered
   `400 BAD_REQUEST`, a code outside the registry, and the answer was replayed for its key. It now

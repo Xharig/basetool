@@ -352,8 +352,9 @@
   verpackt über der Grenze liegt, wird mit `413` und dem Registry-Code abgelehnt statt mit
   `400 BAD_REQUEST`, und diese Antwort wird nicht mehr zwischengespeichert.
   
-- **Datenaustausch: Redis-Ausfälle.** Jeder Redis-Fehler auf einer Austausch-Route antwortet mit
-  `503 SERVICE_UNAVAILABLE` und `Retry-After: 60`, nie mit `500`.
+- **Datenaustausch: Redis-Ausfälle.** Ein nicht erreichbarer Speicher auf einer Austausch-Route
+  antwortet mit `503 SERVICE_UNAVAILABLE` und `Retry-After: 60`, nie mit `500`; Registry und
+  Tageskontingent antworten weiter mit `Retry-After: 30`.
   
 - **Datenaustausch: Tageszähler ohne Ablauf.** Der Zähler des Schreibkontingents entsteht mit seinem
   Ablaufdatum in einem Befehl und kann es nicht mehr verlieren; er zählt dabei genau einmal im

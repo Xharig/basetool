@@ -177,8 +177,11 @@ table, as the limit, and send a fresh DPoP proof with every request, retries inc
 
 - `429 RATE_LIMITED` and `429 QUOTA_EXCEEDED` carry `Retry-After` in seconds — for the quota, until
   the next UTC day. Wait at least that long.
-- `503 EXCHANGE_BUDGET_EXHAUSTED` and `503 SERVICE_UNAVAILABLE` carry `Retry-After` too; retry the
-  same request under the same key after it.
+- Every `503` of the gateway carries `Retry-After` too: 30 seconds for `EXCHANGE_DISABLED` and
+  `REGISTRY_UNAVAILABLE`, 60 for `EXCHANGE_BUDGET_EXHAUSTED`, and for `SERVICE_UNAVAILABLE` 60 when
+  a store cannot be reached, 30 when the daily write quota cannot be counted and 5 when the identity
+  provider cannot be reached. Wait at least that long and retry the same request under the same key;
+  read the header rather than these numbers.
 - `502 BACKEND_RELAY_FAILED` and a `503` without `Retry-After`: back off exponentially with jitter,
   starting at a few seconds, and retry under the same key.
 
