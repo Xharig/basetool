@@ -64,7 +64,7 @@ class ExchangeStoreRedisIntegrationTest {
 
   private static final ExchangeStoreProperties SMALL =
       new ExchangeStoreProperties(
-          1024L, 3072L, 5120L, 1024, Duration.ofHours(24), Duration.ofMinutes(2));
+          1024L, 3072L, 5120L, 1024, Duration.ofHours(24), Duration.ofMinutes(2), 1024L);
 
   private final AtomicReference<Instant> now =
       new AtomicReference<>(Instant.parse("2026-09-27T12:00:00Z"));

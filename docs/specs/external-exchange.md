@@ -544,8 +544,8 @@ delete, so the Blueprints audit names the client; each written entry is journale
 only. `basetool_exchange_writes_total{resource,outcome}` counts the ops.
 
 **Status:** read and write sides built in the backend, and the gateway's read route (`GET
-/exchange/v1/me/blueprints`) — WP 4.1 (#2084); the gateway's write route and the corpus round trip
-follow with the sandbox (WP 2.3)
+/exchange/v1/me/blueprints`) and write route (`POST …/changes`) — WP 4.1 (#2084); the corpus round
+trip follows with the sandbox (WP 2.3)
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -589,7 +589,7 @@ lowers or removes is audited by that book-out (`MARKET_OFFER_REDUCED`, `MARKET_O
 `offersReduced` / `offersRemoved`. Each changed lot is journaled.
 
 **Status:** read and write sides built in the backend, and the gateway's read route (`GET
-/exchange/v1/me/stock`) — WP 4.2 (#2085); the gateway's write route follows
+/exchange/v1/me/stock`) and write route (`POST …/changes`) — WP 4.2 (#2085)
 
 ### REQ-XCH-017 — Ships sync with a link step before the first create
 
@@ -629,7 +629,7 @@ place like a stock lot's; an absent `fitted` keeps the ship's. Every write is au
 area with the client and journaled.
 
 **Status:** built in the backend, and the gateway's read route (`GET /exchange/v1/me/ships`) —
-WP 4.4 (#2086); the gateway's write route follows
+WP 4.4 (#2086), and its write route (`POST …/changes`)
 
 ### REQ-XCH-018 — Org demand is anonymised and membership-scoped; locations are the non-hidden list
 
@@ -719,6 +719,12 @@ client's window opened, taken from the lot's first journal entry in the window; 
 that rises elsewhere in the same batch is a move and does not count.
 
 A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
+
+When the backend answers `MASS_CHANGE_CONFIRMATION_REQUIRED`, the gateway stages the change set with
+its client, installation and resource in the handoff staging (`HandoffKind.MASS_CHANGE`, one slot
+per member apart from the extractor drafts, at most `app.exchange.store.max-mass-change-bytes`,
+512 KiB, counted against the exchange's Redis budget) and answers `409` with a `confirmationUrl` to
+`/connected-apps/confirm?handoff=<id>`. A change set too large to hold is `413 BATCH_TOO_LARGE`.
 
 The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
 page consumes nothing: its script strips the id from the address bar and consumes the staged batch

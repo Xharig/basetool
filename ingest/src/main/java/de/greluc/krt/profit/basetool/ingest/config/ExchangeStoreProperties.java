@@ -36,6 +36,7 @@ import org.springframework.validation.annotation.Validated;
  * @param maxResultBytes the largest answer the idempotency cache keeps, reserved before a write
  * @param idempotencyTtl how long an answer is replayed for its key
  * @param lockTtl how long a write in flight holds its key
+ * @param maxMassChangeBytes the largest change set staged for the member's confirmation
  */
 @Validated
 @ConfigurationProperties(prefix = "app.exchange.store")
@@ -45,4 +46,5 @@ public record ExchangeStoreProperties(
     @Min(1024) @DefaultValue("67108864") long totalBytes,
     @Min(1024) @DefaultValue("32768") int maxResultBytes,
     @NotNull @DefaultValue("PT24H") Duration idempotencyTtl,
-    @NotNull @DefaultValue("PT2M") Duration lockTtl) {}
+    @NotNull @DefaultValue("PT2M") Duration lockTtl,
+    @Min(1024) @DefaultValue("524288") long maxMassChangeBytes) {}

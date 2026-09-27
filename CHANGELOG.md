@@ -7,6 +7,10 @@
 - **Datenaustausch: Blueprints lesen.** Verbundene Anwendungen mit `exchange.blueprints.read` lesen
   über `GET /exchange/v1/me/blueprints` die Blueprints des Mitglieds als Snapshot und danach nur die
   Änderungen seit ihrem Cursor (REQ-XCH-013, REQ-XCH-015).
+- **Datenaustausch: Schreibrouten im Gateway.** `POST /exchange/v1/me/{blueprints,stock,ships}/changes`
+  prüfen Änderungssätze (höchstens 500 Operationen, sonst `413 BATCH_TOO_LARGE`) und reichen sie an
+  das Backend weiter; eine von der Massenänderungs-Sperre angehaltene Änderung wird zur Bestätigung
+  im Browser zwischengespeichert und mit `confirmationUrl` beantwortet (REQ-XCH-021, REQ-XCH-023).
 - **Datenaustausch: Lager und Hangar lesen.** Verbundene Anwendungen mit `exchange.stock.read` bzw.
   `exchange.hangar.read` lesen über `GET /exchange/v1/me/stock` und `GET /exchange/v1/me/ships` den
   persönlichen Bestand und die eigenen Schiffe des Mitglieds als Snapshot und danach die Änderungen
