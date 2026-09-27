@@ -621,7 +621,19 @@ installation or a whole client, undo, and confirm a staged mass change. Every ne
 installation raises a notification and stays highlighted until seen. `ADMIN` manages the registry
 on an admin page with a suspend switch. The page is web-only; the app links to it.
 
-**Status:** planned — WP 4.5 (#2087)
+The notification is the rule-engine event `EXCHANGE_INSTALLATION_CONNECTED` (seed `V251`,
+`EVENT_RECIPIENT`), published when the installation upsert reports that it created the row, so two
+concurrent first calls announce one installation once. It names the client by its registry display
+name only: the client-supplied label arrives with a later call and could pose as the Basetool. An
+installation counts as unseen while its notification is unread, `GET /api/v1/connected-apps` says so
+per installation (`unseen`), and `POST /api/v1/connected-apps/seen` marks them read — a notification
+change only, not audited.
+
+- [x] A new installation notifies its member once, by the client's name; the list reports it
+  unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
+  `ConnectedAppsControllerTest`.*
+
+**Status:** planned — WP 4.5 (#2087); the new-connection notification and the unseen state are built
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 

@@ -4,6 +4,9 @@
 
 ### Added
 
+- **Benachrichtigung „Neue Anwendung verbunden".** Verbindet sich eine neue Installation einer
+  Anwendung mit deinem Konto, bekommst du eine Benachrichtigung mit dem Namen der Anwendung, damit
+  dir eine Verbindung auffällt, die du nicht selbst hergestellt hast (Migration `V251`, REQ-XCH-032).
 - **Verbundene Anwendungen: Trennen einer Installation oder einer ganzen Anwendung.** Mitglieder
   können über `/api/v1/connected-apps` ihre Verbindungen sehen und trennen; gesperrte Schlüssel und
   Widerrufe erreichen das Gateway sofort (Migration `V249`, REQ-XCH-008). Die Seite dazu folgt.
