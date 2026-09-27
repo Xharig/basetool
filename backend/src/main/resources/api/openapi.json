@@ -59551,7 +59551,7 @@
             "type" : "string"
           },
           "ref" : {
-            "$ref" : "#/components/schemas/ExchangeProductRefDto"
+            "$ref" : "#/components/schemas/ExchangeItemRefDto"
           }
         }
       },
@@ -59785,7 +59785,7 @@
           }
         }
       },
-      "ExchangeProductRefDto" : {
+      "ExchangeItemRefDto" : {
         "type" : "object",
         "properties" : {
           "bt" : {

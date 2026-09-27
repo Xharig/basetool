@@ -24,7 +24,7 @@ import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
 import de.greluc.krt.profit.basetool.backend.model.PersonalBlueprint;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintPageDto;
-import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeProductRefDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeItemRefDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeTombstoneDto;
 import de.greluc.krt.profit.basetool.backend.repository.PersonalBlueprintRepository;
 import de.greluc.krt.profit.basetool.backend.service.DefaultBlueprintKeyService;
@@ -180,7 +180,7 @@ public class ExchangeBlueprintFeedService {
     String name = row.getProductName();
     return new ExchangeBlueprintDto(
         key,
-        new ExchangeProductRefDto(
+        new ExchangeItemRefDto(
             key, name.length() > MAX_NAME ? name.substring(0, MAX_NAME) : name),
         row.getAcquiredAt(),
         defaultKeys.isDefault(row.getProductKey()),

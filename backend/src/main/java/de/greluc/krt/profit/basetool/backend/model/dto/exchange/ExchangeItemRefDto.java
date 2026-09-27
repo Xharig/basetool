@@ -25,7 +25,8 @@ import org.jetbrains.annotations.NotNull;
  * A catalogue entry as the feed names it: the Basetool key a client echoes as {@code bt}, and the
  * display name (REQ-XCH-012).
  *
- * @param bt the Basetool key, for a blueprint the same opaque key as the feed entry
+ * @param bt the Basetool key: for a blueprint the same opaque key as the feed entry, for a
+ *     material or item its id
  * @param name the display name
  */
-public record ExchangeProductRefDto(@NotNull String bt, @NotNull String name) {}
+public record ExchangeItemRefDto(@NotNull String bt, @NotNull String name) {}
