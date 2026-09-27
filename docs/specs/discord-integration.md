@@ -281,11 +281,6 @@ truststore, and a TLS failure simply fails open.
 
 ### REQ-SEC-026 — Admin-mediated linking of a Discord registration to an existing account
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The account merge carries every new member-linked table of the exchange. Ships with WP 3.1–3.3 (#2083).
->
-> *The RSI handle part shipped with WP 1.4 (#2106, REQ-SEC-072, 2026-09-26): the source's handle moves onto a survivor without one; when both carry one, the survivor's wins and the source's is dropped.*
-
 A member who already has a Basetool account but signs in via Discord **can slip past the fail-open
 collision precheck (REQ-SEC-022)** and land in the PENDING approval queue as a seemingly-new
 registration — typically because their Discord **username** differs from their in-app/server name
@@ -356,6 +351,12 @@ REQ-SEC-022's login-time deny is **unchanged**: a confidently-colliding first-lo
 and redirected to self-service linking; this action resolves the registrations that the fail-open
 precheck let through. Because a `PENDING` account carries **zero** authorities (REQ-SEC-017) until an
 admin acts, no privilege can be inherited before the link, so the merge never widens access.
+
+*Corrected 2026-09-27: a planned-amendment note on this requirement said the account merge carries
+the exchange's member-linked tables and the RSI handle. Linking moves no member data — its DB step
+deletes the throwaway account (step 4). The account merge that moves data is REQ-SEC-046 in
+[`security-and-access.md`](security-and-access.md), which states the exchange tables, and the RSI
+handle rule is REQ-SEC-072's.*
 
 **Acceptance**
 

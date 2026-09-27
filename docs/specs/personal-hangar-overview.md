@@ -56,6 +56,12 @@ bounces the user back to page 0 or drops the filter. The home-location and delet
 on **all** the caller's ships (not the current page), so their count reflects the page envelope's
 `totalElements`.
 
+A connected application's ship writes (REQ-XCH-017) run through the Hangar's own create, update and
+delete (`HangarService`), so the ships they create, change or remove appear in this list exactly
+like web writes — same ordering, filter and counts. After the write commits, the member's open
+hangar page is told through its live-sync room (`hangar:{member}`, REQ-XCH-013) and refreshes
+without a reload.
+
 **Acceptance**
 
 - [ ] `GET /api/v1/hangar/my-ships` honours `page`/`size` and returns page metadata

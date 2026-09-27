@@ -968,8 +968,12 @@ certificate rotation*, *Token rotation*
 
 ### REQ-OPS-018 — Redis session store: durable persistence and a session-safe memory ceiling
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Since WP 2.1 (#2092) the repository carries `maxmemory` **768mb** in a **1024M** container (ADR-0221, owner decision 2026-09-26) — the exchange's bounded 64 MB partition plus headroom. It reaches production with the next release and its Quadlet units; that rollout is an owner-approved production step and must precede the first exchange release.
+> [!note] Planned — the production rollout (epic #2078, WP 2.1, #2092)
+> Built in the repository: both command lines below carry `--maxmemory 768mb` in a 1024M container
+> (ADR-0221), sized for the exchange's bounded 64 MB partition (REQ-XCH-023) plus headroom. Still
+> to come: as of 2026-09-27 no release tag carries it. It reaches production with the next release
+> and its Quadlet units, an owner-approved production step that must precede the first exchange
+> release.
 
 The Redis instance backing Spring Session (frontend) and the ingest handoff staging runs with a
 durability and memory posture matched to a store whose loss forces users to re-login — **not** a

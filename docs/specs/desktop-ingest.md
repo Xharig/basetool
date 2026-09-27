@@ -20,6 +20,10 @@
 > may break without notice. **Building or distributing an unapproved client is not permitted.** If
 > you want to integrate, ask first.
 >
+> This gate covers the extractor's legacy `/v1/*` routes. The **exchange API** on the same gateway
+> (`/exchange/v1`, [`external-exchange.md`](external-exchange.md)) approves clients publicly per
+> capability and gates them through the backend's client registry instead (REQ-XCH-002/-003).
+>
 > Be precise about what enforcement can and cannot achieve — see the honesty note in
 > `REQ-INGEST-011`: these controls segment *registered* clients from one another and make a foreign
 > caller *visible*; they are not native-client attestation, which is not achievable on Windows.
@@ -60,14 +64,14 @@ not a new write path.
 
 ### REQ-INGEST-001 — Dedicated gateway, minimal forward-only surface
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The route table gains `/exchange/v1/**` (REQ-XCH-001). `ActingMemberFilter` keeps the exchange routes as their own explicit list next to the two ingest routes and grows it route by route, never by a prefix (ADR-0216); the first is `/api/v1/exchange/catalog/locations` (WP 3.1). The gateway then keeps idempotency results and daily quotas in Redis and a little policy logic (REQ-XCH-020, REQ-XCH-023). The legacy `/v1/*` routes end at the go-live (REQ-XCH-033). Until WP 3.2 (#2082) ships, the text below is current.
-
 A new standalone service (the `ingest` gateway) is the only new internet-reachable
-surface. It exposes **exactly two** endpoints, one per existing import draft:
-refinery-extract and blueprint-preview. Each endpoint validates the caller's JWT and calls
-the corresponding internal backend import endpoint **under the gateway's own service-account
-identity**, naming the member it acts for in `X-Ingest-On-Behalf-Of` (ADR-0129)
+surface. For the extractor it exposes **exactly two** endpoints, one per existing import draft:
+refinery-extract and blueprint-preview; beside them it serves the exchange API's routes under
+`/exchange/v1` (REQ-XCH-001), whose own rules are [`external-exchange.md`](external-exchange.md).
+The two legacy `/v1/*` routes end at the go-live (REQ-XCH-033). Each extractor endpoint validates
+the caller's JWT and calls the corresponding internal backend import endpoint **under the
+gateway's own service-account identity**, naming the member it acts for in `X-Ingest-On-Behalf-Of`
+(ADR-0129)
 (`POST /api/v1/refinery-orders/import-extract`, `POST /api/v1/personal-blueprints/import/preview`),
 stages the returned draft for browser pickup, and returns a handoff id.
 
@@ -77,7 +81,10 @@ bearer, so binding and relaying were mutually exclusive, and attempting both bro
 2026-08-03. The caller's token now stops at the gateway and does not travel through its service
 layer at all. The backend honours the on-behalf-of header only for a caller whose `azp` is on its
 configured gateway allowlist, and only on these two endpoints, enforced as parsed `PathPattern`s on
-the decoded path (REQ-SEC-029) rather than by convention.
+the decoded path (REQ-SEC-029) rather than by convention. `ActingMemberFilter` keeps the backend's
+exchange routes (`/api/v1/exchange/**`) as a second explicit list beside these two, one pattern per
+route and never a prefix (ADR-0216); on them the member holds the reduced exchange authentication
+of REQ-XCH-009 instead of their own authorities.
 
 **The header selects the security identity, not merely the owner field** (amended 2026-08-04,
 ADR-0129). `ActingMemberFilter` replaces the request's `SecurityContext` with the acting member
@@ -89,7 +96,7 @@ same assembler the login path uses, so they are exact rather than approximate.
 **Four guards bound it, and every one fails closed** (the same four ADR-0129 records, listed here
 in the order the filter applies them):
 
-1. the endpoint is one of the two the header is bounded to, matched on the *decoded* path
+1. the endpoint is one of those the header is bounded to, matched on the *decoded* path
    (REQ-SEC-029). **Checked first, and that is load-bearing**: the filter sits on the unmatched
    chain, so while this ran later, any unauthenticated internet request carrying the header was
    counted under a reason documented as structurally impossible — and alerted on as evidence of a
@@ -111,8 +118,10 @@ lives only in the metric and the log line.
 The gateway has
 **no database and no Flyway migration**, serves **no HTML**, holds **no business logic**
 (matching/validation stay backend-side, ADR-0008), and persists **nothing** durable of its
-own. The backend remains internet-unreachable — the gateway reaches it over the internal
-network only.
+own. For the exchange it adds a little policy logic — schema checks, rate limits and quotas — and
+keeps idempotency results, daily quotas, its byte budget and staged mass changes in Redis, each
+with an expiry (REQ-XCH-011, REQ-XCH-020, REQ-XCH-021, REQ-XCH-023). The backend remains
+internet-unreachable — the gateway reaches it over the internal network only.
 
 **Acceptance**
 
@@ -127,8 +136,9 @@ network only.
 - [x] The gateway declares no `DataSource`/JPA and runs no schema migration (architecture
   test / startup assertion).
 - [x] The routed surface is **exactly** `POST /v1/refinery-extract`, `POST /v1/blueprint-preview`
-  and the exchange routes of REQ-XCH-001 built so far — `GET /exchange/v1/openapi.json` and
-  `GET /exchange/v1/schemas/{name}` (plus springdoc's non-prod `/v3/api-docs` tree and Boot's `/error`
+  and the exchange routes of REQ-XCH-001 — the service document, the two anonymous documents
+  `GET /exchange/v1/openapi.json` and `GET /exchange/v1/schemas/{name}`, and the member, catalogue,
+  change and draft routes (plus springdoc's non-prod `/v3/api-docs` tree and Boot's `/error`
   dispatch target). `IngestPathScope` splits the scope in two: the **protected** surface
   (`/v1/**` and `/exchange/**`) gets the payload cap, the per-IP rate limit and the access log; only
   the **legacy** surface (`/v1/**`) gets the extractor client gate, because exchange clients are
@@ -181,7 +191,8 @@ network only.
 **Enforced by:** `ArchitectureTest` (no JPA / no relational persistence; every controller +
 `@PostMapping` is `@PreAuthorize`-annotated), `IngestControllerTest` (exactly the two endpoints,
 forward-only relay, backend 4xx relayed verbatim, 502 on backend-unreachable), `IngestEndpointSurfaceTest`
-(the dispatcher routes exactly the two `/v1` endpoints), `FilterOrderTest` (the registered filter order),
+(the dispatcher routes exactly the two `/v1` endpoints and the exchange routes),
+`FilterOrderTest` (the registered filter order),
 `GlobalExceptionHandlerTest` (backend 401/403 → 502 + token invalidation), `ServiceAccountTokenProviderTest`
 (atomic cache under concurrency, `invalidate()`, failure backoff), `BackendImportClientTest`
 (the backend is called as the gateway, naming the caller; a refused token is replaced on the next relay),
@@ -240,9 +251,6 @@ device-grant client per [`INGEST_KEYCLOAK_SETUP.md`](../INGEST_KEYCLOAK_SETUP.md
 
 ### REQ-INGEST-003 — Short-lived single-use Redis handoff
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The handoff staging also carries staged mass changes (`HandoffKind.MASS_CHANGE`, REQ-XCH-021) with its own size cap and a per-subject slot of one, so a staged change set never evicts a pending extractor draft and a newer one replaces it. Built with WP 3.2 (#2082); the frontend's confirmation follows with WP 4.5.
-
 The non-persisted draft returned by the backend is staged in Redis under a key derived from
 `(sub, handoffId)`. The `handoffId` is cryptographically unguessable (≥ 128 bits of
 entropy). The entry has a short TTL (~30 minutes) and is **single-use**: the first successful
@@ -262,6 +270,14 @@ reaching the ceiling **refuses writes** rather than evicting. The failure mode w
 slow import but a login outage for everybody. The single-use consume is triggered off an explicit `POST`, never the
 navigational pre-fill GET, so a browser prefetch or a duplicate page load cannot burn the token
 before the real pickup (REQ-INGEST-004, ADR-0110).
+
+The same staging serves the exchange. Its drafts land in the extractor's draft slots
+(`HandoffKind.BLUEPRINT` / `REFINERY`, REQ-XCH-019). A change set the mass-change guard holds back
+is staged as `HandoffKind.MASS_CHANGE` (REQ-XCH-021) under its own size cap
+(`app.exchange.store.max-mass-change-bytes`, 512 KiB) in a per-subject slot of one: it never
+evicts a pending extractor draft, and a newer one replaces it. The member confirms or discards it
+on „Verbundene Anwendungen" (`/connected-apps/confirm`), which consumes it with an explicit request
+as above.
 
 The TTL is deliberately longer than the "picked up within seconds" happy path would suggest:
 staging happens the moment the user clicks Send, but opening the pre-filled page is a **separate
@@ -316,9 +332,6 @@ empty, the per-subject index stays at exactly the cap using the `RPUSH` answer i
 
 ### REQ-INGEST-004 — Browser pre-fill, review-before-commit preserved
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Drafts keep review-before-commit (REQ-XCH-019). The member's own blueprints, personal Lager lots and ships become writable directly through the exchange, journaled and undoable (REQ-XCH-015…-017, REQ-XCH-022, ADR-0218). Ships with WP 4.1–4.4.
-
 The extractor opens the matching basetool page with `?handoff=<id>`
 (`/refinery-orders/create?handoff=<id>` and the blueprint equivalent). If the user has no
 frontend session, the existing OAuth2 login + saved-request replay returns them to that URL
@@ -329,6 +342,11 @@ the unchanged create path — the ingest path adds no new persistence and does n
 create flow. A missing, expired, consumed, or foreign-`sub` handoff degrades to the normal
 empty create form plus a localized, KRT-styled inline notice (no native dialog,
 REQ-UI-008); it never errors the page out.
+
+The exchange's draft routes keep this review-before-commit unchanged (REQ-XCH-019). Separately, an
+approved client may write the member's own blueprints, personal Lager lots and ships directly
+through the exchange — a write path of its own, journaled and undoable, not a draft
+(REQ-XCH-015…-017, REQ-XCH-022, ADR-0218).
 
 **The navigational pre-fill GET is a _safe_ request and MUST NOT consume the handoff.** Consuming
 the single-use pickup is a state-changing operation, so it may not ride the cacheable/prefetchable
@@ -413,8 +431,12 @@ defaults and property names), `FilterOrderTest` (rate limit before the payload c
 
 ### REQ-INGEST-006 — Egress is opt-in; the CLI stays offline
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> From its migration release (WP 5.1, #2088) the SC Extractor may sync blueprints directly, opt-in, through `exchange.blueprints.write`.
+> [!note] Planned — the SC Extractor's migration (epic #2078, WP 5.1, #2088)
+> The Basetool side is built: the blueprint sync route (REQ-XCH-015) and the scopes the provisioner
+> offers the extractor's client — `exchange.connect`, `exchange.blueprints.read` / `.write` and both
+> draft scopes (REQ-XCH-005). Still to come: the extractor release that uses them. From it on the
+> SC Extractor may sync blueprints directly, opt-in, through `exchange.blueprints.write`; until then
+> the text below describes all of its egress.
 
 Data leaves the user's machine **only** when the user explicitly clicks Send in the
 extractor GUI. There is no background sync, no auto-send, and no telemetry. Saving the JSON
@@ -557,15 +579,12 @@ counter) · **Code:** `BotProtectionFilter`, `MetricNames` (`BOT_BLOCKED` + `rul
 
 ### REQ-INGEST-010 — Published API contract for the extractor
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The exchange routes get their own authoritative OpenAPI 3.1 document, `ingest/src/main/resources/api/exchange-v1.openapi.json`, served statically and anonymously at `/exchange/v1/openapi.json` (REQ-XCH-011). Ships with WP 0.2 (#2080) and WP 3.2 (#2082).
-
 The gateway's two endpoints are the contract a **separately developed, separately released** client
 (the `basetool-sc-extractor` desktop app) codes against, so that contract is published as a
-committed OpenAPI document — `ingest/src/main/resources/api/openapi.json`, the module's single
-API-documentation artifact, regenerated by `OpenApiGeneratorTest` exactly like the backend's
-(`api-conventions.md`, `REQ-API-007`). Without it the extractor's authors had only the source to
-read, and a breaking change to the envelope was invisible until the next release.
+committed OpenAPI document — `ingest/src/main/resources/api/openapi.json`, the generated
+documentation of those two endpoints, regenerated by `OpenApiGeneratorTest` exactly like the
+backend's (`api-conventions.md`, `REQ-API-007`). Without it the extractor's authors had only the
+source to read, and a breaking change to the envelope was invisible until the next release.
 
 The document declares the `bearer-jwt` security scheme (`REQ-INGEST-002`), the full `RefineryExtract`
 request schema with its bean-validation bounds, the opaque JSON-object body of the blueprint
@@ -574,6 +593,12 @@ the `413` size cap and `429` throttle of `REQ-INGEST-005`, which a client has to
 generated client would otherwise know about. As in the backend, springdoc `-api` is used (no Swagger
 UI webjar) and `springdoc.api-docs.enabled=false` in `application-prod.yml` keeps `/v3/api-docs`
 unreachable from a deployed environment; the committed file is the contract, not a live endpoint.
+
+The exchange routes are not in it (their controllers are `@Hidden`). Their authoritative OpenAPI 3.1
+document is committed separately, `ingest/src/main/resources/api/exchange-v1.openapi.json`, and the
+gateway
+serves it statically and anonymously at `/exchange/v1/openapi.json` with the JSON Schemas it names
+(REQ-XCH-011).
 
 **Acceptance**
 
@@ -590,13 +615,17 @@ unreachable from a deployed environment; the committed file is the contract, not
 
 ### REQ-INGEST-011 — Client-identity gate: approved clients only
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Approved clients move into a database registry managed by `ADMIN` and mirrored fail-closed (REQ-XCH-003, ADR-0217). The „ingest persists nothing“ containment argument is replaced by journal, undo and the mass-change guard (ADR-0218). The public-client caveat applies to every third-party client. Until WP 3.1 / 3.2 ship, the allowlist below is current.
-
 The ingest interface is restricted to client software the basetool developer (@greluc) has
 explicitly approved. This is a control over **which program** calls the gateway; it does **not**
 change who may use it — that stays `isAuthenticated()` for every member (`REQ-INGEST-002`/`-008`,
 unchanged). Every member may upload blueprints and refinery jobs **with the approved extractor**.
+
+The checks below gate the legacy `/v1/*` routes only (`IngestPathScope`). Exchange clients are
+approved in a database registry managed by `ADMIN` and mirrored to the gateway fail-closed
+(REQ-XCH-003, ADR-0217), so this allowlist would refuse them as unknown extractors. On the exchange
+the containment argument below — the ingest path persists nothing — no longer holds, because
+clients write; journal, undo and the mass-change guard take its place (REQ-XCH-021, REQ-XCH-022,
+ADR-0218). The public-client caveat applies to every third-party client alike.
 
 Four checks, each **inert until configured** and each **fail-closed** once it is:
 
@@ -726,8 +755,9 @@ audit-only, log sanitisation, no echo-back) · **Code:** `ClientIdentityFilter`,
 
 ### REQ-INGEST-012 — DPoP is validated at the gateway, and never relayed
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> On `/exchange/**` DPoP becomes **required**, not only accepted (REQ-XCH-006). The legacy routes keep the behaviour below until they end. Ships with WP 3.2 (#2082).
+This requirement governs the legacy `/v1/*` routes until they end (REQ-XCH-033). On the exchange
+routes DPoP is **required**, not only accepted: a bearer-scheme request or an unbound token is
+refused, and the gateway also demands a server nonce (REQ-XCH-006, `ExchangeDpopGateTest`).
 
 The extractor presents its access token to the gateway under the **`DPoP` scheme with a proof**, and
 the gateway validates that proof itself (Spring Security `.dPoP()`). Sender-constraining pays here

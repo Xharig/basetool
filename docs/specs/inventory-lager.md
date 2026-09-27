@@ -38,18 +38,14 @@ mission; and the write-time merge unions the folded rows' allocations. The full 
 [REQ-INV-027](#req-inv-027--inventory-associations-are-to-many-quantity-splits-variante-c) below.
 
 The **stock identity** ("stack key") is the inventory **physical** natural key: owner (`user`),
-`material`, `location`, `quality`, the `personal` flag, and the owning org-unit pool
-(`owningOrgUnit`). Since Variante C (ADR-0098, REQ-INV-027) the job-order / mission earmarks are
-**no** longer part of it — they are per-entry to-many allocations, not a stack dimension.
+`material`, `location`, `quality`, the `personal` flag, the owning org-unit pool
+(`owningOrgUnit`) and the „gestohlen" marker (`stolen`, REQ-INV-053). Since Variante C (ADR-0098,
+REQ-INV-027) the job-order / mission earmarks are **no** longer part of it — they are per-entry
+to-many allocations, not a stack dimension.
 
 ## Requirements
 
 ### REQ-INV-001 — Inventory is append-only by default (merge is the scoped exception)
-
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Exchange stock writes are book-ins and book-outs through the same services (REQ-XCH-016).
->
-> *Shipped with WP 1.3: a Lager row carries the „gestohlen“ marker, which every append, transfer and split carries (REQ-INV-053).*
 
 A write path does **not** fold a new or edited `InventoryItem` into a different existing row
 **unless the scoped stock merge of [REQ-INV-026](#req-inv-026--write-time-stock-merge-for-piece-auto-and-scu-per-action-opt-in)
@@ -64,7 +60,16 @@ per-allocation endpoints of REQ-INV-027.) In
 particular an **`SCU`** write with no opt-in stays append-only exactly as before. The former
 *unconditional* read-add-write merge — and the pessimistic lock that guarded its lost-update race —
 remain removed for the append-only paths; the merge re-introduces a pessimistic lock only on its own
-path (REQ-INV-026).
+path (REQ-INV-026). Every append, transfer and split carries the row's „gestohlen" marker
+(REQ-INV-053).
+
+A stock write through the exchange (REQ-XCH-016) follows the same rules. Its book-in inserts a new
+personal row without an org unit, records `INVENTORY_ITEM_CREATED` and then runs the write-time
+merge without the `SCU` opt-in, so piece-counted stock joins its existing row; its book-out is the
+Lager's own `DISCARD` book-out (REQ-INV-025). *Corrected 2026-09-27: the planned amendment said
+both go through the same services; the book-in is built by the exchange's own stock service
+(`ExchangeStockWriteService`), not by the Lager's create, and only the merge and the book-out are
+the Lager's.*
 
 **Acceptance**
 
@@ -84,11 +89,6 @@ path (REQ-INV-026).
 
 ### REQ-INV-002 — Group-on-read display: Material → Stack
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The exchange's lot is material + location + quality + stolen across org-unit pools (ADR-0218).
->
-> *Shipped with WP 1.3: the stack identity carries the „gestohlen“ marker in every place the Lager computes one (REQ-INV-053).*
-
 The grouped Lager views (`/inventory/my`, `/inventory/all`) present each material as a group
 whose stacks are computed **in SQL** (a `GROUP BY` over the stock identity) at read time. The
 nullable to-one in the stack key — `owningOrgUnit` — (and `material`, which is null on game-item
@@ -107,9 +107,14 @@ repeated per-level header, right-aligned tabular numbers with a 0-1000 quality g
 rendered only when an entry has one. The
 per-material aggregate page (`/inventory`, `AggregatedInventoryDto`) is unchanged.
 
+The exchange groups differently and on purpose: its **lot** is material (or game item) + location +
+quality + „gestohlen" over the member's own personal rows, **across** their org-unit pools, and
+leaves shared rows out (REQ-XCH-016, ADR-0218). A lot can therefore span several stacks of this
+view.
+
 **Game-item rows (REQ-INV-029/030).** Since [`inventory-items.md`](inventory-items.md)
 REQ-INV-029 the Lager also holds **game-item** stock rows with their own stack key —
-`user · gameItem · location · personal · owningOrgUnit`, no quality dimension — rendered in
+`user · gameItem · location · personal · owningOrgUnit · stolen`, no quality dimension — rendered in
 their own Items view (REQ-INV-030). The material tree and its grouping queries described here
 exclude item rows **explicitly** (`material IS NOT NULL`); the item view mirrors the same
 group-on-read semantics per that spec.
@@ -275,9 +280,6 @@ there is no equivalent on the squadron-wide `/all` view.
 
 ### REQ-INV-007 — Personal-marker rebooking (Umbuchung) is an append-only split
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> A personal row's org unit is changeable after the booking since WP 1.2 (REQ-INV-052, web; the app follows with #2097). Personal rows booked in through the exchange carry no org unit.
-
 A user may **rebook** (Umbuchung) part or all of one of their inventory rows between their personal
 pool and the shared squadron pool by toggling its `personal` marker. The direction is derived from
 the source row's current flag, never from the client:
@@ -299,6 +301,10 @@ the source row's current flag, never from the client:
   (`personal = true`), carrying the source row's existing `owningOrgUnit` over. A source row bound to
   a job order or mission is **refused** (HTTP 400) — a personal row may never carry either
   association.
+
+A rebooking is not the only way a personal row's unit changes: the owner may set it afterwards on
+its own, including to no unit (REQ-INV-052; in the web, the Android app follows with #2097). A
+personal row booked in through the exchange carries no unit (REQ-XCH-016).
 
 The operation is an **append-only split** (REQ-INV-001), structurally identical to the book-out
 `TRANSFER` branch: the moved `amount` is decremented off the source row (the source row is deleted
@@ -348,9 +354,6 @@ There is no "keep home unit" placeholder: the picker always carries a concrete p
 
 ### REQ-INV-025 — Book-out validates the CheckoutType; a target-less TRANSFER is rejected
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> An exchange book-out uses `CheckoutType.DISCARD` with the reason the exchange records; `CheckoutType` is not pinned by `ExternalContractTest`, so the exchange contract never exposes it (WP 4.2, #2085).
-
 Book-out (`POST /api/v1/inventory/{id}/book-out`) resolves the `CheckoutType` before mutating the
 row. An **absent** `type` is inferred — `TRANSFER` when the request carries a target user or
 location, otherwise `DISCARD`. An **explicit** `type = TRANSFER` is *not* re-inferred, so a
@@ -363,6 +366,11 @@ resolves to the source's own user *and* location — likewise 400s; the append-o
 REQ-INV-001 is defined only for a target that actually differs.) A rejected book-out writes **no**
 audit event, consistent with the audit contract that only committed state mutations are logged
 (REQ-AUDIT-001).
+
+An exchange book-out (REQ-XCH-016) is this book-out with `CheckoutType.DISCARD`
+(`InventoryCheckoutService#bookOutForClient`), row by row; the Materialbörse offers it lowers or
+removes are audited with the reason `stock`. `CheckoutType` is not part of the exchange contract,
+and `ExternalContractTest` does not pin it.
 
 **Acceptance**
 
@@ -380,35 +388,34 @@ audit event, consistent with the audit contract that only committed state mutati
 
 ### REQ-INV-026 — Write-time stock merge for PIECE (auto) and SCU (per-action opt-in)
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> *Shipped with WP 1.3: the merge keys carry the „gestohlen“ marker (REQ-INV-053).*
-
 A write that lands a row whose material's quantity type is **`PIECE`** (Stück) is merged into a
 single Lager entry with every existing row that shares its stock identity; a write whose material is
 **`SCU`** does the same **only when the caller opts in for that one action** — a modal checkbox that
 is per-transaction and **never persisted**. The merge runs on the inbound write paths that land a
 row: create (Einbuchen), the book-out **TRANSFER** target (the Umbuchen modal's location / user
 transfer), the personal rebooking (Umbuchen, REQ-INV-007) and every row moved by the bulk rebooking
-(REQ-INV-036); the item-production book-in ([`inventory-items.md`](inventory-items.md)
-REQ-INV-032) runs it with the opt-in off, so only its always-merging rows fold. The refinery store
-does not merge. An `SCU` write without the opt-in stays append-only (REQ-INV-001); the single-row
-modals offer the opt-in checkbox only on `SCU` rows (a `PIECE` row always merges, so no choice is
-shown), while the bulk modal always offers it because a selection can mix both.
+(REQ-INV-036); the item-production book-in ([`inventory-items.md`](inventory-items.md) REQ-INV-032)
+and the exchange's book-in (REQ-XCH-016) run it with the opt-in off, so only their always-merging
+rows fold. The merge key includes the „gestohlen" marker (REQ-INV-053), so stolen and legitimate
+stock never merge. The refinery store does not merge. An `SCU` write without the opt-in stays
+append-only (REQ-INV-001); the single-row modals offer the opt-in checkbox only on `SCU` rows (a
+`PIECE` row always merges, so no choice is shown), while the bulk modal always offers it because a
+selection can mix both.
 
 The **merge identity** is the **physical** stack key (Variante C, REQ-INV-027): owner · material ·
-location · quality · `personal` · owning org-unit pool (a `NULL` pool matches `NULL`); job-order /
-mission earmarks are **not** part of it. The just-written row is the **survivor**; every other row
-sharing that identity is folded into it — `amount`s summed, **distinct notes concatenated**
-(first-seen order, newline-joined, truncated to the 1000-char note column) and the folded rows'
-allocations **unioned** into the survivor (summed per target, the per-slice job-order `delivered`
-flag OR-combined — rule R1 of REQ-INV-027) — and then deleted.
+location · quality · `personal` · owning org-unit pool (a `NULL` pool matches `NULL`) · `stolen`;
+job-order / mission earmarks are **not** part of it. The just-written row is the **survivor**; every
+other row sharing that identity is folded into it — `amount`s summed, **distinct notes
+concatenated** (first-seen order, newline-joined, truncated to the 1000-char note column) and the
+folded rows' allocations **unioned** into the survivor (summed per target, the per-slice job-order
+`delivered` flag OR-combined — rule R1 of REQ-INV-027) — and then deleted.
 
 **Game-item rows (REQ-INV-029).** A **game-item** stock row
 ([`inventory-items.md`](inventory-items.md)) follows the `PIECE` auto-merge rule — items are
 whole units, so they always merge on write regardless of the client's opt-in flag (the Items
 view accordingly never renders the SCU opt-in checkbox for them). The merge identity of an item row
-is its item stack key (owner · gameItem · location · `personal` · owning org-unit pool), and the
-`FOR UPDATE` merge-group query carries NULL-safe
+is its item stack key (owner · gameItem · location · `personal` · owning org-unit pool ·
+`stolen`), and the `FOR UPDATE` merge-group query carries NULL-safe
 material **and** quality branches plus the `gameItem` key — without them the item merge would
 silently degenerate to a permanent no-op.
 
@@ -652,9 +659,6 @@ pages share), `inventory-my.js` / `inventory-admin.js`,
 
 ### REQ-INV-028 — Aggregated per-material overview shows average and maximum quality
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The aggregated overview makes no distinction for the „gestohlen“ marker (owner decision); trade goods booked through the exchange at quality 0 lower the average and maximum shown here — accepted (ADR-0218).
-
 The per-material Lager overview (`GET /inventory`, `AggregatedInventoryDto`) rolls the in-scope
 non-personal stock up to one row per material, showing the total amount, the **amount-weighted
 average** quality and the **maximum** available quality (the best single entry's quality). The three
@@ -664,6 +668,13 @@ the material). Since REQ-INV-030 ([`inventory-items.md`](inventory-items.md)) th
 page also offers an **item-variant** aggregate — one row per gameItem with the total amount but
 **without** the quality columns (item rows carry no quality); the material variant described
 here is unchanged and excludes item rows.
+
+The overview makes no distinction for the „gestohlen" marker (owner decision, REQ-INV-053). The
+exchange books trade goods at quality 0 (REQ-XCH-016) into personal rows, which this overview
+leaves out; once such a row is rebooked into the shared pool, its quality 0 lowers the average
+shown here — accepted (ADR-0218). *Corrected 2026-09-27: the planned amendment said exchange trade
+goods lower the average and the maximum here. Exchange book-ins are personal and not counted until
+rebooked, and a quality-0 row can never lower a maximum.*
 
 **Acceptance**
 
@@ -849,14 +860,13 @@ already known at storage time.
 
 ### REQ-INV-036 — "Markierte umbuchen": the bulk bar moves the whole selection, skipping already-at-target rows
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The bulk bar also offers „Markierte: Einheit ändern“ since WP 1.2 (REQ-INV-052) and „Als gestohlen markieren“ / „Markierung entfernen“ since WP 1.3 (REQ-INV-053); every bulk move carries the marker.
-
 The "Mein Lager" bulk bar (`/inventory/my`, both the Material and the Items view) offers
 **"Markierte umbuchen"** next to "Markierte ausbuchen", acting on the **same** marked selection
 (REQ-INV-034) but *moving* the rows instead of discarding them. It is the bulk counterpart of the
 single-row Umbuchen modal (REQ-INV-007 / REQ-INV-025) and covers both of its destinations: another
-Ort / Nutzer / OrgUnit-Pool, or the personal marker.
+Ort / Nutzer / OrgUnit-Pool, or the personal marker. The same bar offers „Markierte: Einheit
+ändern" (REQ-INV-052) and „Als gestohlen markieren" / „Markierung entfernen" (REQ-INV-053), and
+every bulk move carries a row's „gestohlen" marker.
 
 - **Every marked row moves in full.** There is no per-row amount. The selection spans collapsed
   stacks and later pages, so a per-row quantity could not be reviewed before submitting; moving the
