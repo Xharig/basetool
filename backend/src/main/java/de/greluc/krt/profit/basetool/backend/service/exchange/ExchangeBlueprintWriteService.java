@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.service.exchange;
 
 import de.greluc.krt.profit.basetool.backend.exception.ExchangeProblemException;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.backend.model.BlueprintSource;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeChange;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeJournalAction;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
@@ -338,10 +339,12 @@ public class ExchangeBlueprintWriteService {
   private void execute(
       @NotNull ExchangeCaller caller, @NotNull UUID batch, @NotNull Change planned) {
     if (planned.add()) {
+      ExchangeBlueprintChangeSet.Provenance provenance = planned.op().provenance();
       blueprintService.add(
           caller.member(),
-          new PersonalBlueprintCreateRequest(
-              planned.productKey(), planned.op().acquiredAt(), null));
+          new PersonalBlueprintCreateRequest(planned.productKey(), planned.op().acquiredAt(), null),
+          BlueprintSource.fromClient(provenance == null ? null : provenance.source()),
+          caller.clientId());
       PersonalBlueprint added =
           blueprintRepository
               .findByOwnerUserIdAndProductKey(caller.member(), planned.productKey())

@@ -118,7 +118,9 @@
                                      data-note=${bp.note},
                                      data-version=${bp.version},
                                      data-removable=${bp.removable},
-                                     data-acquired-at=${bp.acquiredAt}">
+                                     data-acquired-at=${bp.acquiredAt},
+                                     data-source=${bp.source},
+                                     data-source-client=${bp.sourceClientId}">
                         <span th:text="${bp.productName}">Produkt</span>
                         <span class="krt-bp-row-aside">
                             <span class="master-row-note" th:if="${bp.note != null and !bp.note.isBlank()}"
@@ -144,6 +146,7 @@
                         <div>
                             <span class="krt-bp-detail-name" id="krt-bp-detail-name">Produkt</span>
                             <div class="krt-bp-detail-acquired" id="krt-bp-detail-acquired"></div>
+                            <div class="krt-bp-detail-acquired" id="krt-bp-detail-source" hidden></div>
                         </div>
                         <div class="krt-bp-detail-actions">
                             <button type="button" class="btn btn-ghost btn-icon" id="krt-bp-detail-edit"
@@ -311,6 +314,13 @@
         exampleRecipe:    /*[[#{personalInventory.blueprints.recipe.exampleRecipe}]]*/ 'Beispielrezept',
         variants:         /*[[#{personalInventory.blueprints.add.variants}]]*/    'Varianten',
         acquiredLabel:    /*[[#{personalInventory.blueprints.field.acquired}]]*/  'Erhalten am',
+        sourceLabel:      /*[[#{personalInventory.blueprints.source.label}]]*/    'Herkunft',
+        sourceVia:        /*[[#{personalInventory.blueprints.source.via}]]*/      'ueber',
+        sourceLOG:        /*[[#{personalInventory.blueprints.source.LOG}]]*/      'Spiel-Log',
+        sourceMANUAL:     /*[[#{personalInventory.blueprints.source.MANUAL}]]*/   'Von Hand',
+        sourceIMPORT:     /*[[#{personalInventory.blueprints.source.IMPORT}]]*/   'Datei-Import',
+        sourceDEFAULT:    /*[[#{personalInventory.blueprints.source.DEFAULT}]]*/  'Standard-Blueprint',
+        sourceOTHER:      /*[[#{personalInventory.blueprints.source.OTHER}]]*/    'Andere Quelle',
         qualityAria:      /*[[#{personalInventory.blueprints.detail.qualityAria}]]*/ 'Qualitaet',
         craftTitle:       /*[[#{personalInventory.blueprints.craft.title}]]*/         'Craftbarkeit',
         craftableLabel:   /*[[#{personalInventory.blueprints.craft.craftableLabel}]]*/ 'Craftbar',

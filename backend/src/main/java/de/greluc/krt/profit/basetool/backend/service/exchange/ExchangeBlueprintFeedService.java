@@ -183,6 +183,9 @@ public class ExchangeBlueprintFeedService {
         new ExchangeItemRefDto(key, name.length() > MAX_NAME ? name.substring(0, MAX_NAME) : name),
         row.getAcquiredAt(),
         defaultKeys.isDefault(row.getProductKey()),
-        row.getNote());
+        row.getNote(),
+        row.getSource() == null
+            ? null
+            : new ExchangeBlueprintDto.Provenance(row.getSource().wire()));
   }
 }

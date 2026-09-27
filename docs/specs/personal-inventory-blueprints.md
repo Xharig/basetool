@@ -589,3 +589,29 @@ member's note.
 **Code:** `PersonalBlueprintService`, `BlueprintImportService`, `DefaultBlueprintService`,
 `DefaultBlueprintProvisioningService`, `UserService#updateUserShareBlueprintsGlobally` · **Issues:**
 #2098 (epic #2078).
+
+### REQ-INV-054 — Every owned blueprint records where it came from
+
+An owned blueprint carries its **source** — `LOG`, `MANUAL`, `IMPORT`, `DEFAULT` or `OTHER` — and,
+when an exchange client added it, that client's id (`personal_blueprint.source`,
+`source_client_id`, `V255`). Every write path sets it: an add or batch add in the web, the app or by
+an admin is `MANUAL`, the file import's apply `IMPORT`, the default provisioning `DEFAULT`, and an
+exchange `add` the source its `provenance` names (`log`, `manual`, `import`; `default`, anything else
+and none are `OTHER`, since a default grant is the server's alone). Rows older than the record keep
+no source, except default products, which the migration marks `DEFAULT`. The source is never
+changed afterwards. „Meine Blueprints" shows it in the detail pane („Herkunft: Spiel-Log über
+versekit"), the exchange feed publishes it as `provenance.source` (REQ-XCH-015), and the member's
+responses carry `source` and `sourceClientId`.
+
+**Acceptance**
+
+- [x] A hand add, a batch add, an import and a default grant record `MANUAL`, `MANUAL`, `IMPORT` and
+  `DEFAULT`. *`PersonalBlueprintProvenanceTest`.*
+- [x] An exchange add records the client and the named source, a client's `default` as `OTHER`.
+  *`ExchangeBlueprintWriteControllerTest`.*
+- [x] The feed publishes a recorded source and leaves an unrecorded one out.
+  *`ExchangeBlueprintControllerTest`.*
+
+**Code:** `BlueprintSource`, `PersonalBlueprintService#add`, `BlueprintImportService`,
+`PersonalBlueprintRepository#grantDefaultBlueprintsTo…`, `ExchangeBlueprintWriteService`,
+`ExchangeBlueprintFeedService` · **Issues:** #2084 (epic #2078).

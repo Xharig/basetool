@@ -61138,6 +61138,9 @@
           "note" : {
             "type" : "string"
           },
+          "provenance" : {
+            "$ref" : "#/components/schemas/Provenance"
+          },
           "ref" : {
             "$ref" : "#/components/schemas/ExchangeItemRefDto"
           }
@@ -68355,6 +68358,13 @@
           "removable" : {
             "type" : "boolean"
           },
+          "source" : {
+            "type" : "string",
+            "enum" : [ "LOG", "MANUAL", "IMPORT", "DEFAULT", "OTHER" ]
+          },
+          "sourceClientId" : {
+            "type" : "string"
+          },
           "updatedAt" : {
             "type" : "string",
             "format" : "date-time"
@@ -68828,6 +68838,20 @@
           }
         },
         "required" : [ "name", "sortOrder", "version" ]
+      },
+      "Provenance" : {
+        "type" : "object",
+        "properties" : {
+          "observedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "source" : {
+            "type" : "string",
+            "pattern" : "^(log|manual|import|default|other)$"
+          }
+        },
+        "required" : [ "source" ]
       },
       "Quantity" : {
         "type" : "object",

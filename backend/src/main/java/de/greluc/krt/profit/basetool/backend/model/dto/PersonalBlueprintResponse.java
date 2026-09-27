@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.backend.model.dto;
 
+import de.greluc.krt.profit.basetool.backend.model.BlueprintSource;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -35,6 +36,8 @@ import java.util.UUID;
  * @param version optimistic-lock version
  * @param createdAt row creation timestamp
  * @param updatedAt row last-update timestamp
+ * @param source where the entry came from, or {@code null} when that was not recorded (REQ-INV-054)
+ * @param sourceClientId the exchange client that added it, or {@code null}
  */
 public record PersonalBlueprintResponse(
     UUID id,
@@ -46,4 +49,6 @@ public record PersonalBlueprintResponse(
     boolean removable,
     Long version,
     Instant createdAt,
-    Instant updatedAt) {}
+    Instant updatedAt,
+    BlueprintSource source,
+    String sourceClientId) {}

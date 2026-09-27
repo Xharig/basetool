@@ -33,6 +33,7 @@ import org.jetbrains.annotations.Nullable;
  * @param acquiredAt when the member acquired it in the game, or {@code null}
  * @param isDefault whether it is granted to every member and so cannot be removed
  * @param note the member's note, read-only in v1, or {@code null}
+ * @param provenance where the entry came from, or {@code null} when that was not recorded
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ExchangeBlueprintDto(
@@ -40,4 +41,13 @@ public record ExchangeBlueprintDto(
     @NotNull ExchangeItemRefDto ref,
     @Nullable Instant acquiredAt,
     boolean isDefault,
-    @Nullable String note) {}
+    @Nullable String note,
+    @Nullable Provenance provenance) {
+
+  /**
+   * Where an entry came from, in the shape of {@code provenance.schema.json}.
+   *
+   * @param source {@code log}, {@code manual}, {@code import}, {@code default} or {@code other}
+   */
+  public record Provenance(@NotNull String source) {}
+}

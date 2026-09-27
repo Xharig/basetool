@@ -76,7 +76,18 @@ class PersonalBlueprintWriteAjaxControllerTest {
     UUID id = UUID.randomUUID();
     PersonalBlueprintDto fresh =
         new PersonalBlueprintDto(
-            id, "key", "Quantum Drive", null, null, "updated note", true, 3L, null, null);
+            id,
+            "key",
+            "Quantum Drive",
+            null,
+            null,
+            "updated note",
+            true,
+            3L,
+            null,
+            null,
+            null,
+            null);
     when(backendApiClient.put(
             eq("/api/v1/personal-blueprints/" + id), any(), eq(PersonalBlueprintDto.class)))
         .thenReturn(fresh);

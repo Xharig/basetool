@@ -21,6 +21,8 @@ package de.greluc.krt.profit.basetool.backend.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -98,4 +100,13 @@ public class PersonalBlueprint extends AbstractEntity<UUID> {
   /** Optional free-form note the owner attaches to the entry. */
   @Column(length = 2000)
   private String note;
+
+  /** Where the entry came from, or {@code null} for an entry older than the record of it. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "source", length = 16)
+  private BlueprintSource source;
+
+  /** The exchange client that added the entry, or {@code null} for any other channel. */
+  @Column(name = "source_client_id", length = 64)
+  private String sourceClientId;
 }
