@@ -351,6 +351,13 @@
   werden abgelehnt.
 - **Datenaustausch: Mengen und Ablehnungstext.** Das Backend begrenzt Lager-Mengen auf 0 bis 10⁹ wie
   das Gateway-Schema, und eine nicht zuordenbare Austausch-Anfrage heißt nicht mehr „Import“.
+- **Gateway: DPoP-Härtung.** Der `jti`-Replay-Cache ist nach Pfadbereich getrennt und pro Mitglied
+  gedeckelt (600 aktive Nachweise), sodass ein Mitglied ihn nicht für alle füllen kann; ein nicht
+  lesbares Ziel verlangt die Nonce. Unter `prod` startet das Gateway nicht mehr ohne
+  `IRI_INGEST_PUBLIC_BASE_URL`, und der Registry-Cache darf höchstens 5 s dauern.
+- **Sandbox: Keycloak nur als `start-dev`.** Das Sandbox-Keycloak-Image verweigert jeden anderen
+  Befehl, weil sein Realm veröffentlichte Wegwerf-Secrets trägt.
+- **Gateway: Log-Zeilen bei 401/403 bereinigt.** Der Anfragepfad läuft durch `LogSafe`.
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.

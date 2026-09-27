@@ -181,8 +181,9 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
 **Code:** `ExchangeRegistryService`, `ExchangeRegistryMirrorSync`, `RedisExchangeRegistryMirror`,
 `ExchangeRegistryReconcileTask`, `AdminExchangeRegistryController` · **Status:** registry, admin
 API and mirror built — WP 3.1 (#2083); the gateway's read — `ExchangeRegistryReader`, a
-five-second cache (`app.exchange.registry-cache-ttl`) of the `app.exchange.registry-key` document —
-built with WP 3.2 (#2082); the admin page built — WP 4.5 (#2087)
+five-second cache (`app.exchange.registry-cache-ttl`, validated to lie between 0 and 5 s so a
+configuration cannot stretch a suspension's delay, `ExchangeGatewayPropertiesTest`) of the
+`app.exchange.registry-key` document — built with WP 3.2 (#2082); the admin page built — WP 4.5 (#2087)
 
 ### REQ-XCH-004 — Capabilities are OAuth scopes, enforced at the gateway and re-checked at the backend
 
@@ -289,13 +290,36 @@ key drawn at startup — and holds for its window and the next; a restart invali
 costs a client one retry. A bearer-scheme request, or a token without `cnf.jkt`, is `401
 DPOP_REQUIRED` with the DPoP challenge.
 
+**Which proofs need the nonce.** Only a proof whose target has a readable path outside `/exchange` —
+the legacy `/v1` routes — skips it; an unparseable target, a target without a path and `/exchange`
+itself count as exchange routes (fail closed). A proof without the nonce is refused before the replay
+check, so it takes no room in the `jti` cache.
+
+**The `jti` replay cache is partitioned.** Spring's default is one in-memory cache per process of
+100 000 entries, shared with the legacy routes, which a hundred member tokens proofing a thousand
+times a minute could fill so that every DPoP request was refused (security review 2, L10). The
+gateway instead keeps one `DpopProofReplayStore` for the exchange routes and one for every other
+route, and inside each counts the live proofs per member (the access token's `sub`; a token without
+one by its proof key). A member holds at most `app.exchange.limits.dpop-proofs-per-member` (**600**)
+live proofs, a store at most `app.exchange.limits.dpop-proofs-total` (**100 000**). A proof is kept
+until its `iat` plus 30 s, so a client at the default 120 requests a minute holds about 120 at once
+and 600 covers several clients of one member; a member over the cap is refused `401 DPOP_INVALID`
+without affecting anyone else, and filling a store takes more than 160 members at their cap. A
+registry `requestsPerMinute` far above the default may need a larger per-member cap. Refusals are
+counted as `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`,
+`full`); `IngestDpopReplayCacheFull` fires on any `full`.
+
 **Acceptance**
 
 - [x] Tests for a bearer token, an unbound token, a proof for another key, a replayed proof and a
   missing nonce, and that the retry with the nonce passes (`ExchangeDpopGateTest`,
   `ExchangeDpopNoncesTest`).
+- [x] A member at the cap is refused while another member and the other path scope still pass; a
+  proof without the nonce stores nothing; an unreadable or pathless target needs the nonce
+  (`DpopProofReplayStoreTest`).
 
-**Enforced by:** `ExchangeDpopGateTest` · **Status:** built — WP 3.2 (#2082)
+**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest` · **Status:** built — WP 3.2
+(#2082); the partitioned replay cache and the fail-closed nonce scope — security review 2 (#2092)
 
 ### REQ-XCH-007 — Installations are identified by their DPoP key and labelled by the client
 
@@ -1013,6 +1037,8 @@ Responses carry `RateLimit` and `Retry-After` headers. The account check has its
 | requests per client, over all its members | 1200 per minute | in-process bucket |
 | account checks per client and member | 10 per hour | in-process bucket |
 | write requests per client and member | 500 per UTC day — `writesPerDay` overrides it, at most 5000 | Redis, `ingest:xch:quota:<client>:<member>:<day>`, created with its expiry by `SET NX EX`, then `INCR`; kept until the end of the following UTC day |
+| live DPoP proofs per member (`dpop-proofs-per-member`) | 600, per path scope | in-process `jti` replay cache (REQ-XCH-006) |
+| live DPoP proofs in total (`dpop-proofs-total`) | 100 000, per path scope | in-process `jti` replay cache (REQ-XCH-006) |
 
 The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
 a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
@@ -1241,6 +1267,13 @@ cell of `e2e.yml`.
       the marker under `prod`) and fails on any secret Trivy finds. It publishes `edge` when run by
       hand on `main` and the version and `latest` on a release tag; the production packages stay
       private and untouched. The packages' public visibility is set once by the owner.*
+- [x] The sandbox Keycloak image refuses to run as anything but `start-dev`, since its realm
+      carries published throwaway secrets (security review 2, L4). *Its entrypoint
+      `docker/sandbox/keycloak/entrypoint.sh` passes only `start-dev …` on to `kc.sh` and ends
+      every other command — `start`, `start --optimized`, `build` — with exit code 64 and a message
+      naming the reason; the image's default command is `start-dev --import-realm --cache=local`,
+      which the sandbox compose passes too. `sandbox-images.yml` proves the refusal before
+      publishing. An explicit `--entrypoint` override is outside what an image can prevent.*
 - [x] The CI job that pulls them anonymously and runs the conformance fixtures and the
       device-grant + DPoP smoke test.
       *`.github/workflows/sandbox-smoke.yml` runs after every publish (called by
@@ -1381,6 +1414,7 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | Threat | Countered by |
 | --- | --- |
 | Stolen refresh or access token | DPoP binding of both (REQ-XCH-005/-006); tokens only in the platform secret store (REQ-XCH-027) |
+| Filling the DPoP `jti` replay cache to lock every client out | one cache per path scope, a per-member cap and a total cap; the nonce is checked first (REQ-XCH-006) |
 | Device-code phishing (RFC 8628 §5.4) | themed device page warning, clients showing only the bare `verification_uri`, notification and a highlight of every new connection until the member acknowledges it, 600 s code lifespan (REQ-XCH-005/-027/-032) — **partial**: an attacker's `verification_uri_complete` link skips the device page, and the consent page does not yet carry the warning and the code (security review 2 of #2092, M1) |
 | A revoked installation refreshing its way back | persistent `jkt` deny list (REQ-XCH-008) |
 | A member who leaves keeping access | departure revocations (REQ-XCH-008) |

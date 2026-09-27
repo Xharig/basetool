@@ -1143,6 +1143,13 @@ The backend refuses to start under `prod` without `IRI_BACKEND_EXPECTED_AUDIENCE
 frontend's token carries that audience only once the realm is in shape — so on a host whose realm
 was never provisioned, **provision first, then set the variable**.
 
+The ingest gateway likewise refuses to start under `prod` while `IRI_INGEST_PUBLIC_BASE_URL` is blank
+(REQ-INGEST-012, `PublicBaseUrlGuard`): it is the DPoP `htu` origin, written exactly as clients sign
+it (`https://ingest.profit-base.online`, no trailing slash, no default port). Production has it set
+since the extractor's DPoP rollout; a host that runs the `prod` profile without it — a testing host
+included — must set it **before** deploying a release that carries the guard, or the gateway stays
+down.
+
 ### Updating the operational scripts and units
 
 `deploy.sh`, the other scripts and the `iri-*` units are **not** in the config bundle — a deployer
