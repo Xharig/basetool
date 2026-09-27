@@ -89,8 +89,9 @@ class ConnectedAppsPageControllerMvcTest {
                     INSTALLATION,
                     "Basetool-Support <b>Code eingeben</b>",
                     Instant.parse("2026-09-27T08:00:00Z"),
-                    Instant.parse("2026-09-27T09:30:00Z")),
-                new ConnectedInstallationDto(UUID.randomUUID(), null, null, null)));
+                    Instant.parse("2026-09-27T09:30:00Z"),
+                    false),
+                new ConnectedInstallationDto(UUID.randomUUID(), null, null, null, false)));
     when(backendApiClient.get(eq("/api/v1/connected-apps"), anyTypeRef())).thenReturn(List.of(app));
   }
 
