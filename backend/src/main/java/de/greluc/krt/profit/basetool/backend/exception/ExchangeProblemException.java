@@ -37,6 +37,10 @@ public final class ExchangeProblemException extends AppException {
   /** A feed cursor older than the retained changes, or not one the server issued. */
   public static final String CURSOR_EXPIRED = "CURSOR_EXPIRED";
 
+  /** A change set that removes more than the mass-change guard allows without confirmation. */
+  public static final String MASS_CHANGE_CONFIRMATION_REQUIRED =
+      "MASS_CHANGE_CONFIRMATION_REQUIRED";
+
   private final HttpStatus status;
   private final String code;
 
@@ -62,6 +66,18 @@ public final class ExchangeProblemException extends AppException {
   public static @NotNull ExchangeProblemException cursorExpired() {
     return new ExchangeProblemException(
         HttpStatus.GONE, CURSOR_EXPIRED, "The feed cursor is older than the retained changes.");
+  }
+
+  /**
+   * The refusal of a change set the member must confirm in the browser; nothing was written.
+   *
+   * @return the {@code 409 MASS_CHANGE_CONFIRMATION_REQUIRED} refusal
+   */
+  public static @NotNull ExchangeProblemException massChangeConfirmationRequired() {
+    return new ExchangeProblemException(
+        HttpStatus.CONFLICT,
+        MASS_CHANGE_CONFIRMATION_REQUIRED,
+        "The change set removes more than the mass-change guard allows.");
   }
 
   @Override

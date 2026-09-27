@@ -3850,6 +3850,55 @@
           }
         }
       ]
+    },
+    {
+      "id": 80,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 256
+      },
+      "type": "timeseries",
+      "title": "Exchange writes/day by resource and outcome",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (resource, outcome) (increase(basetool_exchange_writes_total[1d]))",
+          "refId": "A",
+          "legendFormat": "{{resource}} {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "description": "Ops external clients sent to the member's synced data (REQ-XCH-015…-017), by resource and outcome: applied, unchanged, unmatched, ambiguous or rejected; 'held' counts change sets the mass-change guard held back for the member's confirmation (REQ-XCH-021)."
     }
   ]
 }
