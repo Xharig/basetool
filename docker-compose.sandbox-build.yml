@@ -1,0 +1,30 @@
+services:
+  keycloak-dev:
+    build:
+      context: .
+      dockerfile: docker/sandbox/keycloak/Dockerfile
+    image: ghcr.io/krt-profit/basetool-sandbox-keycloak:local
+
+  backend-dev:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+      args:
+        MODULE: backend
+    image: ghcr.io/krt-profit/basetool-sandbox-backend:local
+
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+      args:
+        MODULE: frontend
+    image: ghcr.io/krt-profit/basetool-sandbox-frontend:local
+
+  ingest-dev:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+      args:
+        MODULE: ingest
+    image: ghcr.io/krt-profit/basetool-sandbox-ingest:local

@@ -50,3 +50,5 @@ docker/maintenance/** text eol=lf
 *.toml text eol=lf
 
 *.acl text eol=lf
+
+docker/sandbox/** text eol=lf

@@ -31,6 +31,18 @@ updates:
       prefix: "chore(docker)"
 
   - package-ecosystem: docker
+    directory: /docker/sandbox/keycloak
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - docker
+    commit-message:
+      prefix: "chore(docker)"
+
+  - package-ecosystem: docker
     directory: /.github/actions/setup-buildx
     schedule:
       interval: weekly

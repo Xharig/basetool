@@ -1,0 +1,91 @@
+name: basetool-sandbox
+
+services:
+  redis-dev:
+    profiles: ["dev", "sandbox"]
+    command: redis-server --save "" --appendonly no --maxmemory 768mb --maxmemory-policy noeviction --notify-keyspace-events Egx --aclfile /etc/redis/users.acl
+    volumes: !override
+      - ./docker/test-redis/users.acl:/etc/redis/users.acl:ro
+
+  db-backend-dev:
+    profiles: ["dev", "sandbox"]
+
+  db-keycloak-dev:
+    profiles: ["dev", "sandbox"]
+
+  keycloak-dev:
+    profiles: ["dev", "sandbox"]
+    image: ghcr.io/krt-profit/basetool-sandbox-keycloak:${BASETOOL_SANDBOX_VERSION:-edge}
+    command: start-dev --import-realm --cache=local
+    environment:
+      KC_HOSTNAME: http://host.docker.internal:18080/auth
+    networks:
+      net-backend-keycloak:
+        aliases:
+          - keycloak
+          - host.docker.internal
+    volumes: !reset []
+
+  backend-dev:
+    profiles: ["dev", "sandbox"]
+    image: ghcr.io/krt-profit/basetool-sandbox-backend:${BASETOOL_SANDBOX_VERSION:-edge}
+    environment:
+      APP_EXCHANGE_MIRROR_ENABLED: "true"
+      APP_EXCHANGE_MIRROR_RECONCILE_INTERVAL: PT10S
+      APP_SECURITY_INGEST_GATEWAY_CLIENT_IDS: basetool-ingest-gateway
+      APP_INVENTORY_STOLEN_MARKING_ENABLED: "true"
+      APP_MAIL_ENABLED: "false"
+      APP_DEFAULT_BLUEPRINTS_PROVISIONING_INTERVAL: PT1M
+      KRT_UEX_SCHEDULER_ENABLED: "false"
+      KRT_SCWIKI_SCHEDULER_ENABLED: "false"
+    extra_hosts: !override []
+
+  frontend-dev:
+    profiles: ["dev", "sandbox"]
+    image: ghcr.io/krt-profit/basetool-sandbox-frontend:${BASETOOL_SANDBOX_VERSION:-edge}
+    extra_hosts: !override []
+
+  ingest-dev:
+    profiles: ["dev", "sandbox"]
+    image: ghcr.io/krt-profit/basetool-sandbox-ingest:${BASETOOL_SANDBOX_VERSION:-edge}
+    extra_hosts: !override []
+    networks:
+      net-backend-keycloak:
+        aliases:
+          - ingest
+
+  sandbox-seed:
+    profiles: ["sandbox"]
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    restart: "no"
+    entrypoint: ["sh", "/seed/seed.sh"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    environment:
+      PGHOST: db-backend
+      PGPORT: "15432"
+      PGDATABASE: ${POSTGRES_DB:?POSTGRES_DB must be set in docker/sandbox/sandbox.env}
+      PGUSER: ${POSTGRES_USER:?POSTGRES_USER must be set in docker/sandbox/sandbox.env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in docker/sandbox/sandbox.env}
+    volumes:
+      - ./docker/sandbox/seed.sh:/seed/seed.sh:ro
+      - ./docker/sandbox/seed.sql:/seed/seed.sql:ro
+      - ./backend/src/main/resources/terms-version.properties:/seed/terms-version.properties:ro
+    depends_on:
+      db-backend-dev:
+        condition: service_healthy
+      backend-dev:
+        condition: service_healthy
+    networks:
+      - net-db-backend
+
+networks:
+  net-db-backend:
+    name: basetool-sandbox_net-db-backend
+  net-db-keycloak:
+    name: basetool-sandbox_net-db-keycloak
+  net-redis-backend:
+    name: basetool-sandbox_net-redis-backend
+  net-redis-frontend:
+    name: basetool-sandbox_net-redis-frontend
