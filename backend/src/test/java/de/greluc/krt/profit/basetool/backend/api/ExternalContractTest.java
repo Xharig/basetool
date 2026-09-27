@@ -2585,6 +2585,40 @@ class ExternalContractTest {
   }
 
   /**
+   * Verifies that no exchange or connected-apps path is admitted by the API vhost allow-list: the
+   * exchange layer answers only the gateway and the member controls only the browser (REQ-XCH-001).
+   *
+   * @throws IOException if the allow-list cannot be read
+   */
+  @Test
+  @DisplayName("no exchange or connected-apps path is admitted by the API vhost allow-list")
+  void theExchangeStaysOffTheApiVhost() throws IOException {
+    List<Predicate<String>> rules = allowListRules();
+    List<String> admitted =
+        List.of(
+                "/api/v1/exchange/catalog/resolve",
+                "/api/v1/exchange/catalog/locations",
+                "/api/v1/exchange/me/blueprints",
+                "/api/v1/exchange/me/stock/changes",
+                "/api/v1/exchange/me/drafts/blueprints",
+                "/api/v1/connected-apps",
+                "/api/v1/connected-apps/seen",
+                "/api/v1/connected-apps/versekit/undo",
+                "/api/v1/connected-apps/mass-changes/confirm",
+                "/api/v1/admin/exchange-clients",
+                "/api/v1/admin/exchange-settings")
+            .stream()
+            .filter(path -> rules.stream().anyMatch(rule -> rule.test(path)))
+            .toList();
+
+    assertThat(admitted)
+        .as(
+            "%s must never admit the exchange layer or the member's connection controls",
+            ALLOW_LIST)
+        .isEmpty();
+  }
+
+  /**
    * Verifies that every frozen operation is admitted by the API vhost allow-list, parsed from the
    * nginx include.
    *

@@ -105,7 +105,9 @@ class ExchangeRelayTest {
     assertThat(interpret(400, "{\"code\":\"VALIDATION_FAILED\"}").code())
         .isEqualTo("SCHEMA_INVALID");
     assertThat(interpret(400, "{\"code\":\"BAD_REQUEST\"}").code()).isEqualTo("SCHEMA_INVALID");
-    assertThat(count("refused")).isEqualTo(3.0d);
+    assertThat(interpret(409, "{\"code\":\"OPTIMISTIC_LOCK\"}").code())
+        .isEqualTo("VERSION_CONFLICT");
+    assertThat(count("refused")).isEqualTo(4.0d);
   }
 
   @Test

@@ -5,6 +5,12 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-27
 
+- **OpenAPI document matches the gateway.** The `Idempotency-Key` takes 8 to 128 characters of
+  `[A-Za-z0-9._~-]`; `POST /exchange/v1/me/installation` needs none; `catalog/resolve` and
+  `catalog/locations` accept any exchange scope, `exchange.connect` included.
+- **`VERSION_CONFLICT` at request level.** A write that meets a concurrent change the row locks did
+  not already turn into a per-op `VERSION_CONFLICT` now answers `409 VERSION_CONFLICT` instead of
+  `502 BACKEND_RELAY_FAILED`.
 - **Drafts.** `POST /exchange/v1/me/drafts/blueprints` and `…/drafts/refinery-orders` stage a
   `basetool.blueprints` envelope or a refinery extract for the member's review and answer the
   `draft-result`. A draft too large to hand off is `413 PAYLOAD_TOO_LARGE`; a draft the Basetool

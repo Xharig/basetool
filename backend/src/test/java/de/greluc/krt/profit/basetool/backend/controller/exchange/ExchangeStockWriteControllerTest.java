@@ -49,6 +49,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -197,6 +202,41 @@ class ExchangeStockWriteControllerTest {
         .andExpect(jsonPath("$.results[0].reason").value("VERSION_CONFLICT"));
 
     assertThat(total(laranite)).isEqualTo(10.0);
+  }
+
+  @Test
+  void twoConcurrentSetsOfOneLotApplyOnceAndTheOtherIsAVersionConflict() throws Exception {
+    UUID laranite = material("SCU", null);
+    UUID area18 = location(null);
+    row(laranite, area18, 500, 10, null);
+    String place = locationName(area18);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      List<Future<String>> answers = new ArrayList<>();
+      for (String target : List.of("6", "4")) {
+        answers.add(
+            pool.submit(
+                () -> {
+                  start.await();
+                  return set(laranite, place, 500, target, "10", "SCU")
+                      .andExpect(status().isOk())
+                      .andReturn()
+                      .getResponse()
+                      .getContentAsString();
+                }));
+      }
+      start.countDown();
+      List<String> bodies = new ArrayList<>();
+      for (Future<String> answer : answers) {
+        bodies.add(answer.get(60, TimeUnit.SECONDS));
+      }
+      assertThat(bodies).filteredOn(b -> b.contains("\"applied\":1")).hasSize(1);
+      assertThat(bodies).filteredOn(b -> b.contains("\"VERSION_CONFLICT\"")).hasSize(1);
+      assertThat(total(laranite)).isIn(6.0, 4.0);
+    } finally {
+      pool.shutdownNow();
+    }
   }
 
   @Test
