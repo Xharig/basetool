@@ -151,9 +151,37 @@ public class ExchangeStockWriteService {
   @Transactional
   public @NotNull ExchangeChangeResultDto apply(
       @NotNull ExchangeCaller caller, @NotNull ExchangeStockChangeSet changeSet) {
+    return run(caller, changeSet, true);
+  }
+
+  /**
+   * Applies a change set the member confirmed after the mass-change guard held it back, without
+   * asking the guard again (REQ-XCH-021).
+   *
+   * @param caller the client, installation and member the change set was staged for
+   * @param changeSet the changes
+   * @return the counts and the detail of every op that was not applied
+   */
+  @Transactional
+  public @NotNull ExchangeChangeResultDto applyConfirmed(
+      @NotNull ExchangeCaller caller, @NotNull ExchangeStockChangeSet changeSet) {
+    return run(caller, changeSet, false);
+  }
+
+  /**
+   * Plans a change set, asks the guard when told to, and applies it.
+   *
+   * @param caller the caller
+   * @param changeSet the changes
+   * @param guarded whether the mass-change guard decides
+   * @return the result
+   */
+  private @NotNull ExchangeChangeResultDto run(
+      @NotNull ExchangeCaller caller, @NotNull ExchangeStockChangeSet changeSet, boolean guarded) {
     List<Planned> plan = plan(caller, changeSet.ops());
     Set<UUID> rising = rising(plan);
-    if (!changeSet.dryRun()
+    if (guarded
+        && !changeSet.dryRun()
         && guard.requiresConfirmation(
             caller,
             ExchangeResource.STOCK,

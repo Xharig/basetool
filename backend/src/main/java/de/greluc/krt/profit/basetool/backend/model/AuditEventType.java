@@ -710,6 +710,9 @@ public enum AuditEventType {
   /** The member undid a client's writes since a point in time (REQ-XCH-022). */
   EXCHANGE_CHANGES_UNDONE(AuditDomain.CONNECTED_APPS),
 
+  /** The member confirmed a change set the mass-change guard held back (REQ-XCH-021). */
+  EXCHANGE_MASS_CHANGE_CONFIRMED(AuditDomain.CONNECTED_APPS),
+
   /** The connected-applications audit log was exported as a PDF or JSON for a period. */
   CONNECTED_APPS_AUDIT_EXPORTED(AuditDomain.CONNECTED_APPS),
 

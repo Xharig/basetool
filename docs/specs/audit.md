@@ -230,7 +230,8 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   member's exchange access (`EXCHANGE_MEMBER_DEPARTED`: the reason, the number of clients, and
   whether every step succeeded), and a member undoing a client's writes (`EXCHANGE_CHANGES_UNDONE`:
   the restored and skipped counts, REQ-XCH-022; the entries themselves are audited in their own
-  areas). The subject is the registry client
+  areas) or confirming a change set the mass-change guard held back
+  (`EXCHANGE_MASS_CHANGE_CONFIRMED`: the resource and the applied count, REQ-XCH-021). The subject is the registry client
   or the installation, labelled by the **client id**; a member's disconnect names the member as
   target, a registry change names none. A change that failed because the mirror could not be
   written rolls back and records nothing.
