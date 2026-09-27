@@ -48,7 +48,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.springframework.data.redis.RedisSystemException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -528,7 +528,7 @@ public class ExchangeController {
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
             "The exchange's storage budget is full; try again later.");
       }
-    } catch (ExchangeUnavailableException | RedisSystemException e) {
+    } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A draft could not be staged: {}", e.getClass().getSimpleName());
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE, "The draft cannot be staged; try again later.");
@@ -640,7 +640,7 @@ public class ExchangeController {
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
             "The exchange's storage budget is full; try again later.");
       }
-    } catch (ExchangeUnavailableException | RedisSystemException e) {
+    } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A mass change could not be staged: {}", e.getClass().getSimpleName());
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE,

@@ -789,7 +789,10 @@ The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash
 and body. The same request under a known key is answered from the cache with `Idempotency-Replayed:
 true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and never a staged mass
 change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
-the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write.
+the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write. That
+holds on every exchange route and for every kind of Redis failure — a lost connection, a timeout, a
+refused command while staging a draft or a mass change, or a store failure escaping a route — each
+answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`.
 
 The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
 per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
