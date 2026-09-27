@@ -148,6 +148,12 @@
 
 ### Fixed
 
+- **Audit-Log der Materialbörse: Kürzungen und Entfernungen durch Lagerbewegungen fehlten.** Wenn
+  eine Ausbuchung, Übertragung, Umbuchung, Übergabe, Produktion, das Leeren des Lagers oder das
+  Löschen eines Kontos ein Angebot kürzte oder mitlöschte, stand das bisher nicht im Audit; jetzt
+  gibt es dafür `MARKET_OFFER_REDUCED` bzw. `MARKET_OFFER_REMOVED` mit dem Anlass (REQ-MARKET-013,
+  REQ-AUDIT-001).
+
 - **Lager: die Org-Einheiten-Auswahl in „Mein Lager“ ist nicht mehr leer.** Beim Sammel-Umbuchen
   und beim Ändern der Org-Einheit fragte die Seite die eigenen Mitgliedschaften mit dem Benutzernamen
   statt der Nutzer-ID ab und bot deshalb nur „Keine Einheit“ an; beide Dialoge nutzen jetzt die ID.
