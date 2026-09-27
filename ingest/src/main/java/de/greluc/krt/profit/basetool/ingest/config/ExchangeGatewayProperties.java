@@ -42,5 +42,4 @@ public record ExchangeGatewayProperties(
     @NotBlank @Pattern(regexp = "exchange:[a-z0-9:_-]+") @DefaultValue("exchange:registry")
         String registryKey,
     @NotNull @DefaultValue("PT5S") Duration registryCacheTtl,
-    @NotBlank @URL @DefaultValue("https://ingest.profit-base.online/exchange/v1/openapi.json")
-        String docsUrl) {}
+    @NotBlank @URL @DefaultValue("https://krt-profit.github.io/basetool/") String docsUrl) {}

@@ -10,10 +10,9 @@ is public, case by case, and for the capabilities a client actually needs.
    and your confirmation of each of the [client security requirements](client-security.md).
 2. The owner reviews the application and your client against the requirements — the source where it
    is public, the behaviour of a build where it is not. Closed-source clients can be approved.
-3. A pull request adds your client to
-   [`docs/legal/approved-clients.md`](../legal/approved-clients.md) and to the list the Keycloak
-   provisioner reads. **Its merge is the approval.** An administrator then registers the client with
-   the approved capabilities under „Verbundene Anwendungen".
+3. A pull request adds your client to the [approved-clients list][approved] and to the list the
+   Keycloak provisioner reads. **Its merge is the approval.** An administrator then registers the
+   client with the approved capabilities under „Verbundene Anwendungen".
 
 ## Criteria
 
@@ -39,3 +38,5 @@ Access is limited to the approved capabilities; Basetool data stays on the membe
 no telemetry and no transfer to third parties; tokens are handled as the security requirements
 state; incidents are reported to the Basetool's security contact; the Basetool may suspend the
 client at any time.
+
+[approved]: https://github.com/krt-profit/basetool/blob/main/docs/legal/approved-clients.md

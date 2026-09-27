@@ -4,6 +4,9 @@
 
 ### Added
 
+- **Datenaustausch: Dokumentation für Fremd-Anwendungen online.** `docs/exchange/` erscheint mit einer
+  gerenderten OpenAPI-Referenz unter <https://krt-profit.github.io/basetool/>; das Service-Dokument
+  verweist dorthin. CI prüft Links und Markdown der Seiten.
 - **Blueprints: Herkunft.** Jeder Blueprint merkt sich, woher er kam (von Hand, Datei-Import,
   Standard, Spiel-Log einer verbundenen Anwendung), und „Meine Blueprints“ zeigt das in der
   Detailansicht. Migration `V255`; ältere Einträge bleiben ohne Herkunft.

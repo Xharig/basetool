@@ -1,0 +1,99 @@
+name: Exchange Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/exchange/**
+      - ingest/src/main/resources/api/exchange-v1.openapi.json
+      - ingest/src/main/resources/exchange/v1/schemas/**
+      - .github/workflows/exchange-docs.yml
+      - .github/scripts/check_exchange_docs_links.py
+      - .github/scripts/prepare_exchange_reference.py
+  pull_request:
+    paths:
+      - docs/exchange/**
+      - ingest/src/main/resources/api/exchange-v1.openapi.json
+      - ingest/src/main/resources/exchange/v1/schemas/**
+      - .github/workflows/exchange-docs.yml
+      - .github/scripts/check_exchange_docs_links.py
+      - .github/scripts/prepare_exchange_reference.py
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: exchange-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Check and build the exchange docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+
+      - name: links / Self-test the link checker
+        run: python3 .github/scripts/check_exchange_docs_links.py --selftest
+
+      - name: links / Check every relative link stays on the site and resolves
+        run: python3 .github/scripts/check_exchange_docs_links.py
+
+      - name: markdown / Lint the pages
+        run: npx --yes markdownlint-cli2@0.23.3 "docs/exchange/**/*.md"
+
+      - name: reference / Self-test the reference preparation
+        run: python3 .github/scripts/prepare_exchange_reference.py --selftest
+
+      - name: reference / Render the OpenAPI reference
+        run: |
+          python3 .github/scripts/prepare_exchange_reference.py --out build/exchange-reference
+          npx --yes @redocly/cli@2.54.3 build-docs build/exchange-reference/openapi.json \
+            --output build/exchange-reference/index.html
+
+      - name: site / Assemble the sources
+        run: |
+          mkdir -p build/exchange-site/reference build/exchange-site/schemas
+          cp -r docs/exchange/. build/exchange-site/
+          cp build/exchange-reference/index.html build/exchange-site/reference/index.html
+          cp ingest/src/main/resources/api/exchange-v1.openapi.json build/exchange-site/reference/
+          cp ingest/src/main/resources/exchange/v1/schemas/*.schema.json build/exchange-site/schemas/
+
+      - name: site / Build with Jekyll
+        uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697
+        with:
+          source: build/exchange-site
+          destination: build/exchange-pages
+
+      - name: site / Upload the Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: build/exchange-pages
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
