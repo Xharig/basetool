@@ -46,11 +46,11 @@ import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.service.HangarService;
 import de.greluc.krt.profit.basetool.backend.service.PersonalBlueprintService;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
+import de.greluc.krt.profit.basetool.backend.support.ExchangeChangeRetentionProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -86,9 +86,6 @@ public class ExchangeUndoService {
    */
   static final String GONE = "GONE";
 
-  /** How far back an undo reaches: the journal's retention. */
-  static final Duration REACH = Duration.ofDays(90);
-
   private static final String RESTORED = "restored";
   private static final String SKIPPED = "skipped";
 
@@ -106,6 +103,7 @@ public class ExchangeUndoService {
   private final AuditService auditService;
   private final ExchangeLiveSync liveSync;
   private final ExchangeEntryLabels entryLabels;
+  private final ExchangeChangeRetentionProperties retention;
   private final MeterRegistry meterRegistry;
   private final ObjectMapper objectMapper;
   private final Clock clock = Clock.systemUTC();
@@ -115,8 +113,8 @@ public class ExchangeUndoService {
    *
    * @param member the member
    * @param clientId the client
-   * @param since the point in time; one older than the journal's retention reaches only as far back
-   *     as the journal
+   * @param since the point in time; one older than the configured journal and change-log retention
+   *     reaches only as far back as that retention
    * @return how many entries were restored, and the ones left alone with the reason
    * @throws NotFoundException when the client is not registered
    */
@@ -126,7 +124,7 @@ public class ExchangeUndoService {
     final ExchangeClient client =
         Entities.require(
             clientRepository.findWithCapabilitiesByClientId(clientId), () -> "Client not found");
-    Instant floor = clock.instant().minus(REACH);
+    Instant floor = clock.instant().minus(retention.maxAge());
     Instant from = since.isBefore(floor) ? floor : since;
     Map<String, List<ExchangeJournalEntry>> groups = new LinkedHashMap<>();
     for (ExchangeJournalEntry entry : journalRepository.findUndoable(member, clientId, from)) {
@@ -174,7 +172,9 @@ public class ExchangeUndoService {
   }
 
   /**
-   * Restores one entry to its state before the client's first write in the span.
+   * Restores one entry to its state before the client's first write in the span; an entry whose
+   * latest change-log entry is missing counts as changed afterwards, because nothing proves it was
+   * not.
    *
    * @param member the member
    * @param clientId the client
@@ -196,7 +196,7 @@ public class ExchangeUndoService {
               : newest.getEntityKey();
       Optional<ExchangeChange> latest =
           changeRepository.findLatestForKey(member, resource.name(), feedKey);
-      if (latest.isPresent() && latest.get().getTx() != newest.getTx()) {
+      if (latest.isEmpty() || latest.get().getTx() != newest.getTx()) {
         return CHANGED_AFTERWARDS;
       }
       JsonNode before = parse(data.getLast().getBeforeState());
@@ -258,8 +258,9 @@ public class ExchangeUndoService {
   }
 
   /**
-   * Removes, updates or recreates a ship to match its earlier state; a recreated ship gets a new id
-   * and does not rejoin mission units.
+   * Removes, updates or recreates a ship to match its earlier state; a recreated ship gets a new
+   * id, does not rejoin mission units and is stamped like a client's create, so a member of several
+   * org units gets it without a unit.
    *
    * @param member the member
    * @param rawId the ship's id
@@ -299,13 +300,14 @@ public class ExchangeUndoService {
     if (ship.isPresent()) {
       hangarService.updateShip(member, shipId, dto);
     } else {
-      hangarService.addShip(member, dto);
+      hangarService.addShipForClient(member, dto);
     }
     return true;
   }
 
   /**
-   * Takes back the links the client made in the span and puts back what they replaced.
+   * Takes back the links the client made in the span and puts back what they replaced, the latter
+   * only while the ship is still the member's.
    *
    * @param member the member
    * @param clientId the client
@@ -331,7 +333,7 @@ public class ExchangeUndoService {
               .ifPresent(linkRepository::delete);
           linkRepository.flush();
           if (replaced != null
-              && shipRepository.existsById(shipId)
+              && shipRepository.existsByIdAndOwnerId(shipId, member)
               && linkRepository
                   .findByUserIdAndClientIdAndInstallationKeyAndExternalId(
                       member, clientId, installation, replaced)

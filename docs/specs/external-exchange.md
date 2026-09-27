@@ -879,6 +879,9 @@ changed afterwards or a merge removed, and does not restore Materialbörse offer
 **Acceptance**
 
 - [x] Undo after a later web edit skips that row and reports it. *`ExchangeUndoControllerTest`.*
+- [x] An entry without a change-log entry is skipped, the reach follows the configured retention, a
+  removed ship of a member of several units comes back without a unit, and a replaced link is not
+  put back on another member's ship. *`ExchangeUndoControllerTest`.*
 
 The journal is `exchange_journal`: one row per written entry with the client, installation, change
 set, resource, key, action, whether it counts as a removal, the entry before and after as JSON, the
@@ -887,16 +890,24 @@ change feed after 90 days by `exchange_change_retention`, exported under Art. 15
 source account on a merge, and its states are searched by the Personensuche.
 
 The member undoes from „Verbundene Anwendungen" with `POST /api/v1/connected-apps/{clientId}/undo
-{since}` (member session only), reaching back at most 90 days. Each entry the client wrote in the
-span goes back to its state before the client's first write there — a blueprint added or removed, a
-lot set back through the Lager's own book-in and book-out, a ship deleted, updated back or recreated
-under a new id without its mission units — unless the entry's latest change-log entry is not the
-client's last write, then it is skipped as `CHANGED_AFTERWARDS`; one that no longer belongs to the
-member or names something gone is skipped as `GONE`. A ship is locked only when it is still the
-member's; one given to another member is skipped without locking its row. Links the client made
-are taken back. The restored entries' journal rows are marked undone, the undo is audited as
-`EXCHANGE_CHANGES_UNDONE` (restored and skipped counts) and counted in
-`basetool_exchange_undo_total{resource,outcome}`, and the member's pages refresh live.
+{since}` (member session only), reaching back at most as far as the configured journal and
+change-log retention (`app.exchange.change-retention.max-age`, 90 days by default). Each entry the
+client wrote in the span goes back to its state before the client's first write there — a blueprint
+added or removed, a lot set back through the Lager's own book-in and book-out, a ship deleted,
+updated back or recreated under a new id without its mission units — unless the entry's latest
+change-log entry is not the client's last write, or is missing, then it is skipped as
+`CHANGED_AFTERWARDS`: without the change-log entry nothing proves that nobody changed the entry
+since. One that no longer belongs to the member or names something gone is skipped as `GONE`. A
+ship is locked only when it is still the member's; one given to another member is skipped without
+locking its row. A recreated ship is stamped like a client's create (REQ-XCH-017): the member's
+only direct org unit, or none for a member of several. Links the client made are taken back, and a
+link one of them replaced is put back only while the ship is still the member's. The restored
+entries' journal rows are marked undone, the undo is audited as `EXCHANGE_CHANGES_UNDONE` (restored
+and skipped counts) and counted in `basetool_exchange_undo_total{resource,outcome}`, and the
+member's pages refresh live. *Corrected 2026-09-27 (second security review L9): the reach was a
+fixed 90 days whatever the retention, an entry without a change-log entry was restored unchecked, a
+removed ship of a member of several units failed the whole undo with `OWNER_ORG_UNIT_REQUIRED`, and
+a replaced link was put back on a ship that merely still existed.*
 
 **Status:** journal and undo built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086),
 WP 4.5 (#2087)

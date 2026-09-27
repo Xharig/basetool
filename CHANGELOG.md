@@ -261,6 +261,10 @@
 
 ### Fixed
 
+- **Datenaustausch: Zurücknehmen robuster.** Das Zurücknehmen reicht so weit zurück wie die
+  eingestellte Aufbewahrung, lässt Einträge ohne Änderungsprotokoll unangetastet, stellt ein
+  entferntes Schiff auch für Mitglieder mehrerer Einheiten wieder her und hängt keine Verknüpfung
+  mehr an ein Schiff, das inzwischen einem anderen Mitglied gehört.
 - **Datenaustausch: Massenänderung nach dem Trennen nicht mehr bestätigbar.** Eine
   zurückgehaltene Massenänderung gilt nur 30 Minuten ab dem Zurückhalten, auch in der Sitzung;
   wurde die Anwendung oder Installation seitdem getrennt oder die Anwendung gesperrt, lehnt das

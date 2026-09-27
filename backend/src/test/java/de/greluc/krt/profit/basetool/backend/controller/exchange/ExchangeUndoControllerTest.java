@@ -69,11 +69,16 @@ import org.springframework.web.context.WebApplicationContext;
 /**
  * The member undoes a client's writes from the connected-apps page: entries go back to their state
  * before the client's first write in the span, an entry changed afterwards is skipped and reported,
- * and only the member's browser session may do it (REQ-XCH-022). Writes commit.
+ * and only the member's browser session may do it (REQ-XCH-022). The change-log retention is 30
+ * days here, so the undo's reach follows it. Writes commit.
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@TestPropertySource(properties = "app.security.ingest-gateway.client-ids=test-ingest-gateway")
+@TestPropertySource(
+    properties = {
+      "app.security.ingest-gateway.client-ids=test-ingest-gateway",
+      "app.exchange.change-retention.max-age=P30D"
+    })
 class ExchangeUndoControllerTest {
 
   private static final String GATEWAY = "55555555-5555-5555-5555-555555555555";
@@ -91,12 +96,14 @@ class ExchangeUndoControllerTest {
 
   private MockMvc mockMvc;
   private UUID member;
+  private UUID other;
   private String client;
   private boolean wasEnabled;
   private final List<UUID> blueprints = new ArrayList<>();
   private final List<UUID> materials = new ArrayList<>();
   private final List<UUID> locations = new ArrayList<>();
   private final List<UUID> shipTypes = new ArrayList<>();
+  private final List<UUID> orgUnits = new ArrayList<>();
 
   @BeforeEach
   void setUp() {
@@ -111,6 +118,14 @@ class ExchangeUndoControllerTest {
     user.setInKeycloak(true);
     user.setRoles(new HashSet<>(Set.of(roleRepository.findByCode(Roles.KRT_MEMBER).orElseThrow())));
     member = userRepository.saveAndFlush(user).getId();
+    User second = new User();
+    second.setId(UUID.randomUUID());
+    second.setUsername("undo-other-" + UUID.randomUUID());
+    second.setApprovalStatus(ApprovalStatus.ACTIVE);
+    second.setInKeycloak(true);
+    second.setRoles(
+        new HashSet<>(Set.of(roleRepository.findByCode(Roles.KRT_MEMBER).orElseThrow())));
+    other = userRepository.saveAndFlush(second).getId();
     client = "vk-" + UUID.randomUUID().toString().substring(0, 8);
     ExchangeClient registered = new ExchangeClient();
     registered.setClientId(client);
@@ -136,9 +151,13 @@ class ExchangeUndoControllerTest {
     jdbc.update("DELETE FROM exchange_client WHERE client_id = ?", client);
     jdbc.update("DELETE FROM personal_blueprint WHERE owner_user_id = ?", member);
     jdbc.update("DELETE FROM inventory_item WHERE user_id = ?", member);
-    jdbc.update("DELETE FROM ship WHERE owner_id = ?", member);
-    jdbc.update("DELETE FROM user_roles WHERE user_id = ?", member);
-    jdbc.update("DELETE FROM app_user WHERE id = ?", member);
+    for (UUID id : List.of(member, other)) {
+      jdbc.update("DELETE FROM ship WHERE owner_id = ?", id);
+      jdbc.update("DELETE FROM org_unit_membership WHERE user_id = ?", id);
+      jdbc.update("DELETE FROM user_roles WHERE user_id = ?", id);
+      jdbc.update("DELETE FROM app_user WHERE id = ?", id);
+    }
+    orgUnits.forEach(id -> jdbc.update("DELETE FROM org_unit WHERE id = ?", id));
     blueprints.forEach(id -> jdbc.update("DELETE FROM blueprint WHERE id = ?", id));
     materials.forEach(id -> jdbc.update("DELETE FROM material WHERE id = ?", id));
     locations.forEach(id -> jdbc.update("DELETE FROM location WHERE id = ?", id));
@@ -275,6 +294,83 @@ class ExchangeUndoControllerTest {
     undo(Instant.now().minus(1, ChronoUnit.HOURS)).andExpect(jsonPath("$.restored").value(1));
 
     assertThat(owned()).containsExactly(rifle);
+  }
+
+  @Test
+  void anEntryWhoseChangeLogEntryIsMissingIsSkippedAsChangedAfterwards() throws Exception {
+    String rifle = product("Arrowhead Rifle");
+    write("blueprints", "{\"ops\":[{\"op\":\"add\",\"ref\":{\"bt\":\"%s\"}}]}".formatted(rifle));
+    jdbc.update("DELETE FROM exchange_change WHERE user_id = ?", member);
+
+    undo(Instant.now().minus(1, ChronoUnit.HOURS))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.restored").value(0))
+        .andExpect(jsonPath("$.skipped[0].resource").value("BLUEPRINT"))
+        .andExpect(jsonPath("$.skipped[0].reason").value("CHANGED_AFTERWARDS"));
+
+    assertThat(owned()).containsExactly(rifle);
+  }
+
+  @Test
+  void theUndoReachesOnlyAsFarBackAsTheConfiguredRetention() throws Exception {
+    String rifle = product("Arrowhead Rifle");
+    write("blueprints", "{\"ops\":[{\"op\":\"add\",\"ref\":{\"bt\":\"%s\"}}]}".formatted(rifle));
+    jdbc.update(
+        "UPDATE exchange_journal SET recorded_at = ? WHERE user_id = ?",
+        Timestamp.from(Instant.now().minus(40, ChronoUnit.DAYS)),
+        member);
+
+    undo(Instant.now().minus(60, ChronoUnit.DAYS)).andExpect(jsonPath("$.restored").value(0));
+
+    assertThat(owned()).containsExactly(rifle);
+  }
+
+  @Test
+  void aShipRemovedFromAMemberOfSeveralUnitsComesBackWithoutAUnit() throws Exception {
+    UUID cutlass = shipType("Cutlass Black");
+    UUID removed = ship("Retired", cutlass);
+    joins(orgUnit("SQUADRON"));
+    joins(orgUnit("SPECIAL_COMMAND"));
+    String rifle = product("Arrowhead Rifle");
+    write("blueprints", "{\"ops\":[{\"op\":\"add\",\"ref\":{\"bt\":\"%s\"}}]}".formatted(rifle));
+    write(
+            "ships",
+            "{\"ops\":[{\"op\":\"remove\",\"shipId\":\"%s\",\"version\":0}]}".formatted(removed))
+        .andExpect(jsonPath("$.applied").value(1));
+
+    undo(Instant.now().minus(1, ChronoUnit.HOURS))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.restored").value(2));
+
+    assertThat(names()).containsExactly("Retired");
+    assertThat(
+            jdbc.queryForList(
+                "SELECT owning_org_unit_id FROM ship WHERE owner_id = ?", UUID.class, member))
+        .containsExactly((UUID) null);
+    assertThat(owned()).isEmpty();
+  }
+
+  @Test
+  void aReplacedLinkIsNotPutBackOnAShipGivenToAnotherMember() throws Exception {
+    UUID cutlass = shipType("Cutlass Black");
+    UUID given = ship("Given away", cutlass);
+    write(
+            "ships",
+            "{\"ops\":[{\"op\":\"link\",\"externalId\":\"vk-new\",\"shipId\":\"%s\"}]}"
+                .formatted(given))
+        .andExpect(jsonPath("$.applied").value(1));
+    jdbc.update(
+        "UPDATE exchange_journal SET before_state = '{\"externalId\":\"vk-old\"}'"
+            + " WHERE user_id = ? AND action = 'SHIP_LINK'",
+        member);
+    jdbc.update("UPDATE ship SET owner_id = ? WHERE id = ?", other, given);
+
+    undo(Instant.now().minus(1, ChronoUnit.HOURS)).andExpect(status().isOk());
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM exchange_ship_link WHERE user_id = ?", Integer.class, member))
+        .isZero();
   }
 
   @Test
@@ -430,6 +526,35 @@ class ExchangeUndoControllerTest {
         type,
         member);
     return id;
+  }
+
+  /**
+   * Seeds an active org unit.
+   *
+   * @param kind its kind
+   * @return its id
+   */
+  private @NotNull UUID orgUnit(@NotNull String kind) {
+    UUID id = UUID.randomUUID();
+    jdbc.update(
+        "INSERT INTO org_unit (id, kind, name, shorthand, active, is_promotion_enabled,"
+            + " is_profit_eligible) VALUES (?, ?, ?, ?, TRUE, FALSE, FALSE)",
+        id,
+        kind,
+        "Unit " + id,
+        "U" + id.toString().substring(0, 6));
+    orgUnits.add(id);
+    return id;
+  }
+
+  /**
+   * Makes the member a direct member of an org unit.
+   *
+   * @param orgUnit the org unit
+   */
+  private void joins(@NotNull UUID orgUnit) {
+    jdbc.update(
+        "INSERT INTO org_unit_membership (user_id, org_unit_id) VALUES (?, ?)", member, orgUnit);
   }
 
   private @NotNull List<String> names() {
