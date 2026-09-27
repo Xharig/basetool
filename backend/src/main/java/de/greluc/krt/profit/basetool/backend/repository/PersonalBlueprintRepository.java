@@ -114,6 +114,14 @@ public interface PersonalBlueprintRepository extends JpaRepository<PersonalBluep
   boolean existsByOwnerUserIdAndProductKey(UUID ownerUserId, String productKey);
 
   /**
+   * Counts a member's blueprints.
+   *
+   * @param ownerUserId the member
+   * @return the number of blueprints the member owns
+   */
+  long countByOwnerUserId(UUID ownerUserId);
+
+  /**
    * Owner-scoped bulk product lookup, used to compute the "already owned" flag for a page of search
    * results and to dedupe a batch add / import in a single query.
    *

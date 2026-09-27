@@ -9,6 +9,11 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Datenaustausch: Blueprints schreiben.** Verbundene Anwendungen können Blueprints hinzufügen
+  und entfernen (`/api/v1/exchange/me/blueprints/changes`); Standard-Blueprints bleiben, was ein
+  anderes Gerät oder das Web entfernt hat, kommt nur nach Rückfrage wieder, zu große Löschungen
+  warten auf die Bestätigung im Browser, und jede Änderung steht im Audit und im Schreibjournal
+  (REQ-XCH-014, REQ-XCH-015, REQ-XCH-021).
 - **Datenaustausch: Bedarf der eigenen Einheiten.** Das Backend liefert dem Gateway den offenen
   Material- und Item-Bedarf der Einheiten, in denen das Mitglied ist, anonym zusammengefasst – ohne
   Namen, Titel oder einzelne Aufträge (`/api/v1/exchange/me/org-demand`, REQ-XCH-018).

@@ -462,10 +462,14 @@ the member; the override is journaled.
 
 **Acceptance**
 
-- [ ] One installation removes, another tries to re-add: refused; with override: applied and
+- [x] One installation removes, another tries to re-add: refused; with override: applied and
   journaled.
 
-**Status:** planned — WP 3.3 (#2083), WP 4.1 (#2084)
+A tombstone is live while the key's latest change-log entry — its removal — is within the
+retention; the same installation may re-add what it removed itself. *`ExchangeBlueprintWriteControllerTest`
+also covers a removal in the web.*
+
+**Status:** built for blueprints — WP 4.1 (#2084); stock and ships follow with their writes
 
 ### REQ-XCH-015 — Blueprints sync as a set
 
@@ -484,8 +488,16 @@ resolver (REQ-XCH-012) answers a blueprint with the same `bt` and accepts it bac
 - [x] The feed marks default-granted blueprints and follows a change of the default set.
   *`ExchangeBlueprintControllerTest`.*
 
-**Status:** read side built in the backend — WP 4.1 (#2084); the gateway route and the writes
-follow
+The backend applies a change set at `POST /api/v1/exchange/me/blueprints/changes`
+(`exchange.blueprints.write`) in one transaction: it resolves every reference in one resolver call,
+plans the ops in order — an add of an owned product and a remove of a missing one are `unchanged`, a
+remove of a default `rejected DEFAULT_NOT_REMOVABLE`, an add against another's tombstone `rejected
+REMOVED_ELSEWHERE` — then asks the mass-change guard, and writes through the web's own add and
+delete, so the Blueprints audit names the client; each written entry is journaled. `dryRun` plans
+only. `basetool_exchange_writes_total{resource,outcome}` counts the ops.
+
+**Status:** read and write sides built — WP 4.1 (#2084); the corpus round trip follows with the
+sandbox (WP 2.3)
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -606,8 +618,10 @@ member and resource in the last 24 hours plus the batch's, a batch trips above 2
 is at least 5 and more than a fifth of the current count plus the window's removals. Each resource's
 write service decides what in its batch is a removal.
 
-**Status:** the counting rule is built — WP 3.3 (#2083); the resources' removal rules, the staging and
-the confirmation follow with the writes — WP 3.3, WP 3.2 (#2082), WP 4.5 (#2087)
+**Status:** the counting rule and the blueprint removals are built — WP 3.3 (#2083), WP 4.1 (#2084):
+a blueprint batch that trips the rule answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED` and writes
+nothing, and the gateway stages it; the stock and ship removal rules, the confirmation page and the
+apply follow — WP 3.3, WP 3.2 (#2082), WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 
@@ -625,8 +639,8 @@ writing transaction's id and the time. It is written in the write's own transact
 change feed after 90 days by `exchange_change_retention`, exported under Art. 15, stays with the
 source account on a merge, and its states are searched by the Personensuche.
 
-**Status:** journal built — WP 3.3 (#2083); the writes that fill it follow with WP 4.1–4.4, the undo
-with WP 4.5 (#2087)
+**Status:** journal built and filled by the blueprint writes — WP 3.3 (#2083), WP 4.1 (#2084); the
+stock and ship writes and the undo follow — WP 4.2–4.4, WP 4.5 (#2087)
 
 ### REQ-XCH-023 — Rate limits, quotas and a hard Redis budget
 
