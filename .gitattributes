@@ -15,7 +15,6 @@
 *.mjs text eol=lf
 *.svg text eol=lf
 
-` and the pull fails on a
 *.container text eol=lf
 *.network text eol=lf
 *.volume text eol=lf
