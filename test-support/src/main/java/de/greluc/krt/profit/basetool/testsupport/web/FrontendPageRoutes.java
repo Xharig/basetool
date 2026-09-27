@@ -78,6 +78,7 @@ public final class FrontendPageRoutes {
           "/org-chart",
           "/sc-links",
           "/profile",
+          "/connected-apps",
           "/promotion/overview",
           "/promotion/my-evaluations",
           "/promotion/manage",
