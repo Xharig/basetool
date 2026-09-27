@@ -210,7 +210,7 @@
   Extractor-Adressen angewendet, weil Versionen bis 2.9.1 sie noch brauchen.
   
 - **Datenaustausch: Backend prüft „Trennen“ selbst.** Hat ein Mitglied eine Anwendung getrennt,
-  lehnt jetzt auch das Backend deren ältere Tokens ab, nicht nur das Gateway; ist der Sperrspiegel in
+  lehnt jetzt auch das Backend deren Verbindungen von vor dem Trennen ab, mit derselben Zeit wie das Gateway; ist der Sperrspiegel in
   Redis nicht lesbar, wird die Anfrage abgelehnt statt durchgelassen.
   
 - **Datenaustausch: feste Fehlertexte.** Lehnt das Backend eine Anfrage einer verbundenen Anwendung

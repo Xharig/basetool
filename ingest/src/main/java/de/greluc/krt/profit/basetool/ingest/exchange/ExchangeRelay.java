@@ -72,10 +72,11 @@ public class ExchangeRelay {
   public static final String INSTALLATION_HEADER = "X-Exchange-Installation";
 
   /**
-   * The header carrying the member token's {@code iat} in epoch seconds, so the backend can check a
-   * client revocation itself (REQ-XCH-008); absent when the token has none.
+   * The header carrying, in epoch seconds, the connection time the gate compares with a client
+   * revocation, so the backend can check it with the same time (REQ-XCH-008); absent when the token
+   * lacks the claim.
    */
-  public static final String TOKEN_ISSUED_AT_HEADER = "X-Exchange-Token-Issued-At";
+  public static final String CONNECTED_AT_HEADER = "X-Exchange-Connected-At";
 
   /** The code of a relay failure. */
   public static final String RELAY_FAILED = "BACKEND_RELAY_FAILED";
@@ -246,8 +247,8 @@ public class ExchangeRelay {
                             CAPABILITIES_HEADER,
                             String.join(",", new TreeSet<>(context.capabilities())));
                         headers.set(INSTALLATION_HEADER, context.keyThumbprint());
-                        if (context.issuedAt() != null) {
-                          headers.set(TOKEN_ISSUED_AT_HEADER, Long.toString(context.issuedAt()));
+                        if (context.connectedAt() != null) {
+                          headers.set(CONNECTED_AT_HEADER, Long.toString(context.connectedAt()));
                         }
                         headers.setAccept(
                             List.of(

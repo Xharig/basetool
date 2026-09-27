@@ -51,8 +51,8 @@ import org.springframework.transaction.annotation.Transactional;
  * The backend's own check of an exchange request, used as {@code @exchangeGate} in {@code
  * PreAuthorize} on every exchange controller method (REQ-XCH-004): the caller is an acting member
  * relayed for a registry client, the global switch is on, the client is active, the member has not
- * disconnected the installation or, after the token was issued, the client (REQ-XCH-008), and the
- * needed capability was both relayed and granted in the registry. Every refusal is counted.
+ * disconnected the installation or, after the connection was made, the client (REQ-XCH-008), and
+ * the needed capability was both relayed and granted in the registry. Every refusal is counted.
  */
 @Component("exchangeGate")
 @RequiredArgsConstructor
@@ -76,7 +76,7 @@ public class ExchangeGate {
   /** Refusal reason: the member disconnected the calling installation. */
   static final String REASON_INSTALLATION_REVOKED = "installation_revoked";
 
-  /** Refusal reason: the member disconnected the client after the relayed token was issued. */
+  /** Refusal reason: the member disconnected the client after the relayed connection was made. */
   static final String REASON_CLIENT_REVOKED = "client_revoked";
 
   /** Refusal reason: the mirrored client revocations could not be read, so none is assumed. */
@@ -217,9 +217,9 @@ public class ExchangeGate {
   }
 
   /**
-   * Tells whether the member disconnected the client at or after the second the relayed token was
-   * issued, reading the mirror the gateway reads (REQ-XCH-008); a request relayed without an issue
-   * time counts as issued before any disconnect.
+   * Tells whether the member disconnected the client at or after the second of the relayed
+   * connection time, the time the gateway compared (REQ-XCH-008), reading the mirror the gateway
+   * reads; a request relayed without a connection time counts as connected before any disconnect.
    *
    * @param subject the acting member's authentication, relayed for an external client
    * @return {@code true} when a disconnect covers the token
@@ -238,8 +238,8 @@ public class ExchangeGate {
     if (revokedAt == null) {
       return false;
     }
-    Long issuedAt = subject.exchangeTokenIssuedAt();
-    return issuedAt == null || issuedAt <= revokedAt.getEpochSecond();
+    Long connectedAt = subject.exchangeConnectedAt();
+    return connectedAt == null || connectedAt <= revokedAt.getEpochSecond();
   }
 
   /**

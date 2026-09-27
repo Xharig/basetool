@@ -341,10 +341,12 @@ carries a later `iat`. The 60-second reconcile writes
 back any enforced entry the mirror lacks. The backend's `@exchangeGate` refuses a revoked installation
 itself (`installation_revoked`), and re-checks the client revocation the way the gateway does, so a
 gateway that missed it is caught behind it (security review 2026-09-27): the gateway relays the
-token's `iat` as `X-Exchange-Token-Issued-At` (honoured like the other relay headers, REQ-XCH-010),
-the gate reads `exchange:revoked:<client>:<member>` from the mirror on every exchange request and
-refuses a token issued at or before that second (`client_revoked`); a request relayed without an
-issue time counts as issued before it, as a token without `iat` does at the gateway. A mirror the
+connection time it compared — an offline token's `iat`, any other token's `auth_time`
+(`ExchangeGateFilter.connectionTime`) — as `X-Exchange-Connected-At` (honoured like the other relay
+headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from the mirror on every
+exchange request and refuses a connection made at or before that second (`client_revoked`); a request
+relayed without a connection time counts as connected before it, as a token without the claim does
+at the gateway. Both sides therefore compare the same time. A mirror the
 backend cannot read fails closed: the request is refused as `502` (`revocations_unreadable`), which
 the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user already holds `GET` on
 `exchange:*`. The member's controls are `/api/v1/connected-apps` (list,
@@ -366,8 +368,9 @@ the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user alrea
   shared ones before it reads the time, and writes nothing when Keycloak fails
   (`ConnectedAppsServiceTest`, `KeycloakServiceTest`); the extension leaves the member's other
   clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).
-  The backend re-checks it from the relayed issue time and refuses an unreadable mirror (backend
-  `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the relay header in `ExchangeRelayTest`).*
+  The backend re-checks it from the relayed connection time and refuses an unreadable mirror
+  (backend `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the compared time in the gateway's
+  `ExchangeGateTest`, the relay header in `ExchangeRelayTest`).*
 - [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
   sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
   every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
@@ -424,7 +427,7 @@ authentication carries the external client, so audit rows and client metrics nam
 is live before the first registry entry exists.
 
 **How it is built** (WP 3.1). `X-Exchange-Client` / `X-Exchange-Capabilities` — and with them
-`X-Exchange-Installation` and `X-Exchange-Token-Issued-At` (REQ-XCH-007, REQ-XCH-008) — are honoured only
+`X-Exchange-Installation` and `X-Exchange-Connected-At` (REQ-XCH-007, REQ-XCH-008) — are honoured only
 when the gateway acts for a member on an exchange route; from anyone else — or from the gateway on
 an ingest route — the request is refused with `403 ACTING_MEMBER_REFUSED` and counted as
 `basetool_on_behalf_of_refused_total{reason="forged_exchange_header"}`, and an exchange call without

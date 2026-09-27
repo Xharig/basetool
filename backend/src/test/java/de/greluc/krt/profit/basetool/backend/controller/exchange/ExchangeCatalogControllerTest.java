@@ -203,7 +203,7 @@ class ExchangeCatalogControllerTest {
   }
 
   @Test
-  void theBackendRefusesATokenIssuedBeforeTheMemberDisconnectedTheClient() throws Exception {
+  void theBackendRefusesAConnectionMadeBeforeTheMemberDisconnectedTheClient() throws Exception {
     Instant revokedAt = Instant.parse("2026-09-27T10:00:00Z");
     when(revocationMirror.revokedAt("versekit-test", MEMBER)).thenReturn(revokedAt);
 
@@ -211,7 +211,7 @@ class ExchangeCatalogControllerTest {
         .perform(
             relayed("exchange.connect")
                 .header(
-                    ActingMemberHeader.EXCHANGE_TOKEN_ISSUED_AT_HEADER,
+                    ActingMemberHeader.EXCHANGE_CONNECTED_AT_HEADER,
                     Long.toString(revokedAt.getEpochSecond())))
         .andExpect(status().isForbidden());
     mockMvc.perform(relayed("exchange.connect")).andExpect(status().isForbidden());
@@ -219,7 +219,7 @@ class ExchangeCatalogControllerTest {
         .perform(
             relayed("exchange.connect")
                 .header(
-                    ActingMemberHeader.EXCHANGE_TOKEN_ISSUED_AT_HEADER,
+                    ActingMemberHeader.EXCHANGE_CONNECTED_AT_HEADER,
                     Long.toString(revokedAt.getEpochSecond() + 1)))
         .andExpect(status().isOk());
   }
@@ -245,7 +245,7 @@ class ExchangeCatalogControllerTest {
                         .jwt(
                             token ->
                                 token.subject(MEMBER.toString()).claim("azp", "basetool-frontend")))
-                .header(ActingMemberHeader.EXCHANGE_TOKEN_ISSUED_AT_HEADER, "1790000000"))
+                .header(ActingMemberHeader.EXCHANGE_CONNECTED_AT_HEADER, "1790000000"))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("ACTING_MEMBER_REFUSED"));
   }

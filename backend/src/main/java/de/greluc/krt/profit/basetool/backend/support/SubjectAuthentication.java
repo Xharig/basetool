@@ -60,13 +60,13 @@ public interface SubjectAuthentication {
   }
 
   /**
-   * When the member's token behind a relayed exchange request was issued, as the gateway relayed
-   * it.
+   * When the connection behind a relayed exchange request was made, as the gateway compared it with
+   * a client disconnect: an offline token's {@code iat}, any other token's {@code auth_time}.
    *
-   * @return the token's {@code iat} in epoch seconds, or {@code null} when none was relayed
+   * @return the connection time in epoch seconds, or {@code null} when none was relayed
    */
   @Nullable
-  default Long exchangeTokenIssuedAt() {
+  default Long exchangeConnectedAt() {
     return null;
   }
 }

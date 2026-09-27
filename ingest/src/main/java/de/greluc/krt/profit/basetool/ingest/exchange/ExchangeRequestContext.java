@@ -33,7 +33,9 @@ import org.jetbrains.annotations.Unmodifiable;
  * @param keyThumbprint the token's DPoP key thumbprint
  * @param capabilities the capabilities both the token and the registry hold
  * @param client the registry entry
- * @param issuedAt the token's {@code iat} in epoch seconds, or {@code null} when it has none
+ * @param connectedAt the connection time the gate compares with a client revocation, in epoch
+ *     seconds — an offline token's {@code iat}, any other token's {@code auth_time} — or {@code
+ *     null} when the token lacks that claim
  */
 public record ExchangeRequestContext(
     @NotNull String clientId,
@@ -41,7 +43,7 @@ public record ExchangeRequestContext(
     @NotNull String keyThumbprint,
     @NotNull @Unmodifiable Set<String> capabilities,
     @NotNull ExchangeRegistry.Client client,
-    @Nullable Long issuedAt) {
+    @Nullable Long connectedAt) {
 
   /** The request attribute the context is stored under. */
   public static final String ATTRIBUTE = ExchangeRequestContext.class.getName();

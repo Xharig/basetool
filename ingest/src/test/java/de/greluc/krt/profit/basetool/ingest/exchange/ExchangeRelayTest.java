@@ -81,7 +81,7 @@ class ExchangeRelayTest {
         .andExpect(
             header(ExchangeRelay.CAPABILITIES_HEADER, "exchange.connect,exchange.stock.read"))
         .andExpect(header(ExchangeRelay.INSTALLATION_HEADER, "jkt-1"))
-        .andExpect(header(ExchangeRelay.TOKEN_ISSUED_AT_HEADER, "1790000000"))
+        .andExpect(header(ExchangeRelay.CONNECTED_AT_HEADER, "1790000000"))
         .andExpect(header("Accept-Language", "de-DE"))
         .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
 
@@ -99,7 +99,7 @@ class ExchangeRelayTest {
   void aTokenWithoutIssuedAtIsRelayedWithoutTheHeader() {
     backend
         .expect(requestTo("https://backend/api/v1/exchange/catalog/locations"))
-        .andExpect(headerDoesNotExist(ExchangeRelay.TOKEN_ISSUED_AT_HEADER))
+        .andExpect(headerDoesNotExist(ExchangeRelay.CONNECTED_AT_HEADER))
         .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
     ExchangeRequestContext admitted = context();
     ExchangeRequestContext withoutIssuedAt =

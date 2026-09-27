@@ -152,7 +152,7 @@ class ExchangeGateTest {
   }
 
   @Test
-  void refusesATokenIssuedAtOrBeforeTheMembersDisconnectOfTheClient() {
+  void refusesAConnectionMadeAtOrBeforeTheMembersDisconnectOfTheClient() {
     when(revocationMirror.revokedAt("versekit", MEMBER)).thenReturn(REVOKED_AT);
     long second = REVOKED_AT.getEpochSecond();
 
@@ -162,7 +162,7 @@ class ExchangeGateTest {
   }
 
   @Test
-  void allowsATokenIssuedAfterTheDisconnect() {
+  void allowsAConnectionMadeAfterTheDisconnect() {
     when(revocationMirror.revokedAt("versekit", MEMBER)).thenReturn(REVOKED_AT);
 
     assertThat(
@@ -171,7 +171,7 @@ class ExchangeGateTest {
   }
 
   @Test
-  void aRequestRelayedWithoutAnIssueTimeCountsAsIssuedBeforeTheDisconnect() {
+  void aRequestRelayedWithoutAConnectionTimeCountsAsConnectedBeforeTheDisconnect() {
     assertThat(gate.allowsAny(acting("versekit", "exchange.connect"))).isTrue();
 
     when(revocationMirror.revokedAt("versekit", MEMBER)).thenReturn(REVOKED_AT);
@@ -193,7 +193,7 @@ class ExchangeGateTest {
   }
 
   /**
-   * Builds an acting member's exchange authentication relayed without a token issue time.
+   * Builds an acting member's exchange authentication relayed without a connection time.
    *
    * @param externalClient the relayed client, or {@code null}
    * @param scopes the relayed scopes
@@ -208,18 +208,18 @@ class ExchangeGateTest {
    * Builds an acting member's exchange authentication.
    *
    * @param externalClient the relayed client, or {@code null}
-   * @param issuedAt the relayed token issue time in epoch seconds, or {@code null}
+   * @param connectedAt the relayed connection time in epoch seconds, or {@code null}
    * @param scopes the relayed scopes
    * @return the authentication
    */
   private static @NotNull Acting acting(
-      @Nullable String externalClient, @Nullable Long issuedAt, String @NotNull ... scopes) {
+      @Nullable String externalClient, @Nullable Long connectedAt, String @NotNull ... scopes) {
     List<SimpleGrantedAuthority> authorities =
         new java.util.ArrayList<>(List.of(new SimpleGrantedAuthority("ROLE_EXCHANGE_MEMBER")));
     for (String scope : scopes) {
       authorities.add(new SimpleGrantedAuthority("XCH_CAPABILITY:" + scope));
     }
-    return new Acting(externalClient, issuedAt, authorities);
+    return new Acting(externalClient, connectedAt, authorities);
   }
 
   /**
@@ -239,22 +239,22 @@ class ExchangeGateTest {
       implements SubjectAuthentication {
 
     private final @Nullable String externalClient;
-    private final @Nullable Long issuedAt;
+    private final @Nullable Long connectedAt;
 
     /**
      * Creates it.
      *
      * @param externalClient the relayed client, or {@code null}
-     * @param issuedAt the relayed token issue time, or {@code null}
+     * @param connectedAt the relayed connection time, or {@code null}
      * @param authorities the authorities
      */
     Acting(
         @Nullable String externalClient,
-        @Nullable Long issuedAt,
+        @Nullable Long connectedAt,
         @NotNull List<SimpleGrantedAuthority> authorities) {
       super(authorities);
       this.externalClient = externalClient;
-      this.issuedAt = issuedAt;
+      this.connectedAt = connectedAt;
       setAuthenticated(true);
     }
 
@@ -284,8 +284,8 @@ class ExchangeGateTest {
     }
 
     @Override
-    public @Nullable Long exchangeTokenIssuedAt() {
-      return issuedAt;
+    public @Nullable Long exchangeConnectedAt() {
+      return connectedAt;
     }
   }
 }

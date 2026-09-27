@@ -62,6 +62,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -360,6 +361,36 @@ class ExchangeGateTest {
         Instant.ofEpochSecond(revokedAt).minusSeconds(3600));
 
     call(HttpMethod.GET, STOCK).andExpect(status().isOk());
+  }
+
+  @Test
+  void theConnectionTimeIsTheTimeTheRevocationIsComparedWith() {
+    Instant signIn = issuedAt.minusSeconds(3600);
+    Jwt online =
+        ExchangeTestSupport.token(
+            TOKEN, "basetool-ingest", thumbprint, member, "exchange.connect", issuedAt, signIn);
+    Jwt offline =
+        ExchangeTestSupport.token(
+            TOKEN,
+            "basetool-ingest",
+            thumbprint,
+            member,
+            "exchange.connect offline_access",
+            issuedAt,
+            signIn);
+    Jwt withoutSignIn =
+        ExchangeTestSupport.token(
+            TOKEN, "basetool-ingest", thumbprint, member, "exchange.connect", issuedAt, null);
+
+    assertThat(ExchangeGateFilter.connectionTime(online, Set.of("exchange.connect")))
+        .isEqualTo(Instant.ofEpochSecond(signIn.getEpochSecond()));
+    assertThat(
+            ExchangeGateFilter.connectionTime(offline, Set.of("exchange.connect", "offline_access"))
+                .getEpochSecond())
+        .isEqualTo(issuedAt.getEpochSecond());
+    assertThat(ExchangeGateFilter.connectionTime(withoutSignIn, Set.of("exchange.connect")))
+        .isNull();
+    assertThat(ExchangeGateFilter.connectedAfter(null, 0L)).isFalse();
   }
 
   @Test

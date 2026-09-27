@@ -138,7 +138,7 @@ class ExchangeControllerTest {
     assertThat(admitted.getValue().member()).isEqualTo(member);
     assertThat(admitted.getValue().capabilities())
         .containsExactlyInAnyOrder("exchange.connect", "exchange.stock.read");
-    assertThat(admitted.getValue().issuedAt())
+    assertThat(admitted.getValue().connectedAt())
         .isBetween(Instant.now().getEpochSecond() - 120L, Instant.now().getEpochSecond());
   }
 
