@@ -102,9 +102,11 @@ public class ExchangeTokenGateFilter extends OncePerRequestFilter {
       filterChain.doFilter(request, response);
       return;
     }
+    String client = refusals.clientLabel(jwt.getClaimAsString("azp"));
     if (!isDpopRequest(request) || !isBound(jwt)) {
       response.setHeader(HttpHeaders.WWW_AUTHENTICATE, ExchangeChallenge.header(null));
       refuse(
+          client,
           response,
           HttpStatus.UNAUTHORIZED,
           ExchangeRefusals.DPOP_REQUIRED,
@@ -114,6 +116,7 @@ public class ExchangeTokenGateFilter extends OncePerRequestFilter {
     List<String> audience = jwt.getAudience();
     if (audience == null || !audience.contains(AUDIENCE)) {
       refuse(
+          client,
           response,
           HttpStatus.UNAUTHORIZED,
           ExchangeRefusals.UNAUTHENTICATED,
@@ -155,6 +158,7 @@ public class ExchangeTokenGateFilter extends OncePerRequestFilter {
   /**
    * Writes and counts one refusal.
    *
+   * @param client the {@code client_id} label of the refused request
    * @param response the response
    * @param status the status
    * @param code the problem code
@@ -162,12 +166,13 @@ public class ExchangeTokenGateFilter extends OncePerRequestFilter {
    * @throws IOException if writing fails
    */
   private void refuse(
+      @NotNull String client,
       @NotNull HttpServletResponse response,
       @NotNull HttpStatus status,
       @NotNull String code,
       @NotNull String detail)
       throws IOException {
-    refusals.count(code);
+    refusals.count(code, client);
     meterRegistry.counter(MetricNames.HTTP_ERROR, MetricNames.TAG_CODE, code).increment();
     ProblemResponseWriter.write(
         response, objectMapper, loggingProperties, status, "Refused", code, detail);

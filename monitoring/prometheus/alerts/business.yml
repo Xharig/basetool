@@ -188,7 +188,16 @@ groups:
           severity: warning
         annotations:
           summary: "Exchange relays to the backend keep failing"
-          description: "The ingest gateway relayed admitted exchange requests but the backend answered unusably - 5xx, a refusal outside the exchange error registry, or an answer that breaks the v1 schema - and the client got 502 BACKEND_RELAY_FAILED (REQ-XCH-011). Check the backend's exchange layer and the gateway log line 'Exchange relay to' or 'Exchange answer breaks'."
+          description: "The ingest gateway relayed admitted exchange requests but the backend answered unusably - 5xx, a refusal outside the exchange error registry, an answer that breaks the v1 schema, or no answer at all (unreachable, circuit open, no gateway token) - and the client got 502 BACKEND_RELAY_FAILED (REQ-XCH-011). Check the backend and its exchange layer and the gateway log lines 'Exchange relay to' or 'Exchange answer breaks'."
+
+      - alert: ExchangeClientRefusalsSpike
+        expr: sum by (client_id) (increase(basetool_ingest_exchange_refused_total{client_id!~"none|unknown|unregistered", reason!~"rate_limited|quota_exceeded|idempotency_in_progress"}[15m])) > 30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A registered exchange client is refused unusually often"
+          description: "The ingest gateway refused more than 30 requests of one registered client (client_id) in 15 minutes for a reason other than its own limits - typically a release below the minimum version, a capability the registry does not grant, revoked keys or broken DPoP proofs after a client update (REQ-XCH-028). Check the per-client panel and the refusal reasons on the operations dashboard, then contact the client's author or suspend it under Administration - Verbundene Anwendungen."
 
       - alert: ExchangeRegistryUnreadableAtGateway
         expr: sum(increase(basetool_ingest_exchange_refused_total{reason="registry_unavailable"}[5m])) > 0

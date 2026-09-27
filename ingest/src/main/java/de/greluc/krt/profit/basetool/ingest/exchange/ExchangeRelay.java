@@ -141,7 +141,12 @@ public class ExchangeRelay {
   @PostConstruct
   void register() {
     for (String outcome : new String[] {OUTCOME_OK, OUTCOME_REFUSED, OUTCOME_FAILED}) {
-      meterRegistry.counter(MetricNames.EXCHANGE_RELAY, MetricNames.TAG_OUTCOME, outcome);
+      meterRegistry.counter(
+          MetricNames.EXCHANGE_RELAY,
+          MetricNames.TAG_OUTCOME,
+          outcome,
+          MetricNames.TAG_CLIENT_ID,
+          MetricNames.EXCHANGE_CLIENT_NONE);
     }
   }
 
@@ -171,10 +176,10 @@ public class ExchangeRelay {
           "Exchange relay to {} could not reach the backend: {}",
           backendPath,
           e.getClass().getSimpleName());
-      count(OUTCOME_FAILED);
+      count(OUTCOME_FAILED, context.clientId());
       return Result.failed();
     }
-    return interpret(raw, backendPath);
+    return interpret(raw, backendPath, context.clientId());
   }
 
   /**
@@ -237,13 +242,14 @@ public class ExchangeRelay {
    *
    * @param raw the answer
    * @param backendPath the backend path, for the log
+   * @param client the admitted request's registry client id, the counter's {@code client_id}
    * @return the result
    */
   @NotNull
-  Result interpret(@NotNull Raw raw, @NotNull String backendPath) {
+  Result interpret(@NotNull Raw raw, @NotNull String backendPath, @NotNull String client) {
     JsonNode node = parse(raw.body());
     if (raw.status() >= 200 && raw.status() < 300 && node != null) {
-      count(OUTCOME_OK);
+      count(OUTCOME_OK, client);
       return Result.ok(node);
     }
     if (raw.status() >= 400 && raw.status() < 500 && node != null && node.isObject()) {
@@ -252,7 +258,7 @@ public class ExchangeRelay {
       String exchangeCode =
           backendCode == null ? null : TRANSLATED.getOrDefault(backendCode, backendCode);
       if (exchangeCode != null && PASSED_THROUGH.contains(exchangeCode)) {
-        count(OUTCOME_REFUSED);
+        count(OUTCOME_REFUSED, client);
         JsonNode detail = node.get("detail");
         return Result.refused(
             raw.status(),
@@ -265,7 +271,7 @@ public class ExchangeRelay {
         backendPath,
         raw.status(),
         node != null);
-    count(OUTCOME_FAILED);
+    count(OUTCOME_FAILED, client);
     return Result.failed();
   }
 
@@ -273,9 +279,17 @@ public class ExchangeRelay {
    * Counts one outcome.
    *
    * @param outcome the outcome
+   * @param client the admitted request's registry client id
    */
-  private void count(@NotNull String outcome) {
-    meterRegistry.counter(MetricNames.EXCHANGE_RELAY, MetricNames.TAG_OUTCOME, outcome).increment();
+  private void count(@NotNull String outcome, @NotNull String client) {
+    meterRegistry
+        .counter(
+            MetricNames.EXCHANGE_RELAY,
+            MetricNames.TAG_OUTCOME,
+            outcome,
+            MetricNames.TAG_CLIENT_ID,
+            client)
+        .increment();
   }
 
   /**

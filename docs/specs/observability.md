@@ -1608,7 +1608,15 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   bookings need no dedicated meter — `JOB_ORDER_PRODUCTION_BOOKED` and
   `INVENTORY_CONSUMED_BY_PRODUCTION` roll into the existing `JOB_ORDER` and `INVENTORY` domain
   counts (REQ-ORDERS-025).
-- `basetool_ingest_exchange_refused_total{reason}` counter — every exchange request the gateway
+- **`client_id` on the two exchange request counters** (`refused_total`, `relay_total`): the
+  registry client id when the registry lists the token's `azp`, otherwise `unregistered`,
+  `unknown` while the registry cannot be read, and `none` before a token names a client (and on
+  the zero registrations). The label is bounded by the registry, never by what a caller sends. The
+  operations dashboard shows both per client beside the budget, and `ExchangeClientRefusalsSpike`
+  (warning, 10 m) fires when one registered client is refused more than 30 times in 15 minutes for
+  anything but its own limits (`rate_limited`, `quota_exceeded`, `idempotency_in_progress`)
+  (REQ-XCH-028).
+- `basetool_ingest_exchange_refused_total{reason,client_id}` counter — every exchange request the gateway
   refused, by its problem code in snake case — `dpop_required`, `dpop_invalid`, `unauthenticated`,
   `not_found`, `registry_unavailable`, `exchange_disabled`, `client_not_allowed`,
   `client_suspended`, `installation_revoked`, `client_revoked`, `scope_missing`,
@@ -1626,9 +1634,10 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `IngestAuthFailureSpike` and `IngestUnauthenticatedFlood` alert per scope;
   `ExchangeDpopProofsFailing` (warning, 15 m) fires on sustained refused exchange proofs
   (REQ-XCH-006).
-- `basetool_ingest_exchange_relay_total{outcome}` counter — every admitted exchange request the
+- `basetool_ingest_exchange_relay_total{outcome,client_id}` counter — every admitted exchange request the
   gateway relayed: `ok`, `refused` (the backend refused with a code of the exchange error registry,
-  passed on to the client) or `failed` (answered `502 BACKEND_RELAY_FAILED`), registered at zero.
+  passed on to the client) or `failed` (answered `502 BACKEND_RELAY_FAILED` — including a backend
+  that cannot be reached, an open circuit breaker and a missing gateway token), registered at zero.
   `ExchangeRelayFailing` (warning) fires on more than three failures in 15 minutes (REQ-XCH-011,
   REQ-XCH-028).
 - `basetool_ingest_legacy_endpoints_enabled` gauge (`1` while the legacy extractor endpoints answer,
@@ -3229,7 +3238,11 @@ the presented token (REQ-OBS-004).
 **The 401 volume on these surfaces is a designed constant, not a signal.** Three blackbox jobs probe
 `https://api.profit-base.online/api/v1/terms/status` every 30 s and the ingest gateway's root is
 probed the same way, all expecting a 401 — that is the whole point of the `http_2xx_or_401` module
-(below). Of 601 401s sampled at the edge in one hour, **600 carried `Blackbox-Exporter/0.28.0`** and
+(below). The exchange service document `GET /exchange/v1` is probed every 30 s as well, with the
+stricter `http_401` module (`blackbox-http-401`, REQ-XCH-028): a `200` there would mean the
+exchange answers without a token. It adds about 0.03/s of `no_credentials` in the `exchange`
+scope and of `unauthenticated` with `client_id="none"` to the exchange refusals, far below
+`IngestUnauthenticatedFlood`'s 1/s. Of 601 401s sampled at the edge in one hour, **600 carried `Blackbox-Exporter/0.28.0`** and
 one was an outside scanner. The floor this puts under the backend's 401 rate is **~0.1/s**, and it
 rises with every probe target added.
 

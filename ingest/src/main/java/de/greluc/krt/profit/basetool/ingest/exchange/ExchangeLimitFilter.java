@@ -128,14 +128,14 @@ public class ExchangeLimitFilter extends OncePerRequestFilter {
                 MINUTE)
             .tryConsumeAndReturnRemaining(1);
     if (!member.isConsumed()) {
-      rateLimited(response, member);
+      rateLimited(context.clientId(), response, member);
       return;
     }
     ConsumptionProbe client =
         bucket("c|" + context.clientId(), properties.clientPerMinute(), MINUTE)
             .tryConsumeAndReturnRemaining(1);
     if (!client.isConsumed()) {
-      rateLimited(response, client);
+      rateLimited(context.clientId(), response, client);
       return;
     }
     if (route.get().accountCheck()) {
@@ -146,7 +146,7 @@ public class ExchangeLimitFilter extends OncePerRequestFilter {
                   HOUR)
               .tryConsumeAndReturnRemaining(1);
       if (!check.isConsumed()) {
-        rateLimited(response, check);
+        rateLimited(context.clientId(), response, check);
         return;
       }
     }
@@ -184,6 +184,7 @@ public class ExchangeLimitFilter extends OncePerRequestFilter {
     } catch (ExchangeUnavailableException e) {
       response.setHeader(HttpHeaders.RETRY_AFTER, UNAVAILABLE_RETRY_AFTER_SECONDS);
       refuse(
+          context.clientId(),
           response,
           HttpStatus.SERVICE_UNAVAILABLE,
           ExchangeRefusals.SERVICE_UNAVAILABLE,
@@ -193,6 +194,7 @@ public class ExchangeLimitFilter extends OncePerRequestFilter {
     if (count > limit) {
       response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(quotas.secondsUntilTomorrow()));
       refuse(
+          context.clientId(),
           response,
           HttpStatus.TOO_MANY_REQUESTS,
           ExchangeRefusals.QUOTA_EXCEEDED,
@@ -229,16 +231,21 @@ public class ExchangeLimitFilter extends OncePerRequestFilter {
   /**
    * Refuses a request over a per-period limit.
    *
+   * @param client the admitted request's registry client id
    * @param response the response
    * @param probe the exhausted bucket's probe
    * @throws IOException if writing fails
    */
-  private void rateLimited(@NotNull HttpServletResponse response, @NotNull ConsumptionProbe probe)
+  private void rateLimited(
+      @NotNull String client,
+      @NotNull HttpServletResponse response,
+      @NotNull ConsumptionProbe probe)
       throws IOException {
     long retryAfter =
         Math.max(1L, TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()) + 1);
     response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter));
     refuse(
+        client,
         response,
         HttpStatus.TOO_MANY_REQUESTS,
         ExchangeRefusals.RATE_LIMITED,
@@ -248,6 +255,7 @@ public class ExchangeLimitFilter extends OncePerRequestFilter {
   /**
    * Writes and counts one refusal.
    *
+   * @param client the {@code client_id} label of the refused request
    * @param response the response
    * @param status the status
    * @param code the problem code
@@ -255,12 +263,13 @@ public class ExchangeLimitFilter extends OncePerRequestFilter {
    * @throws IOException if writing fails
    */
   private void refuse(
+      @NotNull String client,
       @NotNull HttpServletResponse response,
       @NotNull HttpStatus status,
       @NotNull String code,
       @NotNull String detail)
       throws IOException {
-    refusals.count(code);
+    refusals.count(code, client);
     meterRegistry.counter(MetricNames.HTTP_ERROR, MetricNames.TAG_CODE, code).increment();
     ProblemResponseWriter.write(
         response, objectMapper, loggingProperties, status, "Refused", code, detail);

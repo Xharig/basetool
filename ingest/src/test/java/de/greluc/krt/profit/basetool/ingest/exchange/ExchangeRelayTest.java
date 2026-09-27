@@ -236,7 +236,9 @@ class ExchangeRelayTest {
    */
   private ExchangeRelay.Result interpret(int status, String body) {
     return relay.interpret(
-        new ExchangeRelay.Raw(status, body.getBytes(StandardCharsets.UTF_8)), "/api/v1/exchange/x");
+        new ExchangeRelay.Raw(status, body.getBytes(StandardCharsets.UTF_8)),
+        "/api/v1/exchange/x",
+        "versekit");
   }
 
   /**
@@ -264,6 +266,7 @@ class ExchangeRelayTest {
     return meters
         .get(MetricNames.EXCHANGE_RELAY)
         .tag(MetricNames.TAG_OUTCOME, outcome)
+        .tag(MetricNames.TAG_CLIENT_ID, "versekit")
         .counter()
         .count();
   }

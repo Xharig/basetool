@@ -3688,7 +3688,7 @@
       },
       "type": "timeseries",
       "title": "Exchange gateway refusals/hour by reason",
-      "description": "Client-identity gate rejections (REQ-INGEST-011), also counted while audit-only is set. unknown_client / bad_provenance = an unapproved tool is calling the restricted interface. missing_azp / missing_scope = a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Backs the IngestUnknownClient alert.",
+      "description": "Every exchange request the ingest gateway refused before it reached the backend, by problem code in snake case (REQ-XCH-028): DPoP, audience, registry, revocation, scope, version, limit, quota, idempotency and budget refusals. The per-client split is the panel beside the relay outcomes. Backs ExchangeDpopProofsFailing and ExchangeRegistryUnreadableAtGateway.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3778,6 +3778,115 @@
           "expr": "sum(increase(basetool_ingest_legacy_gone_total[1h]))",
           "refId": "B",
           "legendFormat": "410 gone",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 256
+      },
+      "type": "timeseries",
+      "title": "Exchange requests/hour per client: refused and relayed by outcome",
+      "description": "The error picture of each registered client (REQ-XCH-028): gateway refusals and relayed requests by outcome, labelled client_id. Only registry clients carry their own id; any other token is 'unregistered', 'unknown' while the registry cannot be read, and refusals before a token was read are 'none' (not shown). The admin page Verbundene Anwendungen links here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id) (increase(basetool_ingest_exchange_refused_total{client_id!=\"none\"}[1h]))",
+          "refId": "A",
+          "legendFormat": "refused {{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (client_id, outcome) (increase(basetool_ingest_exchange_relay_total{client_id!=\"none\"}[1h]))",
+          "refId": "B",
+          "legendFormat": "relayed {{outcome}} {{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 256
+      },
+      "type": "timeseries",
+      "title": "Exchange Redis byte budget in use",
+      "description": "The share of the exchange's total Redis byte budget (64 MiB) the gateway's cached answers, quota counters and locks hold (REQ-XCH-023). Above 0.8 ExchangeBudgetHigh fires; at 1.0 writes are refused EXCHANGE_BUDGET_EXHAUSTED before they reach the backend.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "max": 1,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max(basetool_ingest_exchange_budget_used_ratio)",
+          "refId": "A",
+          "legendFormat": "used",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

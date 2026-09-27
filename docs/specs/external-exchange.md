@@ -673,7 +673,19 @@ bounded labels (REQ-OBS-011), alert on a registry change, on 80 % of the Redis b
 spikes per client, and a blackbox probe checks `GET /exchange/v1` for `401`. The nightly purge of
 tombstones and journal reports task metrics.
 
-**Status:** planned — every WP, tracked by #2091
+- [x] The gateway's refusal and relay counters carry a `client_id` bounded by the registry, the
+  operations dashboard shows them per client, and `ExchangeClientRefusalsSpike` alerts on one client's
+  refusals outside its own limits. *`ExchangeRefusalsTest`, `ExchangeGateTest`,
+  `exchange_gateway_alerts_test.yml`.* The admin page links there instead of showing an error rate
+  itself (owner decision 2026-09-27).
+- [x] Registry changes and the Redis budget alert (`ExchangeRegistryChanged`, `ExchangeBudgetHigh`).
+- [x] A blackbox probe checks `GET /exchange/v1` for exactly `401` (`blackbox-http-401`, module
+  `http_401`; `BlackboxProbeFailed` covers it).
+- [ ] Per-client write metrics with the WP 3.3 journal, and the tombstone and journal purge task
+  metrics.
+
+**Status:** partly built — the gateway's per-client counters and alerts; the rest with WP 3.3 and
+#2091
 
 ### REQ-XCH-029 — Third parties get a local sandbox
 
