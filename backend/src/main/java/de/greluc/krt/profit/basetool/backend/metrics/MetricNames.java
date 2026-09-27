@@ -764,6 +764,13 @@ public final class MetricNames {
   public static final String EXCHANGE_WRITES = "basetool.exchange.writes";
 
   /**
+   * Counter of the entries a member's undo of a client's writes restored or skipped, tagged by
+   * resource ({@code blueprint} / {@code stock} / {@code ship}) and outcome ({@code restored} /
+   * {@code skipped}) (REQ-XCH-022).
+   */
+  public static final String EXCHANGE_UNDO = "basetool.exchange.undo";
+
+  /**
    * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path
    * without a well-formed {@code X-Exchange-Installation}.
    */

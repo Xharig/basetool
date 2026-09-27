@@ -224,7 +224,9 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   (`EXCHANGE_CLIENT_DISCONNECTED`) or one installation (`EXCHANGE_INSTALLATION_DISCONNECTED`,
   REQ-XCH-008; the installation's label never enters the row), and the system ending a departed
   member's exchange access (`EXCHANGE_MEMBER_DEPARTED`: the reason, the number of clients, and
-  whether every step succeeded). The subject is the registry client
+  whether every step succeeded), and a member undoing a client's writes (`EXCHANGE_CHANGES_UNDONE`:
+  the restored and skipped counts, REQ-XCH-022; the entries themselves are audited in their own
+  areas). The subject is the registry client
   or the installation, labelled by the **client id**; a member's disconnect names the member as
   target, a registry change names none. A change that failed because the mirror could not be
   written rolls back and records nothing.

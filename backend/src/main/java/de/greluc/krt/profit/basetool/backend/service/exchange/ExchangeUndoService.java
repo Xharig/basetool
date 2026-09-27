@@ -1,0 +1,455 @@
+/*
+ * Profit Basetool - squadron-management web app.
+ * Copyright (C) 2026 Lucas Greuloch
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package de.greluc.krt.profit.basetool.backend.service.exchange;
+
+import de.greluc.krt.profit.basetool.backend.exception.NotFoundException;
+import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.backend.model.AuditEventType;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeChange;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeJournalAction;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeJournalEntry;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeShipLink;
+import de.greluc.krt.profit.basetool.backend.model.PersonalBlueprint;
+import de.greluc.krt.profit.basetool.backend.model.Ship;
+import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeUndoResultDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintCreateRequest;
+import de.greluc.krt.profit.basetool.backend.model.dto.ShipRequestDto;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeChangeRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeJournalRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeShipLinkRepository;
+import de.greluc.krt.profit.basetool.backend.repository.GameItemRepository;
+import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
+import de.greluc.krt.profit.basetool.backend.repository.MaterialRepository;
+import de.greluc.krt.profit.basetool.backend.repository.PersonalBlueprintRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ShipRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ShipTypeRepository;
+import de.greluc.krt.profit.basetool.backend.service.AuditService;
+import de.greluc.krt.profit.basetool.backend.service.HangarService;
+import de.greluc.krt.profit.basetool.backend.service.PersonalBlueprintService;
+import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * Undoes a client's writes to the member's entries since a point in time (REQ-XCH-022): each entry
+ * goes back to its state before the client's first write in that span, unless something else has
+ * changed it since the client's last one; Materialbörse offers a book-out lowered stay lowered.
+ */
+@Service
+@RequiredArgsConstructor
+public class ExchangeUndoService {
+
+  /** The reason of an entry changed after the client's last write to it. */
+  static final String CHANGED_AFTERWARDS = "CHANGED_AFTERWARDS";
+
+  /**
+   * The reason of an entry that no longer belongs to the member, or whose catalogue entry is gone.
+   */
+  static final String GONE = "GONE";
+
+  /** How far back an undo reaches: the journal's retention. */
+  static final Duration REACH = Duration.ofDays(90);
+
+  private static final String RESTORED = "restored";
+  private static final String SKIPPED = "skipped";
+
+  private final ExchangeJournalRepository journalRepository;
+  private final ExchangeChangeRepository changeRepository;
+  private final ExchangeClientRepository clientRepository;
+  private final PersonalBlueprintRepository blueprintRepository;
+  private final PersonalBlueprintService blueprintService;
+  private final ExchangeStockWriteService stockWriteService;
+  private final MaterialRepository materialRepository;
+  private final GameItemRepository gameItemRepository;
+  private final ShipRepository shipRepository;
+  private final ShipTypeRepository shipTypeRepository;
+  private final LocationRepository locationRepository;
+  private final HangarService hangarService;
+  private final ExchangeShipLinkRepository linkRepository;
+  private final AuditService auditService;
+  private final ExchangeLiveSync liveSync;
+  private final MeterRegistry meterRegistry;
+  private final ObjectMapper objectMapper;
+  private final Clock clock = Clock.systemUTC();
+
+  /** Registers the undo counter at zero for every resource and outcome. */
+  @PostConstruct
+  void registerCounters() {
+    for (ExchangeResource resource : ExchangeResource.values()) {
+      counter(resource, RESTORED);
+      counter(resource, SKIPPED);
+    }
+  }
+
+  /**
+   * Undoes a client's writes to the member's entries since a point in time, in one transaction.
+   *
+   * @param member the member
+   * @param clientId the client
+   * @param since the point in time; one older than the journal's retention reaches only as far back
+   *     as the journal
+   * @return how many entries were restored, and the ones left alone with the reason
+   * @throws NotFoundException when the client is not registered
+   */
+  @Transactional
+  public @NotNull ExchangeUndoResultDto undo(
+      @NotNull UUID member, @NotNull String clientId, @NotNull Instant since) {
+    ExchangeClient client =
+        clientRepository
+            .findWithCapabilitiesByClientId(clientId)
+            .orElseThrow(() -> new NotFoundException("Client not found"));
+    Instant floor = clock.instant().minus(REACH);
+    Instant from = since.isBefore(floor) ? floor : since;
+    Map<String, List<ExchangeJournalEntry>> groups = new LinkedHashMap<>();
+    for (ExchangeJournalEntry entry : journalRepository.findUndoable(member, clientId, from)) {
+      groups
+          .computeIfAbsent(
+              entry.getResource().name() + ':' + entry.getEntityKey(), k -> new ArrayList<>())
+          .add(entry);
+    }
+    int restored = 0;
+    List<ExchangeUndoResultDto.Skipped> skipped = new ArrayList<>();
+    Set<ExchangeResource> touched = EnumSet.noneOf(ExchangeResource.class);
+    Instant now = clock.instant();
+    for (List<ExchangeJournalEntry> group : groups.values()) {
+      ExchangeJournalEntry newest = group.getFirst();
+      ExchangeResource resource = newest.getResource();
+      String reason = restore(member, clientId, group);
+      if (reason != null) {
+        skipped.add(new ExchangeUndoResultDto.Skipped(resource.name(), label(group), reason));
+        counter(resource, SKIPPED).increment();
+        continue;
+      }
+      group.forEach(entry -> entry.setUndoneAt(now));
+      restored++;
+      touched.add(resource);
+      counter(resource, RESTORED).increment();
+    }
+    auditService.record(
+        AuditEventType.EXCHANGE_CHANGES_UNDONE,
+        client.getId(),
+        client.getClientId(),
+        member,
+        AuditDetails.of("restored", restored).with("skipped", skipped.size()));
+    touched.forEach(resource -> refresh(member, resource));
+    return new ExchangeUndoResultDto(restored, List.copyOf(skipped));
+  }
+
+  /**
+   * Restores one entry to its state before the client's first write in the span.
+   *
+   * @param member the member
+   * @param clientId the client
+   * @param group the client's writes to the entry, newest first
+   * @return {@code null} when restored, else the reason it was left alone
+   */
+  private @Nullable String restore(
+      @NotNull UUID member, @NotNull String clientId, @NotNull List<ExchangeJournalEntry> group) {
+    List<ExchangeJournalEntry> data =
+        group.stream().filter(e -> e.getAction() != ExchangeJournalAction.SHIP_LINK).toList();
+    List<ExchangeJournalEntry> links =
+        group.stream().filter(e -> e.getAction() == ExchangeJournalAction.SHIP_LINK).toList();
+    if (!data.isEmpty()) {
+      ExchangeJournalEntry newest = data.getFirst();
+      ExchangeResource resource = newest.getResource();
+      String feedKey =
+          resource == ExchangeResource.BLUEPRINT
+              ? ExchangeBlueprintFeedService.keyOf(newest.getEntityKey())
+              : newest.getEntityKey();
+      Optional<ExchangeChange> latest =
+          changeRepository.findLatestForKey(member, resource.name(), feedKey);
+      if (latest.isPresent() && latest.get().getTx() != newest.getTx()) {
+        return CHANGED_AFTERWARDS;
+      }
+      JsonNode before = parse(data.getLast().getBeforeState());
+      boolean done =
+          switch (resource) {
+            case BLUEPRINT -> restoreBlueprint(member, newest.getEntityKey(), before);
+            case STOCK -> restoreLot(member, newest.getEntityKey(), before);
+            case SHIP -> restoreShip(member, newest.getEntityKey(), before);
+          };
+      if (!done) {
+        return GONE;
+      }
+    }
+    unlink(member, clientId, links);
+    return null;
+  }
+
+  /**
+   * Adds or removes a blueprint to match its earlier state.
+   *
+   * @param member the member
+   * @param productKey the product
+   * @param before the state before the client's first write, or {@code null} when it was absent
+   * @return always {@code true}
+   */
+  private boolean restoreBlueprint(
+      @NotNull UUID member, @NotNull String productKey, @Nullable JsonNode before) {
+    Optional<PersonalBlueprint> owned =
+        blueprintRepository.findByOwnerUserIdAndProductKey(member, productKey);
+    if (before == null) {
+      owned.ifPresent(blueprint -> blueprintService.delete(member, blueprint.getId()));
+    } else if (owned.isEmpty()) {
+      String acquiredAt = text(before, "acquiredAt");
+      blueprintService.add(
+          member,
+          new PersonalBlueprintCreateRequest(
+              productKey,
+              acquiredAt == null ? null : Instant.parse(acquiredAt),
+              text(before, "note")));
+    }
+    return true;
+  }
+
+  /**
+   * Sets a lot back to its earlier quantity.
+   *
+   * @param member the member
+   * @param lotKey the lot
+   * @param before the state before the client's first write
+   * @return whether the lot could be restored
+   */
+  private boolean restoreLot(
+      @NotNull UUID member, @NotNull String lotKey, @Nullable JsonNode before) {
+    if (before == null || before.get("quantity") == null || text(before, "unit") == null) {
+      return false;
+    }
+    BigDecimal quantity = before.get("quantity").decimalValue();
+    return stockWriteService.restoreLot(member, lotKey, quantity, text(before, "unit"));
+  }
+
+  /**
+   * Removes, updates or recreates a ship to match its earlier state; a recreated ship gets a new id
+   * and does not rejoin mission units.
+   *
+   * @param member the member
+   * @param rawId the ship's id
+   * @param before the state before the client's first write, or {@code null} when it was absent
+   * @return whether the ship could be restored
+   */
+  private boolean restoreShip(
+      @NotNull UUID member, @NotNull String rawId, @Nullable JsonNode before) {
+    UUID shipId = UUID.fromString(rawId);
+    Optional<Ship> ship = shipRepository.lockById(shipId);
+    if (ship.isPresent()
+        && (ship.get().getOwner() == null || !member.equals(ship.get().getOwner().getId()))) {
+      return false;
+    }
+    if (before == null) {
+      if (ship.isPresent()) {
+        hangarService.deleteShip(member, shipId);
+      }
+      return true;
+    }
+    UUID shipType = UUID.fromString(text(before, "shipType"));
+    String location = text(before, "location");
+    UUID locationId = location == null ? null : UUID.fromString(location);
+    if (!shipTypeRepository.existsById(shipType)
+        || locationId != null && !locationRepository.existsById(locationId)) {
+      return false;
+    }
+    JsonNode fitted = before.get("fitted");
+    ShipRequestDto dto =
+        new ShipRequestDto(
+            text(before, "name"),
+            shipType,
+            text(before, "insurance"),
+            locationId,
+            fitted != null && fitted.asBoolean(),
+            ship.map(Ship::getVersion).orElse(null),
+            null);
+    if (ship.isPresent()) {
+      hangarService.updateShip(member, shipId, dto);
+    } else {
+      hangarService.addShip(member, dto);
+    }
+    return true;
+  }
+
+  /**
+   * Takes back the links the client made in the span and puts back what they replaced.
+   *
+   * @param member the member
+   * @param clientId the client
+   * @param links the client's link writes to one ship, newest first
+   */
+  private void unlink(
+      @NotNull UUID member, @NotNull String clientId, @NotNull List<ExchangeJournalEntry> links) {
+    Map<String, List<ExchangeJournalEntry>> byInstallation = new LinkedHashMap<>();
+    links.forEach(
+        entry ->
+            byInstallation
+                .computeIfAbsent(entry.getInstallationKey(), k -> new ArrayList<>())
+                .add(entry));
+    byInstallation.forEach(
+        (installation, entries) -> {
+          UUID shipId = UUID.fromString(entries.getFirst().getEntityKey());
+          String made = text(parse(entries.getFirst().getAfterState()), "externalId");
+          String replaced = text(parse(entries.getLast().getBeforeState()), "externalId");
+          linkRepository
+              .findByUserIdAndClientIdAndInstallationKeyAndShipId(
+                  member, clientId, installation, shipId)
+              .filter(link -> link.getExternalId().equals(made))
+              .ifPresent(linkRepository::delete);
+          linkRepository.flush();
+          if (replaced != null
+              && shipRepository.existsById(shipId)
+              && linkRepository
+                  .findByUserIdAndClientIdAndInstallationKeyAndExternalId(
+                      member, clientId, installation, replaced)
+                  .isEmpty()) {
+            linkRepository.save(
+                ExchangeShipLink.builder()
+                    .id(UUID.randomUUID())
+                    .userId(member)
+                    .clientId(clientId)
+                    .installationKey(installation)
+                    .externalId(replaced)
+                    .shipId(shipId)
+                    .createdAt(clock.instant())
+                    .build());
+          }
+        });
+  }
+
+  /**
+   * Names an entry for the member: the blueprint, the material or item, or the ship type.
+   *
+   * @param group the client's writes to the entry
+   * @return the name, or {@code null} when it is no longer known
+   */
+  private @Nullable String label(@NotNull List<ExchangeJournalEntry> group) {
+    ExchangeJournalEntry entry = group.getFirst();
+    JsonNode state = parse(entry.getAfterState());
+    if (state == null) {
+      state = parse(group.getLast().getBeforeState());
+    }
+    return switch (entry.getResource()) {
+      case BLUEPRINT -> state == null ? null : text(state, "productName");
+      case STOCK -> lotLabel(entry.getEntityKey());
+      case SHIP -> {
+        String type = state == null ? null : text(state, "shipType");
+        yield type == null
+            ? null
+            : shipTypeRepository.findById(UUID.fromString(type)).map(t -> t.getName()).orElse(null);
+      }
+    };
+  }
+
+  /**
+   * Names a lot by its material or item.
+   *
+   * @param lotKey the lot
+   * @return the name, or {@code null} when it is gone
+   */
+  private @Nullable String lotLabel(@NotNull String lotKey) {
+    if (lotKey.length() < 38) {
+      return null;
+    }
+    try {
+      UUID id = UUID.fromString(lotKey.substring(2, 38));
+      return lotKey.startsWith("m:")
+          ? materialRepository.findById(id).map(m -> m.getName()).orElse(null)
+          : gameItemRepository.findById(id).map(i -> i.getName()).orElse(null);
+    } catch (IllegalArgumentException ignored) {
+      return null;
+    }
+  }
+
+  /**
+   * Refreshes the member's open pages for a resource once the undo has committed.
+   *
+   * @param member the member
+   * @param resource the resource
+   */
+  private void refresh(@NotNull UUID member, @NotNull ExchangeResource resource) {
+    switch (resource) {
+      case BLUEPRINT -> liveSync.blueprintsChanged(member);
+      case STOCK -> liveSync.stockChanged(false);
+      default -> liveSync.hangarChanged(member);
+    }
+  }
+
+  /**
+   * Reads a journaled state.
+   *
+   * @param json the state, or {@code null}
+   * @return the state, or {@code null} for none
+   */
+  private @Nullable JsonNode parse(@Nullable String json) {
+    return json == null ? null : objectMapper.readTree(json);
+  }
+
+  /**
+   * Reads a text field of a state.
+   *
+   * @param state the state, or {@code null}
+   * @param field the field
+   * @return its text, or {@code null} when absent or null
+   */
+  private static @Nullable String text(@Nullable JsonNode state, @NotNull String field) {
+    if (state == null) {
+      return null;
+    }
+    JsonNode value = state.get(field);
+    return value == null || value.isNull() ? null : value.asString();
+  }
+
+  /**
+   * Returns the undo counter of one resource and outcome.
+   *
+   * @param resource the resource
+   * @param outcome {@code restored} or {@code skipped}
+   * @return the counter
+   */
+  private @NotNull Counter counter(@NotNull ExchangeResource resource, @NotNull String outcome) {
+    return meterRegistry.counter(
+        MetricNames.EXCHANGE_UNDO,
+        MetricNames.TAG_RESOURCE,
+        resource.name().toLowerCase(Locale.ROOT),
+        MetricNames.TAG_OUTCOME,
+        outcome);
+  }
+}

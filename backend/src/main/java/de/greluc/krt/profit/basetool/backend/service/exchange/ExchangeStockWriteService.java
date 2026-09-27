@@ -43,6 +43,7 @@ import de.greluc.krt.profit.basetool.backend.repository.ExchangeChangeRepository
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeJournalRepository;
 import de.greluc.krt.profit.basetool.backend.repository.GameItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
+import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.repository.MaterialRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
@@ -71,6 +72,7 @@ import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -121,6 +123,7 @@ public class ExchangeStockWriteService {
   private final MaterialRepository materialRepository;
   private final GameItemRepository gameItemRepository;
   private final ExchangeLocationResolver locationResolver;
+  private final LocationRepository locationRepository;
   private final InventoryItemRepository inventoryRepository;
   private final InventoryCheckoutService checkoutService;
   private final MaterialExchangeOfferRepository offerRepository;
@@ -195,6 +198,78 @@ public class ExchangeStockWriteService {
         offers.reduced,
         offers.removed,
         null);
+  }
+
+  /**
+   * Sets one of the member's lots back to a quantity for an undo, through the same book-in and
+   * book-out as a client write; offers a book-out lowers are not raised again.
+   *
+   * @param member the member
+   * @param lotKey the lot's key as the journal and the change feed record it
+   * @param target the quantity to restore
+   * @param unit the lot's unit
+   * @return whether the lot could be restored; {@code false} when its material, item or location is
+   *     gone or the key is not a lot key
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public boolean restoreLot(
+      @NotNull UUID member,
+      @NotNull String lotKey,
+      @NotNull BigDecimal target,
+      @NotNull String unit) {
+    Optional<Lot> parsed = parseLot(lotKey, unit);
+    if (parsed.isEmpty()) {
+      return false;
+    }
+    Lot lot = parsed.get();
+    List<InventoryItem> rows = lockRows(member, lot);
+    BigDecimal delta = round(target, unit).subtract(round(sum(rows), unit));
+    if (delta.signum() > 0) {
+      bookIn(member, lot, delta);
+    } else if (delta.signum() < 0) {
+      bookOut(member, rows, delta.negate(), unit, new OfferEffects());
+    }
+    return true;
+  }
+
+  /**
+   * Reads a lot key back into its lot.
+   *
+   * @param lotKey the key
+   * @param unit the lot's unit
+   * @return the lot, or empty when the key is malformed or names something that no longer exists
+   */
+  private @NotNull Optional<Lot> parseLot(@NotNull String lotKey, @NotNull String unit) {
+    String[] parts = lotKey.split("\\|");
+    if (parts.length != 4
+        || !parts[1].startsWith("l:")
+        || !parts[2].startsWith("q:")
+        || !parts[3].startsWith("s:")) {
+      return Optional.empty();
+    }
+    try {
+      UUID catalogueId = UUID.fromString(parts[0].substring(2));
+      Optional<Location> location =
+          locationRepository.findById(UUID.fromString(parts[1].substring(2)));
+      int quality = Integer.parseInt(parts[2].substring(2));
+      boolean stolen = "1".equals(parts[3].substring(2));
+      if (location.isEmpty()) {
+        return Optional.empty();
+      }
+      if (parts[0].startsWith("m:")) {
+        return materialRepository
+            .findById(catalogueId)
+            .map(m -> new Lot(m, null, location.get(), quality, stolen, unit));
+      }
+      if (parts[0].startsWith("i:")) {
+        return gameItemRepository
+            .findById(catalogueId)
+            .map(i -> new Lot(null, i, location.get(), null, stolen, unit));
+      }
+      return Optional.empty();
+    } catch (IllegalArgumentException ignored) {
+      return Optional.empty();
+    }
   }
 
   /**

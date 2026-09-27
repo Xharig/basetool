@@ -20,11 +20,15 @@
 package de.greluc.krt.profit.basetool.backend.controller;
 
 import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedAppDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeUndoRequestDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeUndoResultDto;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ConnectedAppsService;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeUndoService;
 import de.greluc.krt.profit.basetool.backend.support.AuthenticatedSubject;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +41,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -52,6 +57,31 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConnectedAppsController {
 
   private final ConnectedAppsService connectedAppsService;
+  private final ExchangeUndoService undoService;
+
+  /**
+   * Undoes a client's writes to the caller's blueprints, stock and ships since a point in time.
+   *
+   * @param clientId the Keycloak client id
+   * @param request the point in time
+   * @param authentication the caller
+   * @return how many entries were restored, and the ones left alone
+   */
+  @NotNull
+  @PostMapping("/{clientId}/undo")
+  @Operation(
+      summary = "Undo a client's changes",
+      description =
+          "Sets every entry the client changed since the point in time back to its earlier state,"
+              + " unless it was changed afterwards; Materialbörse offers are not restored.")
+  @ApiResponse(responseCode = "200", description = "The entries restored and skipped")
+  @ApiResponse(responseCode = "404", description = "The client is not registered")
+  public ResponseEntity<ExchangeUndoResultDto> undo(
+      @PathVariable @NotNull String clientId,
+      @NotNull @Valid @RequestBody ExchangeUndoRequestDto request,
+      @NotNull Authentication authentication) {
+    return ResponseEntity.ok(undoService.undo(member(authentication), clientId, request.since()));
+  }
 
   /**
    * Lists the caller's connected clients and their installations.
