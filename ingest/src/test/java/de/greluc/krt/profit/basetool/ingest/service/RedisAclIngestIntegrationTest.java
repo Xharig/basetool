@@ -110,6 +110,17 @@ class RedisAclIngestIntegrationTest {
   }
 
   @Test
+  void theGatewayCountsExchangeQuotasInItsOwnKeysOnly() {
+    StringRedisTemplate template = template(ingest);
+
+    assertThat(template.opsForValue().increment("ingest:xch:quota:versekit:m-1:2026-09-27"))
+        .isEqualTo(1L);
+    assertThatThrownBy(() -> template.opsForValue().increment("exchange:registry"))
+        .as("the registry mirror stays read-only")
+        .isInstanceOf(DataAccessException.class);
+  }
+
+  @Test
   void everythingBeyondItsOwnKeysIsRefused() {
     StringRedisTemplate template = template(ingest);
 

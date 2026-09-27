@@ -73,6 +73,15 @@ public class ExchangeRefusals {
   /** The client's version is below its minimum. */
   public static final String CLIENT_VERSION_UNSUPPORTED = "CLIENT_VERSION_UNSUPPORTED";
 
+  /** A per-period limit is exhausted. */
+  public static final String RATE_LIMITED = "RATE_LIMITED";
+
+  /** The daily write quota is exhausted. */
+  public static final String QUOTA_EXCEEDED = "QUOTA_EXCEEDED";
+
+  /** A dependency of the gate, such as the quota counter, is unreachable. */
+  public static final String SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
+
   /** Every code this counter knows, registered at zero. */
   static final @Unmodifiable List<String> CODES =
       List.of(
@@ -87,7 +96,10 @@ public class ExchangeRefusals {
           INSTALLATION_REVOKED,
           CLIENT_REVOKED,
           SCOPE_MISSING,
-          CLIENT_VERSION_UNSUPPORTED);
+          CLIENT_VERSION_UNSUPPORTED,
+          RATE_LIMITED,
+          QUOTA_EXCEEDED,
+          SERVICE_UNAVAILABLE);
 
   private final MeterRegistry meterRegistry;
 

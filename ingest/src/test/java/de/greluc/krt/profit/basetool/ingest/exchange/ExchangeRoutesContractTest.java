@@ -79,6 +79,33 @@ class ExchangeRoutesContractTest {
     assertThat(table).isEqualTo(documented);
   }
 
+  @Test
+  void theChangeAndDraftRoutesAreTheWrites() {
+    Set<String> writes = new TreeSet<>();
+    for (ExchangeRoutes.Route route : ExchangeRoutes.ROUTES) {
+      if (route.write()) {
+        writes.add(route.pattern().getPatternString());
+      }
+    }
+    assertThat(writes)
+        .containsExactly(
+            "/exchange/v1/me/blueprints/changes",
+            "/exchange/v1/me/drafts/blueprints",
+            "/exchange/v1/me/drafts/refinery-orders",
+            "/exchange/v1/me/ships/changes",
+            "/exchange/v1/me/stock/changes");
+    assertThat(
+            ExchangeRoutes.find("POST", "/exchange/v1/me/account-check")
+                .orElseThrow()
+                .accountCheck())
+        .isTrue();
+    assertThat(
+            ExchangeRoutes.find("POST", "/exchange/v1/catalog/resolve")
+                .orElseThrow()
+                .accountCheck())
+        .isFalse();
+  }
+
   /**
    * Returns the scopes an operation's {@code memberToken} requirement lists.
    *
