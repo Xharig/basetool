@@ -339,6 +339,29 @@ public class ExchangeController {
   }
 
   /**
+   * Returns the anonymised open demand of the units the member belongs to.
+   *
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the demand or a problem
+   */
+  @GetMapping("/me/org-demand")
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> orgDemand(
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    ExchangeRequestContext context = ExchangeRequestContext.of(request);
+    if (context == null) {
+      return failed();
+    }
+    return relayed(
+        relay.forward(HttpMethod.GET, BACKEND + "/me/org-demand", null, context, acceptLanguage),
+        "org-demand.schema.json",
+        List.of());
+  }
+
+  /**
    * Adds or removes blueprints.
    *
    * @param body the change set

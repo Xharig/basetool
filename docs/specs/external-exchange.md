@@ -502,10 +502,11 @@ scope), one query, a city link winning over a space-station link.
 **Acceptance**
 
 - [ ] An overseer who is not a member of a unit does not see its demand.
-- [ ] The response schema admits no name or free-text field.
+- [x] The response schema admits no name or free-text field.
+  *`ExchangeOrgDemandRouteTest` pins the schema's field sets; the only names are catalogue names.*
 
-**Status:** the backend location list is built — WP 3.1 (#2083); the demand feed with WP 4.3
-(#2095) and WP 3.3
+**Status:** the backend location list is built — WP 3.1 (#2083); the gateway's demand route
+(`GET /exchange/v1/me/org-demand`) is built — WP 4.3 (#2095)
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 
