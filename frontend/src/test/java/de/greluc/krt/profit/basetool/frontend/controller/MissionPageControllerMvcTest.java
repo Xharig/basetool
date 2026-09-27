@@ -41,13 +41,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import de.greluc.krt.profit.basetool.frontend.model.dto.InventoryItemDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.LocationReferenceDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.MaterialReferenceDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.MissionDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.MissionFinanceTotalsDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.PageResponse;
+import de.greluc.krt.profit.basetool.frontend.model.dto.UserReferenceDto;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import de.greluc.krt.profit.basetool.frontend.service.CachedCatalog;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -2996,6 +3001,113 @@ class MissionPageControllerMvcTest {
         .get(eq("/api/v1/missions/" + missionId + "/finance-entries?size=200"), anyTypeRef());
     verify(backendApiClient).get(eq("/api/v1/refinery-orders/mission/" + missionId), anyTypeRef());
     verify(backendApiClient).get(eq("/api/v1/inventory/mission/" + missionId), anyTypeRef());
+  }
+
+  /** Verifies that only the stolen row of the mission's stock table carries the stolen chip. */
+  @Test
+  @WithMockUser(roles = "OFFICER")
+  void missionDetail_FinanceFragment_MarksOnlyTheStolenInventoryRow() throws Exception {
+    UUID missionId = UUID.randomUUID();
+    when(backendApiClient.get(eq("/api/v1/missions/" + missionId), anyTypeRef()))
+        .thenReturn(editableMission(missionId));
+    when(backendApiClient.getCached(any(CachedCatalog.class), anyTypeRef()))
+        .thenReturn(Collections.emptyList());
+    stubEmptyFinance(missionId);
+    when(backendApiClient.get(eq("/api/v1/inventory/mission/" + missionId), anyTypeRef()))
+        .thenReturn(List.of(missionStock("Titanium", false), missionStock("Quantanium", true)));
+
+    String html =
+        mockMvc
+            .perform(
+                get("/missions/" + missionId)
+                    .param("fragment", "finance")
+                    .header("Accept-Language", "de"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("mission-detail :: financeSection"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(html.split("data-testid=\"stolen-chip\"", -1).length - 1)
+        .as("exactly one stolen chip in the stock table")
+        .isEqualTo(1);
+    assertThat(enclosingRow(html, "Quantanium"))
+        .as("the stolen row carries the chip")
+        .contains("data-testid=\"stolen-chip\"")
+        .contains(">Gestohlen<");
+    assertThat(enclosingRow(html, "Titanium"))
+        .as("the legitimate row carries no chip")
+        .doesNotContain("data-testid=\"stolen-chip\"");
+  }
+
+  /** Verifies that a mission's stock table without stolen entries renders no stolen chip. */
+  @Test
+  @WithMockUser(roles = "OFFICER")
+  void missionDetail_FinanceFragment_NoStolenInventory_RendersNoChip() throws Exception {
+    UUID missionId = UUID.randomUUID();
+    when(backendApiClient.get(eq("/api/v1/missions/" + missionId), anyTypeRef()))
+        .thenReturn(editableMission(missionId));
+    when(backendApiClient.getCached(any(CachedCatalog.class), anyTypeRef()))
+        .thenReturn(Collections.emptyList());
+    stubEmptyFinance(missionId);
+    when(backendApiClient.get(eq("/api/v1/inventory/mission/" + missionId), anyTypeRef()))
+        .thenReturn(List.of(missionStock("Titanium", false)));
+
+    mockMvc
+        .perform(
+            get("/missions/" + missionId)
+                .param("fragment", "finance")
+                .header("Accept-Language", "de"))
+        .andExpect(status().isOk())
+        .andExpect(view().name("mission-detail :: financeSection"))
+        .andExpect(content().string(containsString("Titanium")))
+        .andExpect(content().string(not(containsString("data-testid=\"stolen-chip\""))));
+  }
+
+  /**
+   * Builds one SCU stock entry allocated to a mission, with owner and location set.
+   *
+   * @param materialName the material name, unique within the rendered fragment
+   * @param stolen whether the entry is marked stolen
+   * @return the inventory entry
+   */
+  private static InventoryItemDto missionStock(String materialName, boolean stolen) {
+    return new InventoryItemDto(
+        UUID.randomUUID(),
+        new UserReferenceDto(UUID.randomUUID(), "owner", null, "Owner", null),
+        new MaterialReferenceDto(UUID.randomUUID(), materialName, "SCU"),
+        null,
+        new LocationReferenceDto(UUID.randomUUID(), "Everus Harbor"),
+        500,
+        12.5,
+        false,
+        stolen,
+        List.of(),
+        null,
+        List.of(),
+        null,
+        null,
+        null,
+        1L,
+        true,
+        Instant.now());
+  }
+
+  /**
+   * Returns the table row of the rendered markup that encloses the first occurrence of the marker.
+   *
+   * @param html the rendered markup
+   * @param marker text that occurs first inside the wanted row
+   * @return the row's markup from its opening tag up to its closing tag
+   */
+  private static String enclosingRow(String html, String marker) {
+    int at = html.indexOf(marker);
+    assertThat(at).as("%s is rendered", marker).isNotNegative();
+    int start = html.lastIndexOf("<tr", at);
+    int end = html.indexOf("</tr>", at);
+    assertThat(start).as("%s sits inside a <tr>", marker).isNotNegative();
+    assertThat(end).as("%s sits inside a closed <tr>", marker).isGreaterThan(at);
+    return html.substring(start, end);
   }
 
   @Test
