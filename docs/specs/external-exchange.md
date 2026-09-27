@@ -933,8 +933,11 @@ A client stores tokens only in the platform's secret store (Windows Credential M
 Linux Secret Service, with a `0600` file fallback and a visible hint), keeps the DPoP private key
 non-exportable where the platform allows, never writes a token into logs, backups, diagnostics or a
 problem-report channel, pins the production issuer and allows another only through a developer
-environment variable, and sends a descriptive `User-Agent`. The checklist is
-`docs/exchange/client-security.md`.
+environment variable, and sends a descriptive `User-Agent`. It also syncs as the sync guide
+requires: each resource an opt-in, pull before push, an add-only first sync, removals only from a
+diff, no re-add of what the member removed elsewhere without asking, ships linked before created,
+and the account check before a new game account's first sync. The checklist is
+`docs/exchange/client-security.md`; the application template asks for each point.
 
 **Status:** the checklist `docs/exchange/client-security.md` is written — WP 4.6 (#2090); the
 clients' implementations with WP 5.1 (#2088), WP 5.2 (#2089)

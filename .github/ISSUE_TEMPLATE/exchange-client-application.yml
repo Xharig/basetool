@@ -125,6 +125,27 @@ body:
           required: true
 
   - type: checkboxes
+    id: sync
+    attributes:
+      label: Sync behaviour
+      description: Each point of the sync behaviour in docs/exchange/client-security.md.
+      options:
+        - label: Every resource is an explicit opt-in of the member, off by default.
+          required: true
+        - label: Pull before push; the first sync is add-only; a remove only from a diff against the last synced state.
+          required: true
+        - label: What the member removed elsewhere is never re-added; override only after the member agreed.
+          required: true
+        - label: Ships are linked to existing ships before any new one is created.
+          required: true
+        - label: After CURSOR_EXPIRED, a fresh snapshot is reconciled against the last synced state.
+          required: true
+        - label: Stock is sent with the expectedQuantity last seen; a VERSION_CONFLICT is resolved by pulling.
+          required: true
+        - label: The account check runs before the first sync of a newly detected game account, with a warning on mismatch.
+          required: true
+
+  - type: checkboxes
     id: terms
     attributes:
       label: Terms of the integration
