@@ -315,13 +315,14 @@ class ExchangeResolveServiceTest {
   }
 
   /**
-   * Stubs the master products from alternating keys and names.
+   * Stubs the master products from alternating keys and names; a trailing key without a name is
+   * ignored.
    *
    * @param keysAndNames key, name, key, name, …
    */
   private void products(@NotNull String... keysAndNames) {
     List<ResolvedProduct> products = new ArrayList<>();
-    for (int i = 0; i < keysAndNames.length; i += 2) {
+    for (int i = 0; i + 1 < keysAndNames.length; i += 2) {
       products.add(new ResolvedProduct(keysAndNames[i], keysAndNames[i + 1], null));
     }
     lenient().when(blueprintProductService.allProducts()).thenReturn(products);
