@@ -41,6 +41,24 @@ How each step works is on the [authentication](authentication.md) page.
 - Send a descriptive `User-Agent`: product, version and a URL, for example
   `ExampleClient/1.2.0 (+https://example.org/client)`.
 
+## Sync behaviour
+
+The [sync guide](sync-guide.md) explains each rule; these are the ones an application is checked
+against:
+
+- Every resource is an explicit opt-in of the member and off by default.
+- Pull before push; the first sync of a resource is add-only; a `remove` is sent only from a diff
+  against the last synced state.
+- Never re-add what the member removed elsewhere: a `REMOVED_ELSEWHERE` is shown to the member, and
+  `override` is sent only after the member agreed.
+- Ships are linked to the member's existing ships before any new one is created.
+- After `410 CURSOR_EXPIRED`, reconcile a fresh snapshot against the last synced state; it is not an
+  add-only first sync.
+- Stock is sent as lots with the `expectedQuantity` last seen; a `VERSION_CONFLICT` is resolved by
+  pulling, never by resending blindly.
+- Before the first sync of a newly detected game account, run the account check and warn the member
+  on `mismatch`.
+
 ## Response and supply chain
 
 - Publish a privacy statement and a security contact.
