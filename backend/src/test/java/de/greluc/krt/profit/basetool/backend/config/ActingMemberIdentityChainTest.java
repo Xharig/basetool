@@ -33,7 +33,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeSettings;
 import de.greluc.krt.profit.basetool.backend.model.User;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeSettingsRepository;
 import de.greluc.krt.profit.basetool.backend.repository.RoleRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.BlueprintImportService;
@@ -42,6 +48,7 @@ import de.greluc.krt.profit.basetool.backend.service.RefineryImportService;
 import de.greluc.krt.profit.basetool.backend.service.TermsAcceptanceService;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
+import java.util.EnumSet;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,6 +131,8 @@ class ActingMemberIdentityChainTest {
   @Autowired private UserRepository userRepository;
   @Autowired private RoleRepository roleRepository;
   @Autowired private TermsAcceptanceService termsAcceptanceService;
+  @Autowired private ExchangeClientRepository clientRepository;
+  @Autowired private ExchangeSettingsRepository settingsRepository;
 
   @MockitoBean private RefineryImportService refineryImportService;
   @MockitoBean private BlueprintImportService blueprintImportService;
@@ -157,6 +166,37 @@ class ActingMemberIdentityChainTest {
   /**
    * The member's identity, not the gateway's, reaches the handler as the draft's {@code callerId}.
    */
+  @Test
+  void anExchangeDraftIsBuiltForTheActingMemberUnderTheReducedAuthentication() throws Exception {
+    termsAcceptanceService.acceptCurrentTerms(MEMBER);
+    ExchangeClient client = new ExchangeClient();
+    client.setClientId("vk-chain");
+    client.setDisplayName("VerseKit");
+    client.setStatus(ExchangeClientStatus.ACTIVE);
+    client.setCapabilities(
+        EnumSet.of(ExchangeCapability.CONNECT, ExchangeCapability.DRAFTS_REFINERY));
+    clientRepository.saveAndFlush(client);
+    ExchangeSettings settings =
+        settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
+    settings.setEnabled(true);
+    settingsRepository.saveAndFlush(settings);
+
+    mockMvc
+        .perform(
+            post("/api/v1/exchange/me/drafts/refinery-orders")
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "vk-chain")
+                .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.drafts.refinery")
+                .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "Kx9_" + "c".repeat(39))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(EXTRACT))
+        .andExpect(status().isOk());
+
+    verify(refineryImportService).buildDraft(any(), eq(MEMBER));
+  }
+
   @Test
   void buildsTheDraftForTheActingMemberNotTheGateway() throws Exception {
     termsAcceptanceService.acceptCurrentTerms(MEMBER);
