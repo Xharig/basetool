@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.ingest.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRoutes;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import de.greluc.krt.profit.basetool.testsupport.web.Call;
@@ -51,7 +52,11 @@ class IngestEndpointSurfaceTest {
           new Call(HttpMethod.POST, "/v1/refinery-extract"),
           new Call(HttpMethod.POST, "/v1/blueprint-preview"),
           new Call(HttpMethod.GET, "/exchange/v1/openapi.json"),
-          new Call(HttpMethod.GET, "/exchange/v1/schemas/x"));
+          new Call(HttpMethod.GET, "/exchange/v1/schemas/x"),
+          new Call(HttpMethod.GET, "/exchange/v1"),
+          new Call(HttpMethod.POST, "/exchange/v1/me/installation"),
+          new Call(HttpMethod.POST, "/exchange/v1/catalog/resolve"),
+          new Call(HttpMethod.GET, "/exchange/v1/catalog/locations"));
 
   /** springdoc's OpenAPI document tree, served in non-prod profiles only. */
   private static final String API_DOCS_ROOT = "/v3/api-docs";
@@ -100,6 +105,20 @@ class IngestEndpointSurfaceTest {
       assertThat(IngestPathScope.isProtectedRequest(request))
           .as("%s must be covered by the protective filters", call)
           .isTrue();
+    }
+  }
+
+  @Test
+  void everyServedExchangeRouteIsInTheGatedRouteTable() {
+    for (Call call : EndpointEnumeration.mappings(context)) {
+      if (!EndpointEnumeration.isUnder(call.path(), "/exchange")
+          || call.path().equals("/exchange/v1/openapi.json")
+          || call.path().startsWith("/exchange/v1/schemas/")) {
+        continue;
+      }
+      assertThat(ExchangeRoutes.find(call.method().name(), call.path()))
+          .as("%s is served but not in ExchangeRoutes, so the gate would answer 404", call)
+          .isPresent();
     }
   }
 

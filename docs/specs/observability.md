@@ -1622,6 +1622,11 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `IngestAuthFailureSpike` and `IngestUnauthenticatedFlood` alert per scope;
   `ExchangeDpopProofsFailing` (warning, 15 m) fires on sustained refused exchange proofs
   (REQ-XCH-006).
+- `basetool_ingest_exchange_relay_total{outcome}` counter — every admitted exchange request the
+  gateway relayed: `ok`, `refused` (the backend refused with a code of the exchange error registry,
+  passed on to the client) or `failed` (answered `502 BACKEND_RELAY_FAILED`), registered at zero.
+  `ExchangeRelayFailing` (warning) fires on more than three failures in 15 minutes (REQ-XCH-011,
+  REQ-XCH-028).
 - `basetool_ingest_legacy_endpoints_enabled` gauge (`1` while the legacy extractor endpoints answer,
   `0` once switched off) and `basetool_ingest_legacy_gone_total` counter (legacy requests refused
   with `410 LEGACY_ENDPOINT_GONE`, registered at zero). No alert: after the go-live a trickle of

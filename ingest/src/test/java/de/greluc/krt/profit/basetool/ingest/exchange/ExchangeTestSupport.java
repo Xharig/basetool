@@ -42,29 +42,36 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.RouterFunctions;
 import org.springframework.web.servlet.function.ServerRequest;
 import org.springframework.web.servlet.function.ServerResponse;
 
 /** Keys, tokens, DPoP proofs, registries and probe routes for the exchange gate tests. */
-final class ExchangeTestSupport {
+public final class ExchangeTestSupport {
 
   /** The origin MockMvc requests carry. */
-  static final String ORIGIN = "http://localhost";
+  public static final String ORIGIN = "http://localhost";
 
   /** The registry client the tests act as. */
-  static final String CLIENT = "versekit";
+  public static final String CLIENT = "versekit";
 
-  /** A route any granted capability admits. */
-  static final String LOCATIONS = "/exchange/v1/catalog/locations";
+  /** A read route without a controller yet, which needs {@code exchange.stock.read}. */
+  public static final String STOCK = "/exchange/v1/me/stock";
 
   /** The service document, which needs {@code exchange.connect}. */
-  static final String SERVICE_DOCUMENT = "/exchange/v1";
+  public static final String SERVICE_DOCUMENT = "/exchange/v1";
 
   /** A write route, which needs {@code exchange.blueprints.write}. */
-  static final String BLUEPRINT_CHANGES = "/exchange/v1/me/blueprints/changes";
+  public static final String BLUEPRINT_CHANGES = "/exchange/v1/me/blueprints/changes";
 
   /** Not instantiable. */
   private ExchangeTestSupport() {}
@@ -75,7 +82,7 @@ final class ExchangeTestSupport {
    * @return a P-256 key
    * @throws Exception if generation fails
    */
-  static @NotNull ECKey newKey() throws Exception {
+  public static @NotNull ECKey newKey() throws Exception {
     return new ECKeyGenerator(Curve.P_256).generate();
   }
 
@@ -86,7 +93,7 @@ final class ExchangeTestSupport {
    * @return the RFC 7638 thumbprint
    * @throws Exception if hashing fails
    */
-  static @NotNull String thumbprint(@NotNull ECKey key) throws Exception {
+  public static @NotNull String thumbprint(@NotNull ECKey key) throws Exception {
     return key.computeThumbprint().toString();
   }
 
@@ -101,7 +108,7 @@ final class ExchangeTestSupport {
    * @param issuedAt the issue time
    * @return the token
    */
-  static @NotNull Jwt token(
+  public static @NotNull Jwt token(
       @NotNull String value,
       @NotNull String audience,
       @Nullable String thumbprint,
@@ -134,7 +141,7 @@ final class ExchangeTestSupport {
    * @return the compact proof
    * @throws Exception if signing fails
    */
-  static @NotNull String proof(
+  public static @NotNull String proof(
       @NotNull ECKey signer,
       @NotNull String token,
       @NotNull String method,
@@ -173,7 +180,7 @@ final class ExchangeTestSupport {
    * @param minVersion the minimum client version, or {@code null}
    * @return the registry
    */
-  static @NotNull ExchangeRegistry registry(
+  public static @NotNull ExchangeRegistry registry(
       boolean enabled,
       boolean active,
       @NotNull Set<String> capabilities,
@@ -187,11 +194,75 @@ final class ExchangeTestSupport {
   }
 
   /**
+   * Builds a registry holding the test client, active and switched on, with limit overrides.
+   *
+   * @param capabilities the granted capabilities
+   * @param minVersion the minimum client version, or {@code null}
+   * @param requestsPerMinute the per-minute limit override
+   * @return the registry
+   */
+  public static @NotNull ExchangeRegistry registryWithLimits(
+      @NotNull Set<String> capabilities, @Nullable String minVersion, int requestsPerMinute) {
+    return new ExchangeRegistry(
+        1L,
+        true,
+        Map.of(
+            CLIENT,
+            new ExchangeRegistry.Client(
+                "VerseKit", true, capabilities, minVersion, requestsPerMinute, null)));
+  }
+
+  /**
+   * Sends one DPoP-bound request: a first proof without a nonce fetches the nonce, the second one
+   * carries it.
+   *
+   * @param mockMvc the client
+   * @param key the DPoP key
+   * @param token the access token
+   * @param method the method
+   * @param path the path
+   * @param json the JSON body, or {@code null}
+   * @param userAgent the {@code User-Agent}, or {@code null}
+   * @return the second request's result
+   * @throws Exception if a request fails
+   */
+  public static @NotNull ResultActions call(
+      @NotNull MockMvc mockMvc,
+      @NotNull ECKey key,
+      @NotNull String token,
+      @NotNull HttpMethod method,
+      @NotNull String path,
+      @Nullable String json,
+      @Nullable String userAgent)
+      throws Exception {
+    String nonce =
+        mockMvc
+            .perform(
+                MockMvcRequestBuilders.request(method, path)
+                    .header(HttpHeaders.AUTHORIZATION, "DPoP " + token)
+                    .header("DPoP", proof(key, token, method.name(), path, null)))
+            .andReturn()
+            .getResponse()
+            .getHeader(ExchangeTokenGateFilter.DPOP_NONCE_HEADER);
+    MockHttpServletRequestBuilder request =
+        MockMvcRequestBuilders.request(method, path)
+            .header(HttpHeaders.AUTHORIZATION, "DPoP " + token)
+            .header("DPoP", proof(key, token, method.name(), path, nonce));
+    if (userAgent != null) {
+      request.header(HttpHeaders.USER_AGENT, userAgent);
+    }
+    if (json != null) {
+      request.contentType(MediaType.APPLICATION_JSON).content(json);
+    }
+    return mockMvc.perform(request);
+  }
+
+  /**
    * Test-only answers on real exchange routes, registered as functions so no other context sees
    * them.
    */
   @TestConfiguration
-  static class ProbeRoutes {
+  public static class ProbeRoutes {
 
     /**
      * Answers the probed routes with the gate's context.
@@ -201,8 +272,7 @@ final class ExchangeTestSupport {
     @Bean
     RouterFunction<ServerResponse> exchangeProbes() {
       return RouterFunctions.route()
-          .GET(LOCATIONS, ProbeRoutes::context)
-          .GET(SERVICE_DOCUMENT, ProbeRoutes::context)
+          .GET(STOCK, ProbeRoutes::context)
           .POST(BLUEPRINT_CHANGES, ProbeRoutes::context)
           .build();
     }

@@ -21,8 +21,8 @@ package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.BLUEPRINT_CHANGES;
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.CLIENT;
-import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.LOCATIONS;
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.SERVICE_DOCUMENT;
+import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.STOCK;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -91,19 +91,24 @@ class ExchangeGateTest {
     thumbprint = ExchangeTestSupport.thumbprint(key);
     member = UUID.randomUUID().toString();
     issuedAt = Instant.now().minusSeconds(60);
-    tokenScopes("exchange.connect exchange.blueprints.read");
-    registry(true, true, Set.of("exchange.connect", "exchange.blueprints.read"), null);
+    tokenScopes("exchange.connect exchange.stock.read");
+    registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), null);
     when(revocationReader.isDenied(anyString())).thenReturn(false);
     when(revocationReader.revokedAt(anyString(), anyString())).thenReturn(null);
   }
 
   @Test
   void anAdmittedRequestCarriesTheClientAndTheCapabilitiesBothHold() throws Exception {
-    registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), null);
+    tokenScopes("exchange.connect exchange.stock.read exchange.hangar.read");
+    registry(
+        true,
+        true,
+        Set.of("exchange.connect", "exchange.stock.read", "exchange.demand.read"),
+        null);
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isOk())
-        .andExpect(content().string(CLIENT + " exchange.connect"));
+        .andExpect(content().string(CLIENT + " exchange.connect exchange.stock.read"));
   }
 
   @Test
@@ -115,14 +120,14 @@ class ExchangeGateTest {
 
   @Test
   void aKnownPathWithTheWrongMethodIsNotFound() throws Exception {
-    call(HttpMethod.POST, LOCATIONS).andExpect(status().isNotFound());
+    call(HttpMethod.POST, STOCK).andExpect(status().isNotFound());
   }
 
   @Test
   void theSwitchOffRefusesWithRetryAfter() throws Exception {
-    registry(false, true, Set.of("exchange.connect"), null);
+    registry(false, true, Set.of("exchange.connect", "exchange.stock.read"), null);
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isServiceUnavailable())
         .andExpect(header().string(HttpHeaders.RETRY_AFTER, "30"))
         .andExpect(jsonPath("$.code").value("EXCHANGE_DISABLED"));
@@ -133,7 +138,7 @@ class ExchangeGateTest {
     when(registryReader.current()).thenThrow(new ExchangeUnavailableException("down", null));
     double before = refused("registry_unavailable");
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isServiceUnavailable())
         .andExpect(jsonPath("$.code").value("REGISTRY_UNAVAILABLE"));
 
@@ -145,7 +150,7 @@ class ExchangeGateTest {
     when(revocationReader.isDenied(anyString()))
         .thenThrow(new ExchangeUnavailableException("down", null));
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isServiceUnavailable())
         .andExpect(jsonPath("$.code").value("REGISTRY_UNAVAILABLE"));
   }
@@ -154,16 +159,16 @@ class ExchangeGateTest {
   void aClientOutsideTheRegistryIsNotAllowed() throws Exception {
     when(registryReader.current()).thenReturn(new ExchangeRegistry(1L, true, Map.of()));
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("CLIENT_NOT_ALLOWED"));
   }
 
   @Test
   void aSuspendedClientIsRefused() throws Exception {
-    registry(true, false, Set.of("exchange.connect"), null);
+    registry(true, false, Set.of("exchange.connect", "exchange.stock.read"), null);
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("CLIENT_SUSPENDED"));
   }
@@ -172,7 +177,7 @@ class ExchangeGateTest {
   void aDeniedInstallationIsRefusedWhateverTheTokensAge() throws Exception {
     when(revocationReader.isDenied(thumbprint)).thenReturn(true);
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("INSTALLATION_REVOKED"));
   }
@@ -181,7 +186,7 @@ class ExchangeGateTest {
   void aTokenIssuedBeforeTheClientRevocationIsRefused() throws Exception {
     when(revocationReader.revokedAt(CLIENT, member)).thenReturn(issuedAt.getEpochSecond() + 10);
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
   }
@@ -190,7 +195,7 @@ class ExchangeGateTest {
   void aFreshConnectionAfterTheRevocationWorksAtOnce() throws Exception {
     when(revocationReader.revokedAt(CLIENT, member)).thenReturn(issuedAt.getEpochSecond() - 10);
 
-    call(HttpMethod.GET, LOCATIONS).andExpect(status().isOk());
+    call(HttpMethod.GET, STOCK).andExpect(status().isOk());
   }
 
   @Test
@@ -206,7 +211,7 @@ class ExchangeGateTest {
   @Test
   void aCapabilityTheRegistryDoesNotGrantIsRefused() throws Exception {
     tokenScopes("exchange.connect exchange.blueprints.write");
-    registry(true, true, Set.of("exchange.connect"), null);
+    registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), null);
 
     call(HttpMethod.POST, BLUEPRINT_CHANGES)
         .andExpect(status().isForbidden())
@@ -232,14 +237,14 @@ class ExchangeGateTest {
 
   @Test
   void anOldVersionIsRefusedAndACurrentOneAdmitted() throws Exception {
-    registry(true, true, Set.of("exchange.connect"), "2.5.0");
+    registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), "2.5.0");
 
-    call(HttpMethod.GET, LOCATIONS)
+    call(HttpMethod.GET, STOCK)
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("CLIENT_VERSION_UNSUPPORTED"));
 
-    registry(true, true, Set.of("exchange.connect"), "2.4.0");
-    call(HttpMethod.GET, LOCATIONS).andExpect(status().isOk());
+    registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), "2.4.0");
+    call(HttpMethod.GET, STOCK).andExpect(status().isOk());
   }
 
   /**

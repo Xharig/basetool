@@ -170,6 +170,13 @@ public final class MetricNames {
   public static final String EXCHANGE_REFUSED = "basetool.ingest.exchange.refused";
 
   /**
+   * Counter {@code basetool_ingest_exchange_relay_total{outcome}}: every admitted exchange request
+   * the gateway relayed — {@code ok}, {@code refused} by the backend with a registry code, or
+   * {@code failed} (answered {@code 502}) (REQ-XCH-028).
+   */
+  public static final String EXCHANGE_RELAY = "basetool.ingest.exchange.relay";
+
+  /**
    * Tag key on {@link #INGEST_AUTH_FAILURES}: the surface the request targeted — {@link
    * #PATH_SCOPE_LEGACY}, {@link #PATH_SCOPE_EXCHANGE} or {@link #PATH_SCOPE_OTHER}.
    */
