@@ -1,0 +1,125 @@
+/*
+ * Profit Basetool - squadron-management web app.
+ * Copyright (C) 2026 Lucas Greuloch
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package de.greluc.krt.profit.basetool.backend.controller;
+
+import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedAppDto;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ConnectedAppsService;
+import de.greluc.krt.profit.basetool.backend.support.AuthenticatedSubject;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * The member's own exchange connections, reachable only from the member's browser session
+ * (REQ-XCH-001, REQ-XCH-008, REQ-XCH-032).
+ */
+@RestController
+@RequestMapping("/api/v1/connected-apps")
+@RequiredArgsConstructor
+@PreAuthorize("@connectedAppsGate.isMemberSession(authentication)")
+@Tag(name = "Connected apps", description = "The member's own external client connections")
+public class ConnectedAppsController {
+
+  private final ConnectedAppsService connectedAppsService;
+
+  /**
+   * Lists the caller's connected clients and their installations.
+   *
+   * @param authentication the caller
+   * @return the connected clients
+   */
+  @NotNull
+  @GetMapping
+  @Operation(summary = "List my connected apps")
+  @ApiResponse(responseCode = "200", description = "The connected clients")
+  public ResponseEntity<List<ConnectedAppDto>> list(@NotNull Authentication authentication) {
+    return ResponseEntity.ok(connectedAppsService.list(member(authentication)));
+  }
+
+  /**
+   * Disconnects a whole client for the caller.
+   *
+   * @param clientId the Keycloak client id
+   * @param authentication the caller
+   * @return {@code 204}
+   */
+  @NotNull
+  @DeleteMapping("/{clientId}")
+  @Operation(
+      summary = "Disconnect a client",
+      description =
+          "Refuses every token the client holds for me from the next request on and removes my"
+              + " consent; a new connection works at once.")
+  @ApiResponse(responseCode = "204", description = "Disconnected")
+  @ApiResponse(responseCode = "502", description = "The gateway mirror or Keycloak was unreachable")
+  public ResponseEntity<Void> disconnectClient(
+      @PathVariable @NotNull String clientId, @NotNull Authentication authentication) {
+    connectedAppsService.disconnectClient(member(authentication), clientId);
+    return ResponseEntity.noContent().build();
+  }
+
+  /**
+   * Disconnects one of the caller's installations.
+   *
+   * @param installationId the installation
+   * @param authentication the caller
+   * @return {@code 204}
+   */
+  @NotNull
+  @DeleteMapping("/installations/{installationId}")
+  @Operation(
+      summary = "Disconnect an installation",
+      description =
+          "Refuses every token bound to that installation's key; reconnecting needs a new key.")
+  @ApiResponse(responseCode = "204", description = "Disconnected")
+  @ApiResponse(responseCode = "404", description = "Not one of my installations")
+  @ApiResponse(responseCode = "502", description = "The gateway mirror was unreachable")
+  public ResponseEntity<Void> disconnectInstallation(
+      @PathVariable @NotNull UUID installationId, @NotNull Authentication authentication) {
+    connectedAppsService.disconnectInstallation(member(authentication), installationId);
+    return ResponseEntity.noContent().build();
+  }
+
+  /**
+   * Returns the caller's user id.
+   *
+   * @param authentication the caller
+   * @return the id
+   * @throws AccessDeniedException when the caller has none
+   */
+  @NotNull
+  private static UUID member(@NotNull Authentication authentication) {
+    return AuthenticatedSubject.idOf(authentication)
+        .orElseThrow(() -> new AccessDeniedException("No member"));
+  }
+}

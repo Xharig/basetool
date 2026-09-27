@@ -33,6 +33,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.domain.JavaParameterizedType;
 import com.tngtech.archunit.core.domain.JavaType;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -468,6 +469,108 @@ class ArchitectureTest {
             && "record".equals(call.getTarget().getName());
       }
     };
+  }
+
+  @Test
+  void everyExchangeControllerMethodCarriesTheExchangeGate() {
+    methods()
+        .that()
+        .areDeclaredInClassesThat()
+        .resideInAPackage("..backend.controller.exchange..")
+        .and()
+        .arePublic()
+        .should(
+            new ArchCondition<JavaMethod>("gate on @exchangeGate in @PreAuthorize") {
+              @Override
+              public void check(JavaMethod method, ConditionEvents events) {
+                String value =
+                    method.isAnnotatedWith(PRE_AUTHORIZE)
+                        ? method
+                            .getAnnotationOfType(PRE_AUTHORIZE)
+                            .tryGetExplicitlyDeclaredProperty("value")
+                            .map(Object::toString)
+                            .orElse("")
+                        : "";
+                if (!value.contains("@exchangeGate.")) {
+                  events.add(
+                      SimpleConditionEvent.violated(
+                          method, method.getFullName() + " is not gated by @exchangeGate"));
+                }
+              }
+            })
+        .because("REQ-XCH-004: the backend re-checks every relayed capability itself")
+        .check(CLASSES);
+  }
+
+  @Test
+  void exchangeControllersCallExchangeServicesOnly() {
+    noClasses()
+        .that()
+        .resideInAPackage("..backend.controller.exchange..")
+        .should()
+        .dependOnClassesThat()
+        .resideInAnyPackage("..backend.repository..", "..backend.mapper..")
+        .orShould()
+        .dependOnClassesThat(
+            DescribedPredicate.describe(
+                "a service outside the exchange layer",
+                (JavaClass c) ->
+                    c.getPackageName().contains(".backend.service")
+                        && !c.getPackageName().contains(".backend.service.exchange")))
+        .because("REQ-XCH-009: the exchange layer reaches the domain only through its own services")
+        .check(CLASSES);
+  }
+
+  @Test
+  void exchangeDtosStayInTheExchangeLayer() {
+    classes()
+        .that()
+        .resideInAPackage("..backend.model.dto.exchange..")
+        .should()
+        .onlyBeAccessed()
+        .byClassesThat()
+        .resideInAnyPackage(
+            "..backend.model.dto.exchange..",
+            "..backend.controller.exchange..",
+            "..backend.service.exchange..",
+            "..backend.repository..")
+        .because("the exchange contract must not leak into the web or app API")
+        .check(CLASSES);
+  }
+
+  @Test
+  void exchangeServicesNeverUseAdminGatesOrTheAdminScope() {
+    noClasses()
+        .that()
+        .resideInAPackage("..backend.service.exchange..")
+        .should()
+        .callMethodWhere(
+            new DescribedPredicate<JavaMethodCall>("an ADMIN-gated method") {
+              @Override
+              public boolean test(JavaMethodCall call) {
+                return call.getTarget().resolveMember().stream()
+                    .anyMatch(
+                        member ->
+                            member.isAnnotatedWith(PRE_AUTHORIZE)
+                                && member
+                                    .getAnnotationOfType(PRE_AUTHORIZE)
+                                    .tryGetExplicitlyDeclaredProperty("value")
+                                    .map(Object::toString)
+                                    .orElse("")
+                                    .contains("ADMIN"));
+              }
+            })
+        .orShould()
+        .callMethodWhere(
+            new DescribedPredicate<JavaMethodCall>("OwnerScopeService.currentScopePredicate(..)") {
+              @Override
+              public boolean test(JavaMethodCall call) {
+                return call.getTargetOwner().getSimpleName().equals("OwnerScopeService")
+                    && "currentScopePredicate".equals(call.getTarget().getName());
+              }
+            })
+        .because("REQ-XCH-009: an ADMIN member acts on the exchange with own data only")
+        .check(CLASSES);
   }
 
   @Test

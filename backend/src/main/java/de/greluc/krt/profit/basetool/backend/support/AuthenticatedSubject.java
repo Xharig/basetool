@@ -67,13 +67,20 @@ public final class AuthenticatedSubject {
   }
 
   /**
-   * Extracts the unbounded {@code azp} claim naming the Keycloak client the caller's token was
-   * issued to. Consumers that label or persist it must bound it via {@link ClientAttribution}.
+   * Extracts the client the request came from: the external client of a relayed exchange request
+   * (REQ-XCH-010), otherwise the unbounded {@code azp} claim naming the Keycloak client the
+   * caller's token was issued to. Consumers that label or persist it must bound it via {@link
+   * ClientAttribution}.
    *
    * @param authentication the current authentication, may be {@code null}
-   * @return the {@code azp} claim, or empty when there is no token or the claim is absent/blank
+   * @return the external client or the {@code azp} claim, or empty when there is neither
    */
   public static Optional<String> authorizedParty(@Nullable Authentication authentication) {
+    if (authentication instanceof SubjectAuthentication subjectAuth
+        && subjectAuth.externalClient() != null
+        && !subjectAuth.externalClient().isBlank()) {
+      return Optional.of(subjectAuth.externalClient());
+    }
     return token(authentication)
         .map(jwt -> jwt.getClaimAsString(AUTHORIZED_PARTY_CLAIM))
         .filter(azp -> !azp.isBlank());

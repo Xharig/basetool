@@ -150,6 +150,9 @@ public final class HandleErasureCoverage {
           removed("personal_blueprint.note", "See personal_inventory_item.name."),
           removed("ship.name", "The member's hangar is purged with the account."),
           removed(
+              "exchange_installation.label",
+              "The member's exchange installations cascade away with the account."),
+          removed(
               "inventory_item.note",
               "The departing member's warehouse rows are purged, with the job-order and mission"
                   + " allocations the database cascades off them."),
