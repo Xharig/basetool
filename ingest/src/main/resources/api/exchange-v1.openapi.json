@@ -180,9 +180,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/DPoP"
-          },
-          {
-            "$ref": "#/components/parameters/IdempotencyKey"
           }
         ],
         "requestBody": {
@@ -260,13 +257,52 @@
         "security": [
           {
             "memberToken": [
-              "exchange.blueprints.read",
-              "exchange.blueprints.write",
-              "exchange.stock.read",
-              "exchange.stock.write",
-              "exchange.hangar.read",
-              "exchange.hangar.write",
+              "exchange.connect"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.blueprints.read"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.blueprints.write"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.stock.read"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.stock.write"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.hangar.read"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.hangar.write"
+            ]
+          },
+          {
+            "memberToken": [
               "exchange.demand.read"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.drafts.blueprints"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.drafts.refinery"
             ]
           }
         ],
@@ -320,13 +356,52 @@
         "security": [
           {
             "memberToken": [
-              "exchange.blueprints.read",
-              "exchange.blueprints.write",
-              "exchange.stock.read",
-              "exchange.stock.write",
-              "exchange.hangar.read",
-              "exchange.hangar.write",
+              "exchange.connect"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.blueprints.read"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.blueprints.write"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.stock.read"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.stock.write"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.hangar.read"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.hangar.write"
+            ]
+          },
+          {
+            "memberToken": [
               "exchange.demand.read"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.drafts.blueprints"
+            ]
+          },
+          {
+            "memberToken": [
+              "exchange.drafts.refinery"
             ]
           }
         ],
@@ -902,9 +977,9 @@
         "description": "A fresh key per logical write, kept 24 h per client and member. A replay returns the first result.",
         "schema": {
           "type": "string",
-          "minLength": 16,
-          "maxLength": 64,
-          "pattern": "^[A-Za-z0-9_-]+$"
+          "minLength": 8,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._~-]+$"
         }
       }
     }
