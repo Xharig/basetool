@@ -62,15 +62,15 @@ public class ClientAttribution {
    */
   public @NotNull String relayedLabelOf(
       @Nullable Authentication authentication, @Nullable String relayedClient) {
-    if (relayedClient != null
-        && !relayedClient.isBlank()
-        && gatewayProperties.isGatewayClient(
-            AuthenticatedSubject.authorizedParty(authentication).orElse(null))) {
+    String authorizedParty = AuthenticatedSubject.authorizedParty(authentication).orElse(null);
+    if (gatewayProperties.isGatewayClient(authorizedParty)
+        && relayedClient != null
+        && !relayedClient.isBlank()) {
       return knownExchangeClients.isRegistered(relayedClient)
           ? relayedClient
           : MetricNames.CLIENT_ID_OTHER;
     }
-    return labelOf(authentication);
+    return label(authorizedParty);
   }
 
   /**
