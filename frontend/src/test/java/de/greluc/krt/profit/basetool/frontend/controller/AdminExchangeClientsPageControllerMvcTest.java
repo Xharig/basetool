@@ -126,6 +126,10 @@ class AdminExchangeClientsPageControllerMvcTest {
         .andExpect(content().string(containsString("data-version=\"3\"")))
         .andExpect(content().string(containsString("href=\"https://versekit.example/privacy\"")))
         .andExpect(content().string(containsString("value=\"exchange.drafts.refinery\"")))
+        .andExpect(
+            content().string(containsString("id=\"xc-requestsPerMinute\" min=\"1\" max=\"1200\"")))
+        .andExpect(
+            content().string(containsString("id=\"xc-writesPerDay\" min=\"1\" max=\"5000\"")))
         .andExpect(content().string(not(containsString("??exchange.capability"))))
         .andExpect(content().string(not(containsString("??admin.exchangeClients"))));
   }
