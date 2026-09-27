@@ -207,6 +207,9 @@
 
 ### Changed
 
+- **Datenaustausch: eigener Code für die DPoP-Obergrenze.** Hält ein Mitglied schon 600 lebende
+  DPoP-Nachweise, antwortet das Gateway mit `429 DPOP_PROOF_LIMIT` und `Retry-After` statt mit dem
+  `401 DPOP_INVALID` eines wiederholten Nachweises (REQ-XCH-006).
 - **Datenaustausch: Doku-Seite im KRT-Design.** Die öffentliche Entwickler-Doku
   (`krt-profit.github.io/basetool`) nutzt statt des Standard-Themes das DAS-KARTELL-Design mit
   Basetool-Logo, Seitennavigation, „Improve this page“-Link und einer eingefärbten API-Referenz;

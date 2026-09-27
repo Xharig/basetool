@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.ingest.web;
 
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
+import de.greluc.krt.profit.basetool.ingest.exchange.DpopProofLimitError;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeChallenge;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopProofValidation;
@@ -35,6 +36,7 @@ import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -170,6 +172,9 @@ public class SecurityProblemResponseHandler
     if (asksForNonce(oauth2Exception)) {
       return MetricNames.AUTH_USE_DPOP_NONCE;
     }
+    if (proofLimitRetryAfter(oauth2Exception) != null) {
+      return MetricNames.AUTH_DPOP_PROOF_LIMIT;
+    }
     String code =
         oauth2Exception.getError() == null ? null : oauth2Exception.getError().getErrorCode();
     if (OAuth2ErrorCodes.INVALID_DPOP_PROOF.equals(code)) {
@@ -186,8 +191,9 @@ public class SecurityProblemResponseHandler
   /**
    * Answers an unauthenticated exchange request with the DPoP challenge and the current nonce
    * (REQ-XCH-006): a bearer token, a DPoP-scheme request without a proof and a token without a key
-   * binding are {@code DPOP_REQUIRED}, a missing nonce gets the nonce to retry with, a bad proof is
-   * {@code DPOP_INVALID}, anything else {@code UNAUTHENTICATED}.
+   * binding are {@code DPOP_REQUIRED}, a missing nonce gets the nonce to retry with, a proof of a
+   * member at its proof cap is {@code 429 DPOP_PROOF_LIMIT} with {@code Retry-After}, a bad proof
+   * is {@code DPOP_INVALID}, anything else {@code UNAUTHENTICATED}.
    *
    * @param request the request
    * @param response the response
@@ -218,6 +224,18 @@ public class SecurityProblemResponseHandler
           ExchangeChallenge.header(ExchangeDpopProofValidation.USE_DPOP_NONCE));
       code = ExchangeRefusals.DPOP_INVALID;
       detail = "Retry with the server nonce from the DPoP-Nonce header.";
+    } else if (MetricNames.AUTH_DPOP_PROOF_LIMIT.equals(reason)) {
+      Long retryAfter = proofLimitRetryAfter(authException);
+      response.setHeader(
+          HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter == null ? 1L : retryAfter));
+      refusals.count(ExchangeRefusals.DPOP_PROOF_LIMIT, MetricNames.EXCHANGE_CLIENT_NONE);
+      write(
+          response,
+          HttpStatus.TOO_MANY_REQUESTS,
+          "Too many requests",
+          ExchangeRefusals.DPOP_PROOF_LIMIT,
+          "The member holds too many live DPoP proofs; retry after Retry-After.");
+      return;
     } else if (MetricNames.AUTH_INVALID_DPOP_PROOF.equals(reason)) {
       response.setHeader(
           HttpHeaders.WWW_AUTHENTICATE,
@@ -248,6 +266,26 @@ public class SecurityProblemResponseHandler
       }
     }
     return false;
+  }
+
+  /**
+   * Finds the proof verifier's refusal of a proof whose member holds its cap of live proofs.
+   *
+   * @param exception the failure
+   * @return the seconds until the member may send a proof again, or {@code null} when no cause is
+   *     that refusal
+   */
+  private static @Nullable Long proofLimitRetryAfter(@NotNull Throwable exception) {
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      if (cause instanceof JwtValidationException validation) {
+        for (var error : validation.getErrors()) {
+          if (error instanceof DpopProofLimitError limit) {
+            return limit.getRetryAfterSeconds();
+          }
+        }
+      }
+    }
+    return null;
   }
 
   /**

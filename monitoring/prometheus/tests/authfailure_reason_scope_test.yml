@@ -155,6 +155,19 @@ tests:
         alertname: IngestAuthFailureSpike
         exp_alerts: []
 
+  - name: silent - the DPoP proof limit is not a failing proof
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_auth_failures_total{reason="dpop_proof_limit", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+60x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeDpopProofsFailing
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: IngestAuthFailureSpike
+        exp_alerts: []
+
   - name: fires - the exchange replay cache is full
     interval: 1m
     input_series:

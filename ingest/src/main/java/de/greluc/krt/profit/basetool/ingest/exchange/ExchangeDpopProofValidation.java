@@ -36,10 +36,11 @@ import org.springframework.security.oauth2.jwt.JwtClaimNames;
 
 /**
  * Builds the DPoP proof verifier: Spring's checks ({@code htm}, {@code htu}, {@code iat}, key
- * binding, {@code ath}, {@code jti} replay) everywhere, plus the server nonce on exchange routes
- * (REQ-XCH-006). The {@code jti} replay cache is one {@link DpopProofReplayStore} per path scope,
- * partitioned by the access token's member, so neither one member nor the legacy {@code /v1} routes
- * can fill the cache the exchange relies on.
+ * binding, {@code ath}, {@code jti} replay) everywhere, plus the server nonce and a {@link
+ * DpopProofLimitError} for a member at its proof cap on exchange routes (REQ-XCH-006). The {@code
+ * jti} replay cache is one {@link DpopProofReplayStore} per path scope, partitioned by the access
+ * token's member, so neither one member nor the legacy {@code /v1} routes can fill the cache the
+ * exchange relies on.
  */
 public final class ExchangeDpopProofValidation {
 
@@ -69,9 +70,9 @@ public final class ExchangeDpopProofValidation {
     factory.setJwtValidatorFactory(
         context -> {
           boolean exchange = isExchange(context);
-          DPoPProofReplayValidator replay =
-              new DPoPProofReplayValidator(
-                  (exchange ? proofs.exchange() : proofs.legacy()).forMember(subjectOf(context)));
+          DpopProofReplayStore.MemberView view =
+              (exchange ? proofs.exchange() : proofs.legacy()).forMember(subjectOf(context));
+          DPoPProofReplayValidator replay = new DPoPProofReplayValidator(view);
           OAuth2TokenValidator<Jwt> defaults =
               DPoPProofJwtDecoderFactory.createDefaultJwtValidatorFactory(List.of(replay))
                   .apply(context);
@@ -79,7 +80,7 @@ public final class ExchangeDpopProofValidation {
             return defaults;
           }
           DelegatingOAuth2TokenValidator<Jwt> withNonce =
-              new DelegatingOAuth2TokenValidator<>(nonce, defaults);
+              new DelegatingOAuth2TokenValidator<>(nonce, proofLimit(defaults, view));
           withNonce.setFailOnError(true);
           return withNonce;
         });
@@ -100,6 +101,25 @@ public final class ExchangeDpopProofValidation {
         nonces.isValid(proof.getClaimAsString(NONCE_CLAIM))
             ? OAuth2TokenValidatorResult.success()
             : OAuth2TokenValidatorResult.failure(error);
+  }
+
+  /**
+   * Reports a proof the replay check refused for the member cap as a {@link DpopProofLimitError}
+   * instead of Spring's generic replay error; every other result passes unchanged.
+   *
+   * @param defaults Spring's proof checks, the replay check last
+   * @param view the member's view of the replay cache the replay check claims through
+   * @return the validator
+   */
+  static @NotNull OAuth2TokenValidator<Jwt> proofLimit(
+      @NotNull OAuth2TokenValidator<Jwt> defaults, @NotNull DpopProofReplayStore.MemberView view) {
+    return proof -> {
+      OAuth2TokenValidatorResult result = defaults.validate(proof);
+      Long retryAfter = view.proofLimitRetryAfter();
+      return result.hasErrors() && retryAfter != null
+          ? OAuth2TokenValidatorResult.failure(new DpopProofLimitError(retryAfter))
+          : result;
+    };
   }
 
   /**

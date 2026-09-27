@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.nimbusds.jose.jwk.ECKey;
+import de.greluc.krt.profit.basetool.ingest.exchange.DpopProofReplayStore.Outcome;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -31,10 +32,13 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.DPoPProofContext;
 import org.springframework.security.oauth2.jwt.DPoPProofJwtDecoderFactory;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 
 /**
  * Tests the partitioned DPoP replay cache: one member at its cap cannot lock another out, the
@@ -93,11 +97,11 @@ class DpopProofReplayStoreTest {
     Instant expiry = clock.instant().plusSeconds(30);
 
     for (int i = 0; i < 3; i++) {
-      assertThat(store.claim("a-" + i, expiry, "member-a")).isTrue();
+      assertThat(store.claim("a-" + i, expiry, "member-a").outcome()).isEqualTo(Outcome.STORED);
     }
 
-    assertThat(store.claim("a-3", expiry, "member-a")).isFalse();
-    assertThat(store.claim("b-0", expiry, "member-b")).isTrue();
+    assertThat(store.claim("a-3", expiry, "member-a").outcome()).isEqualTo(Outcome.MEMBER_CAP);
+    assertThat(store.claim("b-0", expiry, "member-b").outcome()).isEqualTo(Outcome.STORED);
     assertThat(refused(MetricNames.PATH_SCOPE_EXCHANGE, MetricNames.DPOP_REPLAY_MEMBER_CAP))
         .isEqualTo(1.0d);
   }
@@ -108,11 +112,11 @@ class DpopProofReplayStoreTest {
     DpopProofReplayStore store = store(2, 1000, clock);
     Instant expiry = clock.instant().plusSeconds(30);
 
-    assertThat(store.claim("jti", expiry, "member-a")).isTrue();
-    assertThat(store.claim("jti", expiry, "member-a")).isFalse();
-    assertThat(store.claim("jti", expiry, "member-b")).isFalse();
+    assertThat(store.claim("jti", expiry, "member-a").outcome()).isEqualTo(Outcome.STORED);
+    assertThat(store.claim("jti", expiry, "member-a").outcome()).isEqualTo(Outcome.REPLAYED);
+    assertThat(store.claim("jti", expiry, "member-b").outcome()).isEqualTo(Outcome.REPLAYED);
 
-    assertThat(store.claim("other", expiry, "member-a")).isTrue();
+    assertThat(store.claim("other", expiry, "member-a").outcome()).isEqualTo(Outcome.STORED);
     assertThat(refused(MetricNames.PATH_SCOPE_EXCHANGE, MetricNames.DPOP_REPLAY_REPLAYED))
         .isEqualTo(2.0d);
   }
@@ -124,12 +128,56 @@ class DpopProofReplayStoreTest {
     Instant expiry = clock.instant().plusSeconds(30);
     store.claim("a-0", expiry, "member-a");
     store.claim("a-1", expiry, "member-a");
-    assertThat(store.claim("a-2", expiry, "member-a")).isFalse();
+    assertThat(store.claim("a-2", expiry, "member-a").outcome()).isEqualTo(Outcome.MEMBER_CAP);
 
     clock.advance(Duration.ofSeconds(45));
 
-    assertThat(store.claim("a-3", clock.instant().plusSeconds(30), "member-a")).isTrue();
+    assertThat(store.claim("a-3", clock.instant().plusSeconds(30), "member-a").outcome())
+        .isEqualTo(Outcome.STORED);
     assertThat(store.size()).isEqualTo(1);
+  }
+
+  @Test
+  void aMemberAtItsCapLearnsWhenItsEarliestProofExpiresAndTakesNoRoom() {
+    MovableClock clock = new MovableClock();
+    DpopProofReplayStore store = store(2, 1000, clock);
+    store.claim("a-late", clock.instant().plusSeconds(30), "member-a");
+    store.claim("a-early", clock.instant().plusSeconds(20), "member-a");
+
+    DpopProofReplayStore.Claim capped =
+        store.claim("a-2", clock.instant().plusSeconds(30), "member-a");
+
+    assertThat(capped.outcome()).isEqualTo(Outcome.MEMBER_CAP);
+    assertThat(capped.retryAfterSeconds()).isEqualTo(21L);
+    assertThat(store.size()).isEqualTo(2);
+
+    clock.advance(Duration.ofMillis(9_500));
+    assertThat(store.claim("a-3", clock.instant().plusSeconds(30), "member-a").retryAfterSeconds())
+        .isEqualTo(11L);
+  }
+
+  @Test
+  void aMembersExpiredProofsMakeRoomBeforeTheNextSweep() {
+    MovableClock clock = new MovableClock();
+    DpopProofReplayStore store = store(2, 1000, clock);
+    store.claim("a-0", clock.instant().plusSeconds(5), "member-a");
+    store.claim("a-1", clock.instant().plusSeconds(30), "member-a");
+
+    clock.advance(Duration.ofSeconds(6));
+
+    assertThat(store.claim("a-2", clock.instant().plusSeconds(30), "member-a").outcome())
+        .isEqualTo(Outcome.STORED);
+    assertThat(store.size()).isEqualTo(2);
+  }
+
+  @Test
+  void theRetryAfterRoundsUpAndIsAtLeastOneSecond() {
+    Instant now = Instant.parse("2026-09-27T12:00:00Z");
+
+    assertThat(DpopProofReplayStore.retryAfterSeconds(now, now)).isEqualTo(1L);
+    assertThat(DpopProofReplayStore.retryAfterSeconds(now, now.plusMillis(1))).isEqualTo(1L);
+    assertThat(DpopProofReplayStore.retryAfterSeconds(now, now.plusMillis(1_001))).isEqualTo(2L);
+    assertThat(DpopProofReplayStore.retryAfterSeconds(now, now.plusSeconds(30))).isEqualTo(31L);
   }
 
   @Test
@@ -140,7 +188,7 @@ class DpopProofReplayStoreTest {
     store.claim("a", expiry, "member-a");
     store.claim("b", expiry, "member-b");
 
-    assertThat(store.claim("c", expiry, "member-c")).isFalse();
+    assertThat(store.claim("c", expiry, "member-c").outcome()).isEqualTo(Outcome.FULL);
     assertThat(refused(MetricNames.PATH_SCOPE_EXCHANGE, MetricNames.DPOP_REPLAY_FULL))
         .isEqualTo(1.0d);
   }
@@ -204,6 +252,42 @@ class DpopProofReplayStoreTest {
   }
 
   @Test
+  void anExchangeProofOverTheMemberCapIsReportedAsTheProofLimitAndAReplayIsNot() throws Exception {
+    DpopProofReplayStore exchange =
+        new DpopProofReplayStore(
+            MetricNames.PATH_SCOPE_EXCHANGE, 1, 1000, meterRegistry, Clock.systemUTC());
+    ExchangeDpopNonces nonces = new ExchangeDpopNonces();
+    DPoPProofJwtDecoderFactory factory =
+        ExchangeDpopProofValidation.factory(
+            nonces,
+            new DpopProofReplayStores(
+                exchange,
+                new DpopProofReplayStore(
+                    MetricNames.PATH_SCOPE_LEGACY, 1, 1000, meterRegistry, Clock.systemUTC())));
+    ECKey key = ExchangeTestSupport.newKey();
+    Jwt token = token("token", key);
+    String first =
+        ExchangeTestSupport.proof(
+            key, token.getTokenValue(), "GET", ExchangeTestSupport.STOCK, nonces.current());
+    assertThat(refusal(factory, token, first)).isNull();
+
+    String second =
+        ExchangeTestSupport.proof(
+            key, token.getTokenValue(), "GET", ExchangeTestSupport.STOCK, nonces.current());
+    assertThat(refusal(factory, token, second))
+        .isInstanceOfSatisfying(
+            DpopProofLimitError.class,
+            limit -> assertThat(limit.getRetryAfterSeconds()).isBetween(1L, 31L));
+    assertThat(exchange.size()).isEqualTo(1);
+
+    assertThat(refusal(factory, token, first))
+        .isNotNull()
+        .isNotInstanceOf(DpopProofLimitError.class)
+        .extracting(OAuth2Error::getErrorCode)
+        .isEqualTo("invalid_dpop_proof");
+  }
+
+  @Test
   void anUnreadableOrPathlessTargetCountsAsAnExchangeRoute() {
     assertThat(ExchangeDpopProofValidation.isExchangeTarget("https://ingest.example/v1/a b"))
         .isTrue();
@@ -243,6 +327,30 @@ class DpopProofReplayStoreTest {
         UUID.randomUUID().toString(),
         "exchange.connect",
         Instant.now().minusSeconds(5));
+  }
+
+  /**
+   * Decodes an exchange proof for the stock route as the gateway would.
+   *
+   * @param factory the verifier factory
+   * @param token the access token
+   * @param proof the signed proof
+   * @return the first validation error, or {@code null} when the proof passed
+   */
+  private static @Nullable OAuth2Error refusal(
+      @NotNull DPoPProofJwtDecoderFactory factory, @NotNull Jwt token, @NotNull String proof) {
+    DPoPProofContext context =
+        DPoPProofContext.withDPoPProof(proof)
+            .accessToken(token)
+            .method("GET")
+            .targetUri(ExchangeTestSupport.ORIGIN + ExchangeTestSupport.STOCK)
+            .build();
+    try {
+      factory.createDecoder(context).decode(proof);
+      return null;
+    } catch (JwtValidationException refused) {
+      return refused.getErrors().iterator().next();
+    }
   }
 
   /**

@@ -5,6 +5,11 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-27
 
+- **New code `429 DPOP_PROOF_LIMIT`.** A proof whose member already holds 600 live proofs is no
+  longer refused like a replayed one (`401 DPOP_INVALID`) but with `429 DPOP_PROOF_LIMIT` and
+  `Retry-After`, the seconds until the member's earliest live proof no longer counts
+  ([errors](errors.md), [authentication](authentication.md#live-proofs-per-member)). A new code is
+  additive in `v1`; a client that does not know it handles it by its status, `429`.
 - **More approval criteria.** An application is now also checked for: a Linux fallback key
   file in a `0700` directory; baseline, ship links and cursors kept per installation and random
   idempotency keys; showing `detachedFromMissions`, `offersReduced` and `offersRemoved` to the
@@ -26,9 +31,8 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   `https://krt-profit.github.io/basetool/exchange/`, which does not exist. The gateway sends the
   site root, `https://krt-profit.github.io/basetool/`.
 - **Documented: the cap on live DPoP proofs.** A member holds at most 600 live proofs over all
-  clients; a proof over the cap is refused like a replayed one, `401 DPOP_INVALID` with
-  `invalid_dpop_proof` ([authentication](authentication.md#live-proofs-per-member)). The cap existed
-  before; only the page is new.
+  clients ([authentication](authentication.md#live-proofs-per-member)). The cap existed before;
+  only the page is new.
 - **Documented: the problem fields.** The [error registry](errors.md#the-problem-document) lists
   which fields a problem carries and when, and the `X-Correlation-Id` header. `retryAfterSeconds` is
   reserved and not sent. `problem.schema.json` allows a `correlationId` of up to 128 characters

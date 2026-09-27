@@ -179,7 +179,7 @@ mass-change window of your client.
 | Requests | 1200 per minute | client, over all its members |
 | Account checks | 10 per hour | client and member |
 | Writes (change sets and drafts) | 500 per UTC day, or `limits.writesPerDay` | client and member |
-| Live DPoP proofs | 600 at a time, each live until about 30 to 40 seconds after its `iat` ([details](authentication.md#live-proofs-per-member)) | member, over all clients |
+| Live DPoP proofs | 600 at a time, each live until just after 30 seconds past its `iat` (`429 DPOP_PROOF_LIMIT`, [details](authentication.md#live-proofs-per-member)) | member, over all clients |
 
 Every attempt counts, retries and replays included. Admitted answers carry `RateLimit` and
 `RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out.
@@ -189,8 +189,8 @@ as is the DPoP `jti` replay check; the daily write quota is shared. The Basetool
 gateway instance, so the table above is what you get; still treat the `RateLimit` headers, not the
 table, as the limit, and send a fresh DPoP proof with every request, retries included.
 
-- `429 RATE_LIMITED` and `429 QUOTA_EXCEEDED` carry `Retry-After` in seconds — for the quota, until
-  the next UTC day. Wait at least that long.
+- `429 RATE_LIMITED`, `429 DPOP_PROOF_LIMIT` and `429 QUOTA_EXCEEDED` carry `Retry-After` in
+  seconds — for the quota, until the next UTC day. Wait at least that long.
 - Every `503` of the gateway carries `Retry-After` too: 30 seconds for `EXCHANGE_DISABLED` and
   `REGISTRY_UNAVAILABLE`, 60 for `EXCHANGE_BUDGET_EXHAUSTED`, and for `SERVICE_UNAVAILABLE` 60 when
   a store cannot be reached, 30 when the daily write quota cannot be counted and 5 when the identity

@@ -329,16 +329,24 @@ gateway instead keeps one `DpopProofReplayStore` for the exchange routes and one
 route, and inside each counts the live proofs per member (the access token's `sub`; a token without
 one by its proof key). A member holds at most `app.exchange.limits.dpop-proofs-per-member` (**600**)
 live proofs, a store at most `app.exchange.limits.dpop-proofs-total` (**100 000**). A proof is kept
-until its `iat` plus 30 s, so a client at the default 120 requests a minute holds about 120 at once
-and 600 covers several clients of one member; a member over the cap is refused `401 DPOP_INVALID`
-without affecting anyone else, and filling a store takes more than 160 members at their cap. A
-registry `requestsPerMinute` far above the default may need a larger per-member cap. Refusals are
-counted as `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`,
-`full`) and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on
-any `full`. A proof refused for either cap gets the same answer as a replayed one — `401
-DPOP_INVALID`, `error="invalid_dpop_proof"`, the same `detail` — so a client cannot tell them apart;
-the developer site documents both caps and tells a client to pause a member's requests for at least
-40 s when a proof it knows is fresh is refused (`docs/exchange/authentication.md`).
+until its `iat` plus 30 s, so a client at the default 120 requests a minute holds about 60 at once
+and 600 covers several clients of one member; filling a store takes more than 160 members at their
+cap. A registry `requestsPerMinute` far above the default may need a larger per-member cap.
+
+**The cap has its own answer** (owner decision 2026-09-27). On an exchange route a member over its
+cap gets `429 DPOP_PROOF_LIMIT` with `Retry-After`: the whole seconds until the member's earliest
+live proof no longer counts, rounded up and at least 1. Before checking the cap, the store drops
+that member's expired proofs, so the answer is exact and does not wait for the ten-second sweep.
+The refused proof takes no room. The seam: the store's member view remembers why it refused a
+proof, and `ExchangeDpopProofValidation.proofLimit` turns Spring's generic replay error into a
+`DpopProofLimitError` when that reason is the cap; `SecurityProblemResponseHandler` finds it in the
+cause chain. A replayed proof, and a proof refused because the whole store is full, stay `401
+DPOP_INVALID` with `error="invalid_dpop_proof"`; the legacy routes keep that answer for their cap as
+well. Refusals are counted as `basetool_ingest_dpop_replay_refused_total{path_scope,reason}`
+(`replayed`, `member_cap`, `full`) and shown on the Exchange and operations dashboards;
+`IngestDpopReplayCacheFull` fires on any `full`. The auth-failure counter records the exchange cap
+as `dpop_proof_limit`, apart from `invalid_dpop_proof`, so `ExchangeDpopProofsFailing` does not
+fire on a busy member.
 
 **Acceptance**
 
@@ -348,8 +356,11 @@ the developer site documents both caps and tells a client to pause a member's re
 - [x] A member at the cap is refused while another member and the other path scope still pass; a
   proof without the nonce stores nothing; an unreadable or pathless target needs the nonce
   (`DpopProofReplayStoreTest`).
-- [x] Through the whole gateway, a member over the cap gets exactly the answer of a replayed proof,
-  and another member still passes (`ExchangeDpopMemberCapTest`).
+- [x] Through the whole gateway, a member over the cap gets `429 DPOP_PROOF_LIMIT` with
+  `Retry-After`, a replayed proof still gets `401 DPOP_INVALID`, and another member still passes
+  (`ExchangeDpopMemberCapTest`); the store answers the seconds until the member's earliest proof
+  expires, drops the member's expired proofs before the cap check and takes no room for a refused
+  proof (`DpopProofReplayStoreTest`).
 
 **Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest`, `ExchangeDpopMemberCapTest` · **Status:** built — WP 3.2
 (#2082); the partitioned replay cache and the fail-closed nonce scope — security review 2 (#2092)

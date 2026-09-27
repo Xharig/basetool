@@ -44,6 +44,9 @@ public class ExchangeRefusals {
   /** An invalid, replayed or foreign proof, or one without the server nonce. */
   public static final String DPOP_INVALID = "DPOP_INVALID";
 
+  /** A proof of a member that already holds its cap of live proofs. */
+  public static final String DPOP_PROOF_LIMIT = "DPOP_PROOF_LIMIT";
+
   /** A token that is missing, invalid, or not issued for this gateway. */
   public static final String UNAUTHENTICATED = "UNAUTHENTICATED";
 
@@ -100,6 +103,7 @@ public class ExchangeRefusals {
       List.of(
           DPOP_REQUIRED,
           DPOP_INVALID,
+          DPOP_PROOF_LIMIT,
           UNAUTHENTICATED,
           NOT_FOUND,
           REGISTRY_UNAVAILABLE,

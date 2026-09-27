@@ -331,6 +331,12 @@ public final class MetricNames {
    */
   public static final String AUTH_USE_DPOP_NONCE = "use_dpop_nonce";
 
+  /**
+   * {@link #INGEST_AUTH_FAILURES} reason: an exchange proof's member already held its cap of live
+   * proofs, answered {@code 429 DPOP_PROOF_LIMIT}.
+   */
+  public static final String AUTH_DPOP_PROOF_LIMIT = "dpop_proof_limit";
+
   /** No credential was presented at all, so there is no RFC 6750 code to report. */
   public static final String AUTH_NO_CREDENTIALS = "no_credentials";
 
