@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Datenaustausch: Änderungsprotokoll.** Jede Änderung an persönlichen Blueprints, am persönlichen
+  Lager und an Schiffen – auch über Sammelaktionen und Standard-Blueprints – wird mit ihrer Quelle
+  (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
+  aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
+  REQ-XCH-013).
 - **Datenaustausch: Vertrag öffentlich abrufbar.** Das Ingest-Gateway liefert das OpenAPI-Dokument
   und die JSON-Schemas der Exchange-API anonym unter `/exchange/v1/openapi.json` und
   `/exchange/v1/schemas/<name>.schema.json` aus (REQ-XCH-011). Die alten Extractor-Endpunkte lassen

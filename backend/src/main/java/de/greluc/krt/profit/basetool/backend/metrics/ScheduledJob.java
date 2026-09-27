@@ -81,7 +81,13 @@ public enum ScheduledJob {
    * The 60-second reconcile of the exchange registry's Redis mirror ({@code
    * ExchangeRegistryReconcileTask}, REQ-XCH-003).
    */
-  EXCHANGE_REGISTRY_RECONCILE("exchange_registry_reconcile");
+  EXCHANGE_REGISTRY_RECONCILE("exchange_registry_reconcile"),
+
+  /**
+   * The nightly purge of the exchange change feed's entries past their retention ({@code
+   * ExchangeChangeRetentionTask}, REQ-XCH-013).
+   */
+  EXCHANGE_CHANGE_RETENTION("exchange_change_retention");
 
   /** The fixed, snake-case Prometheus tag value for this job. */
   private final @NotNull String label;

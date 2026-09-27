@@ -153,7 +153,8 @@ public class UserAccountMergeService {
           "deletion_request.decided_by_id",
           "user_roles.user_id",
           "terms_acceptance.user_id",
-          "exchange_client_revocation.user_id");
+          "exchange_client_revocation.user_id",
+          "exchange_change.user_id");
 
   /**
    * The moved tables as {@code table.column}, the form the schema catalogue reports.
