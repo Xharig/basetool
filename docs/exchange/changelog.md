@@ -30,6 +30,10 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **Clarified: `confirmationUrl` is a secret.** Like a draft's `frontendUrl`, it carries a one-time
   handoff id; never log or share it ([sync guide](sync-guide.md#the-mass-change-guard)). The
   fixture now has the real shape, `/connected-apps/confirm?handoff=…`.
+- **Corrected: draft slots.** The drafts page said a member's ten live drafts are shared with the SC
+  Extractor's uploads. Each client holds ten per member in slots of its own, and staging an eleventh
+  drops only that client's oldest. A draft item's `provenance` is not read; the review records
+  `import`.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and
