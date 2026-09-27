@@ -44,10 +44,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Ends a departed member's exchange access at once (REQ-XCH-008): for every registry client the
- * revocation time reaches the mirror and the database and the member's consent is removed, then the
- * member is logged out of every session, which makes their offline tokens stale. Each step is
- * attempted on its own; a failed one is logged and counted, never thrown back into the roster sync.
+ * Ends a departed member's exchange access at once (REQ-XCH-008): the member's consent for every
+ * registry client is removed and the member is logged out of every session, which makes their
+ * offline tokens stale; only then is the revocation time read, and it reaches the mirror and the
+ * database for every client, also when a Keycloak step failed. Each step is attempted on its own; a
+ * failed one is logged and counted, never thrown back into the roster sync.
  */
 @Slf4j
 @Service
@@ -117,8 +118,13 @@ public class ExchangeDepartureService {
       return;
     }
     UUID member = event.userId();
-    Instant now = clock.instant();
     boolean failed = false;
+    for (ExchangeClient client : clients) {
+      failed |=
+          !attempt("consent", () -> keycloakService.revokeConsent(member, client.getClientId()));
+    }
+    failed |= !attempt("logout", () -> keycloakService.logoutUser(member));
+    Instant now = clock.instant();
     for (ExchangeClient client : clients) {
       failed |=
           !attempt("mirror", () -> revocationMirror.revoke(client.getClientId(), member, now));
@@ -128,10 +134,7 @@ public class ExchangeDepartureService {
               () ->
                   requiresNew.executeWithoutResult(
                       status -> revocationRepository.upsert(client.getId(), member, now)));
-      failed |=
-          !attempt("consent", () -> keycloakService.revokeConsent(member, client.getClientId()));
     }
-    failed |= !attempt("logout", () -> keycloakService.logoutUser(member));
     boolean incomplete = failed;
     attempt(
         "audit",

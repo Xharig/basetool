@@ -102,8 +102,9 @@ that has to cross that boundary — the active-OrgUnit pin, the correlation id �
 - **`keycloak-spi`** — a provider JAR, deliberately free of the application stack: no Spring Boot,
   Java-21 bytecode for the Keycloak JVM, its own Lombok pin, `@JBossLog` rather than `@Slf4j`. It
   holds the Discord identity provider and its mappers, the guild/role gate authenticator, the
-  guild-nickname reader, and the backend account checker; every Discord call goes through one shared
-  HTTP client, and a first login reads the guild-member object once. Analysed by SpotBugs +
+  guild-nickname reader, the backend account checker, and the `basetool-exchange` admin extension
+  that ends one client inside a member's shared sessions (ADR-0226, REQ-XCH-008); every Discord call
+  goes through one shared HTTP client, and a first login reads the guild-member object once. Analysed by SpotBugs +
   FindSecBugs and held to a JaCoCo floor like the applications (since 2026-09-22). Shipped as its
   own signed artifact (ADR-0055).
 - **`keycloak-theme/krt-theme`** — not a Gradle module: the `login` and `account` themes in the
