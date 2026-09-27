@@ -263,7 +263,10 @@ and its global switch stays off until the go-live; the risks hold from then on.
   not prevention: the „Verbundene Anwendungen" audit area, the `ExchangeRegistryChanged` alert on
   every registry change, the journal and the member's undo, and suspending the client (ADR-0217).
 - **Unsigned client releases.** Code signing is recommended, not required.
-- **Device-code phishing** is countered, not prevented (RFC 8628 §5.4).
+- **Device-code phishing** is countered, not prevented (RFC 8628 §5.4). The counter is partial
+  until the consent page carries the warning and the user code: an attacker's
+  `verification_uri_complete` link skips the device page that warns (security review 2 of #2092,
+  M1; REQ-XCH-005).
 - **A sync book-out can lower or remove Materialbörse offers**, as a web book-out does, and undo
   does not restore them. The change result reports `offersReduced` / `offersRemoved` and each
   offer change is audited (REQ-XCH-016, -022).

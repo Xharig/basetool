@@ -208,7 +208,10 @@ device code living 600 s at a pinned polling interval, and `dpop.bound.access.to
 request `offline_access`, because a device login joins the member's browser SSO session and a web
 logout would otherwise disconnect every client (owner decision 2026-09-26). Consent is shown in German, per capability. The consent and device
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
-The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
+A `verification_uri_complete` link skips the device page, so for a device login the consent page
+carries the same warning and shows the user code for the member to compare with the one on their PC,
+and clients show only the bare `verification_uri` (REQ-XCH-027; owner decision 2026-09-27, security
+review 2 of #2092, M1). The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
 
 The first-party SC Extractor is held to the same shape once it has migrated (security finding H1,
 owner decision 2026-09-27): its client `basetool-sc-extractor` requires consent, binds access and
@@ -230,8 +233,17 @@ accepted. The provisioner applies this on production only **after** the legacy s
   only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
   the self-test converges a client in today's production shape to it. The box closes with the
   production apply after the legacy switch-off (WP 6, #2092).*
-- [x] The theme renders both pages with the phishing warning (`login-oauth-grant.ftl`,
-  `login-oauth2-device-verify-user-code.ftl`).
+- [x] The theme renders the device page with the phishing warning
+  (`login-oauth2-device-verify-user-code.ftl`). *Corrected 2026-09-27:* this item said „both pages",
+  but `login-oauth-grant.ftl` carries no warning, and a `verification_uri_complete` link goes
+  straight to it (security review 2 of #2092, M1).
+- [ ] For a device login the consent page shows the phishing warning and the user code, asserted on
+  both pages by a theme test. *Keycloak 26.7.4 hands the consent page no user code
+  (`OAuthGrantBean` holds the session code, the client and the scopes); the way to show it is an
+  open owner decision.*
+- [x] The client documentation tells clients to show the bare `verification_uri` with the
+  `user_code` and never `verification_uri_complete` (`docs/exchange/authentication.md`,
+  `client-security.md`, `quickstart.md`, the application template).
 - [x] Keycloak 26.7.4's behaviour is observed (WP 0.4, 2026-09-26, a throwaway local Keycloak of the
   pinned image, owner decision to observe locally): a device login joins the browser SSO session
   (same `sid`); a web logout ends it and the next refresh fails `invalid_grant` unless the client
@@ -240,7 +252,7 @@ accepted. The provisioner applies this on production only **after** the legacy s
   the consent page on every login, also when consent exists; access and refresh tokens carry
   `cnf.jkt`, and a refresh without a DPoP proof is refused.
 
-**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1
+**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1; the consent page's warning and user code — open (#2092, M1)
 
 ### REQ-XCH-006 — DPoP is required on every exchange route
 
@@ -1030,7 +1042,9 @@ A client stores tokens only in the platform's secret store (Windows Credential M
 Linux Secret Service, with a `0600` file fallback and a visible hint), keeps the DPoP private key
 non-exportable where the platform allows, never writes a token into logs, backups, diagnostics or a
 problem-report channel, pins the production issuer and allows another only through a developer
-environment variable, and sends a descriptive `User-Agent`. It also syncs as the sync guide
+environment variable, shows the device login's `user_code` with the bare `verification_uri` and
+never opens, shows or sends `verification_uri_complete` (owner decision 2026-09-27, security review
+2 of #2092, M1), and sends a descriptive `User-Agent`. It also syncs as the sync guide
 requires: each resource an opt-in, pull before push, an add-only first sync, removals only from a
 diff, no re-add of what the member removed elsewhere without asking, ships linked before created,
 and the account check before a new game account's first sync. The checklist is
@@ -1232,7 +1246,7 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | Threat | Countered by |
 | --- | --- |
 | Stolen refresh or access token | DPoP binding of both (REQ-XCH-005/-006); tokens only in the platform secret store (REQ-XCH-027) |
-| Device-code phishing (RFC 8628 §5.4) | themed device page warning, notification and highlight of every new connection, 600 s code lifespan (REQ-XCH-005/-032) — countered, not prevented |
+| Device-code phishing (RFC 8628 §5.4) | themed device page warning, clients showing only the bare `verification_uri`, notification and a highlight of every new connection until the member acknowledges it, 600 s code lifespan (REQ-XCH-005/-027/-032) — **partial**: an attacker's `verification_uri_complete` link skips the device page, and the consent page does not yet carry the warning and the code (security review 2 of #2092, M1) |
 | A revoked installation refreshing its way back | persistent `jkt` deny list (REQ-XCH-008) |
 | A member who leaves keeping access | departure revocations (REQ-XCH-008) |
 | Malicious client update, compromised maintainer account | capability scoping, own-data-only, journal and undo, guard, suspension; signing recommended (REQ-XCH-002/-009/-021/-022) — accepted residual risk |

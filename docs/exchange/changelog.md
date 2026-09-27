@@ -5,6 +5,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-27
 
+- **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and
+  lets the member type the code; it no longer opens `verification_uri_complete`, which skips the
+  page that warns about device-code phishing. The device response is unchanged.
 - **`CLIENT_REVOKED` counts from the sign-in.** After the member disconnects a client, a token
   without `offline_access` is refused while its `auth_time` lies before the disconnect, also when it
   was refreshed afterwards; a client that requests `offline_access`, as it must, is unaffected.
