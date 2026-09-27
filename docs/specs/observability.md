@@ -1634,6 +1634,9 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `unchanged` / `unmatched` / `ambiguous` / `rejected`), plus `held` per change set the mass-change
   guard held back; registered at zero and shown per day on panel 80 of the operations dashboard
   (REQ-XCH-015…-017, REQ-XCH-021).
+- `basetool_exchange_undo_total{resource,outcome}` counter — entries a member's undo of a client's
+  writes restored or skipped (`restored` / `skipped`), by resource; registered at zero and shown on
+  the same panel 80 (REQ-XCH-022).
 - `basetool_exchange_disconnects_total{kind}` counter — a member disconnecting one installation or
   a whole client (`installation` / `client`, REQ-XCH-008), registered at zero and shown per day on
   the operations dashboard. The relay's `exchange_installation_invalid` refusal joins

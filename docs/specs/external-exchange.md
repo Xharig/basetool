@@ -694,7 +694,7 @@ changed afterwards or a merge removed, and does not restore Materialbörse offer
 
 **Acceptance**
 
-- [ ] Undo after a later web edit skips that row and reports it.
+- [x] Undo after a later web edit skips that row and reports it. *`ExchangeUndoControllerTest`.*
 
 The journal is `exchange_journal`: one row per written entry with the client, installation, change
 set, resource, key, action, whether it counts as a removal, the entry before and after as JSON, the
@@ -702,8 +702,19 @@ writing transaction's id and the time. It is written in the write's own transact
 change feed after 90 days by `exchange_change_retention`, exported under Art. 15, stays with the
 source account on a merge, and its states are searched by the Personensuche.
 
-**Status:** journal built and filled by the blueprint, stock and ship writes — WP 3.3 (#2083), WP
-4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086); the undo follows — WP 4.5 (#2087)
+The member undoes from „Verbundene Anwendungen" with `POST /api/v1/connected-apps/{clientId}/undo
+{since}` (member session only), reaching back at most 90 days. Each entry the client wrote in the
+span goes back to its state before the client's first write there — a blueprint added or removed, a
+lot set back through the Lager's own book-in and book-out, a ship deleted, updated back or recreated
+under a new id without its mission units — unless the entry's latest change-log entry is not the
+client's last write, then it is skipped as `CHANGED_AFTERWARDS`; one that no longer belongs to the
+member or names something gone is skipped as `GONE`. Links the client made are taken back. The
+restored entries' journal rows are marked undone, the undo is audited as `EXCHANGE_CHANGES_UNDONE`
+(restored and skipped counts) and counted in `basetool_exchange_undo_total{resource,outcome}`, and
+the member's pages refresh live.
+
+**Status:** journal and undo built — WP 3.3 (#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086),
+WP 4.5 (#2087)
 
 ### REQ-XCH-023 — Rate limits, quotas and a hard Redis budget
 
@@ -840,7 +851,9 @@ change only, not audited.
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
 - [ ] The page highlights an unseen installation until it is seen.
-- [ ] Recent activity, undo and the staged mass-change confirmation (WP 3.3's journal and guard).
+- [x] Undo a client's changes since a chosen span, with the skipped entries listed.
+  *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
+- [ ] Recent activity and the staged mass-change confirmation (WP 3.3's journal and guard).
 - [ ] The end-to-end run on the sandbox (WP 2.3, #2099).
 
 **Status:** list, disconnects, the admin page, the new-connection notification and the unseen state
