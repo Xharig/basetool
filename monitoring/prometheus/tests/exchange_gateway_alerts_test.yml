@@ -55,3 +55,28 @@ tests:
       - eval_time: 20m
         alertname: ExchangeRelayFailing
         exp_alerts: []
+
+  - name: fires - the exchange budget runs high
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_budget_used_ratio{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0.85x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeBudgetHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "The exchange's Redis budget is more than 80 % used"
+              description: "The exchange data the ingest gateway keeps in Redis (the idempotency cache) uses more than 80 % of its 64 MiB budget. Above 100 % every exchange write is refused with 503 EXCHANGE_BUDGET_EXHAUSTED, while sessions keep their room (REQ-XCH-023, ADR-0221). Check which client writes most (the per-client sets under ingest:xch:budget:c:*) and whether a client loops."
+
+  - name: silent - a budget in normal use
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_budget_used_ratio{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0.3x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeBudgetHigh
+        exp_alerts: []

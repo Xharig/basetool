@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: Limits und idempotente Schreibzugriffe.** Das Gateway begrenzt jede Anwendung
+  pro Mitglied (120/min, 500 Schreibzugriffe pro UTC-Tag) und insgesamt (1200/min) und verlangt bei
+  Schreibzugriffen einen `Idempotency-Key`; eine Wiederholung liefert die gespeicherte Antwort,
+  statt doppelt zu schreiben (REQ-XCH-020, REQ-XCH-023).
 - **Datenaustausch: Bewerbung für Fremd-Anwendungen.** `docs/exchange/onboarding.md` und
   `docs/exchange/client-security.md` beschreiben Kriterien und Sicherheitsanforderungen, eine
   Issue-Vorlage nimmt Bewerbungen auf, und `docs/legal/approved-clients.md` ist das öffentliche

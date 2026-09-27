@@ -19,9 +19,12 @@
 
 package de.greluc.krt.profit.basetool.ingest.config;
 
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeBudget;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopProofValidation;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeGateFilter;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeIdempotency;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeIdempotencyFilter;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeLimitFilter;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeQuotas;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
@@ -200,7 +203,10 @@ public class SecurityConfig {
       ExchangeRegistryReader exchangeRegistryReader,
       ExchangeRevocationReader exchangeRevocationReader,
       ExchangeLimitProperties exchangeLimitProperties,
-      ExchangeQuotas exchangeQuotas)
+      ExchangeQuotas exchangeQuotas,
+      ExchangeIdempotency exchangeIdempotency,
+      ExchangeBudget exchangeBudget,
+      ExchangeStoreProperties exchangeStoreProperties)
       throws Exception {
     SecurityProblemResponseHandler securityProblems =
         new SecurityProblemResponseHandler(
@@ -296,6 +302,16 @@ public class SecurityConfig {
                 loggingProperties,
                 meterRegistry),
             ExchangeGateFilter.class)
+        .addFilterAfter(
+            new ExchangeIdempotencyFilter(
+                exchangeIdempotency,
+                exchangeBudget,
+                exchangeStoreProperties,
+                exchangeRefusals,
+                objectMapper,
+                loggingProperties,
+                meterRegistry),
+            ExchangeLimitFilter.class)
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
     return http.build();
   }

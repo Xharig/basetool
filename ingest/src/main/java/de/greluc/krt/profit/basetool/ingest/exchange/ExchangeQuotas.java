@@ -32,7 +32,8 @@ import org.springframework.stereotype.Component;
 /**
  * Counts each member's daily exchange writes per client in Redis, under {@code
  * ingest:xch:quota:<client>:<member>:<UTC day>} (REQ-XCH-023). A counter lives two days, so it
- * outlasts its own day wherever the gateway's clock stands.
+ * outlasts its own day wherever the gateway's clock stands, and counts in the byte budget from its
+ * first write.
  */
 @Slf4j
 @Component
@@ -44,27 +45,38 @@ public class ExchangeQuotas {
   /** How long a counter lives. */
   static final Duration TTL = Duration.ofDays(2);
 
+  /** The bytes a counter is budgeted with: its key plus a long's decimal digits. */
+  static final int VALUE_BYTES = 20;
+
   private final StringRedisTemplate redisTemplate;
+  private final ExchangeBudget budget;
   private final Clock clock;
 
   /**
    * Creates the quotas on the system clock.
    *
    * @param redisTemplate the Redis access
+   * @param budget the byte budget a new counter is registered in
    */
   @Autowired
-  public ExchangeQuotas(@NotNull StringRedisTemplate redisTemplate) {
-    this(redisTemplate, Clock.systemUTC());
+  public ExchangeQuotas(
+      @NotNull StringRedisTemplate redisTemplate, @NotNull ExchangeBudget budget) {
+    this(redisTemplate, budget, Clock.systemUTC());
   }
 
   /**
    * Creates the quotas on the given clock.
    *
    * @param redisTemplate the Redis access
+   * @param budget the byte budget a new counter is registered in
    * @param clock the time source
    */
-  ExchangeQuotas(@NotNull StringRedisTemplate redisTemplate, @NotNull Clock clock) {
+  ExchangeQuotas(
+      @NotNull StringRedisTemplate redisTemplate,
+      @NotNull ExchangeBudget budget,
+      @NotNull Clock clock) {
     this.redisTemplate = redisTemplate;
+    this.budget = budget;
     this.clock = clock;
   }
 
@@ -86,6 +98,7 @@ public class ExchangeQuotas {
       }
       if (count == 1L) {
         redisTemplate.expire(key, TTL);
+        budget.record(clientId, member, key, key.length() + (long) VALUE_BYTES, TTL);
       }
       return count;
     } catch (ExchangeUnavailableException e) {

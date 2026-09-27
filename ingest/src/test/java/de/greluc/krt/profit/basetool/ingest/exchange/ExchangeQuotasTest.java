@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -45,12 +46,13 @@ class ExchangeQuotasTest {
 
   @Mock private StringRedisTemplate template;
   @Mock private ValueOperations<String, String> values;
+  @Mock private ExchangeBudget budget;
 
   private ExchangeQuotas quotas;
 
   @BeforeEach
   void setUp() {
-    quotas = new ExchangeQuotas(template, Clock.fixed(NOW, ZoneOffset.UTC));
+    quotas = new ExchangeQuotas(template, budget, Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
   @Test
@@ -60,6 +62,13 @@ class ExchangeQuotasTest {
 
     assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(1L);
     verify(template).expire(KEY, ExchangeQuotas.TTL);
+    verify(budget)
+        .record(
+            "versekit",
+            "m-1",
+            KEY,
+            KEY.length() + (long) ExchangeQuotas.VALUE_BYTES,
+            ExchangeQuotas.TTL);
   }
 
   @Test
@@ -69,6 +78,7 @@ class ExchangeQuotasTest {
 
     assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(7L);
     verify(template, never()).expire(KEY, ExchangeQuotas.TTL);
+    verifyNoInteractions(budget);
   }
 
   @Test

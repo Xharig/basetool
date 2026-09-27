@@ -1613,8 +1613,12 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   refused, by its problem code in snake case — `dpop_required`, `dpop_invalid`, `unauthenticated`,
   `not_found`, `registry_unavailable`, `exchange_disabled`, `client_not_allowed`,
   `client_suspended`, `installation_revoked`, `client_revoked`, `scope_missing`,
-  `client_version_unsupported`, `rate_limited`, `quota_exceeded`, `service_unavailable` — registered
-  at zero (REQ-XCH-028). A nonce challenge counts as
+  `client_version_unsupported`, `rate_limited`, `quota_exceeded`, `service_unavailable`,
+  `idempotency_key_missing`, `idempotency_key_reused`, `idempotency_in_progress`,
+  `exchange_budget_exhausted` — registered at zero (REQ-XCH-028).
+  `basetool_ingest_exchange_idempotent_replays_total` counts writes answered from the idempotency
+  cache; `basetool_ingest_exchange_budget_used_ratio` is the total byte budget's use at the last
+  measurement, and `ExchangeBudgetHigh` (warning, 10 m) fires above 0.8 (REQ-XCH-020, REQ-XCH-023). A nonce challenge counts as
   `dpop_invalid`, since the client sees that code. `ExchangeRegistryUnreadableAtGateway` (warning,
   5 m) fires while the gateway fails closed on `registry_unavailable`.
 - `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`legacy`, `exchange`,

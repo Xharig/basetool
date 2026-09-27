@@ -177,6 +177,20 @@ public final class MetricNames {
   public static final String EXCHANGE_RELAY = "basetool.ingest.exchange.relay";
 
   /**
+   * Counter {@code basetool_ingest_exchange_idempotent_replays_total}: exchange writes answered
+   * from the idempotency cache instead of running again (REQ-XCH-020).
+   */
+  public static final String EXCHANGE_IDEMPOTENT_REPLAYS =
+      "basetool.ingest.exchange.idempotent.replays";
+
+  /**
+   * Gauge {@code basetool_ingest_exchange_budget_used_ratio}: the share of the exchange's total
+   * Redis byte budget in use when the gateway last measured it (REQ-XCH-023).
+   */
+  public static final String EXCHANGE_BUDGET_USED_RATIO =
+      "basetool.ingest.exchange.budget.used.ratio";
+
+  /**
    * Tag key on {@link #INGEST_AUTH_FAILURES}: the surface the request targeted — {@link
    * #PATH_SCOPE_LEGACY}, {@link #PATH_SCOPE_EXCHANGE} or {@link #PATH_SCOPE_OTHER}.
    */

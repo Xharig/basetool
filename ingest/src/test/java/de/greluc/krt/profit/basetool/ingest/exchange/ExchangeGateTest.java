@@ -24,6 +24,7 @@ import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.SERVICE_DOCUMENT;
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.STOCK;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -78,6 +79,8 @@ class ExchangeGateTest {
   @MockitoBean private ExchangeRegistryReader registryReader;
   @MockitoBean private ExchangeRevocationReader revocationReader;
   @MockitoBean private ExchangeQuotas quotas;
+  @MockitoBean private ExchangeIdempotency idempotency;
+  @MockitoBean private ExchangeBudget budget;
 
   private MockMvc mockMvc;
   private ECKey key;
@@ -95,6 +98,8 @@ class ExchangeGateTest {
     tokenScopes("exchange.connect exchange.stock.read");
     registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), null);
     when(revocationReader.isDenied(anyString())).thenReturn(false);
+    when(idempotency.lock(anyString())).thenReturn(true);
+    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true);
     when(revocationReader.revokedAt(anyString(), anyString())).thenReturn(null);
   }
 
@@ -301,6 +306,7 @@ class ExchangeGateTest {
         request(method, path)
             .header(HttpHeaders.AUTHORIZATION, "DPoP " + TOKEN)
             .header(HttpHeaders.USER_AGENT, USER_AGENT)
+            .header("Idempotency-Key", "gate-" + UUID.randomUUID())
             .header("DPoP", ExchangeTestSupport.proof(key, TOKEN, method.name(), path, nonce)));
   }
 
