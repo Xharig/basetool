@@ -678,8 +678,32 @@ REQ-INGEST-004 requires today; nothing is written until the member confirms.
 **Acceptance**
 
 - [ ] The SC Extractor's draft flows pass unchanged through the exchange routes.
+- [x] A draft is checked against its schema, relayed, staged and answered with its handoff; a
+  refused one stages nothing. *`ExchangeDraftRouteTest`.*
+- [x] The backend previews a blueprint draft as an upload would and writes nothing; each draft
+  needs its own capability. *`ExchangeDraftControllerTest`.*
 
-**Status:** planned — WP 3.2 (#2082), WP 5.1 (#2088)
+The gateway checks a draft against `blueprint-draft.schema.json` or `refinery-draft.schema.json`
+(`SCHEMA_INVALID`) and relays it to `POST /api/v1/exchange/me/drafts/blueprints` or
+`…/refinery-orders` (`exchange.drafts.blueprints` / `exchange.drafts.refinery`). The backend builds
+exactly what the extractor's upload builds: for blueprints it resolves each `ref` as
+`catalog/resolve` does and previews a resolved ref under its product's name and any other under the
+name sent — or its first key when it has none — so it lands among the unmatched rows for a manual
+pick; repeats collapse to the earliest `acquiredAt`. For refinery orders it is the refinery import's
+draft. A draft the backend refuses as malformed is `400 SCHEMA_INVALID`. The gateway stages the
+answer in the member's extractor draft slots (`HandoffKind.BLUEPRINT` / `REFINERY`, at most
+`app.ingest.max-handoff-bytes`, a larger one `413 PAYLOAD_TOO_LARGE`), counts it against the
+exchange's byte budget and answers `draft-result` with the `frontendUrl` of the blueprint import
+review or the refinery create form. As write routes they take an `Idempotency-Key` and count
+against the daily quota.
+
+The web blueprint import reads the same `basetool.blueprints` envelope as an upload, so a client's
+offline file and its draft end in the same review (owner decision 2026-09-27, REQ-INV-014).
+*Corrected 2026-09-27: the owner's answer of 2026-09-26 kept the envelope to the draft route; it was
+revisited once the SC Extractor was to write its offline files in that format.*
+
+**Status:** built in the backend and the gateway — WP 3.2 (#2082); the extractor's side is WP 5.1
+(#2088)
 
 ### REQ-XCH-020 — Writes are idempotent per client and member
 

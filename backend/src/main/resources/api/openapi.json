@@ -58,6 +58,9 @@
     "description" : "Org-unit officer/lead bank access (balance view, booking requests)",
     "name" : "org-unit-bank-controller"
   }, {
+    "description" : "Drafts the member reviews before anything is written",
+    "name" : "Exchange — drafts"
+  }, {
     "description" : "Operations related to job orders",
     "name" : "Orders"
   }, {
@@ -11069,7 +11072,7 @@
     "/api/v1/exchange/me/blueprints" : {
       "get" : {
         "description" : "Gateway-only. Without a cursor a snapshot, with one the changes since it.",
-        "operationId" : "blueprints",
+        "operationId" : "blueprints_1",
         "parameters" : [ {
           "in" : "query",
           "name" : "cursor",
@@ -11278,6 +11281,186 @@
         },
         "summary" : "Exchange: add or remove my blueprints",
         "tags" : [ "Exchange — blueprints" ]
+      }
+    },
+    "/api/v1/exchange/me/drafts/blueprints" : {
+      "post" : {
+        "description" : "Gateway-only. Resolves the references and previews them as an upload would.",
+        "operationId" : "blueprints",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeBlueprintDraftDto"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BlueprintImportPreviewDto"
+                }
+              }
+            },
+            "description" : "The preview"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Exchange: preview blueprints for review",
+        "tags" : [ "Exchange — drafts" ]
+      }
+    },
+    "/api/v1/exchange/me/drafts/refinery-orders" : {
+      "post" : {
+        "description" : "Gateway-only. The same draft the extractor's upload builds.",
+        "operationId" : "refineryOrders",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RefineryExtractDto"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RefineryImportDraftDto"
+                }
+              }
+            },
+            "description" : "The draft"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Exchange: build a refinery draft for review",
+        "tags" : [ "Exchange — drafts" ]
       }
     },
     "/api/v1/exchange/me/installation" : {
@@ -60921,6 +61104,24 @@
         },
         "required" : [ "ops" ]
       },
+      "ExchangeBlueprintDraftDto" : {
+        "type" : "object",
+        "properties" : {
+          "format" : {
+            "type" : "string",
+            "pattern" : "^basetool\\.blueprints$"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Item"
+            },
+            "maxItems" : 2000,
+            "minItems" : 0
+          }
+        },
+        "required" : [ "format", "items" ]
+      },
       "ExchangeBlueprintDto" : {
         "type" : "object",
         "properties" : {
@@ -62223,6 +62424,19 @@
             "$ref" : "#/components/schemas/UserReferenceDto"
           }
         }
+      },
+      "Item" : {
+        "type" : "object",
+        "properties" : {
+          "acquiredAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "ref" : {
+            "$ref" : "#/components/schemas/ExchangeItemRef"
+          }
+        },
+        "required" : [ "ref" ]
       },
       "ItemDerivationDto" : {
         "type" : "object",

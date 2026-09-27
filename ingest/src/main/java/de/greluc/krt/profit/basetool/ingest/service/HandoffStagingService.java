@@ -87,6 +87,28 @@ public class HandoffStagingService {
   }
 
   /**
+   * Stages an exchange client's draft for one-time pickup in the same per-subject slots as the
+   * extractor's uploads, and says how large it is so the exchange's byte budget can count it
+   * (REQ-XCH-019).
+   *
+   * @param sub the member's subject
+   * @param kind which draft is being staged
+   * @param draftJson the backend draft response, stored verbatim
+   * @return where it is staged and how large it is
+   * @throws BadRequestException if the draft exceeds the handoff size cap
+   */
+  public @NotNull Staged stageDraft(
+      @NotNull String sub, @NotNull HandoffKind kind, @NotNull String draftJson) {
+    return store(
+        sub,
+        kind,
+        draftJson,
+        ingestProperties.maxHandoffBytes(),
+        INDEX_PREFIX + sub,
+        ingestProperties.maxHandoffsPerSubject());
+  }
+
+  /**
    * Stages a client's change set the mass-change guard held back, in a slot of its own per subject,
    * so it never evicts an extractor draft and a newer one replaces it (REQ-XCH-021).
    *

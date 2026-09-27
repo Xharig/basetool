@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Datenaustausch: Entwürfe über das Gateway.** `POST /exchange/v1/me/drafts/blueprints` und
+  `…/drafts/refinery-orders` legen Blueprints bzw. Raffinerieaufträge wie der Extractor-Upload zur
+  Prüfung im Browser ab; nichts wird geschrieben, bevor das Mitglied bestätigt.
+- **Blueprint-Import liest das Austauschformat.** Der Datei-Import unter „Meine Blueprints“ nimmt
+  zusätzlich das `basetool.blueprints`-Format verbundener Anwendungen an; die bisherigen Formate
+  bleiben.
 - **Datenaustausch: Blueprints lesen.** Verbundene Anwendungen mit `exchange.blueprints.read` lesen
   über `GET /exchange/v1/me/blueprints` die Blueprints des Mitglieds als Snapshot und danach nur die
   Änderungen seit ihrem Cursor (REQ-XCH-013, REQ-XCH-015).

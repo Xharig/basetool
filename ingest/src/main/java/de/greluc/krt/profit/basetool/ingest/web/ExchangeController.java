@@ -30,6 +30,7 @@ import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRequestContext;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeSchemas;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeUnavailableException;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.ingest.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -96,6 +97,9 @@ public class ExchangeController {
 
   /** The code of a change set above the contract's size. */
   static final String BATCH_TOO_LARGE = "BATCH_TOO_LARGE";
+
+  /** The code of a draft too large to hand off. */
+  static final String PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE";
 
   /** The code of a change set the mass-change guard held back for the member's confirmation. */
   static final String MASS_CHANGE_CONFIRMATION_REQUIRED = "MASS_CHANGE_CONFIRMATION_REQUIRED";
@@ -413,6 +417,132 @@ public class ExchangeController {
       @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
           String acceptLanguage) {
     return changes("ships", "shipChangeSet", body, request, acceptLanguage);
+  }
+
+  /**
+   * Stages blueprints for the member's review in the browser; nothing is written until the member
+   * confirms.
+   *
+   * @param body the {@code basetool.blueprints} envelope
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the handoff or a problem
+   */
+  @PostMapping(value = "/me/drafts/blueprints", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> blueprintDraft(
+      @NotNull @RequestBody JsonNode body,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return draft(
+        "blueprints",
+        "blueprint-draft.schema.json",
+        HandoffKind.BLUEPRINT,
+        ingestProperties.blueprintPath(),
+        body,
+        request,
+        acceptLanguage);
+  }
+
+  /**
+   * Stages refinery orders for the member's review in the browser; nothing is written until the
+   * member confirms.
+   *
+   * @param body the refinery extract
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the handoff or a problem
+   */
+  @PostMapping(value = "/me/drafts/refinery-orders", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PreAuthorize("isAuthenticated()")
+  public @NotNull ResponseEntity<?> refineryDraft(
+      @NotNull @RequestBody JsonNode body,
+      @NotNull HttpServletRequest request,
+      @Nullable @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+          String acceptLanguage) {
+    return draft(
+        "refinery-orders",
+        "refinery-draft.schema.json",
+        HandoffKind.REFINERY,
+        ingestProperties.refineryPath(),
+        body,
+        request,
+        acceptLanguage);
+  }
+
+  /**
+   * Checks a draft, relays it to the backend's preview, stages the answer for the member's review
+   * as the extractor's upload does, and answers where the member opens it.
+   *
+   * @param resource the draft's path segment
+   * @param schema the draft's schema
+   * @param kind the handoff's kind
+   * @param path the frontend page that opens the handoff
+   * @param body the draft
+   * @param request the admitted request
+   * @param acceptLanguage the caller's language
+   * @return the draft result or a problem
+   */
+  private @NotNull ResponseEntity<?> draft(
+      @NotNull String resource,
+      @NotNull String schema,
+      @NotNull HandoffKind kind,
+      @NotNull String path,
+      @NotNull JsonNode body,
+      @NotNull HttpServletRequest request,
+      @Nullable String acceptLanguage) {
+    ExchangeRequestContext context = ExchangeRequestContext.of(request);
+    if (context == null) {
+      return failed();
+    }
+    List<ExchangeSchemas.Violation> violations = schemas.validate(schema, body);
+    if (!violations.isEmpty()) {
+      return schemaInvalid(violations);
+    }
+    ExchangeRelay.Result result =
+        relay.forward(
+            HttpMethod.POST, BACKEND + "/me/drafts/" + resource, body, context, acceptLanguage);
+    if (!result.isOk()) {
+      return problem(result.status(), result.code(), result.detail());
+    }
+    String json = objectMapper.writeValueAsString(result.body());
+    long bytes = json.getBytes(StandardCharsets.UTF_8).length;
+    if (bytes > ingestProperties.maxHandoffBytes()) {
+      return problem(
+          HttpStatus.CONTENT_TOO_LARGE.value(),
+          PAYLOAD_TOO_LARGE,
+          "The draft is too large to hand off; send fewer entries.");
+    }
+    HandoffStagingService.Staged staged;
+    try {
+      if (!budget.fits(context.clientId(), context.member(), bytes)) {
+        return unavailable(
+            ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
+            "The exchange's storage budget is full; try again later.");
+      }
+      staged = stagingService.stageDraft(context.member(), kind, json);
+      budget.record(
+          context.clientId(),
+          context.member(),
+          staged.key(),
+          staged.bytes(),
+          ingestProperties.handoffTtl());
+    } catch (ExchangeUnavailableException | RedisSystemException e) {
+      log.warn("A draft could not be staged: {}", e.getClass().getSimpleName());
+      return unavailable(
+          ExchangeRefusals.SERVICE_UNAVAILABLE, "The draft cannot be staged; try again later.");
+    }
+    meterRegistry
+        .counter(MetricNames.INGEST_HANDOFF, MetricNames.TAG_KIND, kind.name())
+        .increment();
+    ObjectNode answer = objectMapper.createObjectNode();
+    answer.put(
+        "frontendUrl",
+        ingestProperties.frontendBaseUrl() + path + "?handoff=" + staged.handoffId());
+    answer.put("handoffId", staged.handoffId());
+    answer.put("kind", kind.name());
+    return answer(answer, "draft-result.schema.json");
   }
 
   /**
