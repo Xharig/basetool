@@ -40,6 +40,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -516,18 +518,16 @@ public class ExchangeController {
     }
     HandoffStagingService.Staged staged;
     try {
-      if (!budget.fits(context.clientId(), context.member(), bytes)) {
+      staged =
+          stageWithinBudget(
+              context,
+              stagingService.stagedBytes(kind, json),
+              () -> stagingService.stageDraft(context.member(), kind, json));
+      if (staged == null) {
         return unavailable(
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
             "The exchange's storage budget is full; try again later.");
       }
-      staged = stagingService.stageDraft(context.member(), kind, json);
-      budget.record(
-          context.clientId(),
-          context.member(),
-          staged.key(),
-          staged.bytes(),
-          ingestProperties.handoffTtl());
     } catch (ExchangeUnavailableException | RedisSystemException e) {
       log.warn("A draft could not be staged: {}", e.getClass().getSimpleName());
       return unavailable(
@@ -621,20 +621,18 @@ public class ExchangeController {
     }
     HandoffStagingService.Staged staged;
     try {
-      if (!budget.fits(context.clientId(), context.member(), bytes)) {
+      staged =
+          stageWithinBudget(
+              context,
+              stagingService.stagedBytes(HandoffKind.MASS_CHANGE, json),
+              () ->
+                  stagingService.stageMassChange(
+                      context.member(), json, storeProperties.maxMassChangeBytes()));
+      if (staged == null) {
         return unavailable(
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
             "The exchange's storage budget is full; try again later.");
       }
-      staged =
-          stagingService.stageMassChange(
-              context.member(), json, storeProperties.maxMassChangeBytes());
-      budget.record(
-          context.clientId(),
-          context.member(),
-          staged.key(),
-          staged.bytes(),
-          ingestProperties.handoffTtl());
     } catch (ExchangeUnavailableException | RedisSystemException e) {
       log.warn("A mass change could not be staged: {}", e.getClass().getSimpleName());
       return unavailable(
@@ -658,6 +656,45 @@ public class ExchangeController {
     return ResponseEntity.status(HttpStatus.CONFLICT)
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)
         .body(problem);
+  }
+
+  /**
+   * Stages a handoff within the byte budget: reserves its size atomically, stages it and settles
+   * the reservation on the staged key, or frees the reservation when staging fails.
+   *
+   * @param context the admitted request
+   * @param bytes the size the handoff will be staged with
+   * @param stage stages the handoff
+   * @return the staged handoff, or {@code null} when it does not fit the budget
+   * @throws ExchangeUnavailableException if the budget cannot be reached
+   */
+  private @Nullable HandoffStagingService.Staged stageWithinBudget(
+      @NotNull ExchangeRequestContext context,
+      long bytes,
+      @NotNull Supplier<HandoffStagingService.Staged> stage) {
+    String pending = ExchangeBudget.PENDING_PREFIX + UUID.randomUUID();
+    if (!budget.reserve(
+        context.clientId(), context.member(), pending, bytes, ingestProperties.handoffTtl())) {
+      return null;
+    }
+    HandoffStagingService.Staged staged;
+    try {
+      staged = stage.get();
+    } catch (RuntimeException e) {
+      budget.release(context.clientId(), context.member(), pending, bytes);
+      throw e;
+    }
+    if (!budget.settle(
+        context.clientId(),
+        context.member(),
+        pending,
+        bytes,
+        staged.key(),
+        staged.bytes(),
+        ingestProperties.handoffTtl())) {
+      log.warn("A staged handoff stays counted under its reservation");
+    }
+    return staged;
   }
 
   /**

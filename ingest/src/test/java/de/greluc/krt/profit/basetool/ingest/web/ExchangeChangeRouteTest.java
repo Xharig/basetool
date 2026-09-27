@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,12 +42,14 @@ import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRelay;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRevocationReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.ingest.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
@@ -114,8 +117,11 @@ class ExchangeChangeRouteTest {
                 Instant.now().minusSeconds(30)));
     grant(Set.of(scopes.split(" ")));
     when(revocationReader.isDenied(anyString())).thenReturn(false);
-    when(idempotency.lock(anyString())).thenReturn(true);
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true);
+    when(idempotency.lock(anyString())).thenReturn(Optional.of("lock-token"));
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
+    when(budget.settle(
+            anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
+        .thenReturn(true);
   }
 
   @Test
@@ -176,6 +182,7 @@ class ExchangeChangeRouteTest {
                 409, null, "MASS_CHANGE_CONFIRMATION_REQUIRED", "40 removals in 24 hours."));
     when(stagingService.stageMassChange(eq(member), anyString(), anyLong()))
         .thenReturn(new HandoffStagingService.Staged("hid-1", "ingest:handoff:x:hid-1", 321L));
+    when(stagingService.stagedBytes(eq(HandoffKind.MASS_CHANGE), anyString())).thenReturn(321L);
     double before = staged();
 
     post("/exchange/v1/me/blueprints/changes", ADD)
@@ -195,7 +202,17 @@ class ExchangeChangeRouteTest {
     assertThat(MAPPER.readTree(staged.getValue()).at("/changeSet/ops/0/op").stringValue())
         .isEqualTo("add");
     verify(budget)
-        .record(eq("versekit"), eq(member), eq("ingest:handoff:x:hid-1"), eq(321L), any());
+        .reserve(
+            eq("versekit"), eq(member), startsWith(ExchangeBudget.PENDING_PREFIX), eq(321L), any());
+    verify(budget)
+        .settle(
+            eq("versekit"),
+            eq(member),
+            startsWith(ExchangeBudget.PENDING_PREFIX),
+            eq(321L),
+            eq("ingest:handoff:x:hid-1"),
+            eq(321L),
+            any());
     assertThat(staged() - before).isEqualTo(1.0);
   }
 
@@ -203,7 +220,8 @@ class ExchangeChangeRouteTest {
   void aFullBudgetRefusesTheStagingWithRetryAfter() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any()))
         .thenReturn(new ExchangeRelay.Result(409, null, "MASS_CHANGE_CONFIRMATION_REQUIRED", ""));
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true, false);
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any()))
+        .thenReturn(true, false);
 
     post("/exchange/v1/me/blueprints/changes", ADD)
         .andExpect(status().isServiceUnavailable())

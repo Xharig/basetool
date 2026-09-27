@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +49,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
@@ -56,6 +58,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -113,8 +116,11 @@ class ExchangeDraftRouteTest {
                 Instant.now().minusSeconds(30)));
     grant(Set.of(scopes.split(" ")));
     when(revocationReader.isDenied(anyString())).thenReturn(false);
-    when(idempotency.lock(anyString())).thenReturn(true);
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true);
+    when(idempotency.lock(anyString())).thenReturn(Optional.of("lock-token"));
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
+    when(budget.settle(
+            anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
+        .thenReturn(true);
   }
 
   @Test
@@ -124,6 +130,7 @@ class ExchangeDraftRouteTest {
         .thenReturn(ok(PREVIEW));
     when(stagingService.stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), anyString()))
         .thenReturn(new HandoffStagingService.Staged("hid-b", "ingest:handoff:x:hid-b", 222L));
+    when(stagingService.stagedBytes(eq(HandoffKind.BLUEPRINT), anyString())).thenReturn(222L);
     double before = handoffs(HandoffKind.BLUEPRINT);
 
     post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
@@ -138,8 +145,42 @@ class ExchangeDraftRouteTest {
     verify(stagingService).stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), staged.capture());
     assertThat(MAPPER.readTree(staged.getValue()).get("matched").intValue()).isEqualTo(1);
     verify(budget)
-        .record(eq("versekit"), eq(member), eq("ingest:handoff:x:hid-b"), eq(222L), any());
+        .reserve(
+            eq("versekit"), eq(member), startsWith(ExchangeBudget.PENDING_PREFIX), eq(222L), any());
+    verify(budget)
+        .settle(
+            eq("versekit"),
+            eq(member),
+            startsWith(ExchangeBudget.PENDING_PREFIX),
+            eq(222L),
+            eq("ingest:handoff:x:hid-b"),
+            eq(222L),
+            any());
     assertThat(handoffs(HandoffKind.BLUEPRINT) - before).isEqualTo(1.0);
+  }
+
+  @Test
+  void aDraftThatCannotBeStagedFreesItsReservation() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
+    when(stagingService.stagedBytes(eq(HandoffKind.BLUEPRINT), anyString())).thenReturn(222L);
+    when(stagingService.stageDraft(eq(member), eq(HandoffKind.BLUEPRINT), anyString()))
+        .thenThrow(new RedisSystemException("down", null));
+
+    post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+
+    verify(budget)
+        .release(eq("versekit"), eq(member), startsWith(ExchangeBudget.PENDING_PREFIX), eq(222L));
+    verify(budget, never())
+        .settle(
+            anyString(),
+            anyString(),
+            startsWith(ExchangeBudget.PENDING_PREFIX),
+            anyLong(),
+            anyString(),
+            anyLong(),
+            any());
   }
 
   @Test
@@ -188,7 +229,8 @@ class ExchangeDraftRouteTest {
   @Test
   void aFullBudgetRefusesTheDraftWithRetryAfter() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true, false);
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any()))
+        .thenReturn(true, false);
 
     post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
         .andExpect(status().isServiceUnavailable())

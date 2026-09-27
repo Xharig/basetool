@@ -125,6 +125,29 @@ public class HandoffStagingService {
   }
 
   /**
+   * Returns the size a handoff will be staged with, the same figure {@link Staged#bytes()} reports,
+   * so a byte budget can reserve it before the value is written.
+   *
+   * @param kind the handoff's kind
+   * @param json the document to stage
+   * @return the staged value's size in bytes
+   */
+  public long stagedBytes(@NotNull HandoffKind kind, @NotNull String json) {
+    return value(kind, json).getBytes(StandardCharsets.UTF_8).length;
+  }
+
+  /**
+   * Serializes a handoff as it is staged.
+   *
+   * @param kind the handoff's kind
+   * @param json the document to stage
+   * @return the stored value
+   */
+  private @NotNull String value(@NotNull HandoffKind kind, @NotNull String json) {
+    return objectMapper.writeValueAsString(new StagedHandoff(kind, json));
+  }
+
+  /**
    * Stores one handoff under a fresh id and keeps its index within the cap.
    *
    * @param sub the subject
@@ -146,7 +169,7 @@ public class HandoffStagingService {
     byte[] raw = new byte[20];
     RANDOM.nextBytes(raw);
     String handoffId = URL_ENCODER.encodeToString(raw);
-    String value = objectMapper.writeValueAsString(new StagedHandoff(kind, json));
+    String value = value(kind, json);
 
     long stagedBytes = value.getBytes(StandardCharsets.UTF_8).length;
     if (stagedBytes > maxBytes) {

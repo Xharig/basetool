@@ -24,6 +24,7 @@ import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.SERVICE_DOCUMENT;
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.STOCK;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -47,6 +48,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -112,8 +114,11 @@ class ExchangeGateTest {
     tokenScopes("exchange.connect exchange.stock.read");
     registry(true, true, Set.of("exchange.connect", "exchange.stock.read"), null);
     when(revocationReader.isDenied(anyString())).thenReturn(false);
-    when(idempotency.lock(anyString())).thenReturn(true);
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true);
+    when(idempotency.lock(anyString())).thenReturn(Optional.of("lock-token"));
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
+    when(budget.settle(
+            anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
+        .thenReturn(true);
     when(revocationReader.revokedAt(anyString(), anyString())).thenReturn(null);
   }
 

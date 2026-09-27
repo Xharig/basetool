@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,6 +72,7 @@ class ExchangeIdempotencyFilterTest {
   private static final String TOKEN = "idem-token";
   private static final String KEY = "write-0000001";
   private static final String BODY = "{\"ops\":[]}";
+  private static final String LOCK_TOKEN = "lock-token";
   private static final Set<String> GRANTS =
       Set.of("exchange.connect", "exchange.stock.read", "exchange.blueprints.write");
 
@@ -107,9 +109,12 @@ class ExchangeIdempotencyFilterTest {
         .thenReturn(ExchangeTestSupport.registry(true, true, GRANTS, null));
     when(revocationReader.isDenied(anyString())).thenReturn(false);
     when(idempotency.find(anyString())).thenReturn(Optional.empty());
-    when(idempotency.lock(anyString())).thenReturn(true);
-    when(idempotency.store(anyString(), any())).thenReturn(200);
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(true);
+    when(idempotency.lock(anyString())).thenReturn(Optional.of(LOCK_TOKEN));
+    when(idempotency.sizeOf(anyString(), any())).thenReturn(200);
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(true);
+    when(budget.settle(
+            anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
+        .thenReturn(true);
   }
 
   @Test
@@ -132,15 +137,83 @@ class ExchangeIdempotencyFilterTest {
         .isEqualTo(
             ExchangeIdempotency.fingerprint(
                 "POST", BLUEPRINT_CHANGES, BODY.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-    verify(budget).record(eq(ExchangeTestSupport.CLIENT), eq(member), anyString(), eq(200L), any());
+    long reserved = ExchangeIdempotency.lockBytes(namespace()) + 32768L;
     verify(budget)
-        .record(
+        .reserve(
             eq(ExchangeTestSupport.CLIENT),
             eq(member),
             eq(ExchangeIdempotency.LOCK_PREFIX + namespace()),
-            anyLong(),
+            eq(reserved),
             any());
-    verify(idempotency).unlock(namespace());
+    verify(budget)
+        .settle(
+            eq(ExchangeTestSupport.CLIENT),
+            eq(member),
+            eq(ExchangeIdempotency.LOCK_PREFIX + namespace()),
+            eq(reserved),
+            eq(ExchangeIdempotency.PREFIX + namespace()),
+            eq(200L),
+            any());
+    verify(budget, never()).release(anyString(), anyString(), anyString(), anyLong());
+    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+  }
+
+  @Test
+  void aRequestThatRacedTheFirstReplaysItsAnswerUnderTheLock() throws Exception {
+    when(idempotency.find(namespace()))
+        .thenReturn(
+            Optional.empty(),
+            Optional.of(
+                new ExchangeIdempotency.Stored(
+                    ExchangeIdempotency.fingerprint(
+                        "POST",
+                        BLUEPRINT_CHANGES,
+                        BODY.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    201,
+                    MediaType.APPLICATION_JSON_VALUE,
+                    "{\"first\":true}")));
+
+    write(KEY, null)
+        .andExpect(status().isCreated())
+        .andExpect(header().string(ExchangeIdempotencyFilter.REPLAYED, "true"))
+        .andExpect(content().json("{\"first\":true}"));
+
+    verify(budget, never()).reserve(anyString(), anyString(), anyString(), anyLong(), any());
+    verify(idempotency, never()).store(anyString(), any());
+    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+  }
+
+  @Test
+  void aRequestThatRacedTheFirstWithAnotherBodyIsRefusedUnderTheLock() throws Exception {
+    when(idempotency.find(namespace()))
+        .thenReturn(
+            Optional.empty(),
+            Optional.of(new ExchangeIdempotency.Stored("other", 200, null, "{}")));
+
+    write(KEY, null)
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
+
+    verify(idempotency, never()).store(anyString(), any());
+    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+  }
+
+  @Test
+  void anAnswerTheBudgetCannotHoldIsDeliveredButNotCached() throws Exception {
+    when(budget.settle(
+            anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any()))
+        .thenReturn(false);
+
+    write(KEY, null).andExpect(status().isOk());
+
+    verify(idempotency, never()).store(anyString(), any());
+    verify(budget)
+        .release(
+            eq(ExchangeTestSupport.CLIENT),
+            eq(member),
+            eq(ExchangeIdempotency.LOCK_PREFIX + namespace()),
+            anyLong());
+    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
   }
 
   @Test
@@ -176,7 +249,7 @@ class ExchangeIdempotencyFilterTest {
 
   @Test
   void aDuplicateInFlightIsRefused() throws Exception {
-    when(idempotency.lock(namespace())).thenReturn(false);
+    when(idempotency.lock(namespace())).thenReturn(Optional.empty());
 
     write(KEY, null)
         .andExpect(status().isConflict())
@@ -185,13 +258,17 @@ class ExchangeIdempotencyFilterTest {
 
   @Test
   void aFullBudgetRefusesBeforeTheWrite() throws Exception {
-    when(budget.fits(anyString(), anyString(), anyLong())).thenReturn(false);
+    when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(false);
 
     write(KEY, null)
         .andExpect(status().isServiceUnavailable())
         .andExpect(header().exists(HttpHeaders.RETRY_AFTER))
         .andExpect(jsonPath("$.code").value("EXCHANGE_BUDGET_EXHAUSTED"));
-    verify(idempotency, never()).lock(anyString());
+    verify(idempotency, never()).store(anyString(), any());
+    verify(budget, never())
+        .settle(anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any());
+    verify(budget, never()).release(anyString(), anyString(), anyString(), anyLong());
+    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
   }
 
   @Test
@@ -216,7 +293,13 @@ class ExchangeIdempotencyFilterTest {
     verify(idempotency, never()).store(eq(namespace("write-0000002")), any());
     verify(idempotency, never()).store(eq(namespace("write-0000003")), any());
     verify(idempotency, never()).store(eq(namespace("write-0000004")), any());
-    verify(idempotency).unlock(namespace("write-0000003"));
+    verify(idempotency).unlock(namespace("write-0000003"), LOCK_TOKEN);
+    verify(budget)
+        .release(
+            eq(ExchangeTestSupport.CLIENT),
+            eq(member),
+            eq(ExchangeIdempotency.LOCK_PREFIX + namespace("write-0000003")),
+            anyLong());
   }
 
   @Test
@@ -232,11 +315,18 @@ class ExchangeIdempotencyFilterTest {
 
   @Test
   void anAnswerIsDeliveredEvenWhenItCannotBeCached() throws Exception {
-    when(idempotency.store(anyString(), any()))
-        .thenThrow(new ExchangeUnavailableException("down", null));
+    doThrow(new ExchangeUnavailableException("down", null))
+        .when(idempotency)
+        .store(anyString(), any());
 
     write(KEY, null).andExpect(status().isOk());
-    verify(idempotency).unlock(namespace());
+    verify(idempotency).unlock(namespace(), LOCK_TOKEN);
+    verify(budget)
+        .release(
+            eq(ExchangeTestSupport.CLIENT),
+            eq(member),
+            eq(ExchangeIdempotency.PREFIX + namespace()),
+            eq(200L));
   }
 
   @Test

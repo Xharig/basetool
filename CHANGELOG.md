@@ -8,18 +8,22 @@
   verbundener Anwendung (Metriken und Gateway-Logs); Gateway-Logzeilen tragen Client und Route,
   neue Metriken `basetool_exchange_clients` und `basetool_exchange_registry_mirror_age_seconds` samt
   Alarm `ExchangeRegistryMirrorStaleAtGateway`.
+  
 - **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
   `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
   das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Die
   Produktions-Images bleiben privat. Ein Smoke-Test (`scripts/sandbox-smoke.py`) zieht sie danach
   ohne Anmeldung und prüft Geräte-Login, DPoP, alle Ressourcen und die Konformitäts-Beispiele.
 - **Datenaustausch: lokale Sandbox für Fremd-Anwendungen.** `scripts/sandbox.sh` bzw.
+- 
   `scripts/sandbox.ps1` starten Gateway, Backend, Frontend und einen Keycloak-Realm mit Testclient
   `sandbox-client`, synthetischen Mitgliedern und Beispieldaten nur auf `127.0.0.1` – ausschließlich
   mit Wegwerf-Werten, ohne Produktionszugang (`docs/exchange/sandbox.md`, REQ-XCH-029).
+  
 - **Datenaustausch: Anmeldung dokumentiert, DPoP-Referenz.** `docs/exchange/authentication.md`
   beschreibt Geräte-Login, DPoP-Nachweise, Server-Nonce, Refresh und Trennen samt Fehlercodes;
   `docs/exchange/dpop-reference/` ist eine MIT-lizenzierte Python-Referenz (Windows CNG, OpenSSL 3).
+  
 - **Datenaustausch: Dokumentation für Fremd-Anwendungen online.** `docs/exchange/` erscheint mit einer
   gerenderten OpenAPI-Referenz unter <https://krt-profit.github.io/basetool/>; das Service-Dokument
   verweist dorthin. CI prüft Links und Markdown der Seiten.
@@ -257,6 +261,12 @@
 
 ### Fixed
 
+- **Datenaustausch: Doppelte Schreibvorgänge und Budget-Überlauf verhindert.** Eine Wiederholung mit
+  demselben `Idempotency-Key`, die das erste Ergebnis knapp verpasst, liefert es jetzt aus, statt
+  erneut zu schreiben; eine Sperre gibt nur ihr eigener Halter frei. Das Redis-Budget wird per
+  Lua-Skript atomar geprüft und gebucht und hält so auch bei parallelen Schreibvorgängen. Der
+  Redis-Nutzer `basetool-ingest` braucht dafür `EVAL`/`EVALSHA`, `ZREM` und `ZSCORE`.
+  
 - **Datenaustausch: Trennen einer Anwendung wirkt auch ohne Einwilligung.** Das Trennen beendet
   jetzt die Keycloak-Sitzungen, die nur dieser Anwendung gehören, und stempelt die Trennung erst
   danach; der Gateway verweigert Tokens ohne `offline_access` nach ihrer Anmeldezeit (`auth_time`).
