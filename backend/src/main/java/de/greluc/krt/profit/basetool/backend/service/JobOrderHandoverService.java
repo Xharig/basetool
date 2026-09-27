@@ -38,7 +38,6 @@ import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderHandoverRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderMaterialRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderRepository;
-import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.repository.OrgUnitRepository;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
@@ -78,7 +77,7 @@ public class JobOrderHandoverService {
   private final JobOrderRepository jobOrderRepository;
   private final JobOrderHandoverRepository jobOrderHandoverRepository;
   private final InventoryItemRepository inventoryItemRepository;
-  private final MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  private final MaterialExchangeOfferRatchet offerRatchet;
   private final JobOrderHandoverMapper jobOrderHandoverMapper;
   private final JobOrderMaterialRepository jobOrderMaterialRepository;
   private final JobOrderService jobOrderService;
@@ -220,6 +219,8 @@ public class JobOrderHandoverService {
               itemDepleted));
 
       if (remainingAmount <= QUANTITY_EPSILON) {
+        offerRatchet.beforeDelete(
+            List.of(inventoryItem.getId()), MaterialExchangeOfferRatchet.Reason.HANDOVER);
         inventoryItemRepository.delete(inventoryItem);
       } else {
         Map<UUID, Double> missionPlan =
@@ -265,7 +266,7 @@ public class JobOrderHandoverService {
 
     for (HandedItem h : handedItems) {
       if (!h.depleted()) {
-        materialExchangeOfferRepository.clampOfferedAmountToStock(h.itemId(), h.remaining());
+        offerRatchet.lower(h.itemId(), h.remaining(), MaterialExchangeOfferRatchet.Reason.HANDOVER);
       }
       auditService.record(
           AuditEventType.INVENTORY_HANDED_OVER,

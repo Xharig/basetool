@@ -40,7 +40,6 @@ import de.greluc.krt.profit.basetool.backend.model.dto.JobOrderItemProductionCre
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderRepository;
 import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
-import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
@@ -87,7 +86,7 @@ public class JobOrderItemProductionService {
 
   private final JobOrderRepository jobOrderRepository;
   private final InventoryItemRepository inventoryItemRepository;
-  private final MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  private final MaterialExchangeOfferRatchet offerRatchet;
   private final JobOrderItemService jobOrderItemService;
   private final AuditService auditService;
   private final UserService userService;
@@ -254,6 +253,8 @@ public class JobOrderItemProductionService {
               depleted));
 
       if (depleted) {
+        offerRatchet.beforeDelete(
+            List.of(inventoryItem.getId()), MaterialExchangeOfferRatchet.Reason.PRODUCTION);
         inventoryItemRepository.delete(inventoryItem);
       } else {
         Map<UUID, Double> missionPlan =
@@ -270,7 +271,8 @@ public class JobOrderItemProductionService {
 
     for (ConsumedItem ci : consumedItems) {
       if (!ci.depleted()) {
-        materialExchangeOfferRepository.clampOfferedAmountToStock(ci.itemId(), ci.remaining());
+        offerRatchet.lower(
+            ci.itemId(), ci.remaining(), MaterialExchangeOfferRatchet.Reason.PRODUCTION);
       }
       auditService.record(
           AuditEventType.INVENTORY_CONSUMED_BY_PRODUCTION,

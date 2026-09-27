@@ -25,6 +25,7 @@ import de.greluc.krt.profit.basetool.backend.model.Material;
 import de.greluc.krt.profit.basetool.backend.model.User;
 import de.greluc.krt.profit.basetool.backend.model.dto.JobOrderGameItemStockRow;
 import de.greluc.krt.profit.basetool.backend.model.dto.JobOrderMaterialStockRow;
+import de.greluc.krt.profit.basetool.backend.model.projection.ExchangeStockLotRow;
 import de.greluc.krt.profit.basetool.backend.model.projection.InventoryItemStackAggregate;
 import de.greluc.krt.profit.basetool.backend.model.projection.InventoryStackAggregate;
 import de.greluc.krt.profit.basetool.backend.model.projection.OwnedStockSlice;
@@ -51,6 +52,56 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, UUID> {
+
+  /** A member's personal lots with what the exchange shows of them (REQ-XCH-016). */
+  String EXCHANGE_LOTS =
+      """
+      SELECT lots.anchor AS anchor, lots.lot_key AS lotKey, lots.material_id AS materialId,
+             m.name AS materialName, m.type AS materialType,
+             (m.id IS NOT NULL AND m.id_commodity IS NOT NULL) AS commodity,
+             m.quantity_type AS quantityType, lots.game_item_id AS gameItemId,
+             g.name AS gameItemName, l.name AS locationName, c.id_city AS uexCityId,
+             s.id_space_station AS uexSpaceStationId, lots.quality AS quality,
+             lots.stolen AS stolen, lots.amount AS amount
+      FROM (SELECT CAST(MIN(CAST(i.id AS text)) AS uuid) AS anchor,
+                   exchange_stock_lot_key(i.material_id, i.game_item_id, i.location_id,
+                                          i.quality, i.stolen) AS lot_key,
+                   i.material_id, i.game_item_id, i.location_id,
+                   COALESCE(i.quality, 0) AS quality, i.stolen, SUM(i.amount) AS amount
+            FROM inventory_item i
+            WHERE i.user_id = :member AND i.personal
+            GROUP BY i.material_id, i.game_item_id, i.location_id, i.quality, i.stolen) lots
+      LEFT JOIN material m ON m.id = lots.material_id
+      LEFT JOIN game_item g ON g.id = lots.game_item_id
+      JOIN location l ON l.id = lots.location_id
+      LEFT JOIN city c ON c.id = l.city_id
+      LEFT JOIN space_station s ON s.id = l.space_station_id
+      """;
+
+  /**
+   * Returns one snapshot page of a member's personal lots, ordered by their lowest row id.
+   *
+   * @param member the member
+   * @param after the lowest row id of the last lot delivered, or the zero id for the first page
+   * @param limit the most lots to return
+   * @return the lots
+   */
+  @Query(
+      value = EXCHANGE_LOTS + " WHERE lots.anchor > :after ORDER BY lots.anchor LIMIT :limit",
+      nativeQuery = true)
+  List<ExchangeStockLotRow> findExchangeLots(
+      @Param("member") UUID member, @Param("after") UUID after, @Param("limit") int limit);
+
+  /**
+   * Returns the member's personal lots with the given keys, as they are now.
+   *
+   * @param member the member
+   * @param keys the lot keys
+   * @return the lots that still hold rows
+   */
+  @Query(value = EXCHANGE_LOTS + " WHERE lots.lot_key IN (:keys)", nativeQuery = true)
+  List<ExchangeStockLotRow> findExchangeLotsByKeys(
+      @Param("member") UUID member, @Param("keys") Collection<String> keys);
 
   /**
    * Pages the material stock rows owned by {@code user}; item rows are served by {@link
@@ -1058,4 +1109,65 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("includeMaterial") boolean includeMaterial,
       @Param("includeItem") boolean includeItem,
       Pageable pageable);
+
+  /**
+   * Locks a member's personal rows of one material lot for the exchange (REQ-XCH-016).
+   *
+   * @param member the member
+   * @param materialId the material
+   * @param locationId the location
+   * @param quality the quality
+   * @param stolen whether the lot is stolen
+   * @return the rows, locked for the transaction
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      """
+      SELECT i FROM InventoryItem i WHERE i.user.id = :member AND i.personal = true
+        AND i.material.id = :materialId AND i.location.id = :locationId
+        AND COALESCE(i.quality, 0) = :quality AND i.stolen = :stolen
+      """)
+  List<InventoryItem> lockPersonalMaterialLot(
+      @Param("member") UUID member,
+      @Param("materialId") UUID materialId,
+      @Param("locationId") UUID locationId,
+      @Param("quality") int quality,
+      @Param("stolen") boolean stolen);
+
+  /**
+   * Locks a member's personal rows of one item lot for the exchange (REQ-XCH-016).
+   *
+   * @param member the member
+   * @param gameItemId the item
+   * @param locationId the location
+   * @param stolen whether the lot is stolen
+   * @return the rows, locked for the transaction
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      """
+      SELECT i FROM InventoryItem i WHERE i.user.id = :member AND i.personal = true
+        AND i.gameItem.id = :gameItemId AND i.location.id = :locationId AND i.stolen = :stolen
+      """)
+  List<InventoryItem> lockPersonalItemLot(
+      @Param("member") UUID member,
+      @Param("gameItemId") UUID gameItemId,
+      @Param("locationId") UUID locationId,
+      @Param("stolen") boolean stolen);
+
+  /**
+   * Counts a member's personal lots, as the exchange keys them.
+   *
+   * @param member the member
+   * @return the number of lots
+   */
+  @Query(
+      value =
+          """
+          SELECT COUNT(DISTINCT exchange_stock_lot_key(material_id, game_item_id, location_id,
+                                                       quality, stolen))
+          FROM inventory_item WHERE user_id = :member AND personal
+          """,
+      nativeQuery = true)
+  long countPersonalLots(@Param("member") UUID member);
 }
