@@ -33,6 +33,7 @@ import de.greluc.krt.profit.basetool.ingest.service.ServiceAccountTokenProvider;
 import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -162,6 +163,68 @@ class ExchangeRelayTest {
             null);
 
     assertThat(result.code()).isEqualTo("NO_ROLE");
+  }
+
+  @Test
+  void anUnreachableBackendIsARelayFailureAndCounted() {
+    backend
+        .expect(requestTo("https://backend/api/v1/exchange/catalog/locations"))
+        .andRespond(
+            request -> {
+              throw new IOException("connection refused");
+            });
+
+    ExchangeRelay.Result result =
+        relay.forward(HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
+
+    assertThat(result.status()).isEqualTo(502);
+    assertThat(result.code()).isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(count("failed")).isEqualTo(1.0d);
+  }
+
+  @Test
+  void anOpenCircuitIsARelayFailureAndCounted() {
+    CircuitBreakerRegistry breakers = CircuitBreakerRegistry.ofDefaults();
+    breakers.circuitBreaker("backend").transitionToForcedOpenState();
+    ServiceAccountTokenProvider tokens = mock(ServiceAccountTokenProvider.class);
+    when(tokens.currentToken()).thenReturn("gateway-token");
+    ExchangeRelay open =
+        new ExchangeRelay(
+            RestClient.builder().baseUrl("https://backend").build(),
+            tokens,
+            breakers,
+            mapper,
+            meters,
+            TestLoggingProperties.defaults());
+
+    ExchangeRelay.Result result =
+        open.forward(HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
+
+    assertThat(result.code()).isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(count("failed")).isEqualTo(1.0d);
+  }
+
+  @Test
+  void aMissingGatewayTokenIsARelayFailureAndCounted() {
+    ServiceAccountTokenProvider tokens = mock(ServiceAccountTokenProvider.class);
+    when(tokens.currentToken())
+        .thenThrow(
+            new ServiceAccountTokenProvider.ServiceAccountTokenException("no identity", null));
+    ExchangeRelay tokenless =
+        new ExchangeRelay(
+            RestClient.builder().baseUrl("https://backend").build(),
+            tokens,
+            CircuitBreakerRegistry.ofDefaults(),
+            mapper,
+            meters,
+            TestLoggingProperties.defaults());
+
+    ExchangeRelay.Result result =
+        tokenless.forward(
+            HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
+
+    assertThat(result.code()).isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(count("failed")).isEqualTo(1.0d);
   }
 
   /**

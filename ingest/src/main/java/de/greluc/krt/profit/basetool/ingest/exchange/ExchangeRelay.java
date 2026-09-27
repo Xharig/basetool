@@ -23,6 +23,7 @@ import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.ServiceAccountTokenProvider;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -44,6 +45,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -159,43 +161,75 @@ public class ExchangeRelay {
       @Nullable JsonNode body,
       @NotNull ExchangeRequestContext context,
       @Nullable String acceptLanguage) {
+    Raw raw;
+    try {
+      raw = call(method, backendPath, body, context, acceptLanguage);
+    } catch (RestClientException
+        | CallNotPermittedException
+        | ServiceAccountTokenProvider.ServiceAccountTokenException e) {
+      log.warn(
+          "Exchange relay to {} could not reach the backend: {}",
+          backendPath,
+          e.getClass().getSimpleName());
+      count(OUTCOME_FAILED);
+      return Result.failed();
+    }
+    return interpret(raw, backendPath);
+  }
+
+  /**
+   * Sends one request to the backend through the circuit breaker.
+   *
+   * @param method the method
+   * @param backendPath the backend path
+   * @param body the JSON body, or {@code null} for none
+   * @param context what the gate established
+   * @param acceptLanguage the caller's {@code Accept-Language}, or {@code null}
+   * @return the backend's raw answer
+   * @throws RestClientException if the backend cannot be reached or its answer read
+   * @throws CallNotPermittedException if the circuit breaker is open
+   * @throws ServiceAccountTokenProvider.ServiceAccountTokenException if the gateway has no token
+   */
+  private @NotNull Raw call(
+      @NotNull HttpMethod method,
+      @NotNull String backendPath,
+      @Nullable JsonNode body,
+      @NotNull ExchangeRequestContext context,
+      @Nullable String acceptLanguage) {
     String token = tokenProvider.currentToken();
     String correlationId = MDC.get(loggingProperties.correlationIdMdcKey());
     String language = BackendImportClient.sanitizedAcceptLanguage(acceptLanguage);
-    Raw raw =
-        circuitBreaker.executeSupplier(
-            () -> {
-              RestClient.RequestBodySpec request =
-                  backendRestClient
-                      .method(method)
-                      .uri(backendPath)
-                      .headers(
-                          headers -> {
-                            headers.setBearerAuth(token);
-                            headers.set(BackendImportClient.ON_BEHALF_OF_HEADER, context.member());
-                            headers.set(CLIENT_HEADER, context.clientId());
-                            headers.set(
-                                CAPABILITIES_HEADER,
-                                String.join(",", new TreeSet<>(context.capabilities())));
-                            headers.set(INSTALLATION_HEADER, context.keyThumbprint());
-                            headers.setAccept(
-                                List.of(
-                                    MediaType.APPLICATION_JSON,
-                                    MediaType.APPLICATION_PROBLEM_JSON));
-                            if (language != null) {
-                              headers.set(HttpHeaders.ACCEPT_LANGUAGE, language);
-                            }
-                            if (correlationId != null && !correlationId.isBlank()) {
-                              headers.set(loggingProperties.correlationIdHeader(), correlationId);
-                            }
-                          });
-              if (body != null) {
-                request.contentType(MediaType.APPLICATION_JSON).body(body);
-              }
-              return request.exchange(
-                  (req, res) -> new Raw(res.getStatusCode().value(), read(res.getBody())));
-            });
-    return interpret(raw, backendPath);
+    return circuitBreaker.executeSupplier(
+        () -> {
+          RestClient.RequestBodySpec request =
+              backendRestClient
+                  .method(method)
+                  .uri(backendPath)
+                  .headers(
+                      headers -> {
+                        headers.setBearerAuth(token);
+                        headers.set(BackendImportClient.ON_BEHALF_OF_HEADER, context.member());
+                        headers.set(CLIENT_HEADER, context.clientId());
+                        headers.set(
+                            CAPABILITIES_HEADER,
+                            String.join(",", new TreeSet<>(context.capabilities())));
+                        headers.set(INSTALLATION_HEADER, context.keyThumbprint());
+                        headers.setAccept(
+                            List.of(
+                                MediaType.APPLICATION_JSON, MediaType.APPLICATION_PROBLEM_JSON));
+                        if (language != null) {
+                          headers.set(HttpHeaders.ACCEPT_LANGUAGE, language);
+                        }
+                        if (correlationId != null && !correlationId.isBlank()) {
+                          headers.set(loggingProperties.correlationIdHeader(), correlationId);
+                        }
+                      });
+          if (body != null) {
+            request.contentType(MediaType.APPLICATION_JSON).body(body);
+          }
+          return request.exchange(
+              (req, res) -> new Raw(res.getStatusCode().value(), read(res.getBody())));
+        });
   }
 
   /**
