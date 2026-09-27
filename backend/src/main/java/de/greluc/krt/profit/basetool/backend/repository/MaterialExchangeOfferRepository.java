@@ -20,8 +20,10 @@
 package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOffer;
+import de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferKind;
 import de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferStatus;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -226,4 +228,92 @@ public interface MaterialExchangeOfferRepository
    * @return the number of the owner's offers in that status.
    */
   long countByStatusAndOwnerId(MaterialExchangeOfferStatus status, UUID ownerId);
+
+  /**
+   * Reads the active offers standing on the given Lager rows, before a book-out changes them.
+   *
+   * @param inventoryItemIds the rows
+   * @return the offers with what they offer
+   */
+  @Query(
+      """
+      SELECT o.id AS id, o.kind AS kind, o.offeredAmount AS offeredAmount,
+             o.itemQuantity AS itemQuantity, o.itemName AS itemName, o.owner.id AS ownerId,
+             m.name AS materialName
+      FROM MaterialExchangeOffer o JOIN o.inventoryItem i LEFT JOIN i.material m
+      WHERE i.id IN :inventoryItemIds
+        AND o.status = de.greluc.krt.profit.basetool.backend.model.MaterialExchangeOfferStatus.ACTIVE
+      """)
+  List<OfferStock> findActiveStockByInventoryItemIds(
+      @Param("inventoryItemIds") Collection<UUID> inventoryItemIds);
+
+  /**
+   * Reads what offers offer now.
+   *
+   * @param ids the offers
+   * @return the offers that still exist
+   */
+  @Query(
+      """
+      SELECT o.id AS id, o.offeredAmount AS offeredAmount, o.itemQuantity AS itemQuantity
+      FROM MaterialExchangeOffer o WHERE o.id IN :ids
+      """)
+  List<OfferAmount> findAmountsByIds(@Param("ids") Collection<UUID> ids);
+
+  /** What an offer offers now. */
+  interface OfferAmount {
+
+    /**
+     * The offer.
+     *
+     * @return the id
+     */
+    UUID getId();
+
+    /**
+     * The offered amount of a material offer.
+     *
+     * @return the amount, or {@code null}
+     */
+    Double getOfferedAmount();
+
+    /**
+     * The quantity of an item offer.
+     *
+     * @return the quantity, or {@code null}
+     */
+    Integer getItemQuantity();
+  }
+
+  /** An active offer standing on a Lager row, before a book-out. */
+  interface OfferStock extends OfferAmount {
+
+    /**
+     * The offer's kind.
+     *
+     * @return {@code MATERIAL} or {@code ITEM}
+     */
+    MaterialExchangeOfferKind getKind();
+
+    /**
+     * The item offer's name.
+     *
+     * @return the name, or {@code null} for a material offer
+     */
+    String getItemName();
+
+    /**
+     * The material of the row a material offer stands on.
+     *
+     * @return the name, or {@code null}
+     */
+    String getMaterialName();
+
+    /**
+     * The offer's owner.
+     *
+     * @return the member
+     */
+    UUID getOwnerId();
+  }
 }

@@ -318,6 +318,8 @@ public class AdminAuditLogPageController {
               List.of(
                   "MARKET_OFFER_RELEASED",
                   "MARKET_OFFER_DEACTIVATED",
+                  "MARKET_OFFER_REDUCED",
+                  "MARKET_OFFER_REMOVED",
                   "MARKET_REMARK_UPDATED",
                   "MARKET_INTEREST_REGISTERED",
                   "MARKET_INTEREST_WITHDRAWN",

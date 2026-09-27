@@ -23,6 +23,7 @@ import de.greluc.krt.profit.basetool.backend.model.ExchangeJournalEntry;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeResource;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -92,4 +93,18 @@ public interface ExchangeJournalRepository extends JpaRepository<ExchangeJournal
    * @return the entries
    */
   List<ExchangeJournalEntry> findAllByUserIdOrderByRecordedAtAsc(UUID userId);
+
+  /**
+   * Finds a client's first write to one entry of a member since a point in time.
+   *
+   * @param userId the member
+   * @param clientId the client
+   * @param resource the resource
+   * @param entityKey the entry's key
+   * @param since the point in time
+   * @return the first write, or empty
+   */
+  Optional<ExchangeJournalEntry>
+      findFirstByUserIdAndClientIdAndResourceAndEntityKeyAndRecordedAtAfterOrderByRecordedAtAsc(
+          UUID userId, String clientId, ExchangeResource resource, String entityKey, Instant since);
 }

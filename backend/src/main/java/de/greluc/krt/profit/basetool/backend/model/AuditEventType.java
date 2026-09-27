@@ -576,6 +576,12 @@ public enum AuditEventType {
   /** An offer was taken off the board (deactivated) by its owner. */
   MARKET_OFFER_DEACTIVATED(AuditDomain.MARKET),
 
+  /** A stock book-out lowered an offer's offered amount or item quantity to what the row holds. */
+  MARKET_OFFER_REDUCED(AuditDomain.MARKET),
+
+  /** A stock book-out emptied the row an offer stood on, and the offer went with it. */
+  MARKET_OFFER_REMOVED(AuditDomain.MARKET),
+
   /** An offer's trade remark was edited by its owner. */
   MARKET_REMARK_UPDATED(AuditDomain.MARKET),
 

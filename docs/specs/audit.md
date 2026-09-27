@@ -173,7 +173,9 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   REQ-MARKET-008) — every trade-board mutation: offer release (`MARKET_OFFER_RELEASED`), offer
   edit — offered amount + remark (`MARKET_REMARK_UPDATED`), offer deactivate
   (`MARKET_OFFER_DEACTIVATED`), interest register (`MARKET_INTEREST_REGISTERED`) and interest withdraw
-  (`MARKET_INTEREST_WITHDRAWN`). Both offer **kinds** reuse these five events (REQ-MARKET-012). The
+  (`MARKET_INTEREST_WITHDRAWN`); an exchange stock book-out that lowers an offer
+  (`MARKET_OFFER_REDUCED`, details `kind`, `from`, `to`) or empties the row it stands on
+  (`MARKET_OFFER_REMOVED`, details `kind`, `reason=stock`, REQ-XCH-016). Both offer **kinds** reuse these five events (REQ-MARKET-012). The
   subject is the offer, labelled by the **material name** for a material offer or the **item name** for
   an item offer (both non-personal game-asset values); the anbieter is the target reference. The
   details payload carries only bounded facts — the offer `kind`, plus for a material offer the item id

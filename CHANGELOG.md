@@ -9,6 +9,11 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Datenaustausch: Lager schreiben.** Verbundene Anwendungen setzen die Menge eines persönlichen
+  Postens gegen die zuletzt gesehene Menge (`/api/v1/exchange/me/stock/changes`); die Differenz wird
+  wie im Lager ein- oder ausgebucht, gekürzte oder entfernte Materialbörse-Angebote stehen im Audit
+  (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`), und reservierte Mengen bleiben unangetastet
+  (REQ-XCH-016).
 - **Datenaustausch: Blueprints schreiben.** Verbundene Anwendungen können Blueprints hinzufügen
   und entfernen (`/api/v1/exchange/me/blueprints/changes`); Standard-Blueprints bleiben, was ein
   anderes Gerät oder das Web entfernt hat, kommt nur nach Rückfrage wieder, zu große Löschungen

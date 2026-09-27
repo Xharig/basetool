@@ -52,6 +52,8 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `UNMATCHED` | The reference resolves to nothing. | Show it; offer `catalog/resolve`. |
 | `AMBIGUOUS` | The reference resolves to several entries. | Ask the member to pick; send `bt`. |
 | `DEFAULT_NOT_REMOVABLE` | A default-granted blueprint cannot be removed. | Keep it. |
+| `STOCK_EARMARKED` | The lot's stock is reserved for a job order or mission. | Ask the member to release the reservation in the web. |
+| `STOLEN_MARKING_DISABLED` | The Basetool does not yet keep stolen stock apart. | Keep the lot local until the server supports it. |
 | `REMOVED_ELSEWHERE` | The entry has a live tombstone from another channel or installation. | Ask the member; resend with `override: true` only if they agree. |
 | `UNIT_MISMATCH` | The quantity's unit does not match the material's. | Fix the unit. |
 | `LOCATION_UNKNOWN` | The place has no Lager location. | Offer a place from `catalog/locations`. |

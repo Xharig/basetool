@@ -160,7 +160,13 @@ public class ExchangeBlueprintWriteService {
       }
     }
     return new ExchangeChangeResultDto(
-        changeSet.dryRun(), applied, unchanged, plan.size() - applied - unchanged, results);
+        changeSet.dryRun(),
+        applied,
+        unchanged,
+        plan.size() - applied - unchanged,
+        results,
+        null,
+        null);
   }
 
   /**

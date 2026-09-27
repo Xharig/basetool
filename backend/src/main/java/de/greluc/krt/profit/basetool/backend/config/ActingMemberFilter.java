@@ -113,7 +113,8 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           PATH_PARSER.parse("/api/v1/exchange/me/installation"),
           PATH_PARSER.parse("/api/v1/exchange/me/org-demand"),
           PATH_PARSER.parse("/api/v1/exchange/me/ships"),
-          PATH_PARSER.parse("/api/v1/exchange/me/stock"));
+          PATH_PARSER.parse("/api/v1/exchange/me/stock"),
+          PATH_PARSER.parse("/api/v1/exchange/me/stock/changes"));
 
   /** The shape of a registry client id, identical to the database check. */
   private static final Pattern EXCHANGE_CLIENT_ID = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
