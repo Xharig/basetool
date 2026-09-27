@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import de.greluc.krt.profit.basetool.ingest.config.ExchangeGatewayProperties;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -89,6 +90,19 @@ public class ExchangeRegistryReader {
     this.objectMapper = objectMapper;
     this.properties = properties;
     this.clock = clock;
+  }
+
+  /**
+   * Returns how long ago the mirror was last read successfully.
+   *
+   * @return the seconds since the last successful read, or {@link Double#NaN} before the first
+   */
+  public double secondsSinceLastRead() {
+    Cached hit = cached;
+    if (hit == null) {
+      return Double.NaN;
+    }
+    return Duration.between(hit.readAt(), clock.instant()).toMillis() / 1000.0d;
   }
 
   /**
