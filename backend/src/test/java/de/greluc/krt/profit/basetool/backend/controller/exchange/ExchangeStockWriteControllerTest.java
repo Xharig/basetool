@@ -209,7 +209,8 @@ class ExchangeStockWriteControllerTest {
                 Double.class,
                 offer))
         .isEqualTo(1.5);
-    assertThat(audit("MARKET_OFFER_REDUCED", offer)).isEqualTo(1);
+    assertThat(details("MARKET_OFFER_REDUCED", offer))
+        .isEqualTo("kind=MATERIAL from=3.0 to=1.5 reason=stock");
     assertThat(frames("inventory_all")).isEqualTo(lagerBefore + 1);
     assertThat(frames("materialboard")).isEqualTo(boardBefore + 1);
   }
@@ -228,7 +229,7 @@ class ExchangeStockWriteControllerTest {
             jdbc.queryForObject(
                 "SELECT COUNT(*) FROM material_exchange_offer WHERE id = ?", Integer.class, offer))
         .isZero();
-    assertThat(audit("MARKET_OFFER_REMOVED", offer)).isEqualTo(1);
+    assertThat(details("MARKET_OFFER_REMOVED", offer)).isEqualTo("kind=MATERIAL reason=stock");
   }
 
   @Test
@@ -567,10 +568,10 @@ class ExchangeStockWriteControllerTest {
     return sum == null ? 0 : sum;
   }
 
-  private int audit(@NotNull String type, @NotNull UUID subject) {
+  private @NotNull String details(@NotNull String type, @NotNull UUID subject) {
     return jdbc.queryForObject(
-        "SELECT COUNT(*) FROM audit_event WHERE event_type = ? AND subject_id = ?",
-        Integer.class,
+        "SELECT details FROM audit_event WHERE event_type = ? AND subject_id = ?",
+        String.class,
         type,
         subject);
   }
