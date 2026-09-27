@@ -61,17 +61,30 @@ jobs:
       - name: reference / Self-test the reference preparation
         run: python3 .github/scripts/prepare_exchange_reference.py --selftest
 
-      - name: reference / Render the OpenAPI reference
+      - name: reference / Prepare the OpenAPI reference page
+        run: python3 .github/scripts/prepare_exchange_reference.py --out build/exchange-reference
+
+      - name: reference / Add the pinned Redoc bundle
+        env:
+          REDOC_VERSION: 2.5.4
+          REDOC_INTEGRITY: sha512-M6jWhG1qoBnH6TFmzJnstyCZ87HmOY/UzDm78mHiYihEdlV/YcS9ogOo1NlElnJMeLsyxHFe2yFc4sNjHTrABQ==
         run: |
-          python3 .github/scripts/prepare_exchange_reference.py --out build/exchange-reference
-          npx --yes @redocly/cli@2.54.3 build-docs build/exchange-reference/openapi.json \
-            --output build/exchange-reference/index.html
+          set -euo pipefail
+          mkdir -p build/redoc
+          tarball="$(npm pack "redoc@${REDOC_VERSION}" --pack-destination build/redoc --silent)"
+          actual="sha512-$(openssl dgst -sha512 -binary "build/redoc/${tarball}" | base64 -w0)"
+          if [ "$actual" != "$REDOC_INTEGRITY" ]; then
+            echo "::error::redoc@${REDOC_VERSION} does not match its pinned integrity" >&2
+            exit 1
+          fi
+          tar -xzf "build/redoc/${tarball}" -C build/redoc package/bundles/redoc.standalone.js
+          cp build/redoc/package/bundles/redoc.standalone.js build/exchange-reference/
 
       - name: site / Assemble the sources
         run: |
           mkdir -p build/exchange-site/reference build/exchange-site/schemas
           cp -r docs/exchange/. build/exchange-site/
-          cp build/exchange-reference/index.html build/exchange-site/reference/index.html
+          cp -r build/exchange-reference/. build/exchange-site/reference/
           cp ingest/src/main/resources/api/exchange-v1.openapi.json build/exchange-site/reference/
           cp ingest/src/main/resources/exchange/v1/schemas/*.schema.json build/exchange-site/schemas/
 
