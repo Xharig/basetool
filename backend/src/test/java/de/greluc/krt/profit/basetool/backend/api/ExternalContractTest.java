@@ -1545,6 +1545,16 @@ class ExternalContractTest {
               "post",
               Set.of("id", "material", "location", "amount", "personal")),
           new ContractOperation(
+              "/api/v1/inventory/bulk-stolen",
+              "post",
+              Set.of("changed", "skipped"),
+              Set.of("itemIds", "stolen")),
+          new ContractOperation(
+              "/api/v1/inventory/{id}/stolen",
+              "post",
+              Set.of("id", "material", "location", "amount", "personal", "stolen"),
+              Set.of("stolen")),
+          new ContractOperation(
               "/api/v1/inventory/{id}/allocation",
               "post",
               INVENTORY_ROW,

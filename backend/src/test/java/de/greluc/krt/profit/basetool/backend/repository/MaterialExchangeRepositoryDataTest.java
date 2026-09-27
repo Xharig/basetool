@@ -66,6 +66,36 @@ class MaterialExchangeRepositoryDataTest {
   @PersistenceContext private EntityManager entityManager;
 
   /**
+   * „Ohne gestohlene" leaves out offers of stock marked „gestohlen" and keeps free-stated item
+   * offers, which have no Lager row (REQ-INV-053).
+   */
+  @Test
+  void findBoard_excludeStolen_dropsOffersOfStolenStockOnly() {
+    User owner = persistUser("boersen-gestohlen");
+    InventoryItem legit = persistItem(owner, "Agricium", 700, 50.0);
+    InventoryItem stolen = persistItem(owner, "Agricium", 700, 20.0);
+    stolen.setStolen(true);
+    MaterialExchangeOffer legitOffer =
+        persistOffer(legit, owner, MaterialExchangeOfferStatus.ACTIVE);
+    MaterialExchangeOffer stolenOffer =
+        persistOffer(stolen, owner, MaterialExchangeOfferStatus.ACTIVE);
+    entityManager.flush();
+
+    var everything =
+        offerRepository.findBoard(
+            owner.getId(), true, null, 0, null, "qual", false, PageRequest.of(0, 20));
+    var withoutStolen =
+        offerRepository.findBoard(
+            owner.getId(), true, null, 0, null, "qual", true, PageRequest.of(0, 20));
+
+    assertThat(everything.getContent()).contains(legitOffer, stolenOffer);
+    assertThat(withoutStolen.getContent()).contains(legitOffer).doesNotContain(stolenOffer);
+    assertThat(withoutStolen.getTotalElements())
+        .as("the count query applies the same filter")
+        .isEqualTo(everything.getTotalElements() - 1);
+  }
+
+  /**
    * The board query returns an active offer, applies the min-quality / text filters live off the
    * linked item, honours the nested-path quality sort, and hides a deactivated offer.
    */
@@ -87,7 +117,7 @@ class MaterialExchangeRepositoryDataTest {
 
     var all =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, null, "qual", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, null, "qual", false, PageRequest.of(0, 20));
 
     assertThat(all.getContent())
         .as("only the two ACTIVE offers, quality-sorted desc, deactivated excluded")
@@ -96,14 +126,14 @@ class MaterialExchangeRepositoryDataTest {
 
     var minQual =
         offerRepository.findBoard(
-            owner.getId(), false, null, 900, null, "qual", PageRequest.of(0, 20));
+            owner.getId(), false, null, 900, null, "qual", false, PageRequest.of(0, 20));
     assertThat(minQual.getContent())
         .as("min-quality 900 keeps only the Q920 item (read live from the item)")
         .containsExactly(highOffer);
 
     var byText =
         offerRepository.findBoard(
-            owner.getId(), false, "%tungsten%", 0, null, "qual", PageRequest.of(0, 20));
+            owner.getId(), false, "%tungsten%", 0, null, "qual", false, PageRequest.of(0, 20));
     assertThat(byText.getContent())
         .as("text filter matches the material name live off the item")
         .containsExactly(lowOffer);
@@ -128,14 +158,14 @@ class MaterialExchangeRepositoryDataTest {
 
     var byAmount =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, null, "menge", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, null, "menge", false, PageRequest.of(0, 20));
     assertThat(byAmount.getContent())
         .as("sorted by effective offered amount desc — the 200-SCU offer outranks the 30-SCU one")
         .containsExactly(bigOffer, smallOffer);
 
     var minAmount =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, 100.0, "qual", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, 100.0, "qual", false, PageRequest.of(0, 20));
     assertThat(minAmount.getContent())
         .as("min-amount 100 filters on offered amount, so the 30-SCU-off-500-stock offer is out")
         .containsExactly(bigOffer);
@@ -174,19 +204,19 @@ class MaterialExchangeRepositoryDataTest {
 
     var all =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, null, "qual", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, null, "qual", false, PageRequest.of(0, 20));
     assertThat(all.getContent()).containsExactly(partialOffer);
 
     var minAbove =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, 100.0, "qual", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, 100.0, "qual", false, PageRequest.of(0, 20));
     assertThat(minAbove.getContent())
         .as("min-amount 100 filters on the remaining 80 SCU (LEAST), not the stated 200")
         .isEmpty();
 
     var minBelow =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, 50.0, "qual", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, 50.0, "qual", false, PageRequest.of(0, 20));
     assertThat(minBelow.getContent())
         .as("min-amount 50 keeps the offer since 80 SCU remain")
         .containsExactly(partialOffer);
@@ -262,21 +292,21 @@ class MaterialExchangeRepositoryDataTest {
 
     var all =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, null, "neu", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, null, "neu", false, PageRequest.of(0, 20));
     assertThat(all.getContent())
         .as("both a material and an item offer are on the board")
         .contains(materialOffer, itemOffer);
 
     var byItemName =
         offerRepository.findBoard(
-            owner.getId(), false, "%venture%", 0, null, "mat", PageRequest.of(0, 20));
+            owner.getId(), false, "%venture%", 0, null, "mat", false, PageRequest.of(0, 20));
     assertThat(byItemName.getContent())
         .as("the name filter matches the item's stored display name")
         .containsExactly(itemOffer);
 
     var minQual =
         offerRepository.findBoard(
-            owner.getId(), false, null, 500, null, "qual", PageRequest.of(0, 20));
+            owner.getId(), false, null, 500, null, "qual", false, PageRequest.of(0, 20));
     assertThat(minQual.getContent())
         .as("a non-zero min-quality excludes item offers (no quality)")
         .containsExactly(materialOffer)
@@ -284,7 +314,7 @@ class MaterialExchangeRepositoryDataTest {
 
     var minAmount =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, 8.0, "menge", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, 8.0, "menge", false, PageRequest.of(0, 20));
     assertThat(minAmount.getContent())
         .as("min-amount 8 drops the 7-piece item offer but keeps the 500-SCU material")
         .contains(materialOffer)
@@ -304,7 +334,8 @@ class MaterialExchangeRepositoryDataTest {
     entityManager.flush();
 
     var mine =
-        offerRepository.findBoard(owner.getId(), true, null, 0, null, "neu", PageRequest.of(0, 20));
+        offerRepository.findBoard(
+            owner.getId(), true, null, 0, null, "neu", false, PageRequest.of(0, 20));
     assertThat(mine.getContent())
         .as("both active item offers for the same product survive (no unique constraint)")
         .contains(first, second);
@@ -323,21 +354,21 @@ class MaterialExchangeRepositoryDataTest {
 
     var all =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, null, "neu", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, null, "neu", false, PageRequest.of(0, 20));
     assertThat(all.getContent())
         .as("a stock-backed item offer is on the board (LEFT JOIN keeps it)")
         .contains(stockBacked);
 
     var keptByStock =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, 2.0, "menge", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, 2.0, "menge", false, PageRequest.of(0, 20));
     assertThat(keptByStock.getContent())
         .as("min-amount 2 keeps it — effective quantity clamped to the row's 2 in stock")
         .contains(stockBacked);
 
     var droppedByStock =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, 3.0, "menge", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, 3.0, "menge", false, PageRequest.of(0, 20));
     assertThat(droppedByStock.getContent())
         .as("min-amount 3 drops it — the stated 6 is clamped to the 2 in stock")
         .doesNotContain(stockBacked);
@@ -358,20 +389,22 @@ class MaterialExchangeRepositoryDataTest {
     entityManager.flush();
 
     var keptByStatedQty =
-        offerRepository.findBoard(owner.getId(), false, null, 0, 3.0, "neu", PageRequest.of(0, 20));
+        offerRepository.findBoard(
+            owner.getId(), false, null, 0, 3.0, "neu", false, PageRequest.of(0, 20));
     assertThat(keptByStatedQty.getContent())
         .as("min-amount 3 keeps it — the effective quantity is the stated 3, not the 10 in stock")
         .contains(understated);
 
     var droppedAboveStatedQty =
-        offerRepository.findBoard(owner.getId(), false, null, 0, 4.0, "neu", PageRequest.of(0, 20));
+        offerRepository.findBoard(
+            owner.getId(), false, null, 0, 4.0, "neu", false, PageRequest.of(0, 20));
     assertThat(droppedAboveStatedQty.getContent())
         .as("min-amount 4 drops it — the stated 3 (NOT the 10 in stock) is below the threshold")
         .doesNotContain(understated);
 
     var byMenge =
         offerRepository.findBoard(
-            owner.getId(), false, null, 0, null, "menge", PageRequest.of(0, 20));
+            owner.getId(), false, null, 0, null, "menge", false, PageRequest.of(0, 20));
     assertThat(byMenge.getContent())
         .as("menge sort ranks the material offer (4) above the item offer (stated 3, not stock 10)")
         .containsSubsequence(material, understated);

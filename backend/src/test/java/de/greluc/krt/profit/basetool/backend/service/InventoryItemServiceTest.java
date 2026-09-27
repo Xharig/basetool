@@ -60,6 +60,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -131,7 +132,8 @@ class InventoryItemServiceTest {
             jobOrderItemService,
             auditService,
             realAggregationService,
-            realCheckoutService);
+            realCheckoutService,
+            new de.greluc.krt.profit.basetool.backend.support.InventoryProperties(false));
   }
 
   @Test
@@ -310,6 +312,8 @@ class InventoryItemServiceTest {
             eq(true),
             eq(missionIds),
             eq(false),
+            eq(false),
+            eq(false),
             eq(false)))
         .thenReturn(List.of());
 
@@ -329,6 +333,8 @@ class InventoryItemServiceTest {
             eq(jobOrderIds),
             eq(true),
             eq(missionIds),
+            eq(false),
+            eq(false),
             eq(false),
             eq(false));
   }
@@ -351,6 +357,8 @@ class InventoryItemServiceTest {
             eq(false),
             eq(null),
             eq(false),
+            eq(false),
+            eq(false),
             eq(false)))
         .thenReturn(List.of());
 
@@ -369,6 +377,8 @@ class InventoryItemServiceTest {
             eq(null),
             eq(false),
             eq(null),
+            eq(false),
+            eq(false),
             eq(false),
             eq(false));
   }
@@ -395,6 +405,8 @@ class InventoryItemServiceTest {
             eq(false),
             eq(null),
             eq(false),
+            eq(false),
+            eq(false),
             eq(false)))
         .thenReturn(List.of());
 
@@ -414,6 +426,8 @@ class InventoryItemServiceTest {
             eq(null),
             eq(false),
             eq(null),
+            eq(false),
+            eq(false),
             eq(false),
             eq(false));
   }
@@ -437,12 +451,14 @@ class InventoryItemServiceTest {
             eq(false),
             eq(null),
             eq(true),
+            eq(false),
+            eq(false),
             eq(false)))
         .thenReturn(List.of());
 
     List<GroupedInventoryDto> result =
         inventoryItemService.getMyAggregatedInventory(
-            userId, null, null, null, null, null, true, false);
+            userId, null, null, null, null, null, true, false, false, false);
 
     assertNotNull(result);
     verify(inventoryItemRepository)
@@ -458,6 +474,8 @@ class InventoryItemServiceTest {
             eq(false),
             eq(null),
             eq(true),
+            eq(false),
+            eq(false),
             eq(false));
   }
 
@@ -480,12 +498,14 @@ class InventoryItemServiceTest {
             eq(false),
             eq(null),
             eq(false),
-            eq(true)))
+            eq(true),
+            eq(false),
+            eq(false)))
         .thenReturn(List.of());
 
     List<GroupedInventoryDto> result =
         inventoryItemService.getMyAggregatedInventory(
-            userId, null, null, null, null, null, false, true);
+            userId, null, null, null, null, null, false, true, false, false);
 
     assertNotNull(result);
     verify(inventoryItemRepository)
@@ -501,7 +521,9 @@ class InventoryItemServiceTest {
             eq(false),
             eq(null),
             eq(false),
-            eq(true));
+            eq(true),
+            eq(false),
+            eq(false));
   }
 
   @Test
@@ -519,6 +541,7 @@ class InventoryItemServiceTest {
             100,
             10.0,
             false,
+            null,
             null,
             null,
             null,
@@ -552,6 +575,7 @@ class InventoryItemServiceTest {
             null,
             null,
             false,
+            false,
             java.util.List.of(),
             0.0,
             java.util.List.of(),
@@ -567,6 +591,99 @@ class InventoryItemServiceTest {
 
     assertNotNull(result);
     verify(inventoryItemRepository).save(any(InventoryItem.class));
+  }
+
+  @Test
+  void createInventoryItem_stolenIsRefusedWhileTheMarkerIsSwitchedOff() {
+    UUID userId = UUID.randomUUID();
+    UUID materialId = UUID.randomUUID();
+    UUID locationId = UUID.randomUUID();
+    InventoryItemCreateDto dto =
+        new InventoryItemCreateDto(
+            userId,
+            materialId,
+            null,
+            locationId,
+            100,
+            10.0,
+            false,
+            true,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    User user = new User();
+    user.setId(userId);
+    Material material = new Material();
+    material.setId(materialId);
+    Location location = new Location();
+    location.setId(locationId);
+    lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+    lenient().when(materialRepository.findById(materialId)).thenReturn(Optional.of(material));
+    lenient().when(locationRepository.findById(locationId)).thenReturn(Optional.of(location));
+
+    assertThrows(
+        de.greluc.krt.profit.basetool.backend.exception.BusinessConflictException.class,
+        () -> inventoryItemService.createInventoryItem(dto, userId));
+    verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
+  }
+
+  @Test
+  void createInventoryItem_stolenIsStoredWhenTheMarkerIsSwitchedOn() {
+    InventoryItemService switchedOn =
+        new InventoryItemService(
+            inventoryItemRepository,
+            userRepository,
+            materialRepository,
+            gameItemRepository,
+            locationRepository,
+            jobOrderRepository,
+            missionRepository,
+            inventoryItemMapper,
+            ownerScopeService,
+            jobOrderItemService,
+            auditService,
+            realAggregationService,
+            realCheckoutService,
+            new de.greluc.krt.profit.basetool.backend.support.InventoryProperties(true));
+    UUID userId = UUID.randomUUID();
+    UUID materialId = UUID.randomUUID();
+    UUID locationId = UUID.randomUUID();
+    InventoryItemCreateDto dto =
+        new InventoryItemCreateDto(
+            userId,
+            materialId,
+            null,
+            locationId,
+            100,
+            10.0,
+            false,
+            true,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    User user = new User();
+    user.setId(userId);
+    Material material = new Material();
+    material.setId(materialId);
+    Location location = new Location();
+    location.setId(locationId);
+    when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+    when(materialRepository.findById(materialId)).thenReturn(Optional.of(material));
+    when(locationRepository.findById(locationId)).thenReturn(Optional.of(location));
+    when(inventoryItemRepository.save(any(InventoryItem.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    switchedOn.createInventoryItem(dto, userId);
+
+    ArgumentCaptor<InventoryItem> saved = ArgumentCaptor.forClass(InventoryItem.class);
+    verify(inventoryItemRepository).save(saved.capture());
+    assertEquals(Boolean.TRUE, saved.getValue().getStolen());
   }
 
   @Test
@@ -587,6 +704,7 @@ class InventoryItemServiceTest {
             100,
             10.0,
             false,
+            null,
             null,
             null,
             null,
@@ -657,6 +775,7 @@ class InventoryItemServiceTest {
             null,
             null,
             null,
+            null,
             java.util.List.of(
                 new InventoryAllocationInput(orderAId, 8.0),
                 new InventoryAllocationInput(orderBId, 5.0)),
@@ -706,6 +825,7 @@ class InventoryItemServiceTest {
             null,
             null,
             null,
+            null,
             java.util.List.of(
                 new InventoryAllocationInput(orderAId, 3.0),
                 new InventoryAllocationInput(orderAId, 4.0)),
@@ -751,6 +871,7 @@ class InventoryItemServiceTest {
             null,
             null,
             null,
+            null,
             java.util.List.of(new InventoryAllocationInput(UUID.randomUUID(), 3.0)),
             null);
 
@@ -786,6 +907,7 @@ class InventoryItemServiceTest {
             100,
             10.0,
             false,
+            null,
             null,
             jobOrderId,
             null,
@@ -829,6 +951,7 @@ class InventoryItemServiceTest {
             100,
             10.0,
             false,
+            null,
             null,
             jobOrderId,
             null,
@@ -883,6 +1006,7 @@ class InventoryItemServiceTest {
             null,
             null,
             null,
+            null,
             null);
 
     User user = new User();
@@ -927,6 +1051,7 @@ class InventoryItemServiceTest {
             null,
             null,
             null,
+            null,
             null);
 
     assertThrows(
@@ -951,6 +1076,7 @@ class InventoryItemServiceTest {
             100,
             10.0,
             false,
+            null,
             null,
             null,
             null,
@@ -986,6 +1112,7 @@ class InventoryItemServiceTest {
             null,
             null,
             null,
+            null,
             null);
     when(ownerScopeService.canManageUserInventory(foreignUserId)).thenReturn(true);
 
@@ -1012,6 +1139,7 @@ class InventoryItemServiceTest {
             100,
             10.0,
             false,
+            null,
             null,
             null,
             null,
@@ -1062,6 +1190,7 @@ class InventoryItemServiceTest {
         null,
         5.0,
         false,
+        null,
         missionId,
         null,
         null,
@@ -1287,6 +1416,7 @@ class InventoryItemServiceTest {
             null,
             null,
             null,
+            null,
             null);
 
     User user = new User();
@@ -1315,7 +1445,20 @@ class InventoryItemServiceTest {
     UUID locationId = UUID.randomUUID();
     InventoryItemCreateDto dto =
         new InventoryItemCreateDto(
-            userId, null, null, locationId, null, 5.0, false, null, null, null, null, null, null);
+            userId,
+            null,
+            null,
+            locationId,
+            null,
+            5.0,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
 
     User user = new User();
     user.setId(userId);
@@ -1347,6 +1490,7 @@ class InventoryItemServiceTest {
             null,
             5.0,
             false,
+            null,
             null,
             null,
             null,
@@ -1385,6 +1529,7 @@ class InventoryItemServiceTest {
             100,
             5.0,
             false,
+            null,
             null,
             null,
             null,
@@ -2017,8 +2162,8 @@ class InventoryItemServiceTest {
   private static de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemDto
       minimalInventoryDto(UUID id) {
     return new de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemDto(
-        id, null, null, null, null, null, null, null, List.of(), 0.0, List.of(), 0.0, null, null,
-        1L, null, null);
+        id, null, null, null, null, null, null, null, false, List.of(), 0.0, List.of(), 0.0, null,
+        null, 1L, null, null);
   }
 
   /**
@@ -2173,6 +2318,7 @@ class InventoryItemServiceTest {
             false,
             null,
             null,
+            null,
             pickedOrgUnitId,
             null,
             null,
@@ -2217,6 +2363,7 @@ class InventoryItemServiceTest {
             false,
             null,
             null,
+            null,
             foreignOrgUnitId,
             null,
             null,
@@ -2251,6 +2398,7 @@ class InventoryItemServiceTest {
             100,
             10.0,
             false,
+            null,
             null,
             null,
             pickedOrgUnitId,

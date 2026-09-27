@@ -108,6 +108,11 @@
                                th:aria-label="#{materialboerse.filter.minAmount}"/>
                         <span class="mb-filt-unit" th:text="#{materialboerse.unit.scu}">SCU</span>
                     </div>
+                    <label class="mb-filt">
+                        <input type="checkbox" data-mb-exclude-stolen data-testid="mb-exclude-stolen"
+                               th:checked="${filterExcludeStolen}"/>
+                        <span class="mb-filt-label" th:text="#{materialboerse.filter.excludeStolen}">Ohne gestohlene</span>
+                    </label>
                     <div class="mb-filt">
                         <span class="mb-filt-label" th:text="#{materialboerse.filter.sort}">Sortieren</span>
                         <select class="chip-select" data-mb-sort th:aria-label="#{materialboerse.filter.sort}">
@@ -144,6 +149,7 @@
                             <span class="mb-mrow-mat">
                                 <span th:text="${offer.kind() == 'ITEM' ? offer.itemName() : offer.material().name()}">Material</span>
                                 <span th:if="${offer.kind() == 'ITEM'}" class="mb-kind-tag" th:text="#{materialboerse.kind.item}">Item</span>
+                                <span th:if="${offer.stolen()}" class="chip chip--danger" data-testid="stolen-chip" th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                             </span>
                             <span class="mb-mrow-sub">
                                 <span class="mb-mrow-owner" th:text="${offer.owner().effectiveName()}">Spieler</span>
@@ -190,6 +196,7 @@
                                     <h2>
                                         <span th:text="${offer.kind() == 'ITEM' ? offer.itemName() : offer.material().name()}">Material</span>
                                         <span th:if="${offer.kind() == 'ITEM'}" class="mb-kind-tag" th:text="#{materialboerse.kind.item}">Item</span>
+                                        <span th:if="${offer.stolen()}" class="chip chip--danger" data-testid="stolen-chip" th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
                                     </h2>
                                     <span class="mb-dp-owner">
                                         <span th:text="#{materialboerse.detail.from}">von</span>
@@ -323,6 +330,7 @@
         submitSave: /*[[#{materialboerse.modal.submit.save}]]*/ 'Speichern',
         pickerEmpty: /*[[#{materialboerse.modal.material.empty}]]*/ 'Keine freigebbaren Lager-Posten gefunden.',
         pickerAlready: /*[[#{materialboerse.modal.material.already}]]*/ 'bereits auf der Börse',
+        pickerStolen: /*[[#{inventory.stolen.chip}]]*/ 'Gestohlen',
         conflict: {
             title: /*[[#{frontend.ajax.conflict.title}]]*/ 'Konflikt',
             reloadDetailFallback: /*[[#{frontend.ajax.conflict.detail}]]*/ 'Neu laden.',

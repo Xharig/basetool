@@ -109,6 +109,7 @@ class InventoryCheckoutServiceAuditTest {
                 null,
                 null,
                 null,
+                false,
                 java.util.List.of(),
                 0.0,
                 java.util.List.of(),

@@ -425,6 +425,13 @@
             if (it.alreadyReleased) {
                 meta += ' · ' + escapeHtml(i18n.pickerAlready || '');
             }
+            let stolenChip = '';
+            if (it.stolen) {
+                stolenChip =
+                    '<span class="chip chip--danger" data-testid="stolen-chip">' +
+                    escapeHtml(i18n.pickerStolen || '') +
+                    '</span> ';
+            }
             html +=
                 '<li class="krt-combobox__option" role="option" data-item-id="' +
                 escapeAttr(it.inventoryItemId) +
@@ -440,7 +447,9 @@
                 escapeAttr(it.amount) +
                 '"><strong>' +
                 escapeHtml(it.materialName) +
-                '</strong> <small>' +
+                '</strong> ' +
+                stolenChip +
+                '<small>' +
                 meta +
                 '</small></li>';
         });

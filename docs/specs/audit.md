@@ -80,6 +80,9 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   a personal row's org-unit change (`INVENTORY_ORG_UNIT_CHANGED`, from / to as `kind:id` or `none`;
   a selection writes one `INVENTORY_BULK_ORG_UNIT_CHANGED` summary; an unchanged unit records
   nothing, REQ-INV-052) /
+  the „gestohlen“ marker (`INVENTORY_STOLEN_MARKED` / `INVENTORY_STOLEN_UNMARKED` per row or split,
+  with the amount and whether it split; a selection writes one `INVENTORY_BULK_STOLEN_CHANGED`
+  summary; an unchanged row records nothing, REQ-INV-053) /
   global wipe; plus the cross-area writers (refinery store → `INVENTORY_RECEIVED_FROM_REFINERY`,
   job-order handover — material handover **and** item delivery consuming the order's earmarked item
   stock, REQ-ORDERS-030 → `INVENTORY_HANDED_OVER`, job-order item-production consumption →

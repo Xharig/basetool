@@ -77,6 +77,12 @@ public class InventoryForm {
   private Boolean isGlobal;
   private Boolean personal = false;
 
+  /**
+   * Books the stock in as „gestohlen" (REQ-INV-053); offered only while the server switch allows
+   * marking, and refused by the backend otherwise.
+   */
+  private Boolean stolen = false;
+
   private String source;
 
   private Long version;

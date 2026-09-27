@@ -214,6 +214,7 @@ public class InventoryWriteController {
         itemMode ? null : form.getQuality(),
         form.getAmount(),
         form.getPersonal(),
+        Boolean.TRUE.equals(form.getStolen()),
         itemMode ? null : form.getMissionId(),
         form.getJobOrderId(),
         form.getOwningOrgUnitId(),
@@ -337,10 +338,10 @@ public class InventoryWriteController {
       model.addAttribute("showBookOutModal", id);
       if (fromAdminListing) {
         return inventoryPageController.viewAllInventory(
-            null, null, null, null, null, null, null, false, model);
+            null, null, null, null, null, null, null, false, false, false, model);
       }
       return inventoryPageController.viewMyInventory(
-          null, null, null, null, null, null, null, false, false, false, model);
+          null, null, null, null, null, null, null, false, false, false, false, false, model);
     }
 
     try {

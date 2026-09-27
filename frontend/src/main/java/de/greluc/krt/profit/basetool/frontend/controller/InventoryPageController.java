@@ -469,6 +469,9 @@ public class InventoryPageController {
    * @param personalOnly when true, show only the caller's personal entries
    * @param nonPersonalOnly when true, show only the caller's shared entries; mutually exclusive
    *     with {@code personalOnly}
+   * @param stolenOnly when true, show only stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when true, hide stock marked „gestohlen"; mutually exclusive with {@code
+   *     stolenOnly}
    * @param fragment when true, return the {@code inventoryTableFragment} fragment
    * @param model model populated with grouped items, filter catalogs and auth-derived UX flags
    * @return either the full {@code inventory-my} view or its table fragment
@@ -485,6 +488,8 @@ public class InventoryPageController {
       @RequestParam(required = false) List<UUID> locationIds,
       @RequestParam(required = false, defaultValue = "false") boolean personalOnly,
       @RequestParam(required = false, defaultValue = "false") boolean nonPersonalOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean stolenOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean nonStolenOnly,
       @RequestParam(required = false, defaultValue = "false") boolean fragment,
       Model model) {
     if (!model.containsAttribute("inventoryForm")) {
@@ -497,6 +502,7 @@ public class InventoryPageController {
     }
     boolean itemsView = isItemsView(view);
     model.addAttribute("view", itemsView ? "items" : "material");
+    StolenFilter stolen = new StolenFilter(stolenOnly, nonStolenOnly);
 
     if (itemsView) {
       List<GroupedInventoryDto> groupedItems = new ArrayList<>();
@@ -508,7 +514,8 @@ public class InventoryPageController {
                 locationIds,
                 jobOrderIds,
                 personalOnly,
-                nonPersonalOnly);
+                nonPersonalOnly,
+                stolen);
         if (res != null) {
           groupedItems = res;
         }
@@ -526,17 +533,26 @@ public class InventoryPageController {
               fragment,
               gameItemIds,
               jobOrderIds,
-              personalOnly || nonPersonalOnly));
+              personalOnly || nonPersonalOnly || stolen.active()));
       model.addAttribute(
           "locations",
           resolveLocationFilterOptions(
               groupedItems,
               fragment,
               anyItemFilterActive(
-                  gameItemIds, locationIds, jobOrderIds, personalOnly || nonPersonalOnly),
+                  gameItemIds,
+                  locationIds,
+                  jobOrderIds,
+                  personalOnly || nonPersonalOnly || stolen.active()),
               () ->
                   fetchGroupedItemInventory(
-                      "/api/v1/inventory/my-inventory/grouped", null, null, null, false, false)));
+                      "/api/v1/inventory/my-inventory/grouped",
+                      null,
+                      null,
+                      null,
+                      false,
+                      false,
+                      StolenFilter.NONE)));
       model.addAttribute("jobOrders", fetchActiveJobOrders());
       model.addAttribute("users", fetchUsers());
       model.addAttribute("selectedGameItemIds", gameItemIds);
@@ -544,6 +560,8 @@ public class InventoryPageController {
       model.addAttribute("selectedJobOrderIds", jobOrderIds);
       model.addAttribute("selectedPersonalOnly", personalOnly);
       model.addAttribute("selectedNonPersonalOnly", nonPersonalOnly);
+      model.addAttribute("selectedStolenOnly", stolenOnly);
+      model.addAttribute("selectedNonStolenOnly", nonStolenOnly);
       model.addAttribute("authUserId", currentAuthName());
       model.addAttribute("canEditForeignNotes", hasLogisticianOrAbove());
       if (fragment) {
@@ -563,7 +581,8 @@ public class InventoryPageController {
               jobOrderIds,
               missionIds,
               personalOnly,
-              nonPersonalOnly);
+              nonPersonalOnly,
+              stolen);
       if (res != null) {
         groupedItems = res;
       }
@@ -586,7 +605,7 @@ public class InventoryPageController {
                 minQuality,
                 jobOrderIds,
                 missionIds,
-                personalOnly || nonPersonalOnly),
+                personalOnly || nonPersonalOnly || stolen.active()),
             () ->
                 fetchGroupedMaterialInventory(
                     "/api/v1/inventory/my-inventory/grouped",
@@ -596,7 +615,8 @@ public class InventoryPageController {
                     null,
                     null,
                     false,
-                    false)));
+                    false,
+                    StolenFilter.NONE)));
     model.addAttribute("jobOrders", fetchActiveJobOrders());
     model.addAttribute("missions", fetchMissions());
     model.addAttribute("users", fetchUsers());
@@ -607,6 +627,8 @@ public class InventoryPageController {
     model.addAttribute("selectedMissionIds", missionIds);
     model.addAttribute("selectedPersonalOnly", personalOnly);
     model.addAttribute("selectedNonPersonalOnly", nonPersonalOnly);
+    model.addAttribute("selectedStolenOnly", stolenOnly);
+    model.addAttribute("selectedNonStolenOnly", nonStolenOnly);
     model.addAttribute("authUserId", currentAuthName());
     model.addAttribute("canEditForeignNotes", hasLogisticianOrAbove());
 
@@ -630,6 +652,9 @@ public class InventoryPageController {
    * @param personalOnly when true, restrict to the caller's personal entries
    * @param nonPersonalOnly when true, restrict to the caller's shared entries (mutually exclusive
    *     with {@code personalOnly})
+   * @param stolenOnly when true, show only stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when true, hide stock marked „gestohlen"; mutually exclusive with {@code
+   *     stolenOnly}
    * @return the ids of every matching entry, in creation order; never {@code null}
    */
   @GetMapping("/my/entry-ids")
@@ -643,7 +668,9 @@ public class InventoryPageController {
       @RequestParam(required = false) List<UUID> gameItemIds,
       @RequestParam(required = false) List<UUID> locationIds,
       @RequestParam(required = false, defaultValue = "false") boolean personalOnly,
-      @RequestParam(required = false, defaultValue = "false") boolean nonPersonalOnly) {
+      @RequestParam(required = false, defaultValue = "false") boolean nonPersonalOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean stolenOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean nonStolenOnly) {
     org.springframework.web.util.UriComponentsBuilder uriBuilder =
         org.springframework.web.util.UriComponentsBuilder.fromPath(
             "/api/v1/inventory/my-inventory/entry-ids");
@@ -666,6 +693,7 @@ public class InventoryPageController {
     if (nonPersonalOnly) {
       uriBuilder.queryParam("nonPersonalOnly", true);
     }
+    new StolenFilter(stolenOnly, nonStolenOnly).appendTo(uriBuilder);
     List<UUID> ids = backendApiClient.get(uriBuilder.build().toUriString(), UUID_LIST);
     return ids != null ? ids : List.of();
   }
@@ -681,6 +709,7 @@ public class InventoryPageController {
    * @param jobOrderIds optional job-order filter
    * @param personalOnly relay {@code personalOnly=true} (only meaningful on {@code /my})
    * @param nonPersonalOnly relay {@code nonPersonalOnly=true} (only meaningful on {@code /my})
+   * @param stolen the „gestohlen" narrowing (REQ-INV-053)
    * @return the grouped result as returned by the backend, may be {@code null}
    */
   private List<GroupedInventoryDto> fetchGroupedItemInventory(
@@ -689,7 +718,8 @@ public class InventoryPageController {
       List<UUID> locationIds,
       List<UUID> jobOrderIds,
       boolean personalOnly,
-      boolean nonPersonalOnly) {
+      boolean nonPersonalOnly,
+      @NotNull StolenFilter stolen) {
     org.springframework.web.util.UriComponentsBuilder uriBuilder =
         org.springframework.web.util.UriComponentsBuilder.fromPath(basePath)
             .queryParam("catalog", "ITEM");
@@ -702,6 +732,7 @@ public class InventoryPageController {
     if (nonPersonalOnly) {
       uriBuilder.queryParam("nonPersonalOnly", true);
     }
+    stolen.appendTo(uriBuilder);
     return backendApiClient.get(uriBuilder.build().toUriString(), GROUPED_INVENTORY_LIST);
   }
 
@@ -737,6 +768,7 @@ public class InventoryPageController {
    * @param missionIds optional mission filter
    * @param personalOnly relay {@code personalOnly=true} (only meaningful on {@code /my})
    * @param nonPersonalOnly relay {@code nonPersonalOnly=true} (only meaningful on {@code /my})
+   * @param stolen the „gestohlen" narrowing (REQ-INV-053)
    * @return the grouped result as returned by the backend, may be {@code null}
    */
   private List<GroupedInventoryDto> fetchGroupedMaterialInventory(
@@ -747,7 +779,8 @@ public class InventoryPageController {
       List<UUID> jobOrderIds,
       List<UUID> missionIds,
       boolean personalOnly,
-      boolean nonPersonalOnly) {
+      boolean nonPersonalOnly,
+      @NotNull StolenFilter stolen) {
     org.springframework.web.util.UriComponentsBuilder uriBuilder =
         org.springframework.web.util.UriComponentsBuilder.fromPath(basePath);
     appendIdParams(uriBuilder, "materialIds", materialIds);
@@ -763,6 +796,7 @@ public class InventoryPageController {
     if (nonPersonalOnly) {
       uriBuilder.queryParam("nonPersonalOnly", true);
     }
+    stolen.appendTo(uriBuilder);
     return backendApiClient.get(uriBuilder.build().toUriString(), GROUPED_INVENTORY_LIST);
   }
 
@@ -892,7 +926,7 @@ public class InventoryPageController {
     if (!fragment && anyFilterActive) {
       try {
         List<GroupedInventoryDto> unfiltered =
-            fetchGroupedItemInventory(basePath, null, null, null, false, false);
+            fetchGroupedItemInventory(basePath, null, null, null, false, false, StolenFilter.NONE);
         if (unfiltered != null) {
           source = unfiltered;
         }
@@ -918,6 +952,9 @@ public class InventoryPageController {
    * @param missionIds optional mission id filter (multi; material view only)
    * @param gameItemIds optional game-item id filter (multi; items view only)
    * @param locationIds optional storage-location id filter (multi; both views, REQ-INV-040)
+   * @param stolenOnly when true, show only stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when true, hide stock marked „gestohlen"; mutually exclusive with {@code
+   *     stolenOnly}
    * @param fragment when true, return the table fragment
    * @return either the full {@code inventory-admin} view or its fragment
    */
@@ -931,6 +968,8 @@ public class InventoryPageController {
       @RequestParam(required = false) List<UUID> missionIds,
       @RequestParam(required = false) List<UUID> gameItemIds,
       @RequestParam(required = false) List<UUID> locationIds,
+      @RequestParam(required = false, defaultValue = "false") boolean stolenOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean nonStolenOnly,
       @RequestParam(required = false, defaultValue = "false") boolean fragment,
       Model model) {
     if (!model.containsAttribute("inventoryForm")) {
@@ -943,6 +982,7 @@ public class InventoryPageController {
     }
     boolean itemsView = isItemsView(view);
     model.addAttribute("view", itemsView ? "items" : "material");
+    StolenFilter stolen = new StolenFilter(stolenOnly, nonStolenOnly);
 
     if (itemsView) {
       List<GroupedInventoryDto> groupedItems = new ArrayList<>();
@@ -954,7 +994,8 @@ public class InventoryPageController {
                 locationIds,
                 jobOrderIds,
                 false,
-                false);
+                false,
+                stolen);
         if (res != null) {
           groupedItems = res;
         }
@@ -972,20 +1013,28 @@ public class InventoryPageController {
               fragment,
               gameItemIds,
               jobOrderIds,
-              false));
+              stolen.active()));
       model.addAttribute(
           "locations",
           resolveLocationFilterOptions(
               groupedItems,
               fragment,
-              anyItemFilterActive(gameItemIds, locationIds, jobOrderIds, false),
+              anyItemFilterActive(gameItemIds, locationIds, jobOrderIds, stolen.active()),
               () ->
                   fetchGroupedItemInventory(
-                      "/api/v1/inventory/all/grouped", null, null, null, false, false)));
+                      "/api/v1/inventory/all/grouped",
+                      null,
+                      null,
+                      null,
+                      false,
+                      false,
+                      StolenFilter.NONE)));
       model.addAttribute("jobOrders", fetchActiveJobOrders());
       model.addAttribute("selectedGameItemIds", gameItemIds);
       model.addAttribute("selectedLocationIds", locationIds);
       model.addAttribute("selectedJobOrderIds", jobOrderIds);
+      model.addAttribute("selectedStolenOnly", stolenOnly);
+      model.addAttribute("selectedNonStolenOnly", nonStolenOnly);
       model.addAttribute("authUserId", currentAuthName());
       model.addAttribute("canEditForeignNotes", hasLogisticianOrAbove());
       if (fragment) {
@@ -1005,7 +1054,8 @@ public class InventoryPageController {
               jobOrderIds,
               missionIds,
               false,
-              false);
+              false,
+              stolen);
       if (res != null) {
         groupedItems = res;
       }
@@ -1023,15 +1073,25 @@ public class InventoryPageController {
             groupedItems,
             fragment,
             anyMaterialFilterActive(
-                materialIds, locationIds, minQuality, jobOrderIds, missionIds, false),
+                materialIds, locationIds, minQuality, jobOrderIds, missionIds, stolen.active()),
             () ->
                 fetchGroupedMaterialInventory(
-                    "/api/v1/inventory/all/grouped", null, null, null, null, null, false, false)));
+                    "/api/v1/inventory/all/grouped",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    false,
+                    StolenFilter.NONE)));
     model.addAttribute("selectedMaterialIds", materialIds);
     model.addAttribute("selectedLocationIds", locationIds);
     model.addAttribute("selectedMinQuality", minQuality);
     model.addAttribute("selectedJobOrderIds", jobOrderIds);
     model.addAttribute("selectedMissionIds", missionIds);
+    model.addAttribute("selectedStolenOnly", stolenOnly);
+    model.addAttribute("selectedNonStolenOnly", nonStolenOnly);
     model.addAttribute("jobOrders", fetchActiveJobOrders());
     model.addAttribute("missions", fetchMissions());
     model.addAttribute("authUserId", currentAuthName());
@@ -1052,6 +1112,7 @@ public class InventoryPageController {
    * @param locationId the stack's storage location
    * @param quality the stack's quality grade, or {@code null}
    * @param personal whether the stack holds the caller's private stock
+   * @param stolen whether the stack holds stock marked „gestohlen" (REQ-INV-053)
    * @param owningOrgUnitId the stack's owning org-unit pool, or {@code null}
    * @param page zero-based page index, or {@code null} for the first page
    * @param size page size, or {@code null} for the backend default
@@ -1065,6 +1126,7 @@ public class InventoryPageController {
       @RequestParam @NotNull UUID locationId,
       @RequestParam(required = false) Integer quality,
       @RequestParam(required = false, defaultValue = "false") boolean personal,
+      @RequestParam(required = false, defaultValue = "false") boolean stolen,
       @RequestParam(required = false) UUID owningOrgUnitId,
       @RequestParam(required = false) Integer page,
       @RequestParam(required = false) Integer size,
@@ -1075,6 +1137,9 @@ public class InventoryPageController {
             .queryParam("materialId", materialId)
             .queryParam("locationId", locationId)
             .queryParam("personal", personal);
+    if (stolen) {
+      uriBuilder.queryParam("stolen", true);
+    }
     if (quality != null) {
       uriBuilder.queryParam("quality", quality);
     }
@@ -1099,6 +1164,7 @@ public class InventoryPageController {
    * @param gameItemId the stack's game item
    * @param locationId the stack's storage location
    * @param personal whether the stack holds the caller's private stock
+   * @param stolen whether the stack holds stock marked „gestohlen" (REQ-INV-053)
    * @param owningOrgUnitId the stack's owning org-unit pool, or {@code null}
    * @param page zero-based page index, or {@code null} for the first page
    * @param size page size, or {@code null} for the backend default
@@ -1111,6 +1177,7 @@ public class InventoryPageController {
       @RequestParam @NotNull UUID gameItemId,
       @RequestParam @NotNull UUID locationId,
       @RequestParam(required = false, defaultValue = "false") boolean personal,
+      @RequestParam(required = false, defaultValue = "false") boolean stolen,
       @RequestParam(required = false) UUID owningOrgUnitId,
       @RequestParam(required = false) Integer page,
       @RequestParam(required = false) Integer size,
@@ -1122,6 +1189,9 @@ public class InventoryPageController {
             .queryParam("gameItemId", gameItemId)
             .queryParam("locationId", locationId)
             .queryParam("personal", personal);
+    if (stolen) {
+      uriBuilder.queryParam("stolen", true);
+    }
     if (owningOrgUnitId != null) {
       uriBuilder.queryParam("owningOrgUnitId", owningOrgUnitId);
     }
@@ -1177,6 +1247,7 @@ public class InventoryPageController {
    * @param userId the stack's owning user
    * @param locationId the stack's storage location
    * @param quality the stack's quality grade, or {@code null}
+   * @param stolen whether the stack holds stock marked „gestohlen" (REQ-INV-053)
    * @param owningOrgUnitId the stack's owning org-unit pool, or {@code null}
    * @param page zero-based page index, or {@code null} for the first page
    * @param size page size, or {@code null} for the backend default
@@ -1190,6 +1261,7 @@ public class InventoryPageController {
       @RequestParam @NotNull UUID userId,
       @RequestParam @NotNull UUID locationId,
       @RequestParam(required = false) Integer quality,
+      @RequestParam(required = false, defaultValue = "false") boolean stolen,
       @RequestParam(required = false) UUID owningOrgUnitId,
       @RequestParam(required = false) Integer page,
       @RequestParam(required = false) Integer size,
@@ -1200,6 +1272,9 @@ public class InventoryPageController {
             .queryParam("materialId", materialId)
             .queryParam("userId", userId)
             .queryParam("locationId", locationId);
+    if (stolen) {
+      uriBuilder.queryParam("stolen", true);
+    }
     if (quality != null) {
       uriBuilder.queryParam("quality", quality);
     }
@@ -1223,6 +1298,7 @@ public class InventoryPageController {
    * @param gameItemId the stack's game item
    * @param userId the stack's owning user
    * @param locationId the stack's storage location
+   * @param stolen whether the stack holds stock marked „gestohlen" (REQ-INV-053)
    * @param owningOrgUnitId the stack's owning org-unit pool, or {@code null}
    * @param page zero-based page index, or {@code null} for the first page
    * @param size page size, or {@code null} for the backend default
@@ -1235,6 +1311,7 @@ public class InventoryPageController {
       @RequestParam @NotNull UUID gameItemId,
       @RequestParam @NotNull UUID userId,
       @RequestParam @NotNull UUID locationId,
+      @RequestParam(required = false, defaultValue = "false") boolean stolen,
       @RequestParam(required = false) UUID owningOrgUnitId,
       @RequestParam(required = false) Integer page,
       @RequestParam(required = false) Integer size,
@@ -1246,6 +1323,9 @@ public class InventoryPageController {
             .queryParam("gameItemId", gameItemId)
             .queryParam("userId", userId)
             .queryParam("locationId", locationId);
+    if (stolen) {
+      uriBuilder.queryParam("stolen", true);
+    }
     if (owningOrgUnitId != null) {
       uriBuilder.queryParam("owningOrgUnitId", owningOrgUnitId);
     }
@@ -1636,5 +1716,40 @@ public class InventoryPageController {
     }
     return roleHierarchy.getReachableGrantedAuthorities(auth.getAuthorities()).stream()
         .anyMatch(a -> Roles.authority(Roles.LOGISTICIAN).equals(a.getAuthority()));
+  }
+
+  /**
+   * The „gestohlen" narrowing of a grouped Lager read or an entry-id read (REQ-INV-053).
+   *
+   * @param stolenOnly relay {@code stolenOnly=true}
+   * @param nonStolenOnly relay {@code nonStolenOnly=true}
+   */
+  private record StolenFilter(boolean stolenOnly, boolean nonStolenOnly) {
+
+    /** No narrowing: stolen and legitimate stock alike. */
+    static final StolenFilter NONE = new StolenFilter(false, false);
+
+    /**
+     * Whether this filter narrows the result.
+     *
+     * @return {@code true} when either flag is set
+     */
+    boolean active() {
+      return stolenOnly || nonStolenOnly;
+    }
+
+    /**
+     * Appends the set flags to a backend request URI.
+     *
+     * @param uriBuilder the builder collecting the backend request URI
+     */
+    void appendTo(@NotNull org.springframework.web.util.UriComponentsBuilder uriBuilder) {
+      if (stolenOnly) {
+        uriBuilder.queryParam("stolenOnly", true);
+      }
+      if (nonStolenOnly) {
+        uriBuilder.queryParam("nonStolenOnly", true);
+      }
+    }
   }
 }

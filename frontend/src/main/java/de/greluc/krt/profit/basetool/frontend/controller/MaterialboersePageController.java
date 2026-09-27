@@ -120,6 +120,7 @@ public class MaterialboersePageController {
    * @param sort the sort key ({@code qual} / {@code menge} / {@code mat} / {@code neu}); anything
    *     else falls back to {@code qual}.
    * @param selected the offer/request id to show in the detail pane, or {@code null} for the first.
+   * @param excludeStolen whether offers of stock marked „gestohlen" are left out (REQ-INV-053).
    * @param fragment {@code "board"} / {@code "list"} / {@code "detail"} for an AJAX swap, else the
    *     full page.
    * @param model the Thymeleaf model.
@@ -135,6 +136,7 @@ public class MaterialboersePageController {
       @RequestParam(required = false) Double minAmount,
       @RequestParam(required = false) String sort,
       @RequestParam(required = false) String selected,
+      @RequestParam(required = false, defaultValue = "false") boolean excludeStolen,
       @RequestParam(required = false) String fragment,
       Model model) {
     boolean requests = "requests".equals(mode);
@@ -163,6 +165,7 @@ public class MaterialboersePageController {
     model.addAttribute("filterMinQuality", minQuality);
     model.addAttribute("filterMinAmount", minAmount);
     model.addAttribute("filterSort", activeSort);
+    model.addAttribute("filterExcludeStolen", excludeStolen);
 
     if (requests) {
       List<MaterialRequestDto> reqs = loadRequests(activeTab, q, minQuality, minAmount, activeSort);
@@ -179,7 +182,7 @@ public class MaterialboersePageController {
     }
 
     List<MaterialExchangeOfferDto> offers =
-        loadOffers(activeTab, q, minQuality, minAmount, activeSort);
+        loadOffers(activeTab, q, minQuality, minAmount, activeSort, excludeStolen);
     model.addAttribute("offers", offers);
     model.addAttribute("selectedOffer", loadDetail(pickSelectedId(offers, selected)));
     if ("board".equals(fragment)) {
@@ -483,10 +486,16 @@ public class MaterialboersePageController {
    * @param minQuality the minimum quality, or {@code null}.
    * @param minAmount the minimum amount, or {@code null}.
    * @param sort the sort key, or {@code null}.
+   * @param excludeStolen whether offers of stock marked „gestohlen" are left out (REQ-INV-053).
    * @return the offers, never {@code null} (empty on a backend error).
    */
   private List<MaterialExchangeOfferDto> loadOffers(
-      String tab, String q, Integer minQuality, Double minAmount, String sort) {
+      String tab,
+      String q,
+      Integer minQuality,
+      Double minAmount,
+      String sort,
+      boolean excludeStolen) {
     UriComponentsBuilder uri =
         UriComponentsBuilder.fromPath("/api/v1/material-exchange/offers")
             .queryParam("tab", tab)
@@ -494,6 +503,9 @@ public class MaterialboersePageController {
     appendIfPresent(uri, "minQuality", minQuality);
     appendIfPresent(uri, "minAmount", minAmount);
     appendIfPresent(uri, "sort", sort);
+    if (excludeStolen) {
+      uri.queryParam("excludeStolen", true);
+    }
     try {
       PageResponse<MaterialExchangeOfferDto> page = backendGetWithQuery(uri, q, OFFERS_PAGE);
       return page == null ? List.of() : page.content();

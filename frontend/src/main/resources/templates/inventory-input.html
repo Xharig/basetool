@@ -159,6 +159,14 @@
                     </div>
                 </div>
 
+                <div class="form-group check-row" th:if="${canMarkStolen}">
+                    <input type="checkbox" id="stolen" th:field="*{stolen}" data-testid="bookin-stolen">
+                    <div>
+                        <label for="stolen" th:text="#{inventory.stolen.bookin.label}">Gestohlen</label>
+                        <p class="form-hint" th:text="#{inventory.stolen.bookin.help}">Bestand als gestohlen einbuchen.</p>
+                    </div>
+                </div>
+
                 <div class="form-group check-row krtm-hidden" id="merge-stock-row">
                     <input type="checkbox" id="mergeStock" th:field="*{mergeStock}">
                     <div>

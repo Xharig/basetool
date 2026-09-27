@@ -57,6 +57,7 @@ public interface MaterialExchangeOfferRepository
    * @param sortKey the whitelisted sort key, {@code menge} / {@code mat} / {@code neu}, else
    *     quality; must be non-null.
    * @param pageable the unsorted page request.
+   * @param excludeStolen whether offers of stock marked „gestohlen" are left out (REQ-INV-053).
    * @return the matching page of active offers, never {@code null}.
    */
   @Query(
@@ -75,6 +76,7 @@ public interface MaterialExchangeOfferRepository
                  OR LOWER(ow.username) LIKE :query
                  OR LOWER(ow.displayName) LIKE :query)
             AND (:minQuality = 0 OR ii.quality >= :minQuality)
+            AND (:excludeStolen = false OR ii.id IS NULL OR ii.stolen = false)
             AND (:minAmount IS NULL
                  OR CASE WHEN o.offeredAmount IS NOT NULL THEN LEAST(o.offeredAmount, ii.amount) WHEN ii.id IS NOT NULL THEN LEAST(o.itemQuantity, ii.amount) ELSE o.itemQuantity END >= :minAmount)
           ORDER BY
@@ -99,6 +101,7 @@ public interface MaterialExchangeOfferRepository
                  OR LOWER(ow.username) LIKE :query
                  OR LOWER(ow.displayName) LIKE :query)
             AND (:minQuality = 0 OR ii.quality >= :minQuality)
+            AND (:excludeStolen = false OR ii.id IS NULL OR ii.stolen = false)
             AND (:minAmount IS NULL
                  OR CASE WHEN o.offeredAmount IS NOT NULL THEN LEAST(o.offeredAmount, ii.amount) WHEN ii.id IS NOT NULL THEN LEAST(o.itemQuantity, ii.amount) ELSE o.itemQuantity END >= :minAmount)
           """)
@@ -109,6 +112,7 @@ public interface MaterialExchangeOfferRepository
       @Param("minQuality") int minQuality,
       @Param("minAmount") Double minAmount,
       @Param("sortKey") String sortKey,
+      @Param("excludeStolen") boolean excludeStolen,
       Pageable pageable);
 
   /**

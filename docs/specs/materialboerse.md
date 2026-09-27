@@ -189,6 +189,12 @@ the new stock (book-out, transfer, rebooking, handover / item delivery, producti
 `JobOrderItemHandoverService#createItemHandover` (item-delivery decrement, REQ-ORDERS-030),
 `JobOrderItemProductionService` (production consumption, REQ-ORDERS-025) · **Issues:** #1182
 
+> [!note] „Gestohlen“ — since WP 1.3 (REQ-INV-053)
+> An offer of stock marked „gestohlen“ is allowed and **labelled**: a danger chip in the list, the
+> search results, the detail and the release picker, and a board filter „ohne gestohlene“
+> (`excludeStolen`). The marker is read live off the Lager row; a free-stated item offer has none.
+> Splitting a marker off an offered row may not leave the row below the offered amount.
+
 ### REQ-MARKET-003 — Signal-only
 
 Releasing, deactivating, or registering interest **never** moves inventory. The board is a discovery

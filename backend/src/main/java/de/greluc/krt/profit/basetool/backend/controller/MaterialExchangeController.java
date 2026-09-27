@@ -80,6 +80,7 @@ public class MaterialExchangeController {
    * @param sort the sort key ({@code qual} / {@code menge} / {@code mat} / {@code neu}).
    * @param page the zero-based page index.
    * @param size the page size.
+   * @param excludeStolen whether offers of stock marked „gestohlen" are left out (REQ-INV-053).
    * @return the matching page of offers.
    */
   @GetMapping("/offers")
@@ -91,8 +92,9 @@ public class MaterialExchangeController {
       @RequestParam(required = false) Double minAmount,
       @RequestParam(required = false) String sort,
       @RequestParam(required = false) Integer page,
-      @RequestParam(required = false) Integer size) {
-    return boardService.board(tab, q, minQuality, minAmount, sort, page, size);
+      @RequestParam(required = false) Integer size,
+      @RequestParam(required = false, defaultValue = "false") boolean excludeStolen) {
+    return boardService.board(tab, q, minQuality, minAmount, sort, page, size, excludeStolen);
   }
 
   /**

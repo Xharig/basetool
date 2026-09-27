@@ -43,6 +43,8 @@ import java.util.UUID;
  * @param amount the quantity; required, non-negative
  * @param personal {@code true} for a personal entry; cannot be combined with mission/job-order
  *     references
+ * @param stolen {@code true} books the stock in as „gestohlen" (REQ-INV-053); {@code null} means
+ *     {@code false}; refused while the marker is switched off
  * @param missionId optional mission reference
  * @param jobOrderId optional job-order reference
  * @param owningOrgUnitId optional owner-picker output; must be an org unit the target user belongs
@@ -63,6 +65,7 @@ public record InventoryItemCreateDto(
     @Min(0) @Max(1000) Integer quality,
     @NotNull Double amount,
     Boolean personal,
+    Boolean stolen,
     UUID missionId,
     UUID jobOrderId,
     UUID owningOrgUnitId,

@@ -29,7 +29,8 @@ import java.util.UUID;
  *
  * <p>The quantity is split across job orders and missions ({@code *Allocations}, unassigned {@code
  * *Rest}; REQ-INV-027). A material row carries {@code material} and {@code quality}; a game-item
- * row carries {@code gameItem} with {@code null} material and quality (REQ-INV-029).
+ * row carries {@code gameItem} with {@code null} material and quality (REQ-INV-029). {@code stolen}
+ * is the „gestohlen" marker (REQ-INV-053).
  */
 public record InventoryItemDto(
     UUID id,
@@ -40,6 +41,7 @@ public record InventoryItemDto(
     Integer quality,
     Double amount,
     Boolean personal,
+    Boolean stolen,
     List<JobOrderAllocationDto> jobOrderAllocations,
     Double jobOrderRest,
     List<MissionAllocationDto> missionAllocations,

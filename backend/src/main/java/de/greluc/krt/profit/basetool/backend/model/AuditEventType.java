@@ -132,6 +132,15 @@ public enum AuditEventType {
   /** A member changed the org unit of a selection of their own personal rows (REQ-INV-052). */
   INVENTORY_BULK_ORG_UNIT_CHANGED(AuditDomain.INVENTORY),
 
+  /** A row, or a part split off it, was marked „gestohlen" (REQ-INV-053). */
+  INVENTORY_STOLEN_MARKED(AuditDomain.INVENTORY),
+
+  /** The „gestohlen" marker was removed from a row or a part split off it (REQ-INV-053). */
+  INVENTORY_STOLEN_UNMARKED(AuditDomain.INVENTORY),
+
+  /** A member set or removed the „gestohlen" marker on a selection of own rows (REQ-INV-053). */
+  INVENTORY_BULK_STOLEN_CHANGED(AuditDomain.INVENTORY),
+
   /**
    * A deleted user's inventory rows were bulk-reassigned to the fallback admin.
    *

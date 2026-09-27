@@ -105,7 +105,7 @@ something broke once.
   `source_systems` and `description_en` / `description_de` one release earlier. It is
   the worked example for the two-phase DROP rule below.
 
-- **V126–V246** — grouped by feature rather than listed file by file (the file names
+- **V126–V247** — grouped by feature rather than listed file by file (the file names
   say the rest):
   - **Blueprints** — personal and default blueprints plus their alias tables:
     V126–V127, V157, V163, V176, V228.
@@ -154,9 +154,10 @@ something broke once.
     without a leading index (REQ-DATA-017).
   - **Profile** — the optional RSI handle with its shape check and case-insensitive
     unique index (V246, REQ-SEC-072).
+  - **Lager** — the „gestohlen“ marker on `inventory_item` (V247, REQ-INV-053).
 
 This timeline is curated, not exhaustive (checked against the directory on
-2026-09-26, tip V246). `ls | sort -V | tail -1` in this directory is the only reliable
+2026-09-26, tip V247). `ls | sort -V | tail -1` in this directory is the only reliable
 answer to "what is the current tip?".
 
 ## Hard rules
