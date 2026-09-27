@@ -267,7 +267,7 @@ public class LiveSyncSubscriptionAuthorizer {
       return failOpen(topic);
     } catch (RuntimeException e) {
       log.debug(
-          "Live-sync subscribe authorization probe failed for topic {} (fail-open direction by"
+          "Live-sync subscribe access probe failed for topic {} (fail-open direction by"
               + " class)",
           topic.canonical(),
           e);

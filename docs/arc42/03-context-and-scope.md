@@ -11,7 +11,8 @@
    Desktop extractor ───►│   missions · hangar · Lager · job orders ·    │       via Keycloak)
    (refinery + blueprint │   refinery · Materialbörse · Kartellbank ·    │
     exports → JSON)      │   notifications · audit · org chart           │◄──── UEX · SC Wiki
-                         │                                               │      (game data)
+   Exchange clients ◄───►│                                               │      (game data)
+   (VerseKit, extractor) │                                               │
    Maintainer  ─────────►│                                               │
    (@greluc)             │                                               │────► SMTP relay
                          └───────────────────────────────────────────────┘      (account mails)
@@ -27,8 +28,9 @@
 | --- | --- | --- | --- |
 | **Member, browser** | in | Interactive use of every feature, over one authenticated session | The primary actor |
 | **Member, Android app** | in | The same data, over `api.profit-base.online` with its own vhost, rate limits and deny rules; sign-in against Keycloak on the app origin (ADR-0166) | A separate repository (`basetool-android`) with its own release cycle |
-| **Desktop extractor** | in | Refinery work orders read from screenshots and blueprints read from the game log, as JSON `POST`s to the ingest gateway (`/v1/refinery-extract`, `/v1/blueprint-preview`) | A separate repository (`basetool-sc-extractor`); **a restricted interface**, not an open API |
-| **Approved external clients** *(planned, epic #2078)* | both | The member's own blueprints, personal Lager lots and ships, both ways, plus a read-only anonymised demand feed, over `/exchange/v1/**` on the ingest gateway — consent per capability, DPoP-bound tokens, a database client registry ([`external-exchange.md`](../specs/external-exchange.md), ADR-0216) | Third-party desktop tools (VerseKit first) and, after its migration, the extractor; programs on the member's PC that we do not build |
+| **Desktop extractor** | in | Refinery work orders read from screenshots and blueprints read from the game log, as JSON `POST`s to the ingest gateway (`/v1/refinery-extract`, `/v1/blueprint-preview`); these legacy routes answer `410` once the extractor has moved to the exchange (REQ-XCH-033) | A separate repository (`basetool-sc-extractor`); **a restricted interface**, not an open API |
+| **Approved exchange clients** (epic #2078) | both | The member's own blueprints, personal Lager lots and ships, both ways, plus a read-only anonymised demand feed, the location list and review drafts, over `/exchange/v1/**` on the ingest gateway — consent per capability, DPoP-bound tokens, a database client registry ([`external-exchange.md`](../specs/external-exchange.md), ADR-0216 … ADR-0220). Built; the global switch stays off until the go-live | Programs on the member's PC: third-party tools approved one by one (VerseKit first) and the SC Extractor as the first-party client |
+| **GitHub Pages** | out | The third-party documentation (`docs/exchange/`, rendered OpenAPI reference, schemas), built by `exchange-docs.yml` and deployed from `main` only; the service document's `docsUrl` points there. A static site, no runtime unit — the schemas' permanent `$id`s stay on the ingest host (REQ-XCH-002, REQ-XCH-011) | Documentation hosting |
 | **Discord** | both | OAuth2 social login, guild membership, in-guild role and nickname — all asked by the Keycloak SPI, fail-closed; the applications never call Discord | An identity the organisation already uses; the tool does not own it |
 | **Keycloak** | — | *Inside* the boundary as a deployed component, but *outside* the applications: they never see a credential | See §5 |
 | **UEX** | out | Commodity and item prices, the universe's locations, vehicles, refinery methods and yields (`integration/UexClient`) | Third-party game-economy data |
@@ -52,7 +54,7 @@ address over PROXY protocol v2; TLS still terminates at the edge, which publishe
 | Public name | Terminates at | Reaches | Notes |
 | --- | --- | --- | --- |
 | `profit-base.online` | edge (nginx) | `frontend`; `keycloak` under `/auth` | The whole interactive UI, and identity on the same origin (ADR-0166). The landing page and the legal pages are the only unauthenticated content (ADR-0159). |
-| `ingest.profit-base.online` | edge | `ingest` | The desktop-extractor gateway. Approved clients only; an unapproved caller gets `403 CLIENT_NOT_ALLOWED`. |
+| `ingest.profit-base.online` | edge | `ingest` | The desktop-extractor gateway (`/v1`) and the exchange API (`/exchange/v1`), through the edge's catch-all location. Approved clients only; an unapproved caller gets `403 CLIENT_NOT_ALLOWED`. |
 | `api.profit-base.online` | edge | `backend` | For the Android app. Rewrites the whole `X-Forwarded-*`/`Forwarded` family and denies `/actuator`. |
 | `grafana.profit-base.online` | edge | `grafana` | Operator-facing, behind Grafana's own OIDC login against the same Keycloak. |
 
@@ -75,7 +77,7 @@ does not have to.
 - **Public API access.** The ingest interface publishes an OpenAPI document so the official
   extractor can be built against a stable contract (`REQ-INGEST-010`); that is documentation of a
   restricted interface, not an invitation — only approved clients are served (`REQ-INGEST-011`).
-  The planned exchange API (epic #2078) keeps that line: it opens a narrow, capability-scoped
+  The exchange API (epic #2078) keeps that line: it opens a narrow, capability-scoped
   contract to clients approved one by one in a public issue and PR, never the backend API
   (ADR-0216).
 - **Handover and location of traded goods.** The Materialbörse matches offers to requests and then

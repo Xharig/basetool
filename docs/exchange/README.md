@@ -42,7 +42,20 @@ the registry grants it to the client.
 - [Client security requirements](client-security.md) — sign-in, DPoP, token storage, releases.
 - [Becoming an approved client](onboarding.md) — how to apply and what approval means.
 - [Conformance fixtures](examples/README.md) — valid and invalid examples for every schema.
+- [Sync guide](sync-guide.md) — pull before push, baselines, tombstones, conflicts, idempotency, the
+  mass-change guard, rate limits and back-off. Read it before writing a sync.
 - [Changelog](changelog.md) — contract changes, dated.
+
+## Resources
+
+- [Connect](resources/connect.md) — the service document, labelling the installation, the account
+  check.
+- [Catalogue](resources/catalog.md) — resolving item references, the Lager's locations.
+- [Blueprints](resources/blueprints.md) — the blueprint feed and blueprint changes.
+- [Stock](resources/stock.md) — stock lots, setting quantities, what a book-out does.
+- [Ships](resources/ships.md) — the ship feed, links, upserts and removals.
+- [Org demand](resources/org-demand.md) — the anonymous open demand of the member's units.
+- [Drafts](resources/drafts.md) — blueprint and refinery drafts reviewed in the browser.
 
 ## Support
 

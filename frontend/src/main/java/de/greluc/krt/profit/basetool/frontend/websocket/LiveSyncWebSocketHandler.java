@@ -655,7 +655,7 @@ public class LiveSyncWebSocketHandler extends TextWebSocketHandler {
           LiveSyncSubscriptionAuthorizer.failOpen(topic);
       droppedCounter(topic, MetricNames.DROPPED_AUTHORIZE_SATURATED).increment();
       log.warn(
-          "Live-sync subscribe authorization for topic {} was not scheduled (auth executor"
+          "Live-sync subscribe access check for topic {} was not scheduled (auth executor"
               + " saturated); resolved as {}",
           topic.canonical(),
           verdict);
@@ -687,20 +687,20 @@ public class LiveSyncWebSocketHandler extends TextWebSocketHandler {
       decision = authorizer.authorize(topic, token, pin, authorities, subject);
       if (decision == LiveSyncSubscriptionAuthorizer.Decision.DENY_INDETERMINATE) {
         log.warn(
-            "Live-sync subscribe to topic {} failed closed on an indeterminate authorization"
-                + " outcome; this tab gets no live updates for it until it reconnects",
+            "Live-sync subscribe to topic {} failed closed because its access check was"
+                + " indeterminate; this tab gets no live updates for it until it reconnects",
             topic.canonical());
       }
     } catch (RuntimeException e) {
       decision = LiveSyncSubscriptionAuthorizer.failOpen(topic);
       if (decision == LiveSyncSubscriptionAuthorizer.Decision.DENY_INDETERMINATE) {
         log.warn(
-            "Live-sync subscribe to topic {} failed closed: the authorization probe threw",
+            "Live-sync subscribe to topic {} failed closed: its access check threw",
             topic.canonical(),
             e);
       } else {
         log.debug(
-            "Live-sync subscribe authorization threw for {} (failing open by class)",
+            "Live-sync subscribe access check threw for {} (failing open by class)",
             topic.canonical(),
             e);
       }

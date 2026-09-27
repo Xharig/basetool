@@ -250,19 +250,25 @@ not happened.
   release rollback to 1.11.0 or older now needs step 4 undone first — above all the Discord
   precheck's truststore, or that guard fails open again without an outage to notice it by.
 
-## 11.7a Accepted risks of the planned exchange API
+## 11.7a Accepted risks of the exchange API
 
 Decided by the owner on 2026-09-26 for epic #2078 and written down so they are not rediscovered as
-bugs ([`external-exchange.md`](../specs/external-exchange.md), threat model):
+bugs ([`external-exchange.md`](../specs/external-exchange.md), threat model). The exchange is built
+and its global switch stays off until the go-live; the risks hold from then on.
 
-- **No repo-reviewed capability ceiling.** The client registry lives in the database and one admin
-  click grants write access; a taken-over admin or client maintainer account abuses it at once. The
-  controls are detection and reversal — the „Verbundene Anwendungen" audit area, an alert on every
-  registry change, journal and undo, suspension (ADR-0217).
+- **No repo-reviewed capability ceiling.** The client registry lives in the database, not in the
+  repository: one admin click grants a client write access. A taken-over admin account grants it
+  at once, and a taken-over maintainer account of an approved client — its GitHub or release
+  account — abuses a grant through a malicious update. The controls are detection and reversal,
+  not prevention: the „Verbundene Anwendungen" audit area, the `ExchangeRegistryChanged` alert on
+  every registry change, the journal and the member's undo, and suspending the client (ADR-0217).
 - **Unsigned client releases.** Code signing is recommended, not required.
 - **Device-code phishing** is countered, not prevented (RFC 8628 §5.4).
-- **A sync book-out can lower or remove Materialbörse offers**, and undo does not restore them.
-- **The minimum-version gate is cooperative**; it stops honest old releases only.
+- **A sync book-out can lower or remove Materialbörse offers**, as a web book-out does, and undo
+  does not restore them. The change result reports `offersReduced` / `offersRemoved` and each
+  offer change is audited (REQ-XCH-016, -022).
+- **The minimum-version gate is cooperative.** It reads the `User-Agent`, so it stops honest old
+  releases, never a client that lies about its version (REQ-XCH-024).
 
 ## 11.8 Smaller, known, and deliberately left
 
