@@ -1,0 +1,96 @@
+/*
+ * Profit Basetool - squadron-management web app.
+ * Copyright (C) 2026 Lucas Greuloch
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package de.greluc.krt.profit.basetool.backend.repository;
+
+import de.greluc.krt.profit.basetool.backend.model.ExchangeChange;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+/** Reads and purges the trigger-written exchange change feed (REQ-XCH-013, ADR-0224). */
+public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, Long> {
+
+  /**
+   * Returns the oldest transaction id still running; every entry of a lower one is final.
+   *
+   * @return the watermark
+   */
+  @Query(
+      value = "SELECT CAST(CAST(pg_snapshot_xmin(pg_current_snapshot()) AS text) AS bigint)",
+      nativeQuery = true)
+  long watermark();
+
+  /**
+   * Returns the feed position of the last entry older than a cutoff.
+   *
+   * @param cutoff the oldest change still kept
+   * @return the position, empty when no entry is that old
+   */
+  @Query(
+      value =
+          """
+          SELECT tx, seq FROM exchange_change WHERE changed_at < :cutoff
+          ORDER BY tx DESC, seq DESC LIMIT 1
+          """,
+      nativeQuery = true)
+  Optional<Position> lastPositionBefore(@Param("cutoff") Instant cutoff);
+
+  /**
+   * Deletes every entry up to and including a feed position.
+   *
+   * @param tx the position's transaction id
+   * @param seq the position's sequence number
+   * @return the number of entries deleted
+   */
+  @Modifying
+  @Query(value = "DELETE FROM exchange_change WHERE (tx, seq) <= (:tx, :seq)", nativeQuery = true)
+  int deleteThrough(@Param("tx") long tx, @Param("seq") long seq);
+
+  /**
+   * Lists a member's entries in sequence order.
+   *
+   * @param userId the member
+   * @return the entries
+   */
+  List<ExchangeChange> findAllByUserIdOrderBySeqAsc(UUID userId);
+
+  /** A feed position as a native query returns it. */
+  interface Position {
+
+    /**
+     * The writing transaction's id.
+     *
+     * @return the id
+     */
+    long getTx();
+
+    /**
+     * The sequence number.
+     *
+     * @return the number
+     */
+    long getSeq();
+  }
+}

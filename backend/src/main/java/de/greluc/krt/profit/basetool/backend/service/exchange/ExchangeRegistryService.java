@@ -30,7 +30,9 @@ import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeSettings;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientCreateRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientUpdateRequest;
+import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientUsageDto;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
@@ -69,6 +71,9 @@ public class ExchangeRegistryService {
   private final MeterRegistry meterRegistry;
   private final KnownExchangeClients knownExchangeClients;
 
+  /** Counts each client's live installations for the admin page. */
+  private final ExchangeInstallationRepository installationRepository;
+
   /**
    * Registers {@code basetool_exchange_registry_changes_total} for every action at zero, so the
    * first change of each kind shows up as an increase.
@@ -90,6 +95,20 @@ public class ExchangeRegistryService {
   @Transactional(readOnly = true)
   public List<ExchangeClient> listClients() {
     return clientRepository.findAllWithCapabilities();
+  }
+
+  /**
+   * Returns how widely each client is in use: its connected members and last activity, counted over
+   * live installations only. A client nobody uses has no row.
+   *
+   * @return one row per client in use
+   */
+  @NotNull
+  @Transactional(readOnly = true)
+  public List<ExchangeClientUsageDto> usage() {
+    return installationRepository.countLiveByClient().stream()
+        .map(u -> new ExchangeClientUsageDto(u.getId(), u.getConnectedMembers(), u.getLastSeenAt()))
+        .toList();
   }
 
   /**
