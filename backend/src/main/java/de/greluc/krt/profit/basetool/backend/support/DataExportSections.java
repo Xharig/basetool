@@ -170,6 +170,16 @@ public final class DataExportSections {
               WHERE r.user_id = :userId ORDER BY r.revoked_at
               """),
           new Section(
+              "exchangeChanges",
+              ART_15,
+              "Recorded by the database whenever the member's synced data changes, naming the"
+                  + " channel and, for an external client, the client that changed it; kept 90"
+                  + " days.",
+              """
+              SELECT resource, entity_key, source_channel, source_client, changed_at
+              FROM exchange_change WHERE user_id = :userId ORDER BY seq
+              """),
+          new Section(
               "personalInventory",
               ART_15_20,
               "Entered by the member, including free-text notes.",
