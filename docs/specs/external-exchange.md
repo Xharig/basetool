@@ -257,10 +257,13 @@ accepted. The provisioner applies this on production only **after** the legacy s
   (`login-oauth2-device-verify-user-code.ftl`). *Corrected 2026-09-27:* this item said „both pages",
   but `login-oauth-grant.ftl` carries no warning, and a `verification_uri_complete` link goes
   straight to it (security review 2 of #2092, M1).
-- [ ] For a device login the consent page shows the phishing warning and the user code, asserted on
+- [x] For a device login the consent page shows the phishing warning and the user code, asserted on
   both pages by a theme test. *Keycloak 26.7.4 hands the consent page no user code
-  (`OAuthGrantBean` holds the session code, the client and the scopes); the way to show it is an
-  open owner decision.*
+  (`OAuthGrantBean` holds the session code, the client and the scopes), so `keycloak-spi`'s login
+  forms provider `krt-freemarker` adds it as `krtDeviceUserCode` (ADR-0228,
+  `DeviceConsentLoginFormsProviderTest`); `scripts/sandbox-smoke.py` asserts the warning on both
+  pages and the code on the consent page against the sandbox Keycloak image, and the same run was
+  made through a `verification_uri_complete` link on 2026-09-27.*
 - [x] The client documentation tells clients to show the bare `verification_uri` with the
   `user_code` and never `verification_uri_complete` (`docs/exchange/authentication.md`,
   `client-security.md`, `quickstart.md`, the application template).
@@ -272,7 +275,7 @@ accepted. The provisioner applies this on production only **after** the legacy s
   the consent page on every login, also when consent exists; access and refresh tokens carry
   `cnf.jkt`, and a refresh without a DPoP proof is refused.
 
-**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1; the consent page's warning and user code — open (#2092, M1)
+**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1; the consent page's warning and user code — built (#2092, M1, ADR-0228)
 
 ### REQ-XCH-006 — DPoP is required on every exchange route
 
@@ -1381,7 +1384,7 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | Threat | Countered by |
 | --- | --- |
 | Stolen refresh or access token | DPoP binding of both (REQ-XCH-005/-006); tokens only in the platform secret store (REQ-XCH-027) |
-| Device-code phishing (RFC 8628 §5.4) | themed device page warning, clients showing only the bare `verification_uri`, notification and a highlight of every new connection until the member acknowledges it, 600 s code lifespan (REQ-XCH-005/-027/-032) — **partial**: an attacker's `verification_uri_complete` link skips the device page, and the consent page does not yet carry the warning and the code (security review 2 of #2092, M1) |
+| Device-code phishing (RFC 8628 §5.4) | the warning on the device page and, with the user code to compare, on the consent page an attacker's `verification_uri_complete` link leads to (ADR-0228); clients showing only the bare `verification_uri`; notification and a highlight of every new connection until the member acknowledges it; 600 s code lifespan (REQ-XCH-005/-027/-032) — countered, not prevented |
 | A revoked installation refreshing its way back | persistent `jkt` deny list (REQ-XCH-008) |
 | A member who leaves keeping access | departure revocations (REQ-XCH-008) |
 | Malicious client update, compromised maintainer account | capability scoping, own-data-only, journal and undo, guard, suspension; signing recommended (REQ-XCH-002/-009/-021/-022) — accepted residual risk |

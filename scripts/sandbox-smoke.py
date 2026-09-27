@@ -97,10 +97,16 @@ class Smoke:
             cookie.secure = False
 
     def page(self, url: str, data: dict | None = None) -> tuple[str, str]:
-        """Loads a Keycloak page as a browser would, submitting a form when data is given."""
+        """Loads a Keycloak page as a browser would, submitting a form when data is given.
+
+        It asks for HTML like a browser: Keycloak answers a form post to the device page with the
+        device authorization endpoint's JSON unless the request prefers HTML.
+        """
         body = urllib.parse.urlencode(data).encode() if data is not None else None
         self.unsecure_cookies()
-        with self.browser.open(urllib.request.Request(self.local(url), data=body)) as answer:
+        request = urllib.request.Request(
+            self.local(url), data=body, headers={"Accept": "text/html,application/xhtml+xml"})
+        with self.browser.open(request) as answer:
             return answer.geturl(), answer.read().decode("utf-8", "replace")
 
     @staticmethod
@@ -136,16 +142,29 @@ class Smoke:
         status, device = self.post_form(
             base + "/auth/device", {"client_id": self.args.client, "scope": SCOPES})
         self.step("device authorization answers", status == 200, str(status))
-        url, text = self.page(device["verification_uri_complete"])
+        url, text = self.page(device["verification_uri"])
+        self.step("the code-entry page warns about device-code phishing",
+                  'id="krt-device-phishing-warning"' in text, url)
+        consent_seen = False
         for _ in range(6):
             action, fields = self.form(text)
-            if "password" in text and "username" in fields:
+            if "device_user_code" in fields:
+                fields["device_user_code"] = device["user_code"]
+            elif "password" in text and "username" in fields:
                 fields.update({"username": self.args.user, "password": self.args.password})
             elif 'name="accept"' in text:
+                self.step("the consent page warns about device-code phishing",
+                          'id="krt-device-consent-warning"' in text, url)
+                shown = re.search(r'id="krt-device-user-code"[^>]*>([^<]*)<', text)
+                self.step("the consent page shows the device login's user code",
+                          shown is not None and shown.group(1).strip() == device["user_code"],
+                          shown.group(1) if shown else "no code on the page")
+                consent_seen = True
                 fields["accept"] = "yes"
-            elif "user_code" not in fields:
+            else:
                 break
             url, text = self.page(urllib.parse.urljoin(url, action), fields)
+        self.step("the device login reached the consent page", consent_seen, url)
         done = "success" in text.lower() or "erfolgreich" in text.lower()
         self.step("the member signs in and consents on the device page", done, url)
         token_url = self.local(base + "/token")

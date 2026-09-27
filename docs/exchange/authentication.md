@@ -82,8 +82,10 @@ follow code links, which is exactly what an attacker sends them.
 
 Only ever show a code this installation created itself, and never relay a code to or from another
 device: a device code typed into someone else's browser hands over that person's account (RFC 8628
-§5.4). The Basetool's code-entry page warns the member about it. Every new connection is announced
-to the member and stays marked „Neu" on „Verbundene Anwendungen" until the member acknowledges it.
+§5.4). The Basetool's code-entry page warns the member about it, and the consent page repeats the
+warning with the code of this sign-in, which must match the one your application shows. Every new
+connection is announced to the member and stays marked „Neu" on „Verbundene Anwendungen" until the
+member acknowledges it.
 
 ### 4. Poll the token endpoint
 
