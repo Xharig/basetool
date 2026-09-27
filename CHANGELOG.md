@@ -238,6 +238,9 @@
 
 ### Fixed
 
+- **Datenaustausch: Schiffe von Mitgliedern mehrerer Einheiten.** Legt eine verbundene Anwendung
+  für ein Mitglied mehrerer Einheiten ein Schiff an, entsteht es ohne Einheit, statt dass der ganze
+  Abgleich abbricht; bei genau einer Einheit bekommt es diese.
 - **Benachrichtigungen kommen nach einer Pause wieder sofort an.** Der Live-Stream der
   Benachrichtigungen (`/notifications/stream`) holt sein Zugriffstoken jetzt über den
   Single-Flight-Manager und erneuert es beim Öffnen, statt nach fünf Minuten Leerlauf ein abgelaufenes

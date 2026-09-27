@@ -26,6 +26,7 @@ import de.greluc.krt.profit.basetool.backend.mapper.ShipMapper;
 import de.greluc.krt.profit.basetool.backend.model.AuditEventType;
 import de.greluc.krt.profit.basetool.backend.model.Location;
 import de.greluc.krt.profit.basetool.backend.model.MissionUnit;
+import de.greluc.krt.profit.basetool.backend.model.OrgUnit;
 import de.greluc.krt.profit.basetool.backend.model.Ship;
 import de.greluc.krt.profit.basetool.backend.model.ShipType;
 import de.greluc.krt.profit.basetool.backend.model.User;
@@ -52,6 +53,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -109,13 +111,46 @@ public class HangarService {
   @Transactional
   public Ship addShip(@NotNull UUID userId, @NotNull ShipRequestDto dto) {
     User user = Entities.require(userRepository.findPlainById(userId), "User not found");
+    return create(
+        user,
+        dto,
+        ownerScopeService.resolveOrgUnitForPickerOutputNullable(user, dto.owningOrgUnitId()));
+  }
+
+  /**
+   * Adds a ship a connected application creates for the member (REQ-XCH-017): stamped with the
+   * member's only org unit, or none when the member has none or several, since a client names no
+   * unit; otherwise as {@link #addShip(UUID, ShipRequestDto)}.
+   *
+   * @param userId owning user's id
+   * @param dto ship payload (name, type, insurance, fitted, location); its org unit is ignored
+   * @return the persisted ship
+   * @throws NotFoundException when the user id does not resolve
+   * @throws BadRequestException when the ship type or location id is missing or invalid
+   */
+  @Transactional
+  public Ship addShipForClient(@NotNull UUID userId, @NotNull ShipRequestDto dto) {
+    User user = Entities.require(userRepository.findPlainById(userId), "User not found");
+    return create(user, dto, ownerScopeService.resolveOrgUnitForClientCreate(user));
+  }
+
+  /**
+   * Creates the ship with the given owning org unit and audits it.
+   *
+   * @param user the owner
+   * @param dto ship payload (name, type, insurance, fitted, location)
+   * @param owningOrgUnit the stamped org unit, or {@code null} for an ownerless personal ship
+   * @return the persisted ship
+   * @throws BadRequestException when the ship type or location id is missing or invalid
+   */
+  private @NotNull Ship create(
+      @NotNull User user, @NotNull ShipRequestDto dto, @Nullable OrgUnit owningOrgUnit) {
     Ship ship = new Ship();
     ship.setName(dto.name());
     ship.setInsurance(dto.insurance());
     ship.setFitted(dto.fitted());
     ship.setOwner(user);
-    ship.setOwningOrgUnit(
-        ownerScopeService.resolveOrgUnitForPickerOutputNullable(user, dto.owningOrgUnitId()));
+    ship.setOwningOrgUnit(owningOrgUnit);
     ship.setShipType(
         shipTypeRepository
             .findById(dto.shipTypeId())
@@ -131,7 +166,7 @@ public class HangarService {
         AuditEventType.HANGAR_SHIP_CREATED,
         saved.getId(),
         saved.getShipType().getName(),
-        userId,
+        user.getId(),
         AuditDetails.of("shipType", saved.getShipType().getId()));
     return saved;
   }

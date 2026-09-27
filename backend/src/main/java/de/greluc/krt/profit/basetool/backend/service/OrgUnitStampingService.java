@@ -143,6 +143,20 @@ public class OrgUnitStampingService {
   }
 
   /**
+   * Resolves the owning org unit of an aggregate a connected application creates for a member
+   * (REQ-XCH-017): the member's only direct membership, or none when the member has none or
+   * several, because a client names no unit and the member assigns it later in the web.
+   *
+   * @param targetUser the member the aggregate is created for
+   * @return the member's only org unit, or {@code null}
+   */
+  @Nullable
+  public OrgUnit resolveOrgUnitForClientCreate(@NotNull User targetUser) {
+    Set<UUID> memberOrgUnitIds = collectMemberOrgUnitIds(targetUser);
+    return memberOrgUnitIds.size() == 1 ? resolveStampedOrgUnit(memberOrgUnitIds, null) : null;
+  }
+
+  /**
    * Variant of {@link #resolveOrgUnitForPickerOutput(User, UUID)} for the ownerless-personal
    * aggregates (ship, refinery order, inventory item): a membershipless user without a pick
    * resolves to {@code null} instead of a 400. Every other case behaves identically.
