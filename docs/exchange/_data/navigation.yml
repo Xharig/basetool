@@ -1,0 +1,50 @@
+- section: Guides
+  items:
+    - title: Overview
+      path: README.md
+    - title: Quick start
+      path: quickstart.md
+    - title: Authentication
+      path: authentication.md
+    - title: DPoP reference
+      path: dpop-reference/README.md
+    - title: Sync guide
+      path: sync-guide.md
+    - title: Formats
+      path: formats.md
+    - title: Errors
+      path: errors.md
+    - title: Versioning
+      path: versioning.md
+    - title: Client security
+      path: client-security.md
+    - title: Becoming a client
+      path: onboarding.md
+    - title: Local sandbox
+      path: sandbox.md
+    - title: Changelog
+      path: changelog.md
+- section: Resources
+  items:
+    - title: Connect
+      path: resources/connect.md
+    - title: Catalogue
+      path: resources/catalog.md
+    - title: Blueprints
+      path: resources/blueprints.md
+    - title: Stock
+      path: resources/stock.md
+    - title: Ships
+      path: resources/ships.md
+    - title: Org demand
+      path: resources/org-demand.md
+    - title: Drafts
+      path: resources/drafts.md
+- section: Reference
+  items:
+    - title: OpenAPI reference
+      path: reference/index.html
+    - title: Schemas
+      path: schemas/index.md
+    - title: Conformance fixtures
+      path: examples/README.md

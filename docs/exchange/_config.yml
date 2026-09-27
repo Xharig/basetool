@@ -1,15 +1,24 @@
 title: Profit Basetool Exchange API
 description: How approved clients exchange a member's data with the Profit Basetool.
-theme: jekyll-theme-primer
+lang: en
+theme: null
+repository: krt-profit/basetool
+edit_base: https://github.com/krt-profit/basetool/edit/main/docs/exchange/
 plugins:
   - jekyll-relative-links
   - jekyll-readme-index
+  - jekyll-seo-tag
 relative_links:
   enabled: true
   collections: false
 exclude:
   - .markdownlint.json
-github:
-  source:
-    branch: main
-    path: docs/exchange
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+  - scope:
+      path: schemas
+    values:
+      generated: true

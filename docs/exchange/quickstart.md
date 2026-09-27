@@ -154,7 +154,7 @@ print(call("POST", "/exchange/v1/me/installation", {"label": "Quick start"}))
 ```
 
 The service document names the member's capabilities for this client and the limits. Labelling the
-installation lets the member tell it apart on „Verbundene Anwendungen".
+installation lets the member tell it apart on *Connected applications*.
 
 ## 7. Read the first sync page
 
@@ -188,8 +188,8 @@ print(status, result)
 ```
 
 The answer counts `applied`, `unchanged` and `notApplied`. Sign in to the web frontend at
-`https://localhost:18081` as `sandbox-member`: the Sandbox Helmet is in *Meine Blueprints*, and
-*Verbundene Anwendungen* lists the client, the installation „Quick start" and the change, which the
+`https://localhost:18081` as `sandbox-member`: the Sandbox Helmet is in *My Blueprints*, and
+*Connected applications* lists the client, the installation "Quick start" and the change, which the
 member can undo there.
 
 ## Next

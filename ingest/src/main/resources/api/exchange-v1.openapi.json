@@ -349,7 +349,7 @@
     "/exchange/v1/catalog/locations": {
       "get": {
         "operationId": "catalog_locations",
-        "summary": "The Lager's non-hidden locations.",
+        "summary": "The warehouse's non-hidden locations.",
         "tags": [
           "catalog"
         ],

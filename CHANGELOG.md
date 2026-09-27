@@ -203,6 +203,13 @@
 
 ### Changed
 
+- **Datenaustausch: Doku-Seite im KRT-Design.** Die öffentliche Entwickler-Doku
+  (`krt-profit.github.io/basetool`) nutzt statt des Standard-Themes das DAS-KARTELL-Design mit
+  Basetool-Logo, Seitennavigation, „Improve this page“-Link und einer eingefärbten API-Referenz;
+  dunkel, handytauglich, ohne externe Ressourcen.
+- **Datenaustausch: Entwickler-Doku komplett auf Englisch.** Deutsche Seitennamen und Begriffe
+  sind durch die englischen Namen der Web-App ersetzt; ein CI-Check verhindert neue Umlaute und
+  deutsche Anführungszeichen auf der Seite.
 - **Datenaustausch: zurückgehaltene Massenänderungen je Anwendung.** Jede verbundene Anwendung hat je
   Mitglied einen eigenen Platz für eine zu bestätigende Massenänderung; eine andere Anwendung kann sie
   nicht mehr verdrängen.

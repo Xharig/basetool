@@ -1,0 +1,11 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#141414">
+<link rel="icon" type="image/svg+xml" href="{{ '/assets/logos/basetool-favicon.svg' | relative_url }}">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ '/assets/logos/basetool-favicon-32.png' | relative_url }}">
+<link rel="icon" type="image/png" sizes="16x16" href="{{ '/assets/logos/basetool-favicon-16.png' | relative_url }}">
+<link rel="apple-touch-icon" href="{{ '/assets/logos/basetool-appicon-512.png' | relative_url }}">
+{% unless include.preload == false %}<link rel="preload" href="{{ '/assets/fonts/Lato-Light.woff2' | relative_url }}" as="font" type="font/woff2" crossorigin>{% endunless %}
+<link rel="stylesheet" href="{{ '/assets/css/krt-docs.css' | relative_url }}?v={{ site.github.build_revision }}">
+{% seo %}

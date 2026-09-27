@@ -1,4 +1,4 @@
-> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-26.
+> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-27.
 > **Owner area:** UI · **Related ADRs:**
 > [0053](../adr/0053-standardize-user-selection-on-searchable-combobox.md) (searchable user pickers, REQ-UI-012) ·
 > [0093](../adr/0093-eliminate-inline-style-attributes-csp-style-src-attr-none.md) (no inline `style=""`, REQ-UI-013) ·
@@ -102,6 +102,8 @@ login / entry surfaces. `color-scheme: dark`; there is **no light theme**.
   rules and font files were removed. `--font-headline` is kept as a Lato alias so existing
   `var(--font-headline)` references keep resolving.)
 - The brand ships no monospace face; "mono" contexts use Lato with tabular figures.
+  **Exception, owner decision 2026-09-27:** the Exchange API docs site's code blocks and Redoc
+  code samples use the generic system `monospace`; its inline code stays Lato (REQ-XCH-002).
 
 ### REQ-UI-005 — Department colours (Bereichsfarben) — values are frozen
 
@@ -962,6 +964,7 @@ Binding placement:
 | Browser tab                                                                   | `logos/basetool-favicon.svg` + `-32.png` + `-16.png`                     |
 | iOS home screen / pinned site                                                 | `logos/basetool-appicon-512.png`                                         |
 | Keycloak login theme                                                          | `img/basetool-logo.svg`                                                  |
+| Exchange API docs site (GitHub Pages, REQ-XCH-002) — header + browser tab     | `assets/logos/basetool-*`, copied from the frontend at build time        |
 | Generated PDF exports (handover protocol, bank statement, three-month report) | `krt.png` / `krt.svg` — **org mark**, unchanged                          |
 | Fan Kit compliance band                                                       | `images/made-by-the-community.png` — CIG artwork, untouched (REQ-UI-018) |
 

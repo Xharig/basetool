@@ -1,0 +1,12 @@
+{%- assign parts = include.html | split: '<h' -%}
+{%- for part in parts -%}
+{%- if forloop.first -%}{{ part }}{%- continue -%}{%- endif -%}
+{%- assign level = part | slice: 0 -%}
+{%- assign opening = part | split: '>' | first -%}
+{%- if "23456" contains level and opening contains ' id="' -%}
+{%- assign id = opening | split: ' id="' | last | split: '"' | first -%}
+{%- assign closing = '</h' | append: level | append: '>' -%}
+{%- capture anchor %} <a class="heading-anchor" href="#{{ id }}" aria-label="Link to this section">#</a>{{ closing }}{% endcapture -%}
+<h{{ part | replace_first: closing, anchor }}
+{%- else -%}<h{{ part }}{%- endif -%}
+{%- endfor -%}

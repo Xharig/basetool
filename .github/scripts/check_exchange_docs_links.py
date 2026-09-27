@@ -5,6 +5,13 @@ that exists; a link to a directory needs an index page there (README.md, index.m
 or the site answers 404. Links into the site's generated parts (the OpenAPI reference and the
 schema copies, both with generated index pages) are checked against their sources in the
 repository. Anchors and absolute URLs are not followed.
+
+Every page the site navigation (`_data/navigation.yml`) lists must exist too, or the layout would
+silently drop its entry.
+
+The site is for developers and carries no German: no umlaut, no sharp s and no German low
+quotation mark in its sources, nor in the OpenAPI document and schemas it renders. Conformance
+fixtures under examples/ are data under test and are not read.
 """
 
 import argparse
@@ -22,6 +29,74 @@ GENERATED = {
     "reference/exchange-v1.openapi.json": "ingest/src/main/resources/api/exchange-v1.openapi.json",
     "schemas": "ingest/src/main/resources/exchange/v1/schemas",
 }
+
+GENERATED_PAGES = {
+    "reference/index.html": "ingest/src/main/resources/api/exchange-v1.openapi.json",
+    "schemas/index.md": "ingest/src/main/resources/exchange/v1/schemas",
+}
+
+NAV_PATH = re.compile(r"^\s*path:\s*(\S+)\s*$", re.M)
+
+GERMAN = re.compile("[äöüÄÖÜßẞ„‚]")
+
+PROSE_SUFFIXES = {".md", ".html", ".yml", ".yaml", ".py", ".js", ".css", ".txt"}
+
+RENDERED_SOURCES = (
+    "ingest/src/main/resources/api/exchange-v1.openapi.json",
+    "ingest/src/main/resources/exchange/v1/schemas",
+)
+
+
+def german_text(repo: pathlib.Path) -> list[str]:
+    """Returns every line of the site's sources that carries a German character.
+
+    Reads the prose files under docs/exchange except the fixture data under examples/, and the
+    OpenAPI document and schemas the reference and the schema index render.
+
+    Args:
+        repo: the repository root.
+
+    Returns:
+        One ``file:line: characters`` line per offending line.
+    """
+    docs = repo / "docs" / "exchange"
+    files = [path for path in docs.rglob("*")
+             if path.is_file() and path.suffix in PROSE_SUFFIXES
+             and not (path.relative_to(docs).parts[0] == "examples" and path.suffix != ".md")]
+    for source in RENDERED_SOURCES:
+        root = repo / source
+        files += sorted(root.glob("*.json")) if root.is_dir() else [root] if root.exists() else []
+    found = []
+    for path in sorted(files):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            hits = GERMAN.findall(line)
+            if hits:
+                found.append(f"{path.relative_to(repo).as_posix()}:{number}: {''.join(sorted(set(hits)))}")
+    return found
+
+
+def broken_navigation(repo: pathlib.Path) -> list[str]:
+    """Returns every page the site navigation lists that the site would not have.
+
+    Args:
+        repo: the repository root.
+
+    Returns:
+        One ``_data/navigation.yml: path (reason)`` line per missing page.
+    """
+    docs = repo / "docs" / "exchange"
+    navigation = docs / "_data" / "navigation.yml"
+    if not navigation.is_file():
+        return ["docs/exchange/_data/navigation.yml (missing)"]
+    broken = []
+    for path in NAV_PATH.findall(navigation.read_text(encoding="utf-8")):
+        where = f"docs/exchange/_data/navigation.yml: {path}"
+        if path in GENERATED_PAGES:
+            if not (repo / GENERATED_PAGES[path]).exists():
+                broken.append(f"{where} (source missing)")
+        elif not (docs / path).is_file():
+            broken.append(f"{where} (missing)")
+    return broken
 
 
 def broken_links(repo: pathlib.Path) -> list[str]:
@@ -84,6 +159,39 @@ def selftest() -> None:
         (spec / "exchange-v1.openapi.json").write_text("{}", encoding="utf-8")
         found = broken_links(repo)
         assert len(found) == 3, found
+        assert broken_navigation(repo) == ["docs/exchange/_data/navigation.yml (missing)"]
+        (docs / "_data").mkdir()
+        (docs / "_data" / "navigation.yml").write_text(
+            "- section: S\n  items:\n    - title: B\n      path: b.md\n"
+            "    - title: Gone\n      path: gone.md\n"
+            "    - title: Reference\n      path: reference/index.html\n"
+            "    - title: Schemas\n      path: schemas/index.md\n",
+            encoding="utf-8",
+        )
+        found = broken_navigation(repo)
+        assert found == [
+            "docs/exchange/_data/navigation.yml: gone.md (missing)",
+            "docs/exchange/_data/navigation.yml: schemas/index.md (source missing)",
+        ], found
+        assert german_text(repo) == [], german_text(repo)
+        (docs / "b.md").write_text(
+            "# b\n\nOpen „Verbundene Anwendungen“.\nPlain “English”.\n", encoding="utf-8")
+        (docs / "_layouts").mkdir()
+        (docs / "_layouts" / "default.html").write_text("<p>Grüße</p>\n", encoding="utf-8")
+        (docs / "examples" / "v1").mkdir(parents=True)
+        (docs / "examples" / "README.md").write_text("# Fixtures\n", encoding="utf-8")
+        (docs / "examples" / "v1" / "umlaut.json").write_text('{"label": "Bärchen"}',
+                                                             encoding="utf-8")
+        (spec / "exchange-v1.openapi.json").write_text('{"summary": "The warehouse"}', encoding="utf-8")
+        schemas = repo / "ingest/src/main/resources/exchange/v1/schemas"
+        schemas.mkdir(parents=True)
+        (schemas / "a.schema.json").write_text('{"title": "Örtlich"}\n', encoding="utf-8")
+        found = german_text(repo)
+        assert found == [
+            "docs/exchange/_layouts/default.html:1: ßü",
+            "docs/exchange/b.md:3: „",
+            "ingest/src/main/resources/exchange/v1/schemas/a.schema.json:1: Ö",
+        ], found
     print("selftest ok")
 
 
@@ -100,10 +208,13 @@ def main() -> int:
         selftest()
         return 0
     repo = pathlib.Path(__file__).resolve().parents[2]
-    broken = broken_links(repo)
+    broken = broken_links(repo) + broken_navigation(repo)
     for line in broken:
         print(f"broken link: {line}")
-    return 1 if broken else 0
+    german = german_text(repo)
+    for line in german:
+        print(f"German text: {line}")
+    return 1 if broken or german else 0
 
 
 if __name__ == "__main__":

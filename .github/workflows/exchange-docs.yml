@@ -10,6 +10,8 @@ on:
       - .github/workflows/exchange-docs.yml
       - .github/scripts/check_exchange_docs_links.py
       - .github/scripts/prepare_exchange_reference.py
+      - frontend/src/main/resources/static/fonts/**
+      - frontend/src/main/resources/META-INF/resources/logos/**
   pull_request:
     paths:
       - docs/exchange/**
@@ -18,6 +20,8 @@ on:
       - .github/workflows/exchange-docs.yml
       - .github/scripts/check_exchange_docs_links.py
       - .github/scripts/prepare_exchange_reference.py
+      - frontend/src/main/resources/static/fonts/**
+      - frontend/src/main/resources/META-INF/resources/logos/**
   workflow_dispatch:
 
 permissions: {}
@@ -47,7 +51,7 @@ jobs:
       - name: links / Self-test the link checker
         run: python3 .github/scripts/check_exchange_docs_links.py --selftest
 
-      - name: links / Check every relative link stays on the site and resolves
+      - name: links / Check every relative link resolves on the site and no German text is on it
         run: python3 .github/scripts/check_exchange_docs_links.py
 
       - name: markdown / Lint the pages
@@ -88,6 +92,9 @@ jobs:
           cp ingest/src/main/resources/api/exchange-v1.openapi.json build/exchange-site/reference/
           cp ingest/src/main/resources/exchange/v1/schemas/*.schema.json build/exchange-site/schemas/
           python3 .github/scripts/prepare_exchange_reference.py --schema-index build/exchange-site/schemas
+          mkdir -p build/exchange-site/assets/fonts build/exchange-site/assets/logos
+          cp frontend/src/main/resources/static/fonts/Lato-*.woff2 frontend/src/main/resources/static/fonts/OFL.txt build/exchange-site/assets/fonts/
+          cp frontend/src/main/resources/META-INF/resources/logos/basetool-*.svg frontend/src/main/resources/META-INF/resources/logos/basetool-*.png build/exchange-site/assets/logos/
 
       - name: site / Build with Jekyll
         uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697

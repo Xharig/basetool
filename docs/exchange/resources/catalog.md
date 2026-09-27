@@ -63,9 +63,9 @@ client settle `ambiguous` and `unmatched` with the member before it writes, inst
 back as per-op results. A stock op resolves its `material` as a `MATERIAL` first and, when no
 material matches, as an `ITEM`.
 
-## Lager locations — `GET /exchange/v1/catalog/locations`
+## Warehouse locations — `GET /exchange/v1/catalog/locations`
 
-No parameters. The answer is a [`location-list`](../schemas/): the Lager's non-hidden locations,
+No parameters. The answer is a [`location-list`](../schemas/): the warehouse's non-hidden locations,
 ordered by name, each with its UEX city or space station when it is linked to one (a city link wins).
 
 ```json

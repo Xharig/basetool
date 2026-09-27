@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang }}">
+<head>
+{% include head.html preload=false %}
+</head>
+<body class="reference-page">
+{% include icons.html %}
+{% include header.html area="reference" %}
+<main id="content" class="reference-main">
+  <noscript><p class="reference-noscript">The interactive reference needs JavaScript. The <a href="{{ page.spec }}">OpenAPI document</a> and the <a href="{{ '/schemas/' | relative_url }}">schemas</a> can be read without it.</p></noscript>
+  {{ content }}
+</main>
+{% include footer.html %}
+<script src="{{ page.bundle }}"></script>
+<script src="{{ '/assets/js/reference.js' | relative_url }}?v={{ site.github.build_revision }}"></script>
+</body>
+</html>

@@ -13,7 +13,7 @@ The ships the member owns in the Hangar. Reading needs `exchange.hangar.read`, c
 | `shipType` | `{bt, name}`; `bt` is the ship type's Basetool id. |
 | `name` | The member's name for the ship; absent when it has none. Up to 255 characters. |
 | `insurance` | `{kind: LTI}` or `{kind: MONTHS, months}` with 0 to 120 months. |
-| `location` | `{name, uex?}` of the Lager location, when the ship has one. |
+| `location` | `{name, uex?}` of the warehouse location, when the ship has one. |
 | `fitted` | Whether the ship is fitted. |
 
 ## Reading the ships — `GET /exchange/v1/me/ships`
@@ -47,7 +47,7 @@ Send an `Idempotency-Key` and a change set of 1 to 500 ops, `dryRun` optional:
       "op": "upsert",
       "externalId": "vk-8",
       "shipType": {"name": "Ursa Rover"},
-      "name": "Neu",
+      "name": "Pathfinder",
       "insurance": {"kind": "LTI"}
     },
     {"op": "remove", "shipId": "s-2", "version": 4}
@@ -77,7 +77,7 @@ batch may update or remove a ship only once. How an op that is not applied is re
 | `remove` of a ship that is already gone | `unchanged` | — |
 | A `shipId` the member does not own or the server never had, or a ship type that matches nothing | `unmatched` | `UNMATCHED` |
 | A ship type that matches several | `ambiguous` | `AMBIGUOUS` |
-| A place without a Lager location | `rejected` | `LOCATION_UNKNOWN` |
+| A place without a warehouse location | `rejected` | `LOCATION_UNKNOWN` |
 | `link` or `upsert` of a ship this installation links to another id | `rejected` | `LINK_TARGET_TAKEN` |
 | `upsert` or `remove` with a `version` the ship no longer has, or of a ship an earlier op of the batch changed | `rejected` | `VERSION_CONFLICT` |
 | `upsert` without `shipId` for an id this installation already linked | `rejected` | `VERSION_CONFLICT` |

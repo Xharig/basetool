@@ -33,7 +33,7 @@ How each step works is on the [authentication](authentication.md) page.
 - Never write a token or a key into a log, a backup, a diagnostics bundle, a problem report or any
   channel that leaves the device. Redact `Authorization` and `DPoP` headers and anything shaped like
   a JWT from everything you collect.
-- „Disconnect" revokes the refresh token (RFC 7009) and deletes the stored credential.
+- "Disconnect" revokes the refresh token (RFC 7009) and deletes the stored credential.
 
 ## Data
 

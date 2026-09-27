@@ -91,14 +91,36 @@ need no new consent (REQ-SEC-028).
   approved client on the member's own device, that the client's own privacy statement governs it
   there, and how to disconnect and undo; it changes with the go-live.
 
-The third-party pages are `docs/exchange/`, English, published on GitHub Pages at
-`https://krt-profit.github.io/basetool/` by `.github/workflows/exchange-docs.yml`: on every change to
-the pages, the OpenAPI document or the schemas it checks that each relative link stays on the site
-and resolves (`check_exchange_docs_links.py`), lints the Markdown, renders the OpenAPI document into a
+The third-party pages are `docs/exchange/`, published on GitHub Pages at
+`https://krt-profit.github.io/basetool/` for developers only, and entirely in English — no German at
+all (owner decision 2026-09-27): Basetool pages and controls go by the English web app's names
+(„Verbundene Anwendungen" is *Connected applications*, the Lager the *warehouse*, the Materialbörse
+the *Material Exchange*), and German test data stays only in the conformance fixtures under
+`examples/`. `.github/workflows/exchange-docs.yml`, on every change to the pages, the OpenAPI
+document or the schemas, checks that each relative link stays on the site and resolves and that no
+umlaut, sharp s or German low quotation mark appears in the site's sources, the OpenAPI document or
+the schemas outside those fixtures (`check_exchange_docs_links.py`), lints the Markdown, renders the OpenAPI document into a
 static reference from the committed schemas (`prepare_exchange_reference.py` and the Redoc bundle of
 a pinned `redoc` release, checked against its npm integrity), copies the document and the schemas
 beside it and builds the site with Jekyll, whose edit links point at `docs/exchange/` on `main`; a pull request builds, only
 `main` deploys, and only the deploy job holds `pages: write` and `id-token: write`.
+
+The site wears the DAS KARTELL design system (REQ-UI-001, REQ-UI-003, REQ-UI-019), not a stock
+Jekyll theme: its own layouts under `docs/exchange/_layouts/` put every page — the generated schema
+index and the reference included — under one header with the Basetool mark and links to the docs,
+the reference and the repository, a section navigation from `docs/exchange/_data/navigation.yml`
+(a sidebar on wide screens, a „Contents" drawer from 1024 px down), heading anchors and scrollable
+tables, and a footer with „Improve this page" (hidden on generated pages), the licence, the security
+policy and the issue tracker. It is dark-only and loads nothing from another origin: the Lato WOFF2
+files and the `basetool-*` marks are copied from the frontend at build time, so the repository holds
+one copy of each. The reference is a Jekyll page (`layout: reference`) whose Redoc theme is built at
+runtime from the stylesheet's design tokens (`docs/exchange/assets/js/reference.js`).
+**One owner-approved deviation from REQ-UI-004** (@greluc, 2026-09-27): code blocks (`pre`) and
+Redoc's JSON and code samples use the generic system `monospace` (the `--font-code` token), because
+column-aligned code does not read in a proportional face; inline code and everything else stay
+Lato. `check_exchange_docs_links.py` also fails a navigation entry whose page does not exist, and the
+preparation script's self-test fails when the reference layout stops loading the bundle or the theme
+reads a token the stylesheet does not define.
 
 **Status:** the list, the onboarding page, the application template and the documentation site with
 its overview, formats, errors, versioning, changelog and authentication pages, and the MIT-licensed
