@@ -863,6 +863,10 @@ within one batch is not a removal. Only the member's browser session can confirm
 - [x] A batch is not confirmed after the client or installation was disconnected, or the client
   suspended, since its staging, nor past its 30-minute staging lifetime, and a kept session entry
   expires with it. *`ExchangeMassChangeControllerTest`, `ConnectedAppsConfirmControllerMvcTest`.*
+- [x] A held batch replaces only the same client's older held batch for that member, never another
+  client's or an extractor draft. *`HandoffStagingServiceTest`, `ExchangeChangeRouteTest`.* The
+  confirmation page keeps consumed batches by handoff id and the backend confirms each on its own,
+  so neither needed a change.
 
 The counting rule is `ExchangeMassChangeGuard`: over the journal's live removals of the client,
 member and resource in the last 24 hours plus the batch's, a batch trips above 25, or when that total
@@ -879,8 +883,9 @@ A ship counts as removed by `remove`, and by an `upsert` that changes both its n
 
 When the backend answers `MASS_CHANGE_CONFIRMATION_REQUIRED`, the gateway stages the change set with
 its client, installation, resource and `stagedAt` (the gateway's clock) in the handoff staging
-(`HandoffKind.MASS_CHANGE`, one slot
-per member apart from the extractor drafts, at most `app.exchange.store.max-mass-change-bytes`,
+(`HandoffKind.MASS_CHANGE`, one slot per client and member, `ingest:handoff-index:mass:<client>:<sub>`,
+apart from the drafts — a client's newer held batch replaces its own older one, never another
+client's (owner decision 2026-09-27) — at most `app.exchange.store.max-mass-change-bytes`,
 512 KiB, counted against the exchange's Redis budget) and answers `409` with a `confirmationUrl` to
 `/connected-apps/confirm?handoff=<id>`. A change set too large to hold — measured, like a draft, as
 the staged value with its wrapper — is `413 BATCH_TOO_LARGE`, checked before staging and never

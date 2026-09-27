@@ -55,7 +55,10 @@ public class HandoffStagingService {
    */
   static final String INDEX_PREFIX = "ingest:handoff-index:";
 
-  /** Prefix of the per-subject index of staged mass changes, a slot apart from the drafts. */
+  /**
+   * Prefix of the index of a client's staged mass change, {@code
+   * ingest:handoff-index:mass:<client>:<sub>}, a slot apart from the drafts and from other clients.
+   */
   static final String MASS_CHANGE_INDEX_PREFIX = "ingest:handoff-index:mass:";
 
   /**
@@ -121,9 +124,11 @@ public class HandoffStagingService {
   }
 
   /**
-   * Stages a client's change set the mass-change guard held back, in a slot of its own per subject,
-   * so it never evicts an extractor draft and a newer one replaces it (REQ-XCH-021).
+   * Stages a client's change set the mass-change guard held back, in a slot of one per client and
+   * member, so it never evicts an extractor draft or another client's pending change set, and the
+   * same client's newer one replaces it (REQ-XCH-021).
    *
+   * @param clientId the registry client that sent the change set
    * @param sub the member's subject
    * @param changeJson the staged change set with its client, installation, resource and staging
    *     time
@@ -132,9 +137,14 @@ public class HandoffStagingService {
    * @throws BadRequestException if the document exceeds {@code maxBytes}
    */
   public @NotNull Staged stageMassChange(
-      @NotNull String sub, @NotNull String changeJson, long maxBytes) {
+      @NotNull String clientId, @NotNull String sub, @NotNull String changeJson, long maxBytes) {
     return store(
-        sub, HandoffKind.MASS_CHANGE, changeJson, maxBytes, MASS_CHANGE_INDEX_PREFIX + sub, 1);
+        sub,
+        HandoffKind.MASS_CHANGE,
+        changeJson,
+        maxBytes,
+        MASS_CHANGE_INDEX_PREFIX + clientId + ":" + sub,
+        1);
   }
 
   /**

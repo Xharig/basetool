@@ -642,7 +642,10 @@ public class ExchangeController {
               bytes,
               () ->
                   stagingService.stageMassChange(
-                      context.member(), json, storeProperties.maxMassChangeBytes()));
+                      context.clientId(),
+                      context.member(),
+                      json,
+                      storeProperties.maxMassChangeBytes()));
       if (staged == null) {
         return unavailable(
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,

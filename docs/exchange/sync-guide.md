@@ -144,7 +144,8 @@ A held batch writes nothing and answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED` 
 ```
 
 Show the member the URL and **do not resend the batch**. The member reviews it in the browser within
-30 minutes and confirms or discards it; a newer held batch replaces an older one. A held batch is
+30 minutes and confirms or discards it; a newer held batch of your client replaces your older one for
+that member, while other clients' held batches stay. A held batch is
 not applied once the member disconnected your client or installation, or your client was
 suspended, after it was held back. A confirmed batch is applied as your installation's own write,
 and your next pull shows it. `dryRun` does not ask the guard.

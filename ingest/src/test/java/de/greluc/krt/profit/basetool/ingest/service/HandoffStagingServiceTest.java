@@ -180,15 +180,18 @@ class HandoffStagingServiceTest {
         .isEqualTo(2L);
   }
 
-  /** A staged mass change has a slot of its own: a newer one replaces it, drafts stay. */
+  /**
+   * A staged mass change has a slot of its own per client and member: the same client's newer one
+   * replaces it, drafts stay.
+   */
   @Test
-  void shouldKeepOneMassChangePerSubjectWithoutEvictingDrafts() {
+  void shouldKeepOneMassChangePerClientAndMemberWithoutEvictingDrafts() {
     HandoffStagingService service = service(TestProperties.ingest("max-handoffs-per-subject", "1"));
     String draft = service.stage("user-mass", HandoffKind.BLUEPRINT, "{\"total\":1}");
     HandoffStagingService.Staged first =
-        service.stageMassChange("user-mass", "{\"resource\":\"stock\"}", 4096);
+        service.stageMassChange("versekit", "user-mass", "{\"resource\":\"stock\"}", 4096);
     HandoffStagingService.Staged second =
-        service.stageMassChange("user-mass", "{\"resource\":\"ships\"}", 4096);
+        service.stageMassChange("versekit", "user-mass", "{\"resource\":\"ships\"}", 4096);
 
     assertThat(consume("user-mass", first.handoffId())).isEmpty();
     Optional<StagedHandoff> kept = consume("user-mass", second.handoffId());
@@ -229,12 +232,29 @@ class HandoffStagingServiceTest {
         .isEqualTo(1L);
   }
 
+  /** A client's staged mass change never replaces another client's pending one. */
+  @Test
+  void shouldKeepOneMassChangePerClientApartFromOtherClients() {
+    HandoffStagingService.Staged mine =
+        service.stageMassChange("versekit", "user-two", "{\"resource\":\"stock\"}", 4096);
+    HandoffStagingService.Staged theirs =
+        service.stageMassChange("other-app", "user-two", "{\"resource\":\"ships\"}", 4096);
+
+    assertThat(consume("user-two", mine.handoffId())).isPresent();
+    assertThat(consume("user-two", theirs.handoffId())).isPresent();
+    assertThat(
+            redisTemplate
+                .opsForList()
+                .size(HandoffStagingService.MASS_CHANGE_INDEX_PREFIX + "versekit:user-two"))
+        .isEqualTo(1L);
+  }
+
   /** A staged mass change above its own cap is refused. */
   @Test
   void shouldRefuseAMassChangeAboveItsCap() {
     String oversized = "{\"pad\":\"" + "x".repeat(4096) + "\"}";
 
-    assertThatThrownBy(() -> service.stageMassChange("user-big", oversized, 1024))
+    assertThatThrownBy(() -> service.stageMassChange("versekit", "user-big", oversized, 1024))
         .isInstanceOf(de.greluc.krt.profit.basetool.ingest.web.BadRequestException.class);
   }
 

@@ -276,8 +276,9 @@ REQ-XCH-019) land in slots of their own per client and member (`app.exchange.sto
 default 10, the oldest evicted), so a client's drafts never evict the extractor's uploads above or
 another client's drafts. A change set the mass-change guard holds back
 is staged as `HandoffKind.MASS_CHANGE` (REQ-XCH-021) under its own size cap
-(`app.exchange.store.max-mass-change-bytes`, 512 KiB) in a per-subject slot of one: it never
-evicts a pending extractor draft, and a newer one replaces it. The member confirms or discards it
+(`app.exchange.store.max-mass-change-bytes`, 512 KiB) in a slot of one per client and member: it
+never evicts a pending extractor draft or another client's held change set, and the same client's
+newer one replaces it. The member confirms or discards it
 on „Verbundene Anwendungen" (`/connected-apps/confirm`), which consumes it with an explicit request
 as above.
 
