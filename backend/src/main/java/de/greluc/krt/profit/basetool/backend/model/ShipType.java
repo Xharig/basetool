@@ -369,6 +369,13 @@ public class ShipType extends AbstractEntity<UUID> {
   @Column(name = "p4k_uuid")
   private UUID p4kUuid;
 
+  /**
+   * The {@code global.ini} name key without the leading {@code @}, from the P4K import; resolves an
+   * exchange {@code locKey} (REQ-XCH-012).
+   */
+  @Column(name = "name_key", length = 200)
+  private String nameKey;
+
   /** Last successful KRT P4K Reader import touch; non-null marks P4K participation. */
   @Column(name = "p4k_synced_at")
   private Instant p4kSyncedAt;

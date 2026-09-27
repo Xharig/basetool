@@ -59,6 +59,7 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -91,6 +92,12 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Transactional(readOnly = true)
 public class P4kImportService {
+
+  /** The longest name key the catalogue stores, matching the {@code name_key} columns. */
+  static final int MAX_NAME_KEY_LENGTH = 200;
+
+  /** The shape of a stored name key: no {@code @}, no whitespace. */
+  private static final Pattern NAME_KEY = Pattern.compile("^[^@\\s]+$");
 
   /**
    * Identifier tokens that mark a DataForge record as a developer / test / template asset rather
@@ -374,6 +381,8 @@ public class P4kImportService {
       enriched |=
           fillIfNull(
               target.getDescriptionDe(), dto.descDe(), v -> target.setDescriptionDe(v), apply);
+      enriched |=
+          refreshNameKey(target.getNameKey(), dto.nameKey(), v -> target.setNameKey(v), apply);
       if (enriched) {
         counts.enriched++;
       }
@@ -443,6 +452,8 @@ public class P4kImportService {
       enriched |=
           fillIfNull(
               target.getDescriptionDe(), dto.descDe(), v -> target.setDescriptionDe(v), apply);
+      enriched |=
+          refreshNameKey(target.getNameKey(), dto.nameKey(), v -> target.setNameKey(v), apply);
       if (enriched) {
         counts.enriched++;
       }
@@ -507,6 +518,8 @@ public class P4kImportService {
 
       boolean enriched =
           fillIfNull(target.getDescription(), dto.desc(), v -> target.setDescription(v), apply);
+      enriched |=
+          refreshNameKey(target.getNameKey(), dto.nameKey(), v -> target.setNameKey(v), apply);
       if (enriched) {
         counts.enriched++;
       }
@@ -730,6 +743,7 @@ public class P4kImportService {
       item.setDescriptionDe(StringNormalization.blankToNull(dto.descDe()));
       item.setKind(GameItemKind.GENERIC);
       item.setSourceSystems(GameItemSourceSystem.P4K);
+      item.setNameKey(storedNameKey(dto.nameKey()));
       item.setP4kUuid(guid);
       item.setP4kSyncedAt(now);
       gameItemRepository.save(item);
@@ -773,6 +787,7 @@ public class P4kImportService {
       ship.setDescriptionEn(StringNormalization.blankToNull(dto.desc()));
       ship.setDescriptionDe(StringNormalization.blankToNull(dto.descDe()));
       ship.setSourceSystems(GameItemSourceSystem.P4K);
+      ship.setNameKey(storedNameKey(dto.nameKey()));
       ship.setP4kUuid(guid);
       ship.setP4kSyncedAt(now);
       shipTypeRepository.save(ship);
@@ -863,6 +878,7 @@ public class P4kImportService {
       material.setScwikiUuid(guid);
       material.setIsVisible(false);
       material.setSourceSystems(MaterialSourceSystem.P4K);
+      material.setNameKey(storedNameKey(dto.nameKey()));
       material.setP4kUuid(guid);
       material.setP4kSyncedAt(now);
       materialRepository.save(material);
@@ -1299,6 +1315,57 @@ public class P4kImportService {
       uuidSetter.accept(guid);
     }
     syncedAtSetter.accept(now);
+  }
+
+  /**
+   * Replaces a stored name key with the catalog's when the catalog carries a usable one that
+   * differs; the P4K catalog is the only source of name keys, so it always wins.
+   *
+   * @param current the row's current name key
+   * @param incoming the catalog's raw name key
+   * @param setter sets the name key on the row
+   * @param apply whether to write
+   * @return whether the row's name key changes
+   */
+  private boolean refreshNameKey(
+      @Nullable String current,
+      @Nullable String incoming,
+      @NotNull Consumer<String> setter,
+      boolean apply) {
+    String stored = storedNameKey(incoming);
+    if (stored == null || stored.equals(current)) {
+      return false;
+    }
+    if (apply) {
+      setter.accept(stored);
+    }
+    return true;
+  }
+
+  /**
+   * Converts a raw DataForge name key to its stored form.
+   *
+   * @param raw the raw key, e.g. {@code @item_NameBEHR_LaserCannon_S2}
+   * @return the key without the leading {@code @}, or {@code null} when it is blank, a {@code LOC_}
+   *     placeholder, longer than {@value #MAX_NAME_KEY_LENGTH} characters or holds an {@code @} or
+   *     whitespace
+   */
+  @Nullable
+  static String storedNameKey(@Nullable String raw) {
+    if (raw == null) {
+      return null;
+    }
+    String key = raw.strip();
+    if (key.startsWith("@")) {
+      key = key.substring(1);
+    }
+    if (key.isEmpty()
+        || key.length() > MAX_NAME_KEY_LENGTH
+        || key.regionMatches(true, 0, "LOC_", 0, 4)
+        || !NAME_KEY.matcher(key).matches()) {
+      return null;
+    }
+    return key;
   }
 
   /**

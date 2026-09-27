@@ -43,7 +43,8 @@ import java.util.List;
  * @param nameDe German display name, or {@code null}
  * @param desc English description, filled into {@code game_item.description_en} when null
  * @param descDe German description, filled into {@code game_item.description_de} when null
- * @param nameKey raw {@code @LOC} name localization key (forensic; not persisted)
+ * @param nameKey raw {@code @LOC} name localization key, stored as {@code name_key} without the
+ *     {@code @}
  * @param descKey raw {@code @LOC} description localization key (forensic; not persisted)
  * @param displayType {@code SCItemPurchasableParams.displayType} (forensic; not persisted)
  */

@@ -778,4 +778,92 @@ class P4kImportServiceTest {
     assertEquals(1, result.items().unmatched());
     verify(gameItemRepository, never()).save(any());
   }
+
+  @Test
+  void item_nameKeyIsStoredWithoutTheAtAndReplacedWhenTheCatalogChangesIt() {
+    UUID guid = UUID.randomUUID();
+    GameItem existing = new GameItem();
+    existing.setName("Arclight");
+    existing.setExternalUuid(guid);
+    existing.setClassName("wpn_arclight");
+    existing.setNameKey("item_NameOld");
+    when(gameItemRepository.findByExternalUuid(guid)).thenReturn(Optional.of(existing));
+
+    String json =
+        "{\"items\":[{\"guid\":\""
+            + guid
+            + "\",\"className\":\"wpn_arclight\",\"name\":\"Arclight\","
+            + "\"nameKey\":\"@item_NameArclight\"}]}";
+
+    P4kImportResultDto result = service.applyImport(upload(json), false);
+
+    assertEquals(1, result.items().enriched());
+    assertEquals("item_NameArclight", existing.getNameKey());
+  }
+
+  @Test
+  void item_placeholderNameKeyLeavesTheStoredKeyAlone() {
+    UUID guid = UUID.randomUUID();
+    GameItem existing = new GameItem();
+    existing.setName("Arclight");
+    existing.setExternalUuid(guid);
+    existing.setClassName("wpn_arclight");
+    existing.setNameKey("item_NameArclight");
+    when(gameItemRepository.findByExternalUuid(guid)).thenReturn(Optional.of(existing));
+
+    String json =
+        "{\"items\":[{\"guid\":\""
+            + guid
+            + "\",\"className\":\"wpn_arclight\",\"name\":\"Arclight\","
+            + "\"nameKey\":\"@LOC_PLACEHOLDER\"}]}";
+
+    P4kImportResultDto result = service.applyImport(upload(json), false);
+
+    assertEquals(0, result.items().enriched());
+    assertEquals("item_NameArclight", existing.getNameKey());
+  }
+
+  @Test
+  void seededShipsAndMaterialsCarryTheNameKey() {
+    UUID shipGuid = UUID.randomUUID();
+    UUID commodityGuid = UUID.randomUUID();
+    when(shipTypeRepository.findByExternalUuid(shipGuid)).thenReturn(Optional.empty());
+    when(shipTypeRepository.findByClassNameIgnoreCase("ship_new")).thenReturn(List.of());
+    when(shipTypeRepository.findByNameIgnoreCase("New Ship")).thenReturn(Optional.empty());
+    when(materialRepository.findByScwikiUuid(commodityGuid)).thenReturn(Optional.empty());
+    when(materialRepository.findByNameIgnoreCase("Quantanium")).thenReturn(Optional.empty());
+
+    String json =
+        "{\"ships\":[{\"guid\":\""
+            + shipGuid
+            + "\",\"className\":\"ship_new\",\"name\":\"New Ship\","
+            + "\"nameKey\":\"@vehicle_NameNewShip\"}],"
+            + "\"commodities\":[{\"guid\":\""
+            + commodityGuid
+            + "\",\"name\":\"Quantanium\",\"nameKey\":\"@items_commodities_quantanium\"}]}";
+
+    service.applyImport(upload(json), true);
+
+    ArgumentCaptor<ShipType> ship = ArgumentCaptor.forClass(ShipType.class);
+    verify(shipTypeRepository).save(ship.capture());
+    assertEquals("vehicle_NameNewShip", ship.getValue().getNameKey());
+    ArgumentCaptor<Material> material = ArgumentCaptor.forClass(Material.class);
+    verify(materialRepository).save(material.capture());
+    assertEquals("items_commodities_quantanium", material.getValue().getNameKey());
+  }
+
+  @Test
+  void storedNameKey_keepsOnlyUsableKeys() {
+    assertEquals("item_NameX", P4kImportService.storedNameKey("@item_NameX"));
+    assertEquals("item_NameX", P4kImportService.storedNameKey(" item_NameX "));
+    assertNull(P4kImportService.storedNameKey(null));
+    assertNull(P4kImportService.storedNameKey("  "));
+    assertNull(P4kImportService.storedNameKey("@"));
+    assertNull(P4kImportService.storedNameKey("@LOC_EMPTY"));
+    assertNull(P4kImportService.storedNameKey("@loc_uninitialized"));
+    assertNull(P4kImportService.storedNameKey("@@item_X"));
+    assertNull(P4kImportService.storedNameKey("@item Name"));
+    assertNull(P4kImportService.storedNameKey("@" + "k".repeat(201)));
+    assertEquals(200, P4kImportService.storedNameKey("@" + "k".repeat(200)).length());
+  }
 }

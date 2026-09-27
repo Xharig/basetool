@@ -100,5 +100,11 @@ public enum NotificationEventType {
    * <p>Creates no notification; it clears the administrators' {@code ACCOUNT_DELETION_REQUESTED}
    * items on every terminal path.
    */
-  ACCOUNT_DELETION_REQUEST_RESOLVED
+  ACCOUNT_DELETION_REQUEST_RESOLVED,
+
+  /**
+   * A registered exchange client was seen with a new installation of a member for the first time
+   * (REQ-XCH-032). The default rule notifies that member via the {@code EVENT_RECIPIENT} selector.
+   */
+  EXCHANGE_INSTALLATION_CONNECTED
 }
