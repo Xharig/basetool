@@ -21,12 +21,14 @@ package de.greluc.krt.profit.basetool.frontend.websocket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.greluc.krt.profit.basetool.frontend.logging.ActiveSquadronContext;
 import de.greluc.krt.profit.basetool.frontend.support.TermsGateHandoff;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +38,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
@@ -45,8 +48,9 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
@@ -55,13 +59,13 @@ import org.springframework.web.socket.WebSocketHandler;
 
 /**
  * Tests for {@link LiveSyncSyncHandshakeInterceptor}: it always marks the future session
- * multiplexed and proceeds, captures the OAuth2 token snapshot and active-org-unit pin when
- * available, relays the consent gate's handoff mark, and fails open (still proceeds, no token) when
- * the authorized-client read is empty or throws.
+ * multiplexed and proceeds, captures the OAuth2 token from the authorized-client manager and the
+ * active-org-unit pin when available, relays the consent gate's handoff mark, and still proceeds
+ * without a token when the manager returns nothing or throws.
  */
 class LiveSyncSyncHandshakeInterceptorTest {
 
-  private OAuth2AuthorizedClientRepository authorizedClientRepository;
+  private OAuth2AuthorizedClientManager authorizedClientManager;
   private LiveSyncSyncHandshakeInterceptor interceptor;
   private ServerHttpRequest request;
   private ServerHttpResponse response;
@@ -70,8 +74,8 @@ class LiveSyncSyncHandshakeInterceptorTest {
 
   @BeforeEach
   void setUp() {
-    authorizedClientRepository = mock(OAuth2AuthorizedClientRepository.class);
-    interceptor = new LiveSyncSyncHandshakeInterceptor(authorizedClientRepository);
+    authorizedClientManager = mock(OAuth2AuthorizedClientManager.class);
+    interceptor = new LiveSyncSyncHandshakeInterceptor(authorizedClientManager);
     request = new ServletServerHttpRequest(new MockHttpServletRequest());
     response = new ServletServerHttpResponse(new MockHttpServletResponse());
     wsHandler = mock(WebSocketHandler.class);
@@ -104,12 +108,49 @@ class LiveSyncSyncHandshakeInterceptorTest {
                 "tok-123",
                 Instant.now(),
                 Instant.now().plusSeconds(300)));
-    when(authorizedClientRepository.loadAuthorizedClient(eq("keycloak"), any(), any()))
-        .thenReturn(client);
+    when(authorizedClientManager.authorize(any())).thenReturn(client);
 
     interceptor.beforeHandshake(request, response, wsHandler, attributes);
 
     assertThat(attributes.get(LiveSyncWebSocketHandler.ATTR_ACCESS_TOKEN)).isEqualTo("tok-123");
+  }
+
+  /**
+   * The token comes from the authorized-client manager, handed the handshake's servlet request and
+   * response, so an expired token is refreshed single-flight before it is captured.
+   */
+  @Test
+  void obtainsTheTokenThroughTheManagerWithTheHandshakeRequestAndResponse() {
+    MockHttpServletRequest servletRequest = new MockHttpServletRequest();
+    MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+    OAuth2AuthorizedClient refreshed = mock(OAuth2AuthorizedClient.class);
+    when(refreshed.getAccessToken())
+        .thenReturn(
+            new OAuth2AccessToken(
+                OAuth2AccessToken.TokenType.BEARER,
+                "refreshed-tok",
+                Instant.now(),
+                Instant.now().plusSeconds(300)));
+    when(authorizedClientManager.authorize(any())).thenReturn(refreshed);
+
+    interceptor.beforeHandshake(
+        new ServletServerHttpRequest(servletRequest),
+        new ServletServerHttpResponse(servletResponse),
+        wsHandler,
+        attributes);
+
+    ArgumentCaptor<OAuth2AuthorizeRequest> captor =
+        ArgumentCaptor.forClass(OAuth2AuthorizeRequest.class);
+    verify(authorizedClientManager).authorize(captor.capture());
+    OAuth2AuthorizeRequest sent = captor.getValue();
+    assertThat(sent.getClientRegistrationId()).isEqualTo("keycloak");
+    assertThat(sent.getPrincipal().getName()).isEqualTo("user");
+    assertThat((Object) sent.getAttribute(HttpServletRequest.class.getName()))
+        .isSameAs(servletRequest);
+    assertThat((Object) sent.getAttribute(HttpServletResponse.class.getName()))
+        .isSameAs(servletResponse);
+    assertThat(attributes.get(LiveSyncWebSocketHandler.ATTR_ACCESS_TOKEN))
+        .isEqualTo("refreshed-tok");
   }
 
   @Test
@@ -192,8 +233,7 @@ class LiveSyncSyncHandshakeInterceptorTest {
 
   @Test
   void noAuthorizedClient_proceedsWithoutToken() {
-    when(authorizedClientRepository.loadAuthorizedClient(eq("keycloak"), any(), any()))
-        .thenReturn(null);
+    when(authorizedClientManager.authorize(any())).thenReturn(null);
 
     boolean proceed = interceptor.beforeHandshake(request, response, wsHandler, attributes);
 
@@ -202,9 +242,8 @@ class LiveSyncSyncHandshakeInterceptorTest {
   }
 
   @Test
-  void authorizedClientReadThrows_failsOpenAndProceeds() {
-    when(authorizedClientRepository.loadAuthorizedClient(eq("keycloak"), any(), any()))
-        .thenThrow(new IllegalStateException("boom"));
+  void refreshFailure_proceedsWithoutToken() {
+    when(authorizedClientManager.authorize(any())).thenThrow(new IllegalStateException("boom"));
 
     boolean proceed = interceptor.beforeHandshake(request, response, wsHandler, attributes);
 

@@ -201,6 +201,9 @@
 
 ### Fixed
 
+- **Live-Aktualisierung im Einsatz fiel nach längerer Pause aus.** Verband sich ein Einsatz-Tab neu,
+  nachdem das Zugangs-Token abgelaufen war, lehnte der Server den Raum ab, und der Tab bekam keine
+  Änderungen anderer mehr. Der `/ws/sync`-Handshake erneuert das Token jetzt vorher (REQ-FE-015).
 - **Audit-Log der Materialbörse: Kürzungen und Entfernungen durch Lagerbewegungen fehlten.** Wenn
   eine Ausbuchung, Übertragung, Umbuchung, Übergabe, Produktion, das Leeren des Lagers oder das
   Löschen eines Kontos ein Angebot kürzte oder mitlöschte, stand das bisher nicht im Audit; jetzt

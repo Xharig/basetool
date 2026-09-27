@@ -36,7 +36,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
@@ -68,7 +68,7 @@ public class LiveSyncWebSocketConfig implements WebSocketConfigurer {
   private final MeterRegistry meterRegistry;
   private final ObjectProvider<LiveSyncFanout> fanoutProvider;
   private final LiveSyncSubscriptionAuthorizer subscriptionAuthorizer;
-  private final OAuth2AuthorizedClientRepository authorizedClientRepository;
+  private final OAuth2AuthorizedClientManager authorizedClientManager;
   private final List<String> allowedOriginPatterns;
 
   /**
@@ -79,8 +79,8 @@ public class LiveSyncWebSocketConfig implements WebSocketConfigurer {
    * @param meterRegistry registry the handler binds its gauges and relay counters to
    * @param fanoutProvider lazy provider of the cross-replica fan-out (Redis when enabled)
    * @param subscriptionAuthorizer authorizes a multiplexed {@code /ws/sync} subscribe
-   * @param authorizedClientRepository authorized-client store read at the {@code /ws/sync}
-   *     handshake
+   * @param authorizedClientManager single-flight manager that supplies, and refreshes when expired,
+   *     the access token captured at the {@code /ws/sync} handshake
    * @param allowedOriginPatterns origin patterns accepted on the WebSocket handshake, from {@code
    *     app.websocket.allowed-origin-patterns}
    */
@@ -89,7 +89,7 @@ public class LiveSyncWebSocketConfig implements WebSocketConfigurer {
       MeterRegistry meterRegistry,
       ObjectProvider<LiveSyncFanout> fanoutProvider,
       LiveSyncSubscriptionAuthorizer subscriptionAuthorizer,
-      OAuth2AuthorizedClientRepository authorizedClientRepository,
+      OAuth2AuthorizedClientManager authorizedClientManager,
       @Value(
               "${app.websocket.allowed-origin-patterns:https://profit-base.online,https://localhost:18081,http://localhost:18081}")
           List<String> allowedOriginPatterns) {
@@ -97,7 +97,7 @@ public class LiveSyncWebSocketConfig implements WebSocketConfigurer {
     this.meterRegistry = meterRegistry;
     this.fanoutProvider = fanoutProvider;
     this.subscriptionAuthorizer = subscriptionAuthorizer;
-    this.authorizedClientRepository = authorizedClientRepository;
+    this.authorizedClientManager = authorizedClientManager;
     this.allowedOriginPatterns = allowedOriginPatterns;
   }
 
@@ -152,7 +152,7 @@ public class LiveSyncWebSocketConfig implements WebSocketConfigurer {
     String[] origins = allowedOriginPatterns.toArray(new String[0]);
     registry
         .addHandler(handler, "/ws/sync")
-        .addInterceptors(new LiveSyncSyncHandshakeInterceptor(authorizedClientRepository))
+        .addInterceptors(new LiveSyncSyncHandshakeInterceptor(authorizedClientManager))
         .setAllowedOriginPatterns(origins);
   }
 }
