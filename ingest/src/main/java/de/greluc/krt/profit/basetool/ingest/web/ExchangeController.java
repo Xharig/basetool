@@ -821,10 +821,7 @@ public class ExchangeController {
   private @NotNull ResponseEntity<?> answer(@NotNull JsonNode body, @NotNull String schema) {
     List<ExchangeSchemas.Violation> violations = schemas.validate(schema, body);
     if (!violations.isEmpty()) {
-      log.warn(
-          "Exchange answer breaks {}: first violation at {}",
-          schema,
-          violations.getFirst().pointer());
+      log.warn("Exchange answer breaks {} with {} violation(s)", schema, violations.size());
       return failed();
     }
     return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(body);
