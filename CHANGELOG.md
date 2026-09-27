@@ -24,11 +24,13 @@
   
 - **Administration → Verbundene Anwendungen.** Admins registrieren, bearbeiten, sperren und
   begrenzen die zugelassenen Anwendungen des Datenaustauschs und schalten ihn global ein oder aus;
-  Sperren, der Schalter und zusätzliche Berechtigungen fragen vorher nach (REQ-XCH-003).
-  
+  Sperren, der Schalter und zusätzliche Berechtigungen fragen vorher nach. Je Anwendung stehen die
+  verbundenen Mitglieder und die letzte Aktivität, die Fehlerrate verlinkt nach Grafana
+  (`APP_GRAFANA_OPERATIONS_DASHBOARD_URL`, REQ-XCH-003).
 - **Verbundene Anwendungen: Trennen einer Installation oder einer ganzen Anwendung.** Mitglieder
-  können über `/api/v1/connected-apps` ihre Verbindungen sehen und trennen; gesperrte Schlüssel und
-  Widerrufe erreichen das Gateway sofort (Migration `V249`, REQ-XCH-008). Die Seite dazu folgt.
+  sehen unter *Persönlich → Verbundene Anwendungen* ihre verbundenen Anwendungen mit Berechtigungen
+  und Installationen und trennen eine Installation oder die ganze Anwendung; gesperrte Schlüssel und
+  Widerrufe erreichen das Gateway sofort (Migration `V249`, REQ-XCH-008, REQ-XCH-032).
   
 - **Audit: Änderungen über eine zugelassene Anwendung nennen diese Anwendung.** Der Client-Filter im
   Audit-Log bietet die registrierten Anwendungen unter ihrem Produktnamen an (REQ-XCH-010).
