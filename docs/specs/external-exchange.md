@@ -97,7 +97,8 @@ all (owner decision 2026-09-27): Basetool pages and controls go by the English w
 („Verbundene Anwendungen" is *Connected applications*, the Lager the *warehouse*, the Materialbörse
 the *Material Exchange*), and German test data stays only in the conformance fixtures under
 `examples/`. `.github/workflows/exchange-docs.yml`, on every change to the pages, the OpenAPI
-document or the schemas, checks that each relative link stays on the site and resolves and that no
+document or the schemas, checks that each relative link stays on the site and resolves — an anchor
+to one of the target page's headings, with the id kramdown's GFM parser gives it — and that no
 umlaut, sharp s or German low quotation mark appears in the site's sources, the OpenAPI document or
 the schemas outside those fixtures (`check_exchange_docs_links.py`), lints the Markdown, renders the OpenAPI document into a
 static reference from the committed schemas (`prepare_exchange_reference.py` and the Redoc bundle of
