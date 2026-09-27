@@ -19,25 +19,23 @@
 
 package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import java.time.Instant;
+import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
 /**
- * One of the member's blueprints in the exchange feed (REQ-XCH-015); absent optional fields are
- * left out.
+ * One page of the member's personal stock lots: a snapshot page or a change-feed page (REQ-XCH-013,
+ * REQ-XCH-016).
  *
- * @param key the opaque key the feed and its tombstones use for the product
- * @param ref the product, with the Basetool key {@code bt} and its display name
- * @param acquiredAt when the member acquired it in the game, or {@code null}
- * @param isDefault whether it is granted to every member and so cannot be removed
- * @param note the member's note, read-only in v1, or {@code null}
+ * @param items the lots on this page
+ * @param removed the tombstones on this page; always empty on a snapshot page
+ * @param nextCursor where to continue: the next snapshot page, or after the last page the feed
+ *     position the snapshot was taken at
+ * @param hasMore whether a further page is ready now
  */
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public record ExchangeBlueprintDto(
-    @NotNull String key,
-    @NotNull ExchangeItemRefDto ref,
-    @Nullable Instant acquiredAt,
-    boolean isDefault,
-    @Nullable String note) {}
+public record ExchangeStockPageDto(
+    @NotNull @Unmodifiable List<ExchangeStockLotDto> items,
+    @NotNull @Unmodifiable List<ExchangeTombstoneDto> removed,
+    @Nullable String nextCursor,
+    boolean hasMore) {}

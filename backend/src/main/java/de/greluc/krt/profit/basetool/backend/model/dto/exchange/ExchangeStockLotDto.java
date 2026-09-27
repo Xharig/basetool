@@ -20,24 +20,28 @@
 package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import java.time.Instant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * One of the member's blueprints in the exchange feed (REQ-XCH-015); absent optional fields are
- * left out.
+ * One lot of the member's personal stock in the exchange feed: one material or item at one
+ * location, quality and stolen state, summed across org-unit pools (REQ-XCH-016); absent optional
+ * fields are left out.
  *
- * @param key the opaque key the feed and its tombstones use for the product
- * @param ref the product, with the Basetool key {@code bt} and its display name
- * @param acquiredAt when the member acquired it in the game, or {@code null}
- * @param isDefault whether it is granted to every member and so cannot be removed
- * @param note the member's note, read-only in v1, or {@code null}
+ * @param key the opaque key the feed and its tombstones use for the lot
+ * @param material the material or item, with its id as {@code bt}
+ * @param materialKind the material's classification, or {@code null} for an item
+ * @param location the location
+ * @param quality the quality, {@code 0} for an item
+ * @param stolen whether the lot is marked stolen
+ * @param quantity the summed amount with its unit
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record ExchangeBlueprintDto(
+public record ExchangeStockLotDto(
     @NotNull String key,
-    @NotNull ExchangeItemRefDto ref,
-    @Nullable Instant acquiredAt,
-    boolean isDefault,
-    @Nullable String note) {}
+    @NotNull ExchangeItemRefDto material,
+    @Nullable ExchangeMaterialKindDto materialKind,
+    @NotNull ExchangeLocationDto location,
+    int quality,
+    boolean stolen,
+    @NotNull ExchangeQuantityDto quantity) {}

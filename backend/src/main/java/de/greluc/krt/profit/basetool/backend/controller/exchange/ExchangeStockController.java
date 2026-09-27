@@ -19,9 +19,9 @@
 
 package de.greluc.krt.profit.basetool.backend.controller.exchange;
 
-import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeBlueprintPageDto;
-import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeBlueprintFeedService;
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeStockPageDto;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeFeedReader;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeStockFeedService;
 import de.greluc.krt.profit.basetool.backend.support.SubjectAuthentication;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -39,17 +39,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The member's blueprints for an exchange client, reachable only from the ingest gateway
- * (REQ-XCH-013, REQ-XCH-015).
+ * The member's personal stock lots for an exchange client, reachable only from the ingest gateway
+ * (REQ-XCH-013, REQ-XCH-016).
  */
 @RestController
-@RequestMapping("/api/v1/exchange/me/blueprints")
+@RequestMapping("/api/v1/exchange/me/stock")
 @RequiredArgsConstructor
-@Tag(name = "Exchange — blueprints", description = "The member's blueprints and their changes")
-public class ExchangeBlueprintController {
+@Tag(name = "Exchange — stock", description = "The member's personal stock lots and their changes")
+public class ExchangeStockController {
 
   /** Reads the snapshot and the feed. */
-  private final ExchangeBlueprintFeedService feedService;
+  private final ExchangeStockFeedService feedService;
 
   /**
    * Returns a snapshot page, or with {@code cursor} the changes since it.
@@ -61,13 +61,13 @@ public class ExchangeBlueprintController {
    */
   @NotNull
   @GetMapping
-  @PreAuthorize("@exchangeGate.allows('exchange.blueprints.read', authentication)")
+  @PreAuthorize("@exchangeGate.allows('exchange.stock.read', authentication)")
   @Operation(
-      summary = "Exchange: my blueprints and their changes",
+      summary = "Exchange: my stock lots and their changes",
       description = "Gateway-only. Without a cursor a snapshot, with one the changes since it.")
   @ApiResponse(responseCode = "200", description = "The page")
   @ApiResponse(responseCode = "410", description = "The cursor has expired (CURSOR_EXPIRED)")
-  public ResponseEntity<ExchangeBlueprintPageDto> blueprints(
+  public ResponseEntity<ExchangeStockPageDto> stock(
       @Nullable @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "" + ExchangeFeedReader.DEFAULT_LIMIT) int limit,
       @NotNull Authentication authentication) {

@@ -19,25 +19,13 @@
 
 package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import java.time.Instant;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
- * One of the member's blueprints in the exchange feed (REQ-XCH-015); absent optional fields are
- * left out.
+ * A material's read-only classification, which a client uses to route a lot to its own lists
+ * (REQ-XCH-016).
  *
- * @param key the opaque key the feed and its tombstones use for the product
- * @param ref the product, with the Basetool key {@code bt} and its display name
- * @param acquiredAt when the member acquired it in the game, or {@code null}
- * @param isDefault whether it is granted to every member and so cannot be removed
- * @param note the member's note, read-only in v1, or {@code null}
+ * @param type {@code RAW}, {@code REFINED} or {@code NO_REFINE}
+ * @param commodity whether the material is a UEX commodity
  */
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public record ExchangeBlueprintDto(
-    @NotNull String key,
-    @NotNull ExchangeItemRefDto ref,
-    @Nullable Instant acquiredAt,
-    boolean isDefault,
-    @Nullable String note) {}
+public record ExchangeMaterialKindDto(@NotNull String type, boolean commodity) {}
