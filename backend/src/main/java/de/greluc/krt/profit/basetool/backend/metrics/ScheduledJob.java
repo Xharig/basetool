@@ -87,7 +87,13 @@ public enum ScheduledJob {
    * The nightly purge of the exchange change feed's and write journal's entries past their
    * retention ({@code ExchangeChangeRetentionTask}, REQ-XCH-013, REQ-XCH-022).
    */
-  EXCHANGE_CHANGE_RETENTION("exchange_change_retention");
+  EXCHANGE_CHANGE_RETENTION("exchange_change_retention"),
+
+  /**
+   * An admin's bulk undo of one exchange client ({@code ExchangeBulkUndoRunner}, REQ-XCH-034); run
+   * on demand, never scheduled, so it publishes no enabled gauge.
+   */
+  EXCHANGE_BULK_UNDO("exchange_bulk_undo");
 
   /** The fixed, snake-case Prometheus tag value for this job. */
   private final @NotNull String label;

@@ -189,3 +189,8 @@ on a local change and every few minutes while the client is open is plenty.
 
 The member can undo your client's writes from *Connected applications*. An undo reaches your feed like
 any other change made in the web; apply it like one and do not push the undone state back.
+
+After a faulty or malicious release, an admin can undo your client's writes for every member at
+once. Your client is suspended first, so every request is refused until the Basetool re-activates
+it; after that the undone entries reach your feed like web edits too. Fix the release before you
+ask for re-activation, and do not replay the writes that were undone.

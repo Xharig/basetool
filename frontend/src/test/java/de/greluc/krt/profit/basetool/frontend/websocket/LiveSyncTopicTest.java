@@ -140,6 +140,21 @@ class LiveSyncTopicTest {
   }
 
   @Test
+  void parse_acceptsTheGlobalAdminExchangeClientsTopic_gatedByTheAdminRole() {
+    LiveSyncTopic topic = LiveSyncTopic.parse("exchange-clients");
+
+    assertThat(topic).isNotNull();
+    assertThat(topic.topicClass()).isEqualTo(LiveSyncTopicClass.EXCHANGE_CLIENTS);
+    assertThat(topic.resourceId()).isNull();
+    assertThat(LiveSyncTopic.parse("exchange-clients:" + UUID.randomUUID())).isNull();
+    assertThat(LiveSyncTopicClass.EXCHANGE_CLIENTS.requiredAnyRole()).containsExactly("ROLE_ADMIN");
+    assertThat(LiveSyncTopicClass.EXCHANGE_CLIENTS.authProbePath()).isNull();
+    assertThat(LiveSyncTopicClass.EXCHANGE_CLIENTS.presenceEnabled()).isFalse();
+    assertThat(LiveSyncTopicClass.EXCHANGE_CLIENTS.allowedSections())
+        .containsExactlyInAnyOrder("registry", "undoRuns");
+  }
+
+  @Test
   void membersTopic_isTheOnlyNewClassGatedByALocalAdminRoleCheck() {
     assertThat(LiveSyncTopicClass.MEMBERS.requiredAnyRole()).containsExactly("ROLE_ADMIN");
     assertThat(LiveSyncTopicClass.MISSIONS_LIST.requiredAnyRole()).isNull();

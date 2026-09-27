@@ -232,7 +232,12 @@ web, naming its client (REQ-AUDIT-005):
   member's exchange access (`EXCHANGE_MEMBER_DEPARTED`: the reason, the number of clients, and
   whether every step succeeded), and a member undoing a client's writes (`EXCHANGE_CHANGES_UNDONE`:
   the restored and skipped counts, REQ-XCH-022; the entries themselves are audited in their own
-  areas) or confirming a change set the mass-change guard held back
+  areas), an admin undoing one client's writes for every member (`EXCHANGE_BULK_UNDO_STARTED`: the
+  run, the span, the resource and installation it is limited to and the member count;
+  `EXCHANGE_BULK_UNDO_FINISHED`: the status, whether a restart interrupted it and the totals; one
+  `EXCHANGE_CHANGES_UNDONE` per member with the run id and the admin as actor, and the preceding
+  suspension as `EXCHANGE_CLIENT_SUSPENDED`, REQ-XCH-034) or confirming a change set the mass-change
+  guard held back
   (`EXCHANGE_MASS_CHANGE_CONFIRMED`: the resource and the applied count, REQ-XCH-021). The subject is the registry client
   or the installation, labelled by the **client id**; a member's disconnect names the member as
   target, a registry change names none. A change that failed because the mirror could not be

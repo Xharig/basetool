@@ -18,7 +18,7 @@ tests:
               client_id: versekit
             exp_annotations:
               summary: "An exchange client removed unusually many entries"
-              description: "One registered client (client_id) removed more than 100 blueprints, stock lots or ships across its members in the last hour. The mass-change guard stops one member losing much at once, but not a faulty release doing it to many members. Follow the vault runbook \"Suspending an exchange client\": suspend the client under Administration - Verbundene Anwendungen, then let the affected members undo its changes (REQ-XCH-021, REQ-XCH-028)."
+              description: "One registered client (client_id) removed more than 100 blueprints, stock lots or ships across its members in the last hour. The mass-change guard stops one member losing much at once, but not a faulty release doing it to many members. Follow the vault runbook \"Suspending an exchange client\": under Administration - Verbundene Anwendungen, undo the client's changes for every member since the faulty release, which suspends it first (REQ-XCH-021, REQ-XCH-028, REQ-XCH-034)."
 
   - name: silent - ordinary removals
     interval: 1m
@@ -109,4 +109,33 @@ tests:
     alert_rule_test:
       - eval_time: 30m
         alertname: ExchangeUnknownClient
+        exp_alerts: []
+
+  - name: fires - a bulk undo run failed
+    interval: 1m
+    input_series:
+      - series: 'basetool_scheduled_job_executions_total{job="basetool-backend", instance="backend:11261", task="exchange_bulk_undo", outcome="failure"}'
+        values: "0x10 1x20"
+      - series: 'basetool_scheduled_job_executions_total{job="basetool-backend", instance="backend:11261", task="exchange_bulk_undo", outcome="success"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeBulkUndoFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "An admin's bulk undo of an exchange client failed"
+              description: "A bulk undo under Administration - Verbundene Anwendungen ended FAILED: at least one member could not be processed, or the run broke off. The members it did process are undone; the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed - it only touches what is not undone yet (REQ-XCH-034)."
+
+  - name: silent - bulk undo runs that completed
+    interval: 1m
+    input_series:
+      - series: 'basetool_scheduled_job_executions_total{job="basetool-backend", instance="backend:11261", task="exchange_bulk_undo", outcome="failure"}'
+        values: "0x30"
+      - series: 'basetool_scheduled_job_executions_total{job="basetool-backend", instance="backend:11261", task="exchange_bulk_undo", outcome="success"}'
+        values: "0x10 1x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ExchangeBulkUndoFailed
         exp_alerts: []

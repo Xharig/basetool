@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.frontend.controller;
 
 import de.greluc.krt.profit.basetool.frontend.config.GrafanaLinkProperties;
 import de.greluc.krt.profit.basetool.frontend.config.UsesLayoutModel;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeBulkUndoRunDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientUsageDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeSettingsDto;
@@ -64,6 +65,12 @@ public class AdminExchangeClientsPageController {
   /** The {@code fragment} value that renders only the registry section, for the in-place swap. */
   static final String REGISTRY_FRAGMENT = "registry";
 
+  /** The {@code fragment} value that renders only the bulk undo runs, for the in-place swap. */
+  static final String UNDO_RUNS_FRAGMENT = "undoRuns";
+
+  private static final ParameterizedTypeReference<List<ExchangeBulkUndoRunDto>> RUNS_TYPE =
+      new ParameterizedTypeReference<>() {};
+
   /**
    * Every capability the registry can grant, in the backend's declaration order, labelled via
    * {@code exchange.capability.<scope>}.
@@ -88,13 +95,16 @@ public class AdminExchangeClientsPageController {
   private final GrafanaLinkProperties grafanaLinks;
 
   /**
-   * Renders the registry page, or with {@code fragment=registry} only its registry section. A
-   * failed load renders an empty list with {@code error} set and no switch.
+   * Renders the registry page, or with {@code fragment=registry} only its registry section and with
+   * {@code fragment=undoRuns} only the bulk undo runs. A failed load renders an empty list with
+   * {@code error} set and no switch.
    *
-   * @param fragment {@code registry} for the section fragment; anything else renders the page
+   * @param fragment {@code registry} or {@code undoRuns} for a section fragment; anything else
+   *     renders the page
    * @param model receives {@code clients}, {@code settings}, {@code usage} by client id, {@code
-   *     capabilities}, {@code grafanaUrl} and, on a failed load, {@code error}
-   * @return {@code admin/exchange-clients}, or its {@code registry} fragment
+   *     capabilities}, {@code grafanaUrl}, {@code undoRuns}, {@code undoRunning} and, on a failed
+   *     load, {@code error}
+   * @return {@code admin/exchange-clients}, or one of its fragments
    */
   @NotNull
   @GetMapping
@@ -116,9 +126,31 @@ public class AdminExchangeClientsPageController {
     model.addAttribute("usage", usage());
     model.addAttribute("capabilities", CAPABILITIES);
     model.addAttribute("grafanaUrl", grafanaLinks.operationsDashboardUrl());
-    return REGISTRY_FRAGMENT.equals(fragment)
-        ? "admin/exchange-clients :: " + REGISTRY_FRAGMENT
+    List<ExchangeBulkUndoRunDto> runs = undoRuns();
+    model.addAttribute("undoRuns", runs);
+    model.addAttribute("undoRunning", runs.stream().anyMatch(ExchangeBulkUndoRunDto::running));
+    if (REGISTRY_FRAGMENT.equals(fragment)) {
+      return "admin/exchange-clients :: " + REGISTRY_FRAGMENT;
+    }
+    return UNDO_RUNS_FRAGMENT.equals(fragment)
+        ? "admin/exchange-clients :: " + UNDO_RUNS_FRAGMENT
         : "admin/exchange-clients";
+  }
+
+  /**
+   * Loads the recent bulk undo runs; a failure leaves the list empty rather than failing the page.
+   *
+   * @return the runs, newest first
+   */
+  private @NotNull List<ExchangeBulkUndoRunDto> undoRuns() {
+    try {
+      List<ExchangeBulkUndoRunDto> runs =
+          backendApiClient.get(AdminExchangeClientsRelayController.UNDO_RUNS, RUNS_TYPE);
+      return runs == null ? List.of() : runs;
+    } catch (Exception e) {
+      log.debug("Failed to load the bulk undo runs", e);
+      return List.of();
+    }
   }
 
   /**

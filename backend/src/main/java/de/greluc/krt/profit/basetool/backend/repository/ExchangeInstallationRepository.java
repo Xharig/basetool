@@ -114,6 +114,17 @@ public interface ExchangeInstallationRepository extends JpaRepository<ExchangeIn
   List<ExchangeInstallation> findAllByUserId(@Param("userId") UUID userId);
 
   /**
+   * Lists every installation of one client with its member, for the admin's bulk undo.
+   *
+   * @param exchangeClientId the registry id of the client
+   * @return the installations
+   */
+  @EntityGraph(attributePaths = "user")
+  @Query("SELECT i FROM ExchangeInstallation i WHERE i.client.id = :exchangeClientId")
+  List<ExchangeInstallation> findAllOfClientWithUser(
+      @Param("exchangeClientId") UUID exchangeClientId);
+
+  /**
    * Lists the installations revoked after a point in time, the live deny list.
    *
    * @param since the oldest revocation still denied

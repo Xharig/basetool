@@ -835,6 +835,68 @@
           }
         }
       ]
+    },
+    {
+      "id": 21,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 73
+      },
+      "type": "row",
+      "title": "Admin bulk undo",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 22,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 74
+      },
+      "type": "timeseries",
+      "title": "Bulk undo runs/day by outcome",
+      "description": "Runs of an admin's undo of one client for every member (REQ-XCH-034), by outcome; a failed run also fires ExchangeBulkUndoFailed. The entries they restored and skipped count in the undo panel above.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (increase(basetool_scheduled_job_executions_total{task=\"exchange_bulk_undo\"}[1d]))",
+          "refId": "A",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
     }
   ]
 }

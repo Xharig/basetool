@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: Zurücknehmen für alle Mitglieder.** Unter *Administration → Verbundene
+  Anwendungen* nimmt ein Admin die Änderungen einer Anwendung seit einem Zeitpunkt bei allen
+  Mitgliedern zurück (optional nur eine Installation oder ein Bereich); die Anwendung wird vorher
+  gesperrt, betroffene Mitglieder werden benachrichtigt. Migrationen `V256`, `V257`.
 - **Datenaustausch: Monitoring je Anwendung.** Neues Grafana-Dashboard „Exchange“ mit Filter nach
   verbundener Anwendung (Metriken und Gateway-Logs); Gateway-Logzeilen tragen Client und Route,
   neue Metriken `basetool_exchange_clients` und `basetool_exchange_registry_mirror_age_seconds` samt

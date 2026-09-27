@@ -64,7 +64,9 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -72,7 +74,8 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Undoes a client's writes to the member's entries since a point in time (REQ-XCH-022): each entry
  * goes back to its state before the client's first write in that span, unless something else has
- * changed it since the client's last one; Materialbörse offers a book-out lowered stay lowered.
+ * changed it since the client's last one; Materialbörse offers a book-out lowered stay lowered. An
+ * admin's bulk undo runs the same per member (REQ-XCH-034).
  */
 @Service
 @RequiredArgsConstructor
@@ -124,10 +127,82 @@ public class ExchangeUndoService {
     final ExchangeClient client =
         Entities.require(
             clientRepository.findWithCapabilitiesByClientId(clientId), () -> "Client not found");
+    Outcome outcome = perform(member, clientId, since, null, null);
+    auditService.record(
+        AuditEventType.EXCHANGE_CHANGES_UNDONE,
+        client.getId(),
+        client.getClientId(),
+        member,
+        AuditDetails.of("restored", outcome.restored()).with("skipped", outcome.skipped().size()));
+    Map<UUID, String> labels = entryLabels.label(outcome.skippedEntries());
+    List<ExchangeUndoResultDto.Skipped> skipped = new ArrayList<>();
+    for (int i = 0; i < outcome.skipped().size(); i++) {
+      ExchangeJournalEntry entry = outcome.skippedEntries().get(i);
+      skipped.add(
+          new ExchangeUndoResultDto.Skipped(
+              entry.getResource().name(),
+              labels.get(entry.getId()),
+              outcome.skipped().get(i).reason()));
+    }
+    return new ExchangeUndoResultDto(outcome.restored(), List.copyOf(skipped));
+  }
+
+  /**
+   * Undoes a client's writes to one member's entries within an admin's bulk undo, in the caller's
+   * transaction, and audits it for that member with the run (REQ-XCH-034).
+   *
+   * @param member the member
+   * @param client the client
+   * @param since the start of the span, already clamped to the retention
+   * @param installationKey the one installation to undo, or {@code null} for all
+   * @param resource the one resource to undo, or {@code null} for all
+   * @param runId the bulk undo run
+   * @return how many entries were restored, and the ones left alone
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public @NotNull Outcome undoWithinRun(
+      @NotNull UUID member,
+      @NotNull ExchangeClient client,
+      @NotNull Instant since,
+      @Nullable String installationKey,
+      @Nullable ExchangeResource resource,
+      @NotNull UUID runId) {
+    Outcome outcome = perform(member, client.getClientId(), since, installationKey, resource);
+    auditService.record(
+        AuditEventType.EXCHANGE_CHANGES_UNDONE,
+        client.getId(),
+        client.getClientId(),
+        member,
+        AuditDetails.of("restored", outcome.restored())
+            .with("skipped", outcome.skipped().size())
+            .with("run", runId));
+    return outcome;
+  }
+
+  /**
+   * Restores every entry in scope and refreshes the member's pages for what changed.
+   *
+   * @param member the member
+   * @param clientId the client
+   * @param since the start of the span; clamped to the retention
+   * @param installationKey the one installation to undo, or {@code null} for all
+   * @param resource the one resource to undo, or {@code null} for all
+   * @return the outcome
+   */
+  private @NotNull Outcome perform(
+      @NotNull UUID member,
+      @NotNull String clientId,
+      @NotNull Instant since,
+      @Nullable String installationKey,
+      @Nullable ExchangeResource resource) {
     Instant floor = clock.instant().minus(retention.maxAge());
     Instant from = since.isBefore(floor) ? floor : since;
     Map<String, List<ExchangeJournalEntry>> groups = new LinkedHashMap<>();
     for (ExchangeJournalEntry entry : journalRepository.findUndoable(member, clientId, from)) {
+      if ((installationKey != null && !installationKey.equals(entry.getInstallationKey()))
+          || (resource != null && resource != entry.getResource())) {
+        continue;
+      }
       groups
           .computeIfAbsent(
               entry.getResource().name() + ':' + entry.getEntityKey(), k -> new ArrayList<>())
@@ -135,40 +210,26 @@ public class ExchangeUndoService {
     }
     int restored = 0;
     List<ExchangeJournalEntry> skippedEntries = new ArrayList<>();
-    List<String> skippedReasons = new ArrayList<>();
+    List<Skipped> skipped = new ArrayList<>();
     Set<ExchangeResource> touched = EnumSet.noneOf(ExchangeResource.class);
     Instant now = clock.instant();
     for (List<ExchangeJournalEntry> group : groups.values()) {
       ExchangeJournalEntry newest = group.getFirst();
-      ExchangeResource resource = newest.getResource();
+      ExchangeResource entryResource = newest.getResource();
       String reason = restore(member, clientId, group);
       if (reason != null) {
         skippedEntries.add(newest);
-        skippedReasons.add(reason);
-        counter(clientId, resource, SKIPPED).increment();
+        skipped.add(new Skipped(newest.getId(), entryResource, reason));
+        counter(clientId, entryResource, SKIPPED).increment();
         continue;
       }
       group.forEach(entry -> entry.setUndoneAt(now));
       restored++;
-      touched.add(resource);
-      counter(clientId, resource, RESTORED).increment();
+      touched.add(entryResource);
+      counter(clientId, entryResource, RESTORED).increment();
     }
-    Map<UUID, String> labels = entryLabels.label(skippedEntries);
-    List<ExchangeUndoResultDto.Skipped> skipped = new ArrayList<>();
-    for (int i = 0; i < skippedEntries.size(); i++) {
-      ExchangeJournalEntry entry = skippedEntries.get(i);
-      skipped.add(
-          new ExchangeUndoResultDto.Skipped(
-              entry.getResource().name(), labels.get(entry.getId()), skippedReasons.get(i)));
-    }
-    auditService.record(
-        AuditEventType.EXCHANGE_CHANGES_UNDONE,
-        client.getId(),
-        client.getClientId(),
-        member,
-        AuditDetails.of("restored", restored).with("skipped", skipped.size()));
-    touched.forEach(resource -> refresh(member, resource));
-    return new ExchangeUndoResultDto(restored, List.copyOf(skipped));
+    touched.forEach(entryResource -> refresh(member, entryResource));
+    return new Outcome(restored, List.copyOf(skipped), List.copyOf(skippedEntries));
   }
 
   /**
@@ -410,4 +471,26 @@ public class ExchangeUndoService {
         MetricNames.TAG_OUTCOME,
         outcome);
   }
+
+  /**
+   * What an undo did for one member.
+   *
+   * @param restored how many entries were restored
+   * @param skipped the entries left alone, in the order they were met
+   * @param skippedEntries the newest journal entry of each skipped entry, in the same order
+   */
+  public record Outcome(
+      int restored,
+      @NotNull @Unmodifiable List<Skipped> skipped,
+      @NotNull @Unmodifiable List<ExchangeJournalEntry> skippedEntries) {}
+
+  /**
+   * One entry an undo left alone.
+   *
+   * @param journalEntryId the entry's newest journal entry
+   * @param resource the entry's resource
+   * @param reason {@code CHANGED_AFTERWARDS} or {@code GONE}
+   */
+  public record Skipped(
+      @NotNull UUID journalEntryId, @NotNull ExchangeResource resource, @NotNull String reason) {}
 }

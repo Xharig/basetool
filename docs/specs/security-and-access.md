@@ -4010,14 +4010,16 @@ worse than a short document that says exactly what exists and points at the mach
 **What the sections cover beyond the core tables.** The account section lists the optional RSI
 handle, and as a name spelling it is scrubbed from other members' free text (REQ-SEC-072); the
 Lager section lists each row's „gestohlen" marker (REQ-INV-053). The external client exchange
-contributes five sections: the installations with their labels (`connectedApps`, the label scrubbed
+contributes six sections: the installations with their labels (`connectedApps`, the label scrubbed
 like other free text; a revoked installation is the deny-list entry for its key), the client
 revocations (`connectedAppRevocations`), the change sequence (`exchangeChanges`: resource, key,
 channel and client of every change to the member's synced data, kept 90 days, ADR-0224), the write
 journal (`exchangeJournal`: client, resource, key, action and the entry before and after each
 client write, kept 90 days; the states scrubbed like other free text, since a note or a ship name
-can name somebody) and the ship links (`exchangeShipLinks`: client, the installation's id for the
-ship, the ship and when it was linked) — REQ-XCH-007, -008, -013, -017, -022.
+can name somebody), what an admin's bulk undo left alone for the member (`exchangeBulkUndoSkips`:
+run, client, resource, reason and when the run started, kept 90 days) and the ship links
+(`exchangeShipLinks`: client, the installation's id for the ship, the ship and when it was linked)
+— REQ-XCH-007, -008, -013, -017, -022, -034.
 
 **Every section is marked with its legal basis**, so the portable subset is identifiable without
 re-deriving it:

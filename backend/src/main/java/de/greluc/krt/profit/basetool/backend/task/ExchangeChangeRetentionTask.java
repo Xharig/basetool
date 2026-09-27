@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.task;
 
 import de.greluc.krt.profit.basetool.backend.metrics.ScheduledJob;
 import de.greluc.krt.profit.basetool.backend.metrics.TaskMetrics;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeBulkUndoService;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeChangeRetentionService;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeJournalService;
 import de.greluc.krt.profit.basetool.backend.support.ExchangeChangeRetentionProperties;
@@ -34,9 +35,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Nightly purge of the exchange change feed's entries, and so its tombstones, and of the exchange
- * write journal past their retention of {@code app.exchange.change-retention.max-age} (default 90
- * days, REQ-XCH-013, REQ-XCH-022).
+ * Nightly purge of the exchange change feed's entries, and so its tombstones, of the exchange write
+ * journal and of the ended bulk undo runs past their retention of {@code
+ * app.exchange.change-retention.max-age} (default 90 days, REQ-XCH-013, REQ-XCH-022, REQ-XCH-034).
  */
 @Component
 @ConditionalOnProperty(
@@ -50,6 +51,7 @@ public class ExchangeChangeRetentionTask {
 
   private final ExchangeChangeRetentionService retentionService;
   private final ExchangeJournalService journalService;
+  private final ExchangeBulkUndoService bulkUndoService;
   private final ExchangeChangeRetentionProperties properties;
   private final TaskMetrics taskMetrics;
   private final Clock clock = Clock.systemUTC();
@@ -66,16 +68,20 @@ public class ExchangeChangeRetentionTask {
   /**
    * Runs one purge.
    *
-   * @return the number of change and journal entries deleted
+   * @return the number of change entries, journal entries and bulk undo runs deleted
    */
   private int purge() {
     Instant now = clock.instant();
     Instant cutoff = now.minus(properties.maxAge());
     int changes = retentionService.purgeOlderThan(cutoff, now);
     int writes = journalService.purgeRecordedBefore(cutoff);
+    int runs = bulkUndoService.purgeFinishedBefore(cutoff);
     log.info(
-        "Exchange retention: {} change entries and {} journal entries purged.", changes, writes);
-    return changes + writes;
+        "Exchange retention: {} change entries, {} journal entries and {} bulk undo runs purged.",
+        changes,
+        writes,
+        runs);
+    return changes + writes + runs;
   }
 
   /**

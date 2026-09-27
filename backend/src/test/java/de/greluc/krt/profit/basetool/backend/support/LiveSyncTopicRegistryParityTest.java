@@ -109,8 +109,14 @@ class LiveSyncTopicRegistryParityTest {
       backendKeys.add(key(backendClass.prefix(), backendClass.perResource()));
     }
     assertThat(backendKeys)
-        .as("the bank staff room, the members room and the org-structure room are web-only")
-        .doesNotContain(key("bank", false), key("members", false), key("org-structure", false));
+        .as(
+            "the bank staff room, the members room, the org-structure room and the admin"
+                + " exchange-clients room are web-only")
+        .doesNotContain(
+            key("bank", false),
+            key("members", false),
+            key("org-structure", false),
+            key("exchange-clients", false));
   }
 
   /**

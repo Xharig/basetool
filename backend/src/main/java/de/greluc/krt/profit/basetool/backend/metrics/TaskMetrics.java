@@ -197,6 +197,24 @@ public class TaskMetrics {
   }
 
   /**
+   * Registers this job's executions counters for both outcomes at zero, so the first failed run is
+   * an increase Prometheus can see rather than the birth of a series; for on-demand jobs whose
+   * failure alerts on {@code increase()}.
+   *
+   * @param job the job
+   */
+  public void registerOutcomes(@NotNull ScheduledJob job) {
+    for (String outcome : new String[] {MetricNames.OUTCOME_SUCCESS, MetricNames.OUTCOME_FAILURE}) {
+      registry.counter(
+          MetricNames.SCHEDULED_JOB_EXECUTIONS,
+          MetricNames.TAG_JOB,
+          job.label(),
+          MetricNames.TAG_OUTCOME,
+          outcome);
+    }
+  }
+
+  /**
    * Publishes {@code basetool_scheduled_job_enabled{task} = 1} for this job.
    *
    * <p>Called from the job bean's own {@code @PostConstruct} (or, for {@code ScWikiScheduler}, only
