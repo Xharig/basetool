@@ -163,6 +163,27 @@ public final class MetricNames {
    */
   public static final String INGEST_LEGACY_ENABLED = "basetool.ingest.legacy.endpoints.enabled";
 
+  /**
+   * Counter {@code basetool_ingest_exchange_refused_total{reason}}: every exchange request the
+   * gateway refused, by its problem code in snake case (REQ-XCH-028).
+   */
+  public static final String EXCHANGE_REFUSED = "basetool.ingest.exchange.refused";
+
+  /**
+   * Tag key on {@link #INGEST_AUTH_FAILURES}: the surface the request targeted — {@link
+   * #PATH_SCOPE_LEGACY}, {@link #PATH_SCOPE_EXCHANGE} or {@link #PATH_SCOPE_OTHER}.
+   */
+  public static final String TAG_PATH_SCOPE = "path_scope";
+
+  /** {@link #TAG_PATH_SCOPE} value: the legacy extractor endpoints under {@code /v1}. */
+  public static final String PATH_SCOPE_LEGACY = "legacy";
+
+  /** {@link #TAG_PATH_SCOPE} value: the exchange under {@code /exchange}. */
+  public static final String PATH_SCOPE_EXCHANGE = "exchange";
+
+  /** {@link #TAG_PATH_SCOPE} value: any other path. */
+  public static final String PATH_SCOPE_OTHER = "other";
+
   /** Tag key: the calling client's Keycloak client id, bounded by the configured allowlist. */
   public static final String TAG_CLIENT_ID = "client_id";
 
@@ -221,6 +242,17 @@ public final class MetricNames {
 
   /** Bearer error: the token is valid but lacks a required scope. */
   public static final String AUTH_INSUFFICIENT_SCOPE = "insufficient_scope";
+
+  /**
+   * {@link #INGEST_AUTH_FAILURES} reason: a DPoP proof was invalid, replayed or for another key.
+   */
+  public static final String AUTH_INVALID_DPOP_PROOF = "invalid_dpop_proof";
+
+  /**
+   * {@link #INGEST_AUTH_FAILURES} reason: an exchange proof lacked the server nonce — the normal
+   * first round trip of a client, not an attack.
+   */
+  public static final String AUTH_USE_DPOP_NONCE = "use_dpop_nonce";
 
   /** No credential was presented at all, so there is no RFC 6750 code to report. */
   public static final String AUTH_NO_CREDENTIALS = "no_credentials";

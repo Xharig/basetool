@@ -1609,6 +1609,16 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   bookings need no dedicated meter — `JOB_ORDER_PRODUCTION_BOOKED` and
   `INVENTORY_CONSUMED_BY_PRODUCTION` roll into the existing `JOB_ORDER` and `INVENTORY` domain
   counts (REQ-ORDERS-025).
+- `basetool_ingest_exchange_refused_total{reason}` counter — every exchange request the gateway
+  refused, by its problem code in snake case (`dpop_required`, `dpop_invalid`, `unauthenticated`;
+  the registry and scope gates add theirs), registered at zero (REQ-XCH-028). A nonce challenge
+  counts as `dpop_invalid`, since the client sees that code.
+- `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`legacy`, `exchange`,
+  `other`) so a third-party client's failures stay apart from the extractor's, and two reasons:
+  `invalid_dpop_proof` and `use_dpop_nonce` (the normal first round trip, never alerted).
+  `IngestAuthFailureSpike` and `IngestUnauthenticatedFlood` alert per scope;
+  `ExchangeDpopProofsFailing` (warning, 15 m) fires on sustained refused exchange proofs
+  (REQ-XCH-006).
 - `basetool_ingest_legacy_endpoints_enabled` gauge (`1` while the legacy extractor endpoints answer,
   `0` once switched off) and `basetool_ingest_legacy_gone_total` counter (legacy requests refused
   with `410 LEGACY_ENDPOINT_GONE`, registered at zero). No alert: after the go-live a trickle of

@@ -84,7 +84,7 @@ tests:
   - name: fires - a rejected token on the ingest gateway
     interval: 1m
     input_series:
-      - series: 'basetool_ingest_auth_failures_total{reason="invalid_token", application="basetool-ingest"}'
+      - series: 'basetool_ingest_auth_failures_total{reason="invalid_token", application="basetool-ingest", path_scope="exchange"}'
         values: "0+6x60"
     alert_rule_test:
       - eval_time: 30m
@@ -94,9 +94,10 @@ tests:
               severity: warning
               application: basetool-ingest
               reason: invalid_token
+              path_scope: exchange
             exp_annotations:
               summary: "Rejected-token spike on ingest (possible JWT brute force)"
-              description: "The ingest gateway is rejecting presented tokens at an elevated rate. Normally zero - a credential-less request counts as reason=no_credentials. Split with sum by (reason) (rate(basetool_ingest_auth_failures_total[5m]))."
+              description: "The ingest gateway is rejecting presented tokens at an elevated rate on exchange (legacy = the extractor's /v1, exchange = third-party clients). Normally zero - a credential-less request counts as reason=no_credentials. Split with sum by (reason, path_scope) (rate(basetool_ingest_auth_failures_total[5m]))."
 
   - name: silent then firing - the gateway's own volume alert clears the probe floor
     interval: 1m
@@ -111,7 +112,7 @@ tests:
   - name: fires - a credential-less flood on the gateway
     interval: 1m
     input_series:
-      - series: 'basetool_ingest_auth_failures_total{reason="no_credentials", application="basetool-ingest"}'
+      - series: 'basetool_ingest_auth_failures_total{reason="no_credentials", application="basetool-ingest", path_scope="other"}'
         values: "0+120x60"
     alert_rule_test:
       - eval_time: 40m
@@ -121,6 +122,35 @@ tests:
               severity: warning
               application: basetool-ingest
               reason: no_credentials
+              path_scope: other
             exp_annotations:
               summary: "Sustained flood of credential-less requests on ingest"
-              description: "The ingest gateway is refusing more than 60 requests/minute that carry no Authorization header at all, for 15 minutes - far above its blackbox-probe baseline. Scanning or a looping client, not credential guessing. Check basetool_bot_blocked_total and the per-IP rate limiter before widening anything."
+              description: "The ingest gateway is refusing more than 60 requests/minute that carry no Authorization header at all on other, for 15 minutes - far above its blackbox-probe baseline. Scanning or a looping client, not credential guessing. Check basetool_bot_blocked_total and the per-IP rate limiter before widening anything."
+
+  - name: fires - exchange proofs keep failing
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_auth_failures_total{reason="invalid_dpop_proof", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+6x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeDpopProofsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Exchange DPoP proofs keep failing on ingest"
+              description: "Exchange clients keep presenting DPoP proofs the gateway refuses - invalid, replayed, or signed by another key than the token is bound to (REQ-XCH-006). A misimplemented client or a replay attempt; a missing server nonce is the normal first round trip and does not count here. Split by client in the gateway's access log."
+
+  - name: silent - nonce challenges are the normal first round trip
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_auth_failures_total{reason="use_dpop_nonce", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+60x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeDpopProofsFailing
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: IngestAuthFailureSpike
+        exp_alerts: []
