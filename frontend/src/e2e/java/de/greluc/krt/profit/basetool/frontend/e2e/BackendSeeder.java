@@ -126,9 +126,20 @@ public final class BackendSeeder {
    * stack is healthy.
    */
   public void seedCatalog() {
+    seedSql("/uex-catalog-seed.sql");
+  }
+
+  /**
+   * Runs an idempotent SQL fixture from the e2e classpath against the backend Postgres over JDBC,
+   * statement by statement.
+   *
+   * @param resource absolute classpath path of the fixture (leading {@code /})
+   * @throws IllegalStateException if the fixture is missing or a statement fails
+   */
+  public void seedSql(String resource) {
     try {
       String body =
-          readResource("/uex-catalog-seed.sql")
+          readResource(resource)
               .lines()
               .filter(line -> !line.strip().startsWith("--"))
               .collect(Collectors.joining("\n"));
@@ -142,7 +153,7 @@ public final class BackendSeeder {
         }
       }
     } catch (Exception e) {
-      throw new IllegalStateException("BackendSeeder.seedCatalog failed", e);
+      throw new IllegalStateException("BackendSeeder.seedSql(" + resource + ") failed", e);
     }
   }
 

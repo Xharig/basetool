@@ -10,6 +10,10 @@ services:
     volumes: !override
       - ./docker/test-redis/users.acl:/etc/redis/users.acl:ro
   keycloak-dev:
+    build:
+      context: .
+      dockerfile: docker/sandbox/keycloak/Dockerfile
+    image: ghcr.io/${IRI_IMAGE_NAMESPACE:-krt-profit}/basetool-sandbox-keycloak:${IRI_BASETOOL_VERSION:-local}
     command: start-dev --import-realm --cache=local
     environment:
       KC_HOSTNAME: http://host.docker.internal:18080/auth
@@ -19,13 +23,16 @@ services:
           - keycloak
           - host.docker.internal
     volumes: !override
-      - ./realm-export.json:/opt/keycloak/data/import/realm-export.json
+      - ./realm-export.json:/opt/keycloak/data/import/realm-iri.json:ro
   backend-dev:
     user: "0:0"
     environment:
       APP_RATE_LIMIT_ENABLED: "false"
       APP_REGISTRATION_REQUIRE_APPROVAL: "false"
       APP_INVENTORY_STOLEN_MARKING_ENABLED: "true"
+      APP_EXCHANGE_MIRROR_ENABLED: "true"
+      APP_EXCHANGE_MIRROR_RECONCILE_INTERVAL: PT10S
+      APP_SECURITY_INGEST_GATEWAY_CLIENT_IDS: basetool-ingest-gateway
     extra_hosts: !override []
     volumes: !override
       - type: tmpfs
@@ -53,6 +60,12 @@ services:
         target: /app/logs
         tmpfs:
           mode: 0o777
+  ingest-dev:
+    extra_hosts: !override []
+    networks:
+      net-backend-keycloak:
+        aliases:
+          - ingest
 
 volumes:
   iri-e2e-db-backend:

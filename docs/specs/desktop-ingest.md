@@ -517,9 +517,10 @@ precede turning the check on, in that order.
   emitting `aud=basetool-backend` (documented runbook step, #641).
 - [x] The sequencing is rehearsed rather than first attempted in prod: the E2E realm stamps
   `aud=basetool-backend` on its frontend client and the E2E backend runs with the check ON, so
-  "mapper present → tokens accepted" is proven on every e2e-labelled PR (#1247). This covers the
-  backend half only — the gateway is not in the E2E stack, and the deployed realm's mappers still
-  have to be confirmed on the host before the prod flip.
+  "mapper present → tokens accepted" is proven on every e2e-labelled PR (#1247). The gateway runs
+  in the E2E stack since ADR-0225 and enforces `aud=basetool-ingest` on the exchange tokens it
+  sees there; the deployed realm's mappers still have to be confirmed on the host before the prod
+  flip.
 
 **Enforced by:** `SecurityConfigTest` (the audience validator), `ArchitectureTest` (every surface is
 authorization-annotated; the gateway adds no new authority) · **Code:** ingest `SecurityConfig`, the
