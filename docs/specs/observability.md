@@ -1608,6 +1608,10 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   bookings need no dedicated meter — `JOB_ORDER_PRODUCTION_BOOKED` and
   `INVENTORY_CONSUMED_BY_PRODUCTION` roll into the existing `JOB_ORDER` and `INVENTORY` domain
   counts (REQ-ORDERS-025).
+- `basetool_ingest_legacy_endpoints_enabled` gauge (`1` while the legacy extractor endpoints answer,
+  `0` once switched off) and `basetool_ingest_legacy_gone_total` counter (legacy requests refused
+  with `410 LEGACY_ENDPOINT_GONE`, registered at zero). No alert: after the go-live a trickle of
+  refusals is outdated extractors, which the hint tells to update (REQ-XCH-033).
 - `basetool_exchange_departures_total{outcome}` counter — a departed member's exchange access
   ended in full (`done`) or in part (`failed`), registered at zero; `ExchangeDepartureIncomplete`
   (warning) fires on any failed one, since the step is not retried (REQ-XCH-008).
@@ -1626,6 +1630,11 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `exchange_client_invalid`; the first backs `ExchangeRelayHeaderForged` (warning, 15 m). Relayed
   exchange requests count under the external client in `basetool_api_client_requests_total`
   (REQ-XCH-010, REQ-XCH-028).
+- `basetool_exchange_resolve_refs_total{kind,status}` counter, one per reference `catalog/resolve`
+  answered (`kind` = `blueprint` / `item` / `material` / `ship_type`, `status` = `resolved` /
+  `ambiguous` / `unmatched`), registered at zero for every pair. It shows how well external
+  clients' references meet the catalogue; no alert, since an unmatched reference is the
+  client's input, not a fault (REQ-XCH-012).
 - `basetool_exchange_registry_changes_total{action}` counter, one per committed registry change
   (`action` = `created` / `updated` / `suspended` / `activated` / `switch_on` / `switch_off`, the
   bounded `ExchangeRegistryAction`), registered at zero for every action. It backs

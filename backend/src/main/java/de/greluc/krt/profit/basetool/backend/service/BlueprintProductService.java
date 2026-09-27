@@ -34,6 +34,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -266,7 +267,26 @@ public class BlueprintProductService {
   @NotNull
   public Map<String, String> scwikiKeyToProductKeyIndex() {
     Map<String, String> index = new LinkedHashMap<>();
-    Set<String> ambiguous = new HashSet<>();
+    scwikiKeyToProductKeys()
+        .forEach(
+            (tagKey, productKeys) -> {
+              if (productKeys.size() == 1) {
+                index.put(tagKey, productKeys.iterator().next());
+              }
+            });
+    return index;
+  }
+
+  /**
+   * Builds the index from lower-cased {@code scwiki_key} to every normalized {@code product_key} an
+   * active recipe with that key produces, keeping keys that name several products (REQ-XCH-012).
+   *
+   * @return lower-cased {@code scwiki_key} to its product keys in first-seen order; never {@code
+   *     null}
+   */
+  @NotNull
+  public Map<String, Set<String>> scwikiKeyToProductKeys() {
+    Map<String, Set<String>> index = new LinkedHashMap<>();
     for (BlueprintProductRow row : blueprintRepository.findActiveProductRows("")) {
       if (row.scwikiKey() == null || row.outputName() == null) {
         continue;
@@ -279,12 +299,8 @@ public class BlueprintProductService {
       if (productKey.isEmpty()) {
         continue;
       }
-      String existing = index.putIfAbsent(tagKey, productKey);
-      if (existing != null && !existing.equals(productKey)) {
-        ambiguous.add(tagKey);
-      }
+      index.computeIfAbsent(tagKey, k -> new LinkedHashSet<>()).add(productKey);
     }
-    ambiguous.forEach(index::remove);
     return index;
   }
 

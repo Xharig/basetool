@@ -34,7 +34,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @param nameDe German display name, or {@code null}
  * @param desc English description, filled into {@code material.description} when null
  * @param descDe German description, or {@code null}
- * @param nameKey raw {@code @LOC} name localization key (forensic; not persisted)
+ * @param nameKey raw {@code @LOC} name localization key, stored as {@code name_key} without the
+ *     {@code @}
  * @param descKey raw {@code @LOC} description localization key (forensic; not persisted)
  * @param typeGuid commodity {@code type} GUID (forensic; not persisted)
  * @param subtypeGuid commodity {@code subtype} GUID (forensic; not persisted)
