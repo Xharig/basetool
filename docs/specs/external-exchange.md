@@ -378,8 +378,9 @@ product names.
 **Acceptance**
 
 - [x] Forged-header tests from a browser session and from the app (`ActingMemberFilterChainTest`).
-- [ ] An exchange write's audit row carries the external client id. *The attribution is in
-  (`ClientAttributionTest`); the first exchange write arrives with WP 3.3.*
+- [x] An exchange write's audit row carries the external client id. *`ClientAttributionTest`;
+  `ExchangeBlueprintWriteControllerTest`, `ExchangeStockWriteControllerTest` and
+  `ExchangeShipWriteControllerTest` read the client from the written audit rows.*
 
 **Status:** built — WP 3.1 (#2083)
 
