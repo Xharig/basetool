@@ -19,6 +19,18 @@
 
 package de.greluc.krt.profit.basetool.ingest.config;
 
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeBudget;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopProofValidation;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeGateFilter;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeIdempotency;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeIdempotencyFilter;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeLimitFilter;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeQuotas;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRevocationReader;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTokenGateFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.ClientIdentityFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.UserIdMdcFilter;
 import de.greluc.krt.profit.basetool.ingest.web.SecurityProblemResponseHandler;
@@ -37,6 +49,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -51,6 +64,7 @@ import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.DPoPAuthenticationProvider;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -183,10 +197,20 @@ public class SecurityConfig {
       MeterRegistry meterRegistry,
       LoggingProperties loggingProperties,
       ClientIdentityProperties clientIdentityProperties,
-      IngestProperties ingestProperties)
+      IngestProperties ingestProperties,
+      ExchangeDpopNonces exchangeNonces,
+      ExchangeRefusals exchangeRefusals,
+      ExchangeRegistryReader exchangeRegistryReader,
+      ExchangeRevocationReader exchangeRevocationReader,
+      ExchangeLimitProperties exchangeLimitProperties,
+      ExchangeQuotas exchangeQuotas,
+      ExchangeIdempotency exchangeIdempotency,
+      ExchangeBudget exchangeBudget,
+      ExchangeStoreProperties exchangeStoreProperties)
       throws Exception {
     SecurityProblemResponseHandler securityProblems =
-        new SecurityProblemResponseHandler(objectMapper, meterRegistry, loggingProperties);
+        new SecurityProblemResponseHandler(
+            objectMapper, meterRegistry, loggingProperties, exchangeNonces, exchangeRefusals);
     CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
     csrfRepo.setCookieCustomizer(cookie -> cookie.sameSite("Strict").secure(true));
     http.csrf(
@@ -225,6 +249,15 @@ public class SecurityConfig {
         .oauth2ResourceServer(
             oauth2 ->
                 oauth2
+                    .withObjectPostProcessor(
+                        new ObjectPostProcessor<DPoPAuthenticationProvider>() {
+                          @Override
+                          public <O extends DPoPAuthenticationProvider> O postProcess(O provider) {
+                            provider.setDPoPProofVerifierFactory(
+                                ExchangeDpopProofValidation.factory(exchangeNonces));
+                            return provider;
+                          }
+                        })
                     .dPoP(
                         dpop ->
                             dpop.authenticationConverter(
@@ -247,6 +280,38 @@ public class SecurityConfig {
             new ClientIdentityFilter(
                 clientIdentityProperties, meterRegistry, objectMapper, loggingProperties),
             UserIdMdcFilter.class)
+        .addFilterAfter(
+            new ExchangeTokenGateFilter(
+                exchangeNonces, exchangeRefusals, objectMapper, loggingProperties, meterRegistry),
+            ClientIdentityFilter.class)
+        .addFilterAfter(
+            new ExchangeGateFilter(
+                exchangeRegistryReader,
+                exchangeRevocationReader,
+                exchangeRefusals,
+                objectMapper,
+                loggingProperties,
+                meterRegistry),
+            ExchangeTokenGateFilter.class)
+        .addFilterAfter(
+            new ExchangeLimitFilter(
+                exchangeLimitProperties,
+                exchangeQuotas,
+                exchangeRefusals,
+                objectMapper,
+                loggingProperties,
+                meterRegistry),
+            ExchangeGateFilter.class)
+        .addFilterAfter(
+            new ExchangeIdempotencyFilter(
+                exchangeIdempotency,
+                exchangeBudget,
+                exchangeStoreProperties,
+                exchangeRefusals,
+                objectMapper,
+                loggingProperties,
+                meterRegistry),
+            ExchangeLimitFilter.class)
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
     return http.build();
   }

@@ -36,8 +36,9 @@ includes the rule.
 - A Javadoc that is not directly above a type, member or package declaration fails the build in
   every source set, whatever caused it: an orphan left by an insertion, or a Javadoc inside a
   method body.
-- `google_checks.xml` stays an unmodified copy of the release file, so a Checkstyle upgrade is still
-  a plain re-copy. The second file uses only one long-standing check, so an upgrade does not need to
+- `google_checks.xml` gets no edit for this rule, so a Checkstyle upgrade is still a re-copy of the
+  release file plus the two ADR-0214 edits that
+  [`docs/dependency-pins.md`](../dependency-pins.md) records. The second file uses only one long-standing check, so an upgrade does not need to
   touch it.
 - The test and e2e Checkstyle tasks now parse those sources on every `check` (about a minute across
   all modules on a warm daemon).

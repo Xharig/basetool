@@ -4,6 +4,32 @@
 
 ### Added
 
+- **Datenaustausch: Blueprints lesen.** Verbundene Anwendungen mit `exchange.blueprints.read` lesen
+  über `GET /exchange/v1/me/blueprints` die Blueprints des Mitglieds als Snapshot und danach nur die
+  Änderungen seit ihrem Cursor (REQ-XCH-013, REQ-XCH-015).
+- **Datenaustausch: Bedarf lesen.** Verbundene Anwendungen mit `exchange.demand.read` lesen über
+  `GET /exchange/v1/me/org-demand` den anonymen offenen Bedarf der Einheiten des Mitglieds
+  (REQ-XCH-018).
+- **Datenaustausch: Schreibrouten im Gateway.** `POST /exchange/v1/me/{blueprints,stock,ships}/changes`
+  prüfen Änderungssätze (höchstens 500 Operationen, sonst `413 BATCH_TOO_LARGE`) und reichen sie an
+  das Backend weiter; eine von der Massenänderungs-Sperre angehaltene Änderung wird zur Bestätigung
+  im Browser zwischengespeichert und mit `confirmationUrl` beantwortet (REQ-XCH-021, REQ-XCH-023).
+- **Datenaustausch: Lager und Hangar lesen.** Verbundene Anwendungen mit `exchange.stock.read` bzw.
+  `exchange.hangar.read` lesen über `GET /exchange/v1/me/stock` und `GET /exchange/v1/me/ships` den
+  persönlichen Bestand und die eigenen Schiffe des Mitglieds als Snapshot und danach die Änderungen
+  (REQ-XCH-016, REQ-XCH-017).
+- **Datenaustausch: Account-Abgleich.** Eine verbundene Anwendung kann fragen, ob ein RSI-Handle aus
+  dem Spiel-Log zum angemeldeten Mitglied gehört, und vor einem Zweit-Account warnen; die Antwort ist
+  nur `match`, `mismatch` oder `unknown`, der gespeicherte Handle wird nie herausgegeben
+  (REQ-XCH-031).
+- **Datenaustausch: Limits und idempotente Schreibzugriffe.** Das Gateway begrenzt jede Anwendung
+  pro Mitglied (120/min, 500 Schreibzugriffe pro UTC-Tag) und insgesamt (1200/min) und verlangt bei
+  Schreibzugriffen einen `Idempotency-Key`; eine Wiederholung liefert die gespeicherte Antwort,
+  statt doppelt zu schreiben (REQ-XCH-020, REQ-XCH-023).
+- **Datenaustausch: Bewerbung für Fremd-Anwendungen.** `docs/exchange/onboarding.md` und
+  `docs/exchange/client-security.md` beschreiben Kriterien und Sicherheitsanforderungen, eine
+  Issue-Vorlage nimmt Bewerbungen auf, und `docs/legal/approved-clients.md` ist das öffentliche
+  Verzeichnis zugelassener Anwendungen (noch leer; REQ-XCH-002, REQ-XCH-027).
 - **Datenaustausch: Änderungsprotokoll.** Jede Änderung an persönlichen Blueprints, am persönlichen
   Lager und an Schiffen – auch über Sammelaktionen und Standard-Blueprints – wird mit ihrer Quelle
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport

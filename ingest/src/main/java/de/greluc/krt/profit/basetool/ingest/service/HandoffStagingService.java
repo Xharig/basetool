@@ -23,6 +23,7 @@ import de.greluc.krt.profit.basetool.ingest.config.IngestProperties;
 import de.greluc.krt.profit.basetool.ingest.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.ingest.model.dto.StagedHandoff;
 import de.greluc.krt.profit.basetool.ingest.web.BadRequestException;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,9 @@ public class HandoffStagingService {
    */
   static final String INDEX_PREFIX = "ingest:handoff-index:";
 
+  /** Prefix of the per-subject index of staged mass changes, a slot apart from the drafts. */
+  static final String MASS_CHANGE_INDEX_PREFIX = "ingest:handoff-index:mass:";
+
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
@@ -72,32 +76,78 @@ public class HandoffStagingService {
    */
   public @NotNull String stage(
       @NotNull String sub, @NotNull HandoffKind kind, @NotNull String draftJson) {
+    return store(
+            sub,
+            kind,
+            draftJson,
+            ingestProperties.maxHandoffBytes(),
+            INDEX_PREFIX + sub,
+            ingestProperties.maxHandoffsPerSubject())
+        .handoffId();
+  }
+
+  /**
+   * Stages a client's change set the mass-change guard held back, in a slot of its own per subject,
+   * so it never evicts an extractor draft and a newer one replaces it (REQ-XCH-021).
+   *
+   * @param sub the member's subject
+   * @param changeJson the staged change set with its client, installation and resource
+   * @param maxBytes the largest staged document
+   * @return where it is staged and how large it is
+   * @throws BadRequestException if the document exceeds {@code maxBytes}
+   */
+  public @NotNull Staged stageMassChange(
+      @NotNull String sub, @NotNull String changeJson, long maxBytes) {
+    return store(
+        sub, HandoffKind.MASS_CHANGE, changeJson, maxBytes, MASS_CHANGE_INDEX_PREFIX + sub, 1);
+  }
+
+  /**
+   * Stores one handoff under a fresh id and keeps its index within the cap.
+   *
+   * @param sub the subject
+   * @param kind the handoff's kind
+   * @param json the staged document
+   * @param maxBytes the largest stored value
+   * @param indexKey the subject's index for this kind of handoff
+   * @param cap the most live entries in that index
+   * @return where it is staged and how large it is
+   * @throws BadRequestException if the value exceeds {@code maxBytes}
+   */
+  private @NotNull Staged store(
+      @NotNull String sub,
+      @NotNull HandoffKind kind,
+      @NotNull String json,
+      long maxBytes,
+      @NotNull String indexKey,
+      int cap) {
     byte[] raw = new byte[20];
     RANDOM.nextBytes(raw);
     String handoffId = URL_ENCODER.encodeToString(raw);
-    String value = objectMapper.writeValueAsString(new StagedHandoff(kind, draftJson));
+    String value = objectMapper.writeValueAsString(new StagedHandoff(kind, json));
 
-    long stagedBytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
-    if (stagedBytes > ingestProperties.maxHandoffBytes()) {
+    long stagedBytes = value.getBytes(StandardCharsets.UTF_8).length;
+    if (stagedBytes > maxBytes) {
       log.warn(
           "Refused to stage an oversized {} handoff (sub=u-{}, bytes={}, max={})",
           kind,
           mask(sub),
           stagedBytes,
-          ingestProperties.maxHandoffBytes());
+          maxBytes);
       throw new BadRequestException("The import draft is too large to hand off.");
     }
 
-    redisTemplate.opsForValue().set(key(sub, handoffId), value, ingestProperties.handoffTtl());
-    trimSubjectIndex(sub, handoffId);
+    String key = key(sub, handoffId);
+    redisTemplate.opsForValue().set(key, value, ingestProperties.handoffTtl());
+    trimSubjectIndex(sub, handoffId, indexKey, cap);
     log.info(
         "Staged {} handoff (sub=u-{}, hid=h-{}, draftLen={}, ttl={})",
         kind,
         mask(sub),
         mask(handoffId),
-        draftJson.length(),
+        json.length(),
         ingestProperties.handoffTtl());
-    return handoffId;
+    return new Staged(handoffId, key, stagedBytes);
   }
 
   /**
@@ -108,13 +158,15 @@ public class HandoffStagingService {
    *
    * @param sub the caller's subject
    * @param handoffId the id just staged
+   * @param indexKey the subject's index
+   * @param cap the most live entries in it
    */
-  private void trimSubjectIndex(@NotNull String sub, @NotNull String handoffId) {
-    String indexKey = INDEX_PREFIX + sub;
+  private void trimSubjectIndex(
+      @NotNull String sub, @NotNull String handoffId, @NotNull String indexKey, int cap) {
     try {
       Long size = redisTemplate.opsForList().rightPush(indexKey, handoffId);
       redisTemplate.expire(indexKey, ingestProperties.handoffTtl());
-      long excess = size == null ? 0L : size - ingestProperties.maxHandoffsPerSubject();
+      long excess = size == null ? 0L : size - cap;
       for (long i = 0; i < excess; i++) {
         String evicted = redisTemplate.opsForList().leftPop(indexKey);
         if (evicted == null) {
@@ -127,7 +179,7 @@ public class HandoffStagingService {
             "Evicted {} handoff(s) over the per-subject cap (sub=u-{}, cap={})",
             excess,
             mask(sub),
-            ingestProperties.maxHandoffsPerSubject());
+            cap);
       }
     } catch (RuntimeException redisProblem) {
       log.warn(
@@ -158,4 +210,13 @@ public class HandoffStagingService {
   private static @NotNull String mask(String value) {
     return value == null ? "none" : Integer.toHexString(value.hashCode());
   }
+
+  /**
+   * A staged handoff.
+   *
+   * @param handoffId the id the frontend picks it up by
+   * @param key its Redis key
+   * @param bytes the size of the stored value
+   */
+  public record Staged(@NotNull String handoffId, @NotNull String key, long bytes) {}
 }

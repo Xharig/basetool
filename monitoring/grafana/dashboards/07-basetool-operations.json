@@ -2632,7 +2632,7 @@
         "y": 168
       },
       "type": "timeseries",
-      "title": "Ingest auth failures/hour by bearer error",
+      "title": "Ingest auth failures/hour by bearer error and path scope",
       "description": "Every ingest 401 under its RFC 6750 bearer error code. The 401 itself logs at DEBUG only (scanner-flood protection on the public surface), so this is the sole signal an operator has when a client fails to authenticate. invalid_token covers bad signature, wrong issuer, expired AND failed audience - check the gateway config before assuming the client is at fault. no_credentials is a request that brought no Authorization header at all and is normally the only non-zero series here: the gateway's own root is probed with the http_2xx_or_401 blackbox module, so its 401 volume is a monitoring baseline rather than a threat (ADR-0173). Deliberately not alerted: unauthenticated probes are constant noise.",
       "datasource": {
         "type": "prometheus",
@@ -2662,9 +2662,9 @@
       },
       "targets": [
         {
-          "expr": "sum by (reason) (rate(basetool_ingest_auth_failures_total[1h])) * 3600",
+          "expr": "sum by (reason, path_scope) (rate(basetool_ingest_auth_failures_total[1h])) * 3600",
           "refId": "A",
-          "legendFormat": "{{reason}}",
+          "legendFormat": "{{path_scope}} {{reason}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -3745,12 +3745,119 @@
       ]
     },
     {
+      "id": 70,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 248
+      },
+      "type": "timeseries",
+      "title": "Exchange gateway refusals/hour by reason",
+      "description": "Every exchange request the ingest gateway refused before it reached the backend, by problem code in snake case (REQ-XCH-028): DPoP, audience, registry, revocation, scope, version, limit, quota, idempotency and budget refusals. The per-client split is the panel beside the relay outcomes. Backs ExchangeDpopProofsFailing and ExchangeRegistryUnreadableAtGateway.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (reason) (increase(basetool_ingest_exchange_refused_total[1h]))",
+          "refId": "A",
+          "legendFormat": "{{reason}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 248
+      },
+      "type": "timeseries",
+      "title": "Legacy extractor endpoints: switch and 410s/hour",
+      "description": "Client-identity gate rejections (REQ-INGEST-011), also counted while audit-only is set. unknown_client / bad_provenance = an unapproved tool is calling the restricted interface. missing_azp / missing_scope = a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Backs the IngestUnknownClient alert.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max(basetool_ingest_legacy_endpoints_enabled)",
+          "refId": "A",
+          "legendFormat": "enabled",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum(increase(basetool_ingest_legacy_gone_total[1h]))",
+          "refId": "B",
+          "legendFormat": "410 gone",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
       "id": 80,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 280
+        "y": 256
       },
       "type": "timeseries",
       "title": "Exchange writes/day by resource and outcome",
@@ -3810,6 +3917,164 @@
         }
       ],
       "description": "Ops external clients sent to the member's synced data (REQ-XCH-015…-017), by resource and outcome: applied, unchanged, unmatched, ambiguous or rejected; 'held' counts change sets the mass-change guard held back for the member's confirmation (REQ-XCH-021). The 'undo' series count the entries a member's undo restored or skipped (REQ-XCH-022). The 'confirmed' series count the held-back change sets members confirmed (REQ-XCH-021)."
+    },
+    {
+      "id": 72,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 264
+      },
+      "type": "timeseries",
+      "title": "Exchange requests/hour per client: refused and relayed by outcome",
+      "description": "The error picture of each registered client (REQ-XCH-028): gateway refusals and relayed requests by outcome, labelled client_id. Only registry clients carry their own id; any other token is 'unregistered', 'unknown' while the registry cannot be read, and refusals before a token was read are 'none' (not shown). The admin page Verbundene Anwendungen links here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id) (increase(basetool_ingest_exchange_refused_total{client_id!=\"none\"}[1h]))",
+          "refId": "A",
+          "legendFormat": "refused {{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (client_id, outcome) (increase(basetool_ingest_exchange_relay_total{client_id!=\"none\"}[1h]))",
+          "refId": "B",
+          "legendFormat": "relayed {{outcome}} {{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 272
+      },
+      "type": "timeseries",
+      "title": "Exchange Redis byte budget in use",
+      "description": "The share of the exchange's total Redis byte budget (64 MiB) the gateway's cached answers, quota counters and locks hold (REQ-XCH-023). Above 0.8 ExchangeBudgetHigh fires; at 1.0 writes are refused EXCHANGE_BUDGET_EXHAUSTED before they reach the backend.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "max": 1,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max(basetool_ingest_exchange_budget_used_ratio)",
+          "refId": "A",
+          "legendFormat": "used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 264
+      },
+      "type": "timeseries",
+      "title": "Exchange mass changes held for confirmation/day per client",
+      "description": "Change sets the backend's mass-change guard held back and the gateway staged for the member's confirmation in the browser (REQ-XCH-021), by registry client. A client that keeps tripping the guard is removing more than members expect.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id) (increase(basetool_ingest_exchange_mass_changes_staged_total{client_id!=\"none\"}[1d]))",
+          "refId": "A",
+          "legendFormat": "{{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
     }
   ]
 }

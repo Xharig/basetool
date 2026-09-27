@@ -241,7 +241,7 @@ device-grant client per [`INGEST_KEYCLOAK_SETUP.md`](../INGEST_KEYCLOAK_SETUP.md
 ### REQ-INGEST-003 — Short-lived single-use Redis handoff
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The handoff staging also carries staged mass changes (a new `HandoffKind`, REQ-XCH-021) with its own size cap and per-subject slot, so a staged change set never evicts a pending extractor draft. Ships with WP 3.2 (#2082).
+> The handoff staging also carries staged mass changes (`HandoffKind.MASS_CHANGE`, REQ-XCH-021) with its own size cap and a per-subject slot of one, so a staged change set never evicts a pending extractor draft and a newer one replaces it. Built with WP 3.2 (#2082); the frontend's confirmation follows with WP 4.5.
 
 The non-persisted draft returned by the backend is staged in Redis under a key derived from
 `(sub, handoffId)`. The `handoffId` is cryptographically unguessable (≥ 128 bits of

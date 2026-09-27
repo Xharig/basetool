@@ -20,6 +20,12 @@
 package de.greluc.krt.profit.basetool.ingest.web;
 
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeChallenge;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopProofValidation;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTokenGateFilter;
+import de.greluc.krt.profit.basetool.ingest.filter.IngestPathScope;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,15 +34,19 @@ import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -57,6 +67,8 @@ public class SecurityProblemResponseHandler
       new BearerTokenAuthenticationEntryPoint();
 
   /** Serializes the problem body. */
+  private static final String BEARER_SCHEME = "Bearer ";
+
   private final ObjectMapper objectMapper;
 
   /** Counts every 401/403 on the bounded auth-failure and error counters. */
@@ -64,6 +76,10 @@ public class SecurityProblemResponseHandler
 
   /** Supplies the MDC key the problem body's {@code correlationId} is read from. */
   private final LoggingProperties loggingProperties;
+
+  private final ExchangeDpopNonces nonces;
+
+  private final ExchangeRefusals refusals;
 
   /**
    * Answers an unauthenticated request to a protected endpoint with a {@code 401} problem body,
@@ -83,8 +99,20 @@ public class SecurityProblemResponseHandler
     if (response.isCommitted()) {
       return;
     }
-    bearerEntryPoint.commence(request, response, authException);
     String bearerErrorCode = bearerErrorCode(authException);
+    if (IngestPathScope.isExchangeRequest(request)) {
+      meterRegistry
+          .counter(
+              MetricNames.INGEST_AUTH_FAILURES,
+              MetricNames.TAG_REASON,
+              bearerErrorCode,
+              MetricNames.TAG_PATH_SCOPE,
+              MetricNames.PATH_SCOPE_EXCHANGE)
+          .increment();
+      commenceExchange(request, response, bearerErrorCode);
+      return;
+    }
+    bearerEntryPoint.commence(request, response, authException);
     log.debug(
         "Unauthenticated ingest request {} {} ({}, {})",
         request.getMethod(),
@@ -92,7 +120,12 @@ public class SecurityProblemResponseHandler
         authException.getClass().getSimpleName(),
         bearerErrorCode);
     meterRegistry
-        .counter(MetricNames.INGEST_AUTH_FAILURES, MetricNames.TAG_REASON, bearerErrorCode)
+        .counter(
+            MetricNames.INGEST_AUTH_FAILURES,
+            MetricNames.TAG_REASON,
+            bearerErrorCode,
+            MetricNames.TAG_PATH_SCOPE,
+            IngestPathScope.scopeLabel(request))
         .increment();
     write(
         response,
@@ -118,14 +151,83 @@ public class SecurityProblemResponseHandler
           ? MetricNames.AUTH_NO_CREDENTIALS
           : MetricNames.AUTH_OTHER;
     }
+    if (asksForNonce(oauth2Exception)) {
+      return MetricNames.AUTH_USE_DPOP_NONCE;
+    }
     String code =
         oauth2Exception.getError() == null ? null : oauth2Exception.getError().getErrorCode();
+    if (OAuth2ErrorCodes.INVALID_DPOP_PROOF.equals(code)) {
+      return MetricNames.AUTH_INVALID_DPOP_PROOF;
+    }
     if (MetricNames.AUTH_INVALID_TOKEN.equals(code)
         || MetricNames.AUTH_INVALID_REQUEST.equals(code)
         || MetricNames.AUTH_INSUFFICIENT_SCOPE.equals(code)) {
       return code;
     }
     return MetricNames.AUTH_OTHER;
+  }
+
+  /**
+   * Answers an unauthenticated exchange request with the DPoP challenge (REQ-XCH-006): the bearer
+   * scheme is {@code DPOP_REQUIRED}, a missing nonce gets a fresh one to retry with, a bad proof is
+   * {@code DPOP_INVALID}, anything else {@code UNAUTHENTICATED}.
+   *
+   * @param request the request
+   * @param response the response
+   * @param reason the failure's metric reason
+   * @throws IOException if writing fails
+   */
+  private void commenceExchange(
+      @NotNull HttpServletRequest request,
+      @NotNull HttpServletResponse response,
+      @NotNull String reason)
+      throws IOException {
+    String code;
+    String detail;
+    if (StringUtils.startsWithIgnoreCase(
+        request.getHeader(HttpHeaders.AUTHORIZATION), BEARER_SCHEME)) {
+      response.setHeader(HttpHeaders.WWW_AUTHENTICATE, ExchangeChallenge.header(null));
+      code = ExchangeRefusals.DPOP_REQUIRED;
+      detail = "Exchange routes need a DPoP-bound token and a DPoP proof.";
+    } else if (MetricNames.AUTH_USE_DPOP_NONCE.equals(reason)) {
+      response.setHeader(ExchangeTokenGateFilter.DPOP_NONCE_HEADER, nonces.current());
+      response.setHeader(
+          HttpHeaders.WWW_AUTHENTICATE,
+          ExchangeChallenge.header(ExchangeDpopProofValidation.USE_DPOP_NONCE));
+      code = ExchangeRefusals.DPOP_INVALID;
+      detail = "Retry with the server nonce from the DPoP-Nonce header.";
+    } else if (MetricNames.AUTH_INVALID_DPOP_PROOF.equals(reason)) {
+      response.setHeader(
+          HttpHeaders.WWW_AUTHENTICATE,
+          ExchangeChallenge.header(OAuth2ErrorCodes.INVALID_DPOP_PROOF));
+      code = ExchangeRefusals.DPOP_INVALID;
+      detail = "The DPoP proof is invalid, replayed or bound to another key.";
+    } else {
+      response.setHeader(HttpHeaders.WWW_AUTHENTICATE, ExchangeChallenge.header(null));
+      code = ExchangeRefusals.UNAUTHENTICATED;
+      detail = "A valid DPoP-bound token is required.";
+    }
+    refusals.count(code, MetricNames.EXCHANGE_CLIENT_NONE);
+    write(response, HttpStatus.UNAUTHORIZED, "Unauthenticated", code, detail);
+  }
+
+  /**
+   * Whether a failure is the proof verifier asking for the server nonce.
+   *
+   * @param exception the failure
+   * @return {@code true} when a cause carries {@code use_dpop_nonce}
+   */
+  private static boolean asksForNonce(@NotNull Throwable exception) {
+    for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+      if (cause instanceof JwtValidationException validation
+          && validation.getErrors().stream()
+              .anyMatch(
+                  error ->
+                      ExchangeDpopProofValidation.USE_DPOP_NONCE.equals(error.getErrorCode()))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

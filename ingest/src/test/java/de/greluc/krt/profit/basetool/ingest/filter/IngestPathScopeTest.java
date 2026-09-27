@@ -83,6 +83,13 @@ class IngestPathScopeTest {
   }
 
   @Test
+  void labelsEachSurfaceForTheMetrics() {
+    assertThat(IngestPathScope.scopeLabel(request("/v1/refinery-extract"))).isEqualTo("legacy");
+    assertThat(IngestPathScope.scopeLabel(request("/exchange/v1"))).isEqualTo("exchange");
+    assertThat(IngestPathScope.scopeLabel(request("/actuator/health"))).isEqualTo("other");
+  }
+
+  @Test
   void doesNotMatchAPathThatMerelyStartsWithTheExchangeLiteral() {
     assertThat(IngestPathScope.isProtectedRequest(request("/exchangex/v1"))).isFalse();
   }
