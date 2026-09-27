@@ -261,7 +261,9 @@ and its global switch stays off until the go-live; the risks hold from then on.
   at once, and a taken-over maintainer account of an approved client — its GitHub or release
   account — abuses a grant through a malicious update. The controls are detection and reversal,
   not prevention: the „Verbundene Anwendungen" audit area, the `ExchangeRegistryChanged` alert on
-  every registry change, the journal and the member's undo, and suspending the client (ADR-0217).
+  every registry change, the journal and the member's undo, suspending the client (ADR-0217), and
+  an admin's undo of the client for every member at once (ADR-0227; until 2026-09-27 the undo was
+  per member only, which is no longer accepted).
 - **Unsigned client releases.** Code signing is recommended, not required.
 - **Device-code phishing** is countered, not prevented (RFC 8628 §5.4). The consent page an
   attacker's `verification_uri_complete` link leads to carries the warning and the user code to

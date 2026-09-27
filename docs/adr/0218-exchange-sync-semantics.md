@@ -49,7 +49,9 @@ visible, bounded and reversible.
    then reconciles against its last baseline.
 5. **Journal and undo.** Every exchange write is journaled for 90 days; the member can undo a
    client's writes from „Verbundene Anwendungen". Undo is version-checked and skips rows the member
-   changed afterwards. Materialbörse offers removed by a sync book-out are not restored.
+   changed afterwards. Materialbörse offers removed by a sync book-out are not restored. *Amended
+   2026-09-27 by [ADR-0227](0227-an-admin-undoes-one-client-for-every-member-in-the-background.md): an
+   admin can also run the same undo for every member of one client at once.*
 6. **Mass-change guard.** Per client, member and resource over a **rolling 24 h**, a batch that
    would take the window above **25 removals, or above 20 % of (current count + entries removed in
    the window) with at least 5**, is staged and confirmed by the member in the browser. Counted as

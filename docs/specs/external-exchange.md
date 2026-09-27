@@ -1007,7 +1007,8 @@ WP 4.5 (#2087)
 
 Each exchange write is journaled for 90 days. The member can undo a client's writes since a point
 in time from „Verbundene Anwendungen"; undo is version-checked, skips and reports rows the member
-changed afterwards or a merge removed, and does not restore Materialbörse offers.
+changed afterwards or a merge removed, and does not restore Materialbörse offers. An admin can run
+the same undo for every member of one client at once (REQ-XCH-034).
 
 **Acceptance**
 
@@ -1435,6 +1436,73 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 
 **Status:** switch built — WP 3.2 (#2082); switched off with WP 6 (#2092)
 
+### REQ-XCH-034 — An admin can undo one client's writes for every member
+
+An `ADMIN` undoes one client's writes since a chosen time for **all** members at once — after a
+malicious or faulty release — from *Administration → Verbundene Anwendungen*. The run first
+suspends the client through the registry's own path, then undoes member by member with the
+member's undo semantics (REQ-XCH-022), lists what it left alone, notifies every member whose data
+it changed, and is audited and instrumented. Re-activating the client stays a separate admin action
+(owner decisions 2026-09-27; ADR-0227).
+
+**Acceptance**
+
+- [x] Starting suspends an active client through `ExchangeRegistryService.suspendClient` (mirror
+  first, audited as `EXCHANGE_CLIENT_SUSPENDED`), then undoes every member's writes in scope with the
+  member's undo semantics: an entry changed afterwards is skipped as `CHANGED_AFTERWARDS` and listed.
+  *`ExchangeBulkUndoControllerTest`.*
+- [x] A run can be limited to one installation and/or one resource; the rest stays untouched.
+  *`ExchangeBulkUndoControllerTest`.*
+- [x] A member that cannot be undone rolls back only its own transaction; the run ends `FAILED`, the
+  other members stay undone, and `ExchangeBulkUndoFailed` alerts. *`ExchangeBulkUndoControllerTest`,
+  `exchange_write_alerts_test.yml`.*
+- [x] One run per client at a time (`409`); a run a restart cut short is marked `FAILED` at the next
+  start. *`ExchangeBulkUndoControllerTest`.*
+- [x] Each member whose data the run changed gets one notification per run; the admin page lists the
+  runs, refreshes while one runs and shows a run's skipped entries.
+  *`ExchangeBulkUndoControllerTest`, `AdminExchangeClientsPageControllerMvcTest`.*
+
+**The scope.** `POST /api/v1/admin/exchange-clients/{id}/undo {since, installationId?, resource?}`
+(`ADMIN`, answers `202` with the run) undoes the client's journal entries recorded at or after
+`since`, clamped to the configured retention (`app.exchange.change-retention.max-age`), that are not
+undone yet; `resource` is `BLUEPRINT`, `STOCK` or `SHIP`, `installationId` one installation of that
+client. A `since` in the future is `400`. `…/undo/preview` answers the members and entries in scope
+and whether the client is still active, writing nothing; `…/undo/installations?since=` lists the
+client's installations with writes in the span (member name, last seen, disconnected, count — never
+the member-given label), at most 500, for choosing one. `GET /api/v1/admin/exchange-undo-runs` lists
+the last twenty runs, `…/{runId}` one run with its first 200 skipped entries, failed members first.
+
+**The run.** Starting checks that no run of the client is `RUNNING` (also a partial unique index),
+suspends the client unless it is suspended already, records the run with the members in scope and
+audits `EXCHANGE_BULK_UNDO_STARTED` (run, since, resource, installation, members). The run then works
+on a single-thread executor (`exchangeBulkUndoExecutor`) under the starting admin's authentication,
+so every write, the change log (`web`) and the audit name that admin. Each member is one
+transaction: `ExchangeUndoService.undoWithinRun` restores the member's entries in scope exactly as
+the member's own undo would, audits `EXCHANGE_CHANGES_UNDONE` for that member with the run id, keeps
+the skipped entries by journal id and reason (no entry name is copied), adds the member's counts to
+the run with one atomic update, and publishes `EXCHANGE_BULK_UNDO_APPLIED` when it restored anything.
+A member whose undo throws is rolled back alone and recorded as `FAILED`. At the end the run is
+`COMPLETED`, or `FAILED` when a member failed, and `EXCHANGE_BULK_UNDO_FINISHED` records the status
+and the totals. A run left `RUNNING` by a restart is marked `FAILED` (`interrupted=true`) at the next
+start; the admin starts it again, which touches only what is not undone yet.
+
+**Notification.** The rule-engine event `EXCHANGE_BULK_UNDO_APPLIED` (seed `V257`, selector
+`EVENT_RECIPIENT`) tells each member once per run how many entries the administration took back and
+names the client by its registry display name only.
+
+**Retention.** Runs and their skipped entries are purged with the exchange change feed and journal,
+90 days after they ended; the skipped entries are part of the member's Art. 15 export
+(`exchangeBulkUndoSkips`).
+
+**Observability.** The run is the on-demand job `exchange_bulk_undo` of `TaskMetrics`
+(`basetool_scheduled_job_executions_total{task,outcome}`, duration, items = members processed); its
+outcome counters are registered at zero so the first failure is an increase, and
+`ExchangeBulkUndoFailed` alerts on any failed run within the hour. The restored and skipped entries
+count in `basetool_exchange_undo_total{client_id,resource,outcome}` like a member's undo. The
+„Exchange" dashboard shows the runs per day by outcome.
+
+**Status:** built (#2092 follow-up)
+
 ## Threat model
 
 | Threat | Countered by |
@@ -1444,7 +1512,7 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | Device-code phishing (RFC 8628 §5.4) | the warning on the device page and, with the user code to compare, on the consent page an attacker's `verification_uri_complete` link leads to (ADR-0228); clients showing only the bare `verification_uri`; notification and a highlight of every new connection until the member acknowledges it; 600 s code lifespan (REQ-XCH-005/-027/-032) — countered, not prevented |
 | A revoked installation refreshing its way back | persistent `jkt` deny list (REQ-XCH-008) |
 | A member who leaves keeping access | departure revocations (REQ-XCH-008) |
-| Malicious client update, compromised maintainer account | capability scoping, own-data-only, journal and undo, guard, suspension; signing recommended (REQ-XCH-002/-009/-021/-022) — accepted residual risk |
+| Malicious client update, compromised maintainer account | capability scoping, own-data-only, journal and undo, guard, suspension, and the admin's undo of the client for every member at once; signing recommended (REQ-XCH-002/-009/-021/-022/-034) — accepted residual risk. *Changed 2026-09-27: undo was per member only, which the owner no longer accepts.* |
 | Compromised admin account (no capability ceiling) | audit area „Verbundene Anwendungen", `ExchangeRegistryChanged` alert, suspension; display names that cannot pose as the Basetool, bounded limits, no first-party client ids (REQ-XCH-003) — accepted risk (ADR-0217) |
 | An admin's client running with admin authority | reduced exchange authentication and ArchUnit rule (REQ-XCH-009) |
 | Confused deputy on the relay hop; forged `X-Exchange-*` headers | headers honoured only from the gateway identity; explicit relay route list (REQ-XCH-010, REQ-XCH-001) |

@@ -162,11 +162,22 @@ capability and disconnects again, shows a dry run, and on confirmation applies i
 as the installation's own write; „Verwerfen" drops it.
 
 **An undo.** On „Verbundene Anwendungen" the member undoes a client's writes since a chosen time,
-at most 90 days back. From the journal, each entry goes back to its state before the client's first
+at most as far back as the journal is kept (90 days by default). From the journal, each entry goes back to its state before the client's first
 write in that span, through the same domain services; an entry changed afterwards by anything else
 is skipped as `CHANGED_AFTERWARDS`, a vanished one as `GONE`. Materialbörse offers a book-out
 lowered stay lowered, and a removed ship comes back under a new id without the mission units it was
 detached from (§11.7a). The client sees the undo in its feed, like any web edit.
+
+**A bulk undo.** After a malicious or faulty release, an admin undoes one client's writes for
+every member on *Administration → Verbundene Anwendungen*: the dialog checks the scope (since
+when, optionally one installation or resource) and shows the members and entries it reaches;
+on confirmation the backend suspends the client through the registry — mirror first, so the
+gateway refuses it — records the run and answers at once. A single-thread executor then works
+through the members under the admin's authentication, one transaction each, with the member's
+own undo semantics; a failing member rolls back alone. Each member whose data changed gets one
+notification, the page refreshes the run list while it runs, and the run ends `COMPLETED` or
+`FAILED` (then `ExchangeBulkUndoFailed` alerts). Re-activating the client is a separate admin
+action (REQ-XCH-034, ADR-0227).
 
 **A draft.** `drafts/blueprints` and `drafts/refinery-orders` write nothing: the backend builds the
 same preview the extractor's upload builds, the gateway stages it for a one-time browser pickup and

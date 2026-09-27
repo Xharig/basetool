@@ -1271,7 +1271,11 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `rejected_registration_retention`, `audit_retention`,
   `bank_ledger_integrity`, `job_order_integrity`, `uex_sync`, `scwiki_sync`, `business_metrics`,
   `exchange_registry_reconcile`, `exchange_change_retention`) via `TaskMetrics` (`record`
-  / `recordCounting`). The `business_metrics` job wraps `BusinessMetricsCollector.refresh()` (the 60s
+  / `recordCounting`). The on-demand `exchange_bulk_undo` job — an admin's undo of one client for
+  every member (REQ-XCH-034) — records the same executions, duration and items (members processed)
+  but publishes no enabled or last-success staleness signal, since it only runs when an admin starts
+  it; its two executions counters are registered at zero (`TaskMetrics.registerOutcomes`) so
+  `ExchangeBulkUndoFailed` sees the first failed run as an increase. The `business_metrics` job wraps `BusinessMetricsCollector.refresh()` (the 60s
   queue-depth sampler) so a wedged sampler surfaces via its frozen last-success (`BusinessMetricsStale`)
   instead of silently freezing every queue gauge under the `*ApprovalOverdue` alerts (#1041 item 3).
   The scheduled-job timer publishes latency histogram buckets (bounded 10ms..600s, `task` label only)
@@ -1706,8 +1710,10 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   REQ-XCH-021). `ExchangeGuardStorm` fires when one client's batches are held more than 10 times an
   hour.
 - `basetool_exchange_undo_total{client_id,resource,outcome}` counter — entries a member's undo of a
-  client's writes restored or skipped (`restored` / `skipped`), by client and resource; shown on the
-  same panel 80 (REQ-XCH-022).
+  client's writes, or an admin's bulk undo of it, restored or skipped (`restored` / `skipped`), by
+  client and resource; shown on the same panel 80 (REQ-XCH-022, REQ-XCH-034). The bulk undo runs
+  themselves are the `exchange_bulk_undo` job above, shown per day by outcome on the „Exchange"
+  dashboard; `ExchangeBulkUndoFailed` (warning) fires on a failed run within the hour.
 - `basetool_exchange_mass_changes_confirmed_total{client_id,resource}` counter — held-back change
   sets members confirmed, by client and resource; shown on panel 80 beside the gateway's staged count
   (REQ-XCH-021).

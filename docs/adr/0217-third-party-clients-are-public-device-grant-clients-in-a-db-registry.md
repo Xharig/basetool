@@ -76,7 +76,9 @@ We will model every external client as follows.
   runtime admin switch, one admin click — or a taken-over admin or client maintainer account —
   grants or abuses write access at once. The controls are detection and reversal: the audit area
   „Verbundene Anwendungen", an alert on every registry change, journal and undo (ADR-0218), and
-  suspension.
+  suspension. *Amended 2026-09-27: the undo is no longer per member only — an admin undoes one
+  client for every member at once, suspending it first
+  ([ADR-0227](0227-an-admin-undoes-one-client-for-every-member-in-the-background.md)).*
 - **Device-code phishing** (RFC 8628 §5.4) remains possible with any public client id. It is
   countered, not prevented: a themed device page warns to enter only codes created on one's own PC,
   every new connection raises a notification and is highlighted in „Verbundene Anwendungen", and a

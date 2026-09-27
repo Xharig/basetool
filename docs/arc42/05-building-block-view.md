@@ -139,9 +139,10 @@ ADR-0221 and ADR-0224.
 | backend | Journal (`V253`, `ExchangeJournalService`) | Every written entry before and after, 90 days |
 | backend | Write services for blueprints, stock and ships (ship links `V254`) | Plan a change set, ask `ExchangeMassChangeGuard`, write through the domain's own services, journal each entry; `ExchangeLiveSync` after commit |
 | backend | `ExchangeUndoService`, `ExchangeMassChangeService` | The member's undo, and the confirmation of a held mass change |
+| backend | Bulk undo (`ExchangeBulkUndoService`, `ExchangeBulkUndoRunner`, `ExchangeBulkUndoStep`, `AdminExchangeBulkUndoController`, `V256`) | An admin's undo of one client for every member: suspends the client, then one member per transaction on the single-thread `exchangeBulkUndoExecutor`; runs and skipped entries kept 90 days (ADR-0227) |
 | backend | `ExchangeResolveService`, `ExchangeDemandService`, `ExchangeDraftService` | Catalogue resolve through the web import's matching, the anonymised org demand, review drafts |
 | frontend | „Verbundene Anwendungen" (`/connected-apps`, `/connected-apps/confirm`) | The member's clients, installations and activity; disconnect, undo, confirm a mass change — over `/api/v1/connected-apps`, member session only |
-| frontend | Admin „Verbundene Anwendungen" (`/admin/exchange-clients`) | The registry and the global switch |
+| frontend | Admin „Verbundene Anwendungen" (`/admin/exchange-clients`) | The registry and the global switch; a client's undo for every member with its runs |
 
 ## 5.6 The monitoring plane
 
