@@ -220,9 +220,26 @@ class Smoke:
                 return error.code, problem
         return 401, {}
 
+    def wait_for_exchange(self, limit: float = 150.0) -> None:
+        """Waits, honouring `Retry-After`, while the gateway answers `503 EXCHANGE_DISABLED`.
+
+        The seed switches the exchange on in the database; the backend mirrors it into Redis within
+        its reconcile interval and the gateway reads the mirror within its refresh interval.
+        """
+        deadline = time.monotonic() + limit
+        while True:
+            status, answer = self.call("GET", "/exchange/v1")
+            if status != 503 or answer.get("code") != "EXCHANGE_DISABLED":
+                return
+            if time.monotonic() >= deadline:
+                self.step("the exchange switch reaches the gateway", False, json.dumps(answer)[:300])
+            print("waiting for the exchange switch to reach the gateway")
+            time.sleep(10)
+
     def run(self) -> None:
         """Signs in and exercises the exchange."""
         self.login()
+        self.wait_for_exchange()
         for label, method, path, body in [
             ("the service document", "GET", "/exchange/v1", None),
             ("the installation is labelled", "POST", "/exchange/v1/me/installation",
