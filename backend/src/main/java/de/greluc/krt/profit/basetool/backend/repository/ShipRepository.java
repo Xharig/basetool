@@ -22,6 +22,7 @@ package de.greluc.krt.profit.basetool.backend.repository;
 import de.greluc.krt.profit.basetool.backend.model.Location;
 import de.greluc.krt.profit.basetool.backend.model.Ship;
 import de.greluc.krt.profit.basetool.backend.model.ShipType;
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeShipRow;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +38,38 @@ import org.springframework.stereotype.Repository;
 /** Spring Data repository for Ship. */
 @Repository
 public interface ShipRepository extends JpaRepository<Ship, UUID> {
+
+  /** A member's ships with their type and location, as the exchange reads them (REQ-XCH-017). */
+  String EXCHANGE_SHIPS =
+      """
+      SELECT new de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeShipRow(
+      s.id, s.version, s.name, t.id, t.name, s.insurance, l.name, c.idCity, st.idSpaceStation,
+      s.fitted) FROM Ship s JOIN s.shipType t LEFT JOIN s.location l LEFT JOIN l.city c
+      LEFT JOIN l.spaceStation st WHERE s.owner.id = :member
+      """;
+
+  /**
+   * Returns one snapshot page of a member's ships, ordered by id.
+   *
+   * @param member the member
+   * @param after the last ship delivered, or the zero id for the first page
+   * @param page the page size
+   * @return the ships
+   */
+  @Query(EXCHANGE_SHIPS + " AND s.id > :after ORDER BY s.id")
+  List<ExchangeShipRow> findExchangeShips(
+      @Param("member") UUID member, @Param("after") UUID after, Pageable page);
+
+  /**
+   * Returns the member's ships with the given ids, as they are now.
+   *
+   * @param member the member
+   * @param ids the ship ids
+   * @return the ships the member still owns
+   */
+  @Query(EXCHANGE_SHIPS + " AND s.id IN :ids")
+  List<ExchangeShipRow> findExchangeShipsByIds(
+      @Param("member") UUID member, @Param("ids") Collection<UUID> ids);
 
   /**
    * Flips the {@code fitted} flag back to {@code false} on every ship; used by the fleet-import

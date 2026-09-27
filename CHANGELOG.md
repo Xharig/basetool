@@ -16,6 +16,9 @@
   Bestand eines Mitglieds als Posten (Material oder Item, Ort, Qualität, gestohlen) über alle
   Einheiten-Pools summiert, als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/stock`,
   REQ-XCH-016).
+- **Datenaustausch: Hangar lesen.** Das Backend liefert dem Gateway die eigenen Schiffe eines
+  Mitglieds ohne Kaufdaten als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/ships`,
+  REQ-XCH-017).
 - **Administration → Verbundene Anwendungen.** Admins registrieren, bearbeiten, sperren und
   begrenzen die zugelassenen Anwendungen des Datenaustauschs und schalten ihn global ein oder aus;
   Sperren, der Schalter und zusätzliche Berechtigungen fragen vorher nach (REQ-XCH-003).

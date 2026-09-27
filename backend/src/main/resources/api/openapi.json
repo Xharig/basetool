@@ -28,6 +28,9 @@
     "description" : "Who has accepted the Terms of Use",
     "name" : "Admin — Terms of Use"
   }, {
+    "description" : "The member's ships and their changes",
+    "name" : "Exchange — ships"
+  }, {
     "description" : "The Materialbörse Gesuche (wanted-listings) board (Flotte & Logistik).",
     "name" : "Material Requests"
   }, {
@@ -10733,6 +10736,130 @@
         },
         "summary" : "Exchange: label the calling installation",
         "tags" : [ "Exchange — installation" ]
+      }
+    },
+    "/api/v1/exchange/me/ships" : {
+      "get" : {
+        "description" : "Gateway-only. Without a cursor a snapshot, with one the changes since it.",
+        "operationId" : "ships",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 500
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeShipPageDto"
+                }
+              }
+            },
+            "description" : "The page",
+            "headers" : {
+              "Cache-Control" : {
+                "description" : "Caching policy (e.g. no-cache for API responses)",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "ETag" : {
+                "description" : "Entity Tag for conditional requests",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "304" : {
+            "description" : "Not Modified (ETag/If-None-Match)"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "410" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeShipPageDto"
+                }
+              }
+            },
+            "description" : "The cursor has expired (CURSOR_EXPIRED)"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Exchange: my ships and their changes",
+        "tags" : [ "Exchange — ships" ]
       }
     },
     "/api/v1/exchange/me/stock" : {
@@ -59890,6 +60017,18 @@
         },
         "required" : [ "label" ]
       },
+      "ExchangeInsuranceDto" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "months" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "ExchangeItemRefDto" : {
         "type" : "object",
         "properties" : {
@@ -59988,6 +60127,56 @@
           }
         },
         "required" : [ "enabled", "version" ]
+      },
+      "ExchangeShipDto" : {
+        "type" : "object",
+        "properties" : {
+          "fitted" : {
+            "type" : "boolean"
+          },
+          "insurance" : {
+            "$ref" : "#/components/schemas/ExchangeInsuranceDto"
+          },
+          "location" : {
+            "$ref" : "#/components/schemas/ExchangeLocationDto"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "shipId" : {
+            "type" : "string"
+          },
+          "shipType" : {
+            "$ref" : "#/components/schemas/ExchangeItemRefDto"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "ExchangeShipPageDto" : {
+        "type" : "object",
+        "properties" : {
+          "hasMore" : {
+            "type" : "boolean"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExchangeShipDto"
+            }
+          },
+          "nextCursor" : {
+            "type" : "string"
+          },
+          "removed" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExchangeTombstoneDto"
+            }
+          }
+        }
       },
       "ExchangeStockLotDto" : {
         "type" : "object",

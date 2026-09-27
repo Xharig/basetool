@@ -108,6 +108,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           PATH_PARSER.parse("/api/v1/exchange/catalog/locations"),
           PATH_PARSER.parse("/api/v1/exchange/me/blueprints"),
           PATH_PARSER.parse("/api/v1/exchange/me/installation"),
+          PATH_PARSER.parse("/api/v1/exchange/me/ships"),
           PATH_PARSER.parse("/api/v1/exchange/me/stock"));
 
   /** The shape of a registry client id, identical to the database check. */
