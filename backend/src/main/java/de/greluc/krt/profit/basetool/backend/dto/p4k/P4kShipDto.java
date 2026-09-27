@@ -35,7 +35,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @param nameDe German display name, or {@code null}
  * @param desc English description, filled into {@code ship_type.description_en} when null
  * @param descDe German description, filled into {@code ship_type.description_de} when null
- * @param nameKey raw {@code @LOC} name localization key (forensic; not persisted)
+ * @param nameKey raw {@code @LOC} name localization key, stored as {@code name_key} without the
+ *     {@code @}
  * @param descKey raw {@code @LOC} description localization key (forensic; not persisted)
  * @param role ship role token (forensic; not persisted)
  * @param career ship career token (forensic; not persisted)

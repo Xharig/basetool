@@ -604,6 +604,27 @@ public class KeycloakService {
   }
 
   /**
+   * Ends every session of a user, which also makes their offline tokens stale (REQ-XCH-008).
+   * Idempotent: a {@code 404} is success.
+   *
+   * @param keycloakUserId the user
+   * @throws ExternalServiceException when the admin URL is unconfigured
+   */
+  public void logoutUser(@NotNull UUID keycloakUserId) {
+    requireAdminUrl();
+    try {
+      adminClient
+          .post()
+          .uri("/admin/realms/{realm}/users/{id}/logout", properties.realm(), keycloakUserId)
+          .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + getAccessToken())
+          .retrieve()
+          .toBodilessEntity();
+    } catch (HttpClientErrorException.NotFound notFound) {
+      log.debug("Keycloak user {} already absent on logout", keycloakUserId);
+    }
+  }
+
+  /**
    * Removes a member's consent for a client, which also revokes the client's offline tokens for
    * that member (REQ-XCH-008). Idempotent: a {@code 404} is success.
    *

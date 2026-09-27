@@ -410,8 +410,9 @@ public final class MetricNames {
 
   /**
    * Tag key: the P4K import job kind ({@code P4kImportJobKind#name()}) on {@link #P4K_IMPORT_JOBS},
-   * and the inbox retention half ({@code read} / {@code unread}) on {@link
-   * #NOTIFICATION_RETENTION_DELETED}. Bounded in both uses.
+   * the inbox retention half ({@code read} / {@code unread}) on {@link
+   * #NOTIFICATION_RETENTION_DELETED}, and the catalogue on {@link #EXCHANGE_RESOLVE_REFS}. Bounded
+   * in every use.
    */
   public static final String TAG_KIND = "kind";
 
@@ -740,6 +741,18 @@ public final class MetricNames {
   public static final String EXCHANGE_DISCONNECTS = "basetool.exchange.disconnects";
 
   /**
+   * Counter {@code basetool_exchange_departures_total{outcome}} — a departed member's exchange
+   * access ended ({@code done}) or ended only in part ({@code failed}, REQ-XCH-008).
+   */
+  public static final String EXCHANGE_DEPARTURES = "basetool.exchange.departures";
+
+  /**
+   * Counter {@code basetool_exchange_account_checks_total{outcome}} — exchange account checks by
+   * answer ({@code match} / {@code mismatch} / {@code unknown}, REQ-XCH-031).
+   */
+  public static final String EXCHANGE_ACCOUNT_CHECKS = "basetool.exchange.account.checks";
+
+  /**
    * {@link #ON_BEHALF_OF_REFUSED} reason: the gateway acted for a member on an exchange path
    * without a well-formed {@code X-Exchange-Installation}.
    */
@@ -928,6 +941,12 @@ public final class MetricNames {
    * the registry's Redis mirror in line (REQ-XCH-003).
    */
   public static final String EXCHANGE_MIRROR_WRITES = "basetool.exchange.mirror.writes";
+
+  /**
+   * Counter {@code basetool_exchange_resolve_refs_total{kind,status}} — one per reference {@code
+   * catalog/resolve} answered, by catalogue and outcome (REQ-XCH-012).
+   */
+  public static final String EXCHANGE_RESOLVE_REFS = "basetool.exchange.resolve.refs";
 
   /**
    * Tag key: the registry change on {@link #EXCHANGE_REGISTRY_CHANGES}, bounded by {@code

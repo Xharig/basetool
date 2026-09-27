@@ -28,9 +28,11 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.greluc.krt.profit.basetool.backend.event.ExchangeInstallationConnectedEvent;
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
 import de.greluc.krt.profit.basetool.backend.model.AuditDomain;
 import de.greluc.krt.profit.basetool.backend.model.AuditEventType;
@@ -39,14 +41,18 @@ import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClientRevocation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
+import de.greluc.krt.profit.basetool.backend.model.Notification;
+import de.greluc.krt.profit.basetool.backend.model.NotificationType;
 import de.greluc.krt.profit.basetool.backend.model.User;
 import de.greluc.krt.profit.basetool.backend.repository.AuditEventRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRevocationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
+import de.greluc.krt.profit.basetool.backend.repository.NotificationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.RoleRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.KeycloakService;
+import de.greluc.krt.profit.basetool.backend.service.NotificationCreationService;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import java.time.Instant;
 import java.util.EnumSet;
@@ -58,6 +64,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.test.context.ActiveProfiles;
@@ -85,6 +92,8 @@ class ConnectedAppsControllerTest {
   @Autowired private ExchangeInstallationRepository installationRepository;
   @Autowired private ExchangeClientRevocationRepository revocationRepository;
   @Autowired private AuditEventRepository auditEventRepository;
+  @Autowired private NotificationRepository notificationRepository;
+  @Autowired private NotificationCreationService notificationCreationService;
   @MockitoBean private KeycloakService keycloakService;
 
   private MockMvc mockMvc;
@@ -119,6 +128,55 @@ class ConnectedAppsControllerTest {
         .andExpect(jsonPath("$[0].displayName").value("VerseKit"))
         .andExpect(jsonPath("$[0].installations.length()").value(1))
         .andExpect(jsonPath("$[0].installations[0].label").value("Desktop"));
+  }
+
+  @Test
+  void aNewInstallationStaysUnseenUntilTheMemberMarksItSeen() throws Exception {
+    notificationRepository.saveAndFlush(connected(MEMBER, mine.getId()));
+    Notification others = notificationRepository.saveAndFlush(connected(OTHER, theirs.getId()));
+
+    mockMvc
+        .perform(get(PATH).with(browser(MEMBER)))
+        .andExpect(jsonPath("$[0].installations[0].unseen").value(true));
+
+    mockMvc.perform(post(PATH + "/seen").with(browser(MEMBER))).andExpect(status().isNoContent());
+
+    mockMvc
+        .perform(get(PATH).with(browser(MEMBER)))
+        .andExpect(jsonPath("$[0].installations[0].unseen").value(false));
+    assertThat(notificationRepository.findById(others.getId()).orElseThrow().isRead())
+        .as("marking seen touches only the caller's own notifications")
+        .isFalse();
+    assertThat(auditEventRepository.findAll())
+        .noneMatch(e -> e.getDomain() == AuditDomain.CONNECTED_APPS);
+  }
+
+  @Test
+  void theSeededRuleTellsOnlyTheConnectedMemberAndNamesTheClientNotTheLabel() throws Exception {
+    notificationCreationService.createFromEvent(
+        new ExchangeInstallationConnectedEvent(MEMBER, mine.getId(), "VerseKit"));
+
+    assertThat(
+            notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(
+                MEMBER, PageRequest.of(0, 10)))
+        .singleElement()
+        .satisfies(
+            n -> {
+              assertThat(n.getType()).isEqualTo(NotificationType.EXCHANGE_INSTALLATION_CONNECTED);
+              assertThat(n.getEntityId()).isEqualTo(mine.getId());
+              assertThat(n.getParams()).contains("VerseKit").doesNotContain("Desktop");
+            });
+    assertThat(notificationRepository.countByRecipientUserIdAndReadFalse(OTHER)).isZero();
+    mockMvc
+        .perform(get(PATH).with(browser(MEMBER)))
+        .andExpect(jsonPath("$[0].installations[0].unseen").value(true));
+  }
+
+  @Test
+  void anInstallationWithoutANotificationIsNotUnseen() throws Exception {
+    mockMvc
+        .perform(get(PATH).with(browser(MEMBER)))
+        .andExpect(jsonPath("$[0].installations[0].unseen").value(false));
   }
 
   @Test
@@ -236,5 +294,22 @@ class ConnectedAppsControllerTest {
     installation.setFirstSeenAt(Instant.now());
     installation.setLastSeenAt(Instant.now());
     return installationRepository.saveAndFlush(installation);
+  }
+
+  /**
+   * Builds an unread new-connection notification.
+   *
+   * @param recipient the member
+   * @param installationId the announced installation
+   * @return the notification
+   */
+  private static @NotNull Notification connected(
+      @NotNull UUID recipient, @NotNull UUID installationId) {
+    return Notification.builder()
+        .recipientUserId(recipient)
+        .type(NotificationType.EXCHANGE_INSTALLATION_CONNECTED)
+        .entityType("EXCHANGE_INSTALLATION")
+        .entityId(installationId)
+        .build();
   }
 }
