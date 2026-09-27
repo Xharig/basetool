@@ -42,6 +42,13 @@ public final class ActingMemberHeader {
    */
   public static final String EXCHANGE_CAPABILITIES_HEADER = "X-Exchange-Capabilities";
 
+  /**
+   * Carries the base64url SHA-256 thumbprint of the installation's DPoP key the gateway verified,
+   * which identifies the installation (REQ-XCH-007); honoured under the same conditions as {@link
+   * #EXCHANGE_CLIENT_HEADER}.
+   */
+  public static final String EXCHANGE_INSTALLATION_HEADER = "X-Exchange-Installation";
+
   /** Not instantiable: a constant holder, not a component. */
   private ActingMemberHeader() {}
 }
