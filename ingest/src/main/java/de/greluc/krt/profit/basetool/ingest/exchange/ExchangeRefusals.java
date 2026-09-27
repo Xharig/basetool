@@ -46,9 +46,48 @@ public class ExchangeRefusals {
   /** A token that is missing, invalid, or not issued for this gateway. */
   public static final String UNAUTHENTICATED = "UNAUTHENTICATED";
 
+  /** The exchange has no such route. */
+  public static final String NOT_FOUND = "NOT_FOUND";
+
+  /** The registry or the revocations cannot be read. */
+  public static final String REGISTRY_UNAVAILABLE = "REGISTRY_UNAVAILABLE";
+
+  /** The exchange is switched off. */
+  public static final String EXCHANGE_DISABLED = "EXCHANGE_DISABLED";
+
+  /** The token's client is not in the registry. */
+  public static final String CLIENT_NOT_ALLOWED = "CLIENT_NOT_ALLOWED";
+
+  /** The client is suspended. */
+  public static final String CLIENT_SUSPENDED = "CLIENT_SUSPENDED";
+
+  /** The token's DPoP key is on the deny list. */
+  public static final String INSTALLATION_REVOKED = "INSTALLATION_REVOKED";
+
+  /** The member disconnected the client after the token was issued. */
+  public static final String CLIENT_REVOKED = "CLIENT_REVOKED";
+
+  /** The route's capability is not in the token or not granted to the client. */
+  public static final String SCOPE_MISSING = "SCOPE_MISSING";
+
+  /** The client's version is below its minimum. */
+  public static final String CLIENT_VERSION_UNSUPPORTED = "CLIENT_VERSION_UNSUPPORTED";
+
   /** Every code this counter knows, registered at zero. */
   static final @Unmodifiable List<String> CODES =
-      List.of(DPOP_REQUIRED, DPOP_INVALID, UNAUTHENTICATED);
+      List.of(
+          DPOP_REQUIRED,
+          DPOP_INVALID,
+          UNAUTHENTICATED,
+          NOT_FOUND,
+          REGISTRY_UNAVAILABLE,
+          EXCHANGE_DISABLED,
+          CLIENT_NOT_ALLOWED,
+          CLIENT_SUSPENDED,
+          INSTALLATION_REVOKED,
+          CLIENT_REVOKED,
+          SCOPE_MISSING,
+          CLIENT_VERSION_UNSUPPORTED);
 
   private final MeterRegistry meterRegistry;
 

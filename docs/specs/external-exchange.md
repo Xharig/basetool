@@ -117,10 +117,12 @@ finds no document, refuses every exchange request.
 
 **Acceptance**
 
-- [ ] Tests for both write orders, a failed mirror write, the reconcile healing a divergence, and
-  the gateway's fail-closed read. *The backend half is in (WP 3.1, `ExchangeRegistryMirrorIntegrationTest`
-  against a real Redis under the backend's ACL user, and `ExchangeRegistrySnapshotTest`); the
-  gateway's read follows with WP 3.2.*
+- [x] Tests for both write orders, a failed mirror write, the reconcile healing a divergence, and
+  the gateway's fail-closed read. *Backend: `ExchangeRegistryMirrorIntegrationTest` against a real
+  Redis under the backend's ACL user, and `ExchangeRegistrySnapshotTest` (WP 3.1). Gateway:
+  `ExchangeRegistryReaderTest` — a missing document, an unknown `schemaVersion`, garbage and an
+  unreachable Redis all fail closed, a failed read is not cached — and `ExchangeGateTest`, which
+  answers them `503 REGISTRY_UNAVAILABLE` with `Retry-After` (WP 3.2).*
 - [x] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
   `ExchangeRegistryChanged` alert.
 
@@ -129,8 +131,9 @@ finds no document, refuses every exchange request.
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
 **Code:** `ExchangeRegistryService`, `ExchangeRegistryMirrorSync`, `RedisExchangeRegistryMirror`,
 `ExchangeRegistryReconcileTask`, `AdminExchangeRegistryController` · **Status:** registry, admin
-API and mirror built — WP 3.1 (#2083); the gateway's read with WP 3.2 (#2082), the admin page with
-WP 4.5 (#2087)
+API and mirror built — WP 3.1 (#2083); the gateway's read — `ExchangeRegistryReader`, a
+five-second cache (`app.exchange.registry-cache-ttl`) of the `app.exchange.registry-key` document —
+built with WP 3.2 (#2082); the admin page with WP 4.5 (#2087)
 
 ### REQ-XCH-004 — Capabilities are OAuth scopes, enforced at the gateway and re-checked at the backend
 
@@ -145,10 +148,13 @@ only by property.
 
 **Acceptance**
 
-- [ ] Gate tests for a scope missing from the token, a scope not granted in the registry, and a
-  wrong audience with the audience property blank. *The audience half is in: the gateway requires
-  `aud` ∋ `basetool-ingest` on exchange routes in code and refuses anything else `401
-  UNAUTHENTICATED` (`ExchangeDpopGateTest`); the scope gates follow with the registry read.*
+- [x] Gate tests for a scope missing from the token, a scope not granted in the registry, and a
+  wrong audience with the audience property blank. *The gateway requires `aud` ∋ `basetool-ingest`
+  on exchange routes in code (`ExchangeDpopGateTest`); a route passes only when its capability is
+  both in the token and granted in the registry, and a route for "any exchange scope" needs at
+  least one such capability (`ExchangeGateTest`). `ExchangeRoutes` holds the route table,
+  `ExchangeRoutesContractTest` pins it to the committed OpenAPI document route for route and scope
+  for scope, and a path or method it does not list is `404 NOT_FOUND`.*
 - [ ] ArchUnit: every exchange controller method carries the exchange gate.
 
 **Status:** the scopes (WP 2.2, #2081) and the registry's per-client grants (`ExchangeCapability`,
@@ -243,8 +249,13 @@ gateway reads the deny list and the timestamps per request, bypassing its cache.
 **Acceptance**
 
 - [ ] A revoked installation is refused after a token refresh; another installation of the same
-  client keeps working.
-- [ ] A revoked client is refused, and a fresh connection right after works.
+  client keeps working. *The gateway half is in: it reads `exchange:deny:<jkt>` on every request,
+  bypassing its cache, and refuses a listed key `401 INSTALLATION_REVOKED` whatever the token's
+  `iat` (`ExchangeGateTest`).*
+- [ ] A revoked client is refused, and a fresh connection right after works. *The gateway half is
+  in: it reads `exchange:revoked:<client>:<member>` per request and refuses a token issued at or
+  before that second `401 CLIENT_REVOKED`, while a token issued after it passes
+  (`ExchangeGateTest`).*
 - [ ] A departed member is refused on the next request.
 
 **Status:** planned — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
@@ -497,7 +508,10 @@ The registry holds a minimum version per client. A request whose `User-Agent`
 `403 CLIENT_VERSION_UNSUPPORTED`. The gate is cooperative: it stops honest old releases, not a
 client that lies.
 
-**Status:** planned — WP 3.2 (#2082)
+A missing or unparseable `User-Agent` counts as older, and a pre-release of the minimum itself
+(`2.4.0-beta.1` against `2.4.0`) is below it, while build metadata (`2.4.0+7`) is not.
+
+**Enforced by:** `ClientVersionsTest`, `ExchangeGateTest` · **Status:** built — WP 3.2 (#2082)
 
 ### REQ-XCH-025 — Errors are problem+json with a stable code
 

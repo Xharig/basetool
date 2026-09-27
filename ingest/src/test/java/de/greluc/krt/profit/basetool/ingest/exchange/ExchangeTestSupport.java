@@ -1,0 +1,225 @@
+/*
+ * Profit Basetool - squadron-management web app.
+ * Copyright (C) 2026 Lucas Greuloch
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package de.greluc.krt.profit.basetool.ingest.exchange;
+
+import com.nimbusds.jose.JOSEObjectType;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.crypto.ECDSASigner;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.ECKey;
+import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.UUID;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.servlet.function.RouterFunction;
+import org.springframework.web.servlet.function.RouterFunctions;
+import org.springframework.web.servlet.function.ServerRequest;
+import org.springframework.web.servlet.function.ServerResponse;
+
+/** Keys, tokens, DPoP proofs, registries and probe routes for the exchange gate tests. */
+final class ExchangeTestSupport {
+
+  /** The origin MockMvc requests carry. */
+  static final String ORIGIN = "http://localhost";
+
+  /** The registry client the tests act as. */
+  static final String CLIENT = "versekit";
+
+  /** A route any granted capability admits. */
+  static final String LOCATIONS = "/exchange/v1/catalog/locations";
+
+  /** The service document, which needs {@code exchange.connect}. */
+  static final String SERVICE_DOCUMENT = "/exchange/v1";
+
+  /** A write route, which needs {@code exchange.blueprints.write}. */
+  static final String BLUEPRINT_CHANGES = "/exchange/v1/me/blueprints/changes";
+
+  /** Not instantiable. */
+  private ExchangeTestSupport() {}
+
+  /**
+   * Generates a DPoP key.
+   *
+   * @return a P-256 key
+   * @throws Exception if generation fails
+   */
+  static @NotNull ECKey newKey() throws Exception {
+    return new ECKeyGenerator(Curve.P_256).generate();
+  }
+
+  /**
+   * Returns a key's thumbprint.
+   *
+   * @param key the key
+   * @return the RFC 7638 thumbprint
+   * @throws Exception if hashing fails
+   */
+  static @NotNull String thumbprint(@NotNull ECKey key) throws Exception {
+    return key.computeThumbprint().toString();
+  }
+
+  /**
+   * Builds a decoded access token.
+   *
+   * @param value the token value
+   * @param audience the audience
+   * @param thumbprint the bound key's thumbprint, or {@code null} for an unbound token
+   * @param member the subject
+   * @param scope the space-separated scopes
+   * @param issuedAt the issue time
+   * @return the token
+   */
+  static @NotNull Jwt token(
+      @NotNull String value,
+      @NotNull String audience,
+      @Nullable String thumbprint,
+      @NotNull String member,
+      @NotNull String scope,
+      @NotNull Instant issuedAt) {
+    Jwt.Builder builder =
+        Jwt.withTokenValue(value)
+            .header("alg", "ES256")
+            .subject(member)
+            .audience(List.of(audience))
+            .claim("azp", CLIENT)
+            .claim("scope", scope)
+            .issuedAt(issuedAt)
+            .expiresAt(issuedAt.plusSeconds(300));
+    if (thumbprint != null) {
+      builder.claim("cnf", Map.of("jkt", thumbprint));
+    }
+    return builder.build();
+  }
+
+  /**
+   * Signs a DPoP proof.
+   *
+   * @param signer the key that signs the proof
+   * @param token the access token the proof binds
+   * @param method the HTTP method
+   * @param path the request path
+   * @param nonce the server nonce, or {@code null} for none
+   * @return the compact proof
+   * @throws Exception if signing fails
+   */
+  static @NotNull String proof(
+      @NotNull ECKey signer,
+      @NotNull String token,
+      @NotNull String method,
+      @NotNull String path,
+      @Nullable String nonce)
+      throws Exception {
+    byte[] hash =
+        MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.US_ASCII));
+    JWTClaimsSet.Builder claims =
+        new JWTClaimsSet.Builder()
+            .claim("htm", method)
+            .claim("htu", ORIGIN + path)
+            .issueTime(Date.from(Instant.now()))
+            .jwtID(UUID.randomUUID().toString())
+            .claim("ath", Base64.getUrlEncoder().withoutPadding().encodeToString(hash));
+    if (nonce != null) {
+      claims.claim("nonce", nonce);
+    }
+    SignedJWT jwt =
+        new SignedJWT(
+            new JWSHeader.Builder(JWSAlgorithm.ES256)
+                .type(new JOSEObjectType("dpop+jwt"))
+                .jwk(signer.toPublicJWK())
+                .build(),
+            claims.build());
+    jwt.sign(new ECDSASigner(signer));
+    return jwt.serialize();
+  }
+
+  /**
+   * Builds a registry holding the test client.
+   *
+   * @param enabled the global switch
+   * @param active whether the client is active
+   * @param capabilities the granted capabilities
+   * @param minVersion the minimum client version, or {@code null}
+   * @return the registry
+   */
+  static @NotNull ExchangeRegistry registry(
+      boolean enabled,
+      boolean active,
+      @NotNull Set<String> capabilities,
+      @Nullable String minVersion) {
+    return new ExchangeRegistry(
+        1L,
+        enabled,
+        Map.of(
+            CLIENT,
+            new ExchangeRegistry.Client("VerseKit", active, capabilities, minVersion, null, null)));
+  }
+
+  /**
+   * Test-only answers on real exchange routes, registered as functions so no other context sees
+   * them.
+   */
+  @TestConfiguration
+  static class ProbeRoutes {
+
+    /**
+     * Answers the probed routes with the gate's context.
+     *
+     * @return the routes
+     */
+    @Bean
+    RouterFunction<ServerResponse> exchangeProbes() {
+      return RouterFunctions.route()
+          .GET(LOCATIONS, ProbeRoutes::context)
+          .GET(SERVICE_DOCUMENT, ProbeRoutes::context)
+          .POST(BLUEPRINT_CHANGES, ProbeRoutes::context)
+          .build();
+    }
+
+    /**
+     * Answers with the admitted client and capabilities.
+     *
+     * @param request the request
+     * @return {@code clientId capability capability…}, or {@code none}
+     */
+    private static ServerResponse context(ServerRequest request) {
+      ExchangeRequestContext context = ExchangeRequestContext.of(request.servletRequest());
+      if (context == null) {
+        return ServerResponse.ok().body("none");
+      }
+      return ServerResponse.ok()
+          .body(context.clientId() + " " + String.join(" ", new TreeSet<>(context.capabilities())));
+    }
+  }
+}

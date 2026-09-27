@@ -21,7 +21,10 @@ package de.greluc.krt.profit.basetool.ingest.config;
 
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopProofValidation;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeGateFilter;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRevocationReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTokenGateFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.ClientIdentityFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.UserIdMdcFilter;
@@ -191,7 +194,9 @@ public class SecurityConfig {
       ClientIdentityProperties clientIdentityProperties,
       IngestProperties ingestProperties,
       ExchangeDpopNonces exchangeNonces,
-      ExchangeRefusals exchangeRefusals)
+      ExchangeRefusals exchangeRefusals,
+      ExchangeRegistryReader exchangeRegistryReader,
+      ExchangeRevocationReader exchangeRevocationReader)
       throws Exception {
     SecurityProblemResponseHandler securityProblems =
         new SecurityProblemResponseHandler(
@@ -269,6 +274,15 @@ public class SecurityConfig {
             new ExchangeTokenGateFilter(
                 exchangeNonces, exchangeRefusals, objectMapper, loggingProperties, meterRegistry),
             ClientIdentityFilter.class)
+        .addFilterAfter(
+            new ExchangeGateFilter(
+                exchangeRegistryReader,
+                exchangeRevocationReader,
+                exchangeRefusals,
+                objectMapper,
+                loggingProperties,
+                meterRegistry),
+            ExchangeTokenGateFilter.class)
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
     return http.build();
   }

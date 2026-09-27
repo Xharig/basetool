@@ -1609,9 +1609,12 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `INVENTORY_CONSUMED_BY_PRODUCTION` roll into the existing `JOB_ORDER` and `INVENTORY` domain
   counts (REQ-ORDERS-025).
 - `basetool_ingest_exchange_refused_total{reason}` counter — every exchange request the gateway
-  refused, by its problem code in snake case (`dpop_required`, `dpop_invalid`, `unauthenticated`;
-  the registry and scope gates add theirs), registered at zero (REQ-XCH-028). A nonce challenge
-  counts as `dpop_invalid`, since the client sees that code.
+  refused, by its problem code in snake case — `dpop_required`, `dpop_invalid`, `unauthenticated`,
+  `not_found`, `registry_unavailable`, `exchange_disabled`, `client_not_allowed`,
+  `client_suspended`, `installation_revoked`, `client_revoked`, `scope_missing`,
+  `client_version_unsupported` — registered at zero (REQ-XCH-028). A nonce challenge counts as
+  `dpop_invalid`, since the client sees that code. `ExchangeRegistryUnreadableAtGateway` (warning,
+  5 m) fires while the gateway fails closed on `registry_unavailable`.
 - `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`legacy`, `exchange`,
   `other`) so a third-party client's failures stay apart from the extractor's, and two reasons:
   `invalid_dpop_proof` and `use_dpop_nonce` (the normal first round trip, never alerted).
