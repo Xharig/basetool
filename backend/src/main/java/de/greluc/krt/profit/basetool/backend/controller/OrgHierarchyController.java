@@ -199,8 +199,10 @@ public class OrgHierarchyController {
   @PreAuthorize(
       "hasRole('"
           + Roles.ADMIN
-          + "') or @orgRoleManagementSecurityService.canAppointBereichRole(#id, #request.role(),"
-          + " authentication)")
+          + "') or (@orgRoleManagementSecurityService.canAppointBereichRole(#id, #request.role(),"
+          + " authentication) and"
+          + " @orgRoleManagementSecurityService.targetsAnotherUser(#request.userId(),"
+          + " authentication))")
   @Operation(
       summary = "Add a Bereichsleitung member",
       description =
@@ -224,8 +226,9 @@ public class OrgHierarchyController {
   @PreAuthorize(
       "hasRole('"
           + Roles.ADMIN
-          + "') or @orgRoleManagementSecurityService.canRemoveBereichRole(#id, #userId,"
-          + " authentication)")
+          + "') or (@orgRoleManagementSecurityService.canRemoveBereichRole(#id, #userId,"
+          + " authentication) and"
+          + " @orgRoleManagementSecurityService.targetsAnotherUser(#userId, authentication))")
   @Operation(
       summary = "Remove a Bereichsleitung member",
       description =

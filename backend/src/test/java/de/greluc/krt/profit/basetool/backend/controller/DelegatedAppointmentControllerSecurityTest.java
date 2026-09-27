@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -117,6 +118,7 @@ class DelegatedAppointmentControllerSecurityTest {
   void assignSquadronRank_delegatedStaffelleiter_isAllowed() throws Exception {
     when(orgRoleManagementSecurityService.canAssignSquadronRank(any(), any(), any()))
         .thenReturn(true);
+    when(orgRoleManagementSecurityService.targetsAnotherUser(any(), any())).thenReturn(true);
     when(orgUnitMembershipService.assignSquadronRankDto(any(), any(), any(), any(), any()))
         .thenReturn(dtoStub());
     mockMvc
@@ -168,6 +170,7 @@ class DelegatedAppointmentControllerSecurityTest {
   void addBereichRole_delegatedOlMember_isAllowed() throws Exception {
     when(orgRoleManagementSecurityService.canAppointBereichRole(any(), any(), any()))
         .thenReturn(true);
+    when(orgRoleManagementSecurityService.targetsAnotherUser(any(), any())).thenReturn(true);
     OrgUnitMembership m = new OrgUnitMembership();
     m.setId(new OrgUnitMembershipId(targetUser, bereichId));
     m.setRole(MembershipRole.BEREICHSLEITER);
@@ -179,6 +182,62 @@ class DelegatedAppointmentControllerSecurityTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"userId\":\"" + targetUser + "\",\"role\":\"LEITER\"}")
                 .with(member("ROLE_OFFICER")))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void assignSquadronRank_delegatedLeaderOnOwnSeat_isForbidden() throws Exception {
+    when(orgRoleManagementSecurityService.canAssignSquadronRank(any(), any(), any()))
+        .thenReturn(true);
+    when(orgRoleManagementSecurityService.targetsAnotherUser(any(), any())).thenReturn(false);
+    mockMvc
+        .perform(
+            put("/api/v1/squadrons/{s}/ranks/{u}", squadronId, targetUser)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"STAFFELLEITER\",\"version\":0}")
+                .with(member("ROLE_OFFICER")))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void removeSquadronRank_delegatedLeaderOnOwnSeat_isForbidden() throws Exception {
+    when(orgRoleManagementSecurityService.canRemoveSquadronRank(any(), any(), any()))
+        .thenReturn(true);
+    when(orgRoleManagementSecurityService.targetsAnotherUser(any(), any())).thenReturn(false);
+    mockMvc
+        .perform(
+            delete("/api/v1/squadrons/{s}/ranks/{u}", squadronId, targetUser)
+                .with(member("ROLE_OFFICER")))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void addBereichRole_delegatedLeaderOnOwnSeat_isForbidden() throws Exception {
+    when(orgRoleManagementSecurityService.canAppointBereichRole(any(), any(), any()))
+        .thenReturn(true);
+    when(orgRoleManagementSecurityService.targetsAnotherUser(any(), any())).thenReturn(false);
+    mockMvc
+        .perform(
+            post("/api/v1/org-hierarchy/bereiche/{id}/members", bereichId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userId\":\"" + targetUser + "\",\"role\":\"LEITER\"}")
+                .with(member("ROLE_OFFICER")))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void assignSquadronRank_adminOnOwnSeat_isAllowed() throws Exception {
+    when(orgUnitMembershipService.assignSquadronRankDto(any(), any(), any(), any(), any()))
+        .thenReturn(dtoStub());
+    mockMvc
+        .perform(
+            put("/api/v1/squadrons/{s}/ranks/{u}", squadronId, targetUser)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"STAFFELLEITER\",\"version\":0}")
+                .with(
+                    jwt()
+                        .jwt(j -> j.subject(targetUser.toString()))
+                        .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
         .andExpect(status().isOk());
   }
 }
