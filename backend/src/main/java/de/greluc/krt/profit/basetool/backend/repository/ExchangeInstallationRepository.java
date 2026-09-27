@@ -26,7 +26,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -42,9 +41,9 @@ public interface ExchangeInstallationRepository extends JpaRepository<ExchangeIn
    * @param keyThumbprint the DPoP key thumbprint
    * @param now the current time
    * @param touchBefore last-seen times before this are moved to {@code now}
-   * @return the number of rows written
+   * @return one row per written installation, holding its id and whether this call inserted it;
+   *     empty when nothing was written
    */
-  @Modifying
   @Query(
       value =
           """
@@ -55,14 +54,33 @@ public interface ExchangeInstallationRepository extends JpaRepository<ExchangeIn
           ON CONFLICT (exchange_client_id, user_id, key_thumbprint)
           DO UPDATE SET last_seen_at = :now
           WHERE exchange_installation.last_seen_at < :touchBefore
+          RETURNING id, (xmax = 0) AS inserted
           """,
       nativeQuery = true)
-  int touch(
+  List<Touched> touch(
       @Param("clientId") String clientId,
       @Param("userId") UUID userId,
       @Param("keyThumbprint") String keyThumbprint,
       @Param("now") Instant now,
       @Param("touchBefore") Instant touchBefore);
+
+  /** One installation {@link #touch} wrote. */
+  interface Touched {
+
+    /**
+     * Returns the installation's id.
+     *
+     * @return the id
+     */
+    UUID getId();
+
+    /**
+     * Tells whether the touch created the installation.
+     *
+     * @return {@code true} on first sight
+     */
+    boolean getInserted();
+  }
 
   /**
    * Loads one member's installation of a client by its key.
