@@ -33,6 +33,7 @@ import de.greluc.krt.profit.basetool.backend.model.Material;
 import de.greluc.krt.profit.basetool.backend.model.QuantityType;
 import de.greluc.krt.profit.basetool.backend.model.User;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemBookOutDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemStolenMarkDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeCatalogKind;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeChangeResultDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeItemRef;
@@ -44,10 +45,12 @@ import de.greluc.krt.profit.basetool.backend.repository.ExchangeJournalRepositor
 import de.greluc.krt.profit.basetool.backend.repository.GameItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
+import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.repository.MaterialRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.service.InventoryCheckoutService;
+import de.greluc.krt.profit.basetool.backend.service.InventoryStolenMarkService;
 import de.greluc.krt.profit.basetool.backend.service.MaterialExchangeOfferRatchet;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
@@ -58,13 +61,15 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -126,6 +131,8 @@ public class ExchangeStockWriteService {
   private final LocationRepository locationRepository;
   private final InventoryItemRepository inventoryRepository;
   private final InventoryCheckoutService checkoutService;
+  private final InventoryStolenMarkService stolenMarkService;
+  private final MaterialExchangeOfferRepository offerRepository;
   private final UserRepository userRepository;
   private final AuditService auditService;
   private final InventoryProperties inventoryProperties;
@@ -179,14 +186,14 @@ public class ExchangeStockWriteService {
   private @NotNull ExchangeChangeResultDto run(
       @NotNull ExchangeCaller caller, @NotNull ExchangeStockChangeSet changeSet, boolean guarded) {
     List<Planned> plan = plan(caller, changeSet.ops());
-    Set<UUID> rising = rising(plan);
+    Set<Change> moves = moves(plan);
     if (guarded
         && !changeSet.dryRun()
         && guard.requiresConfirmation(
             caller,
             ExchangeResource.STOCK,
             lotCount(caller.member()),
-            removals(caller, plan, rising))) {
+            removals(caller, plan, moves))) {
       counter(caller, HELD).increment();
       throw ExchangeProblemException.massChangeConfirmationRequired();
     }
@@ -194,12 +201,16 @@ public class ExchangeStockWriteService {
     int applied = 0;
     int unchanged = 0;
     OfferEffects offers = new OfferEffects();
+    Map<Change, BigDecimal> flipped =
+        changeSet.dryRun() || !inventoryProperties.stolenMarkingEnabled()
+            ? Map.of()
+            : flipStolen(caller.member(), plan);
     List<ExchangeChangeResultDto.OpResult> results = new ArrayList<>();
     for (int i = 0; i < plan.size(); i++) {
       String opId = changeSet.ops().get(i).opId();
       if (plan.get(i) instanceof Change change) {
         if (!changeSet.dryRun()) {
-          execute(caller, batch, change, rising, offers);
+          execute(caller, batch, change, moves, flipped, offers);
           counter(caller, APPLIED).increment();
         }
         applied++;
@@ -454,20 +465,136 @@ public class ExchangeStockWriteService {
   }
 
   /**
-   * Collects the materials and items that rise in the batch; a lot of theirs that falls in the same
-   * batch is a move, not a removal.
+   * Finds the falling lots that are moves: a fall is a move when the rises of the same material or
+   * item elsewhere in the batch still cover all of it, taken in the batch's order; a fall they do
+   * not cover counts by the removal rules.
    *
    * @param plan the plan
-   * @return the rising materials and items
+   * @return the falling lots whose whole fall is covered
    */
-  private static @NotNull Set<UUID> rising(@NotNull List<Planned> plan) {
-    Set<UUID> rising = new HashSet<>();
+  private static @NotNull Set<Change> moves(@NotNull List<Planned> plan) {
+    Map<UUID, BigDecimal> rises = new HashMap<>();
     for (Planned planned : plan) {
       if (planned instanceof Change change && change.target().compareTo(change.current()) > 0) {
-        rising.add(change.lot().catalogueId());
+        rises.merge(
+            change.lot().catalogueId(),
+            change.target().subtract(change.current()),
+            BigDecimal::add);
       }
     }
-    return rising;
+    Set<Change> moves = Collections.newSetFromMap(new IdentityHashMap<>());
+    for (Planned planned : plan) {
+      if (planned instanceof Change change && change.target().compareTo(change.current()) < 0) {
+        BigDecimal fall = change.current().subtract(change.target());
+        BigDecimal left = rises.getOrDefault(change.lot().catalogueId(), BigDecimal.ZERO);
+        if (left.compareTo(fall) >= 0) {
+          moves.add(change);
+          rises.put(change.lot().catalogueId(), left.subtract(fall));
+        }
+      }
+    }
+    return moves;
+  }
+
+  /**
+   * Moves stock between a lot and its stolen or not-stolen twin by marking the rows, the way the
+   * Lager does (REQ-INV-053), instead of booking it out and in: for each falling lot whose twin
+   * rises in the batch, as much as both allow is marked, row by row, rows backing a Materialbörse
+   * offer left out and earmarked stock kept on the row it is earmarked on.
+   *
+   * @param member the member
+   * @param plan the plan
+   * @return the amount each change had marked, by change; the rest of it is booked
+   */
+  private @NotNull Map<Change, BigDecimal> flipStolen(
+      @NotNull UUID member, @NotNull List<Planned> plan) {
+    Map<Change, BigDecimal> flipped = new IdentityHashMap<>();
+    Map<Change, BigDecimal> room = new IdentityHashMap<>();
+    for (Planned planned : plan) {
+      if (planned instanceof Change change && change.target().compareTo(change.current()) > 0) {
+        room.put(change, change.target().subtract(change.current()));
+      }
+    }
+    for (Planned planned : plan) {
+      if (!(planned instanceof Change falling)
+          || falling.target().compareTo(falling.current()) >= 0) {
+        continue;
+      }
+      BigDecimal left = falling.current().subtract(falling.target());
+      for (Map.Entry<Change, BigDecimal> twin : room.entrySet()) {
+        if (left.signum() <= 0) {
+          break;
+        }
+        Change rising = twin.getKey();
+        if (!isTwin(falling.lot(), rising.lot()) || twin.getValue().signum() <= 0) {
+          continue;
+        }
+        BigDecimal marked =
+            markRows(member, falling, rising.lot().stolen(), left.min(twin.getValue()));
+        twin.setValue(twin.getValue().subtract(marked));
+        left = left.subtract(marked);
+        flipped.merge(falling, marked, BigDecimal::add);
+        flipped.merge(rising, marked, BigDecimal::add);
+      }
+    }
+    return flipped;
+  }
+
+  /**
+   * Whether two lots differ in their stolen marker only.
+   *
+   * @param a one lot
+   * @param b the other lot
+   * @return whether b is a's stolen or not-stolen twin
+   */
+  private static boolean isTwin(@NotNull Lot a, @NotNull Lot b) {
+    return a.stolen() != b.stolen()
+        && a.catalogueId().equals(b.catalogueId())
+        && a.location().getId().equals(b.location().getId())
+        && Objects.equals(a.quality(), b.quality());
+  }
+
+  /**
+   * Marks up to an amount of a lot's rows, whole rows first as they come, the last one split.
+   *
+   * @param member the member, recorded as the actor
+   * @param change the falling lot
+   * @param stolen the marker to set
+   * @param amount the amount to mark
+   * @return the amount marked; less when rows backing an offer had to be left out
+   */
+  private @NotNull BigDecimal markRows(
+      @NotNull UUID member, @NotNull Change change, boolean stolen, @NotNull BigDecimal amount) {
+    BigDecimal left = amount;
+    for (InventoryItem row : change.rows()) {
+      if (left.signum() <= 0) {
+        break;
+      }
+      if (Boolean.TRUE.equals(row.getStolen()) == stolen
+          || row.getAmount() == null
+          || row.getAmount() <= 0
+          || offerRepository.existsByInventoryItemId(row.getId())) {
+        continue;
+      }
+      BigDecimal rowAmount = round(BigDecimal.valueOf(row.getAmount()), change.lot().unit());
+      BigDecimal take = rowAmount.min(left);
+      if (take.compareTo(rowAmount) < 0) {
+        BigDecimal earmarked =
+            BigDecimal.valueOf(
+                InventoryAllocations.sumJobOrder(row) + InventoryAllocations.sumMission(row));
+        take = take.min(round(rowAmount.subtract(earmarked), change.lot().unit()));
+      }
+      if (take.signum() <= 0) {
+        continue;
+      }
+      stolenMarkService.mark(
+          row.getId(),
+          new InventoryItemStolenMarkDto(
+              row.getVersion(), stolen, take.compareTo(rowAmount) == 0 ? null : take.doubleValue()),
+          member);
+      left = left.subtract(take);
+    }
+    return amount.subtract(left);
   }
 
   /**
@@ -477,14 +604,14 @@ public class ExchangeStockWriteService {
    *
    * @param caller the caller
    * @param plan the plan
-   * @param rising the materials and items that rise in the batch
+   * @param moves the falling lots that are moves
    * @return the removals
    */
   private long removals(
-      @NotNull ExchangeCaller caller, @NotNull List<Planned> plan, @NotNull Set<UUID> rising) {
+      @NotNull ExchangeCaller caller, @NotNull List<Planned> plan, @NotNull Set<Change> moves) {
     long removals = 0;
     for (Planned planned : plan) {
-      if (planned instanceof Change change && isRemoval(caller, change, rising)) {
+      if (planned instanceof Change change && isRemoval(caller, change, moves)) {
         removals++;
       }
     }
@@ -496,13 +623,12 @@ public class ExchangeStockWriteService {
    *
    * @param caller the caller
    * @param change the change
-   * @param rising the materials and items that rise in the same batch
+   * @param moves the falling lots that are moves
    * @return {@code true} for a removal
    */
   private boolean isRemoval(
-      @NotNull ExchangeCaller caller, @NotNull Change change, @NotNull Set<UUID> rising) {
-    if (change.target().compareTo(change.current()) >= 0
-        || rising.contains(change.lot().catalogueId())) {
+      @NotNull ExchangeCaller caller, @NotNull Change change, @NotNull Set<Change> moves) {
+    if (change.target().compareTo(change.current()) >= 0 || moves.contains(change)) {
       return false;
     }
     if (change.target().signum() == 0) {
@@ -540,33 +666,41 @@ public class ExchangeStockWriteService {
    * @param caller the caller
    * @param batch the change set's id
    * @param change the change
-   * @param rising the materials and items that rise in the batch
+   * @param moves the falling lots that are moves
+   * @param flipped the amount of each change that marking already moved
    * @param offers the running offer effects
    */
   private void execute(
       @NotNull ExchangeCaller caller,
       @NotNull UUID batch,
       @NotNull Change change,
-      @NotNull Set<UUID> rising,
+      @NotNull Set<Change> moves,
+      @NotNull Map<Change, BigDecimal> flipped,
       @NotNull OfferEffects offers) {
     BigDecimal delta = change.target().subtract(change.current());
-    if (delta.signum() > 0) {
-      bookIn(caller.member(), change.lot(), delta);
-    } else {
-      bookOut(caller.member(), change.rows(), delta.negate(), change.lot().unit(), offers);
+    BigDecimal booked = delta.abs().subtract(flipped.getOrDefault(change, BigDecimal.ZERO));
+    if (booked.signum() > 0 && delta.signum() > 0) {
+      bookIn(caller.member(), change.lot(), booked);
+    } else if (booked.signum() > 0) {
+      List<InventoryItem> stillInLot =
+          change.rows().stream()
+              .filter(row -> Boolean.TRUE.equals(row.getStolen()) == change.lot().stolen())
+              .toList();
+      bookOut(caller.member(), stillInLot, booked, change.lot().unit(), offers);
     }
     journalService.record(
         caller,
         batch,
         ExchangeJournalAction.STOCK_SET_QUANTITY,
         change.lot().key(),
-        isRemoval(caller, change, rising),
+        isRemoval(caller, change, moves),
         state(change.current(), change.lot().unit()),
         state(change.target(), change.lot().unit()));
   }
 
   /**
-   * Books stock in as a new personal row without an org unit.
+   * Books stock in as a new personal row without an org unit, which piece-counted stock then joins
+   * to its existing row as a book-in in the Lager does (REQ-INV-026).
    *
    * @param member the member
    * @param lot the lot
@@ -593,6 +727,7 @@ public class ExchangeStockWriteService {
         AuditDetails.of("qty", saved.getAmount())
             .with("q", saved.getQuality())
             .with("personal", true));
+    checkoutService.mergeStockIfRequested(saved, false);
   }
 
   /**
