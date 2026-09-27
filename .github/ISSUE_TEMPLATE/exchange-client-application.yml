@@ -107,6 +107,8 @@ body:
       options:
         - label: Device grant against the pinned production issuer; another issuer only through a developer environment variable.
           required: true
+        - label: The login shows the user code and the bare verification_uri; it never opens, shows or sends verification_uri_complete.
+          required: true
         - label: DPoP (ES256) on the token endpoint and every call, with the nonce retry.
           required: true
         - label: Refresh token and DPoP key only in the platform's secret store; the key non-exportable where the platform allows.

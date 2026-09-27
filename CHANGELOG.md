@@ -80,8 +80,9 @@
   REQ-XCH-013).
   
 - **Verbundene Anwendungen: letzte Änderungen und neue Verbindungen.** Jede Anwendung zeigt ihre zehn
-  letzten Änderungen an deinen Daten (zurückgenommene markiert); eine neue Installation ist bis zum
-  nächsten Aufruf als „Neu" hervorgehoben (REQ-XCH-032).
+  letzten Änderungen an deinen Daten (zurückgenommene markiert); eine neue Installation bleibt mit
+  einem Warnhinweis als „Neu" hervorgehoben, bis du sie in ihrer Zeile mit „Gesehen" bestätigst
+  (REQ-XCH-032).
   
 - **Verbundene Anwendungen: große Änderungen bestätigen.** Will eine Anwendung auf einmal viele
   Einträge entfernen, zeigt der Bestätigungslink, was passieren würde; erst „Bestätigen" wendet es an,
@@ -202,6 +203,10 @@
 
 ### Changed
 
+- **Datenaustausch: Geräte-Login ohne fertigen Code-Link.** Anwendungen zeigen den Code und die
+  schlichte Adresse `verification_uri`, in die das Mitglied den Code selbst eintippt; den Link mit
+  eingesetztem Code, der die Warnseite überspringt, öffnen sie nicht mehr (`docs/exchange/`,
+  REQ-XCH-027).
 - **Keycloak: der SC Extractor wird zum reinen Austausch-Client (Sicherheitsbefund H1).** Der
   Provisioner verlangt für `basetool-sc-extractor` künftig eine Zustimmung im Browser, bindet Zugriffs-
   und Auffrischungs-Token an DPoP und gibt nur noch die Austausch-Berechtigungen und `offline_access`

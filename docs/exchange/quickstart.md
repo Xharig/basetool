@@ -73,14 +73,16 @@ status, device = post_form(KEYCLOAK + "/auth/device", {
     "client_id": CLIENT,
     "scope": "offline_access exchange.connect exchange.blueprints.read exchange.blueprints.write",
 })
-print("code", device["user_code"], "- open", device["verification_uri_complete"])
+print("code", device["user_code"], "- open", device["verification_uri"])
 ```
 
 ## 4. Let the member approve
 
-Open `verification_uri_complete` in a browser, sign in as `sandbox-member` and grant the requested
-access on the consent page. A real client shows the `user_code` and opens the page in the member's
-own browser; it never asks for the password itself.
+Open `verification_uri` in a browser, sign in as `sandbox-member`, type the printed code and grant
+the requested access on the consent page. A real client shows the `user_code` and the bare
+`verification_uri` and lets the member type the code in their own browser; it never opens or sends
+`verification_uri_complete`, which skips the page with the phishing warning
+([authentication](authentication.md)), and it never asks for the password itself.
 
 ## 5. Poll for the token
 

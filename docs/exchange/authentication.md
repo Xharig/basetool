@@ -70,15 +70,20 @@ The answer holds `device_code`, `user_code`, `verification_uri`, `verification_u
 
 ### 3. Let the member approve
 
-Show the `user_code` and open `verification_uri_complete` in the member's browser. The member signs
-in to the Basetool, or already is, confirms the code, and sees the consent page, in German, with one
-line per requested capability. The consent page appears on **every** device login, also when the
-member consented before.
+Show the `user_code` and the bare `verification_uri`, and open that address in the member's browser
+or let the member open it. The member signs in to the Basetool, or already is, **types the code**
+your application shows, and sees the consent page, in German, with one line per requested
+capability. The consent page appears on **every** device login, also when the member consented
+before.
+
+Do not open, show or send `verification_uri_complete`. A link that already carries the code skips
+the page where the member types it — and with it the Basetool's warning — and it teaches members to
+follow code links, which is exactly what an attacker sends them.
 
 Only ever show a code this installation created itself, and never relay a code to or from another
 device: a device code typed into someone else's browser hands over that person's account (RFC 8628
-§5.4). The Basetool's device page warns the member about it, and every new connection is announced
-to the member.
+§5.4). The Basetool's code-entry page warns the member about it. Every new connection is announced
+to the member and stays marked „Neu" on „Verbundene Anwendungen" until the member acknowledges it.
 
 ### 4. Poll the token endpoint
 

@@ -98,10 +98,11 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
       @Param("recipientUserId") UUID recipientUserId, @Param("type") NotificationType type);
 
   /**
-   * Marks a recipient's unread notifications of one type read.
+   * Marks a recipient's unread notifications of one type about one entity read.
    *
    * @param recipientUserId the recipient
    * @param type the notification type
+   * @param entityId the entity the notifications are about
    * @param readAt the read time
    * @return the number of notifications marked
    */
@@ -109,11 +110,13 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
   @Query(
       """
       update Notification n set n.read = true, n.readAt = :readAt
-      where n.recipientUserId = :recipientUserId and n.type = :type and n.read = false
+      where n.recipientUserId = :recipientUserId and n.type = :type and n.entityId = :entityId
+        and n.read = false
       """)
-  int markReadOfType(
+  int markReadOfTypeAndEntity(
       @Param("recipientUserId") UUID recipientUserId,
       @Param("type") NotificationType type,
+      @Param("entityId") UUID entityId,
       @Param("readAt") Instant readAt);
 
   /**

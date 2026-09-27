@@ -2602,7 +2602,7 @@ class ExternalContractTest {
                 "/api/v1/exchange/me/stock/changes",
                 "/api/v1/exchange/me/drafts/blueprints",
                 "/api/v1/connected-apps",
-                "/api/v1/connected-apps/seen",
+                "/api/v1/connected-apps/installations/7a0c7a0c-0000-4000-8000-0000000001a5/seen",
                 "/api/v1/connected-apps/versekit/undo",
                 "/api/v1/connected-apps/mass-changes/confirm",
                 "/api/v1/admin/exchange-clients",

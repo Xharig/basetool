@@ -21,8 +21,10 @@ package de.greluc.krt.profit.basetool.frontend.controller;
 
 import de.greluc.krt.profit.basetool.frontend.config.UsesLayoutModel;
 import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedAppDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ConnectedInstallationDto;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -62,21 +64,29 @@ public class ConnectedAppsPageController {
    * list with {@code error} set.
    *
    * @param fragment {@code apps} for the list fragment; anything else renders the page
-   * @param model receives {@code apps} and, on a failed load, {@code error}
+   * @param model receives {@code apps}, {@code anyUnseen} and, on a failed load, {@code error}
    * @return {@code connected-apps}, or its {@code apps} fragment
    */
   @NotNull
   @GetMapping
   public String page(@Nullable @RequestParam(required = false) String fragment, Model model) {
+    List<ConnectedAppDto> apps = List.of();
     try {
-      List<ConnectedAppDto> apps =
+      List<ConnectedAppDto> loaded =
           backendApiClient.get(ConnectedAppsRelayController.BACKEND, LIST_TYPE);
-      model.addAttribute("apps", apps == null ? List.of() : apps);
+      apps = loaded == null ? List.of() : loaded;
     } catch (Exception e) {
       log.debug("Failed to load the connected apps", e);
-      model.addAttribute("apps", List.of());
       model.addAttribute("error", "connectedApps.error.load");
     }
+    model.addAttribute("apps", apps);
+    model.addAttribute(
+        "anyUnseen",
+        apps.stream()
+            .map(ConnectedAppDto::installations)
+            .filter(Objects::nonNull)
+            .flatMap(List::stream)
+            .anyMatch(ConnectedInstallationDto::unseen));
     return APPS_FRAGMENT.equals(fragment) ? "connected-apps :: " + APPS_FRAGMENT : "connected-apps";
   }
 }

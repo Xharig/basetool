@@ -208,7 +208,10 @@ device code living 600 s at a pinned polling interval, and `dpop.bound.access.to
 request `offline_access`, because a device login joins the member's browser SSO session and a web
 logout would otherwise disconnect every client (owner decision 2026-09-26). Consent is shown in German, per capability. The consent and device
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
-The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
+A `verification_uri_complete` link skips the device page, so for a device login the consent page
+carries the same warning and shows the user code for the member to compare with the one on their PC,
+and clients show only the bare `verification_uri` (REQ-XCH-027; owner decision 2026-09-27, security
+review 2 of #2092, M1). The clients are created by `scripts/provision-keycloak-realm.py`, never by hand.
 
 The first-party SC Extractor is held to the same shape once it has migrated (security finding H1,
 owner decision 2026-09-27): its client `basetool-sc-extractor` requires consent, binds access and
@@ -230,8 +233,17 @@ accepted. The provisioner applies this on production only **after** the legacy s
   only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
   the self-test converges a client in today's production shape to it. The box closes with the
   production apply after the legacy switch-off (WP 6, #2092).*
-- [x] The theme renders both pages with the phishing warning (`login-oauth-grant.ftl`,
-  `login-oauth2-device-verify-user-code.ftl`).
+- [x] The theme renders the device page with the phishing warning
+  (`login-oauth2-device-verify-user-code.ftl`). *Corrected 2026-09-27:* this item said „both pages",
+  but `login-oauth-grant.ftl` carries no warning, and a `verification_uri_complete` link goes
+  straight to it (security review 2 of #2092, M1).
+- [ ] For a device login the consent page shows the phishing warning and the user code, asserted on
+  both pages by a theme test. *Keycloak 26.7.4 hands the consent page no user code
+  (`OAuthGrantBean` holds the session code, the client and the scopes); the way to show it is an
+  open owner decision.*
+- [x] The client documentation tells clients to show the bare `verification_uri` with the
+  `user_code` and never `verification_uri_complete` (`docs/exchange/authentication.md`,
+  `client-security.md`, `quickstart.md`, the application template).
 - [x] Keycloak 26.7.4's behaviour is observed (WP 0.4, 2026-09-26, a throwaway local Keycloak of the
   pinned image, owner decision to observe locally): a device login joins the browser SSO session
   (same `sid`); a web logout ends it and the next refresh fails `invalid_grant` unless the client
@@ -240,7 +252,7 @@ accepted. The provisioner applies this on production only **after** the legacy s
   the consent page on every login, also when consent exists; access and refresh tokens carry
   `cnf.jkt`, and a refresh without a DPoP proof is refused.
 
-**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1
+**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1; the consent page's warning and user code — open (#2092, M1)
 
 ### REQ-XCH-006 — DPoP is required on every exchange route
 
@@ -856,6 +868,10 @@ taken in the batch's order — a single piece added elsewhere does not hide an e
 decision 2026-09-27).
 
 A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
+Nothing compares a ship with its state when the window opened, so a batch that retypes every ship,
+or clears every name and location, counts no removal. The owner kept that rule on 2026-09-27
+(security review 2 of #2092, L2) and accepted the gap: the journal records every such write and the
+member's undo restores it; the threat model lists it as an accepted risk.
 
 When the backend answers `MASS_CHANGE_CONFIRMATION_REQUIRED`, the gateway stages the change set with
 its client, installation, resource and `stagedAt` (the gateway's clock) in the handoff staging
@@ -1066,7 +1082,9 @@ A client stores tokens only in the platform's secret store (Windows Credential M
 Linux Secret Service, with a `0600` file fallback and a visible hint), keeps the DPoP private key
 non-exportable where the platform allows, never writes a token into logs, backups, diagnostics or a
 problem-report channel, pins the production issuer and allows another only through a developer
-environment variable, and sends a descriptive `User-Agent`. It also syncs as the sync guide
+environment variable, shows the device login's `user_code` with the bare `verification_uri` and
+never opens, shows or sends `verification_uri_complete` (owner decision 2026-09-27, security review
+2 of #2092, M1), and sends a descriptive `User-Agent`. It also syncs as the sync guide
 requires: each resource an opt-in, pull before push, an add-only first sync, removals only from a
 diff, no re-add of what the member removed elsewhere without asking, ships linked before created,
 and the account check before a new game account's first sync. The checklist is
@@ -1208,9 +1226,12 @@ The notification is the rule-engine event `EXCHANGE_INSTALLATION_CONNECTED` (see
 `EVENT_RECIPIENT`), published when the installation upsert reports that it created the row, so two
 concurrent first calls announce one installation once. It names the client by its registry display
 name only: the client-supplied label arrives with a later call and could pose as the Basetool. An
-installation counts as unseen while its notification is unread, `GET /api/v1/connected-apps` says so
-per installation (`unseen`), and `POST /api/v1/connected-apps/seen` marks them read — a notification
-change only, not audited.
+installation counts as unseen while its notification is unread, and `GET /api/v1/connected-apps`
+says so per installation (`unseen`). Opening the page marks nothing: the row stays highlighted, under
+a warning to disconnect a connection the member did not start, until the member acknowledges that
+row with „Gesehen" (`POST /api/v1/connected-apps/installations/{id}/seen`, which marks only that
+installation's notification read) or reads the notification — a notification change only, not
+audited.
 
 - [x] List the clients with their capabilities and installations (label, first and last seen), and
   disconnect one installation or a whole client. *`ConnectedAppsPageControllerMvcTest`.*
@@ -1218,8 +1239,12 @@ change only, not audited.
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
-- [x] The page highlights an unseen installation („Neu") and then reports it seen; the highlight
-  ends with the next load. *`ConnectedAppsPageControllerMvcTest`.*
+- [x] The page highlights an unseen installation („Neu") with a warning and reports it seen only
+  when the member acknowledges its row („Gesehen"), one installation at a time; loading the page
+  marks nothing. *`ConnectedAppsPageControllerMvcTest`, `ConnectedAppsControllerTest`.*
+  *Corrected 2026-09-27:* this item first read „and then reports it seen; the highlight ends with
+  the next load" — the page marked every new connection seen on its first load, which made the
+  highlight a weak phishing signal (security review 2 of #2092).
 - [x] Undo a client's changes since a chosen span, with the skipped entries listed.
   *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
 - [x] Confirm or discard a staged mass change. *`ExchangeMassChangeControllerTest`,
@@ -1261,7 +1286,7 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | Threat | Countered by |
 | --- | --- |
 | Stolen refresh or access token | DPoP binding of both (REQ-XCH-005/-006); tokens only in the platform secret store (REQ-XCH-027) |
-| Device-code phishing (RFC 8628 §5.4) | themed device page warning, notification and highlight of every new connection, 600 s code lifespan (REQ-XCH-005/-032) — countered, not prevented |
+| Device-code phishing (RFC 8628 §5.4) | themed device page warning, clients showing only the bare `verification_uri`, notification and a highlight of every new connection until the member acknowledges it, 600 s code lifespan (REQ-XCH-005/-027/-032) — **partial**: an attacker's `verification_uri_complete` link skips the device page, and the consent page does not yet carry the warning and the code (security review 2 of #2092, M1) |
 | A revoked installation refreshing its way back | persistent `jkt` deny list (REQ-XCH-008) |
 | A member who leaves keeping access | departure revocations (REQ-XCH-008) |
 | Malicious client update, compromised maintainer account | capability scoping, own-data-only, journal and undo, guard, suspension; signing recommended (REQ-XCH-002/-009/-021/-022) — accepted residual risk |
@@ -1271,7 +1296,10 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 | Replay and cross-member idempotency replay | idempotency keyed per client and member, gates before cache (REQ-XCH-020) |
 | Enumeration through resolve or account check | resolve returns catalogue data only; account check never returns the handle and is tightly limited (REQ-XCH-012/-031) |
 | DoS against Redis (shared with sessions, `noeviction`) or the backend | hard byte budgets, quotas, batch cap, larger Redis (REQ-XCH-023, ADR-0221) |
-| Guard evasion by batching, near-zero cuts or overwriting updates | window counting rules (REQ-XCH-021) |
+| Guard evasion by batching, near-zero cuts or overwriting stock updates | window counting rules against each lot's state at window start (REQ-XCH-021) |
+| Guard evasion by overwriting ship updates (retyping every ship, clearing names and locations) | counted only when one `upsert` changes both name and type, with no comparison to the window start; journal and undo restore the ships (REQ-XCH-021/-022) — accepted risk (owner decision 2026-09-27) |
+| A malicious release changing many members' data at once | journal and each member's own undo, suspension (REQ-XCH-022) — being addressed (admin bulk undo) |
+| A single open order recognisable in the org demand feed | membership-only scope, catalogue fields only, no requester, title or free text; no low-count suppression, 7-day client cache (REQ-XCH-018) — accepted risk (ADR-0220) |
 | Silent removal of Materialbörse offers by a sync book-out | reported and audited, not undoable — accepted (REQ-XCH-016/-022) |
 | The version gate bypassed by a manipulated client | cooperative by design — accepted (REQ-XCH-024) |
 | Data poisoning of org-wide views | own personal rows only, validated through the domain services (REQ-XCH-009/-016) |

@@ -142,18 +142,54 @@ class ConnectedAppsPageControllerMvcTest {
         .andExpect(content().string(containsString("Arclight &lt;i&gt;Pistol&lt;/i&gt;")))
         .andExpect(content().string(containsString("27.09.2026 10:00 UTC")))
         .andExpect(content().string(containsString("data-ca-unseen")))
-        .andExpect(content().string(containsString("ca-unseen")));
+        .andExpect(content().string(containsString("ca-unseen")))
+        .andExpect(content().string(containsString("id=\"ca-unseen-notice\"")))
+        .andExpect(content().string(containsString("trenne sie sofort")))
+        .andExpect(content().string(containsString("data-ca-mark-seen")))
+        .andExpect(model().attribute("anyUnseen", true));
   }
 
   @Test
   @WithMockUser(roles = "KRT_MEMBER")
-  void markingSeenIsRelayed() throws Exception {
+  void withoutANewInstallationThereIsNoNoticeAndNoSeenControl() throws Exception {
+    ConnectedAppDto app =
+        new ConnectedAppDto(
+            "versekit",
+            "VerseKit",
+            List.of("exchange.connect"),
+            List.of(new ConnectedInstallationDto(INSTALLATION, "Desktop", null, null, false)),
+            List.of());
+    when(backendApiClient.get(eq("/api/v1/connected-apps"), anyTypeRef())).thenReturn(List.of(app));
+
+    mockMvc
+        .perform(get("/connected-apps").param("fragment", "apps"))
+        .andExpect(status().isOk())
+        .andExpect(model().attribute("anyUnseen", false))
+        .andExpect(content().string(not(containsString("ca-unseen-notice"))))
+        .andExpect(content().string(not(containsString("data-ca-mark-seen"))));
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void markingOneInstallationSeenIsRelayed() throws Exception {
     mockMvc
         .perform(
-            post("/connected-apps/seen").header("X-Requested-With", "XMLHttpRequest").with(csrf()))
+            post("/connected-apps/installations/" + INSTALLATION + "/seen")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .with(csrf()))
         .andExpect(status().isNoContent());
 
-    verify(backendApiClient).post("/api/v1/connected-apps/seen", null, Void.class);
+    verify(backendApiClient)
+        .post("/api/v1/connected-apps/installations/" + INSTALLATION + "/seen", null, Void.class);
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void theBulkSeenRouteIsGone() throws Exception {
+    mockMvc.perform(
+        post("/connected-apps/seen").header("X-Requested-With", "XMLHttpRequest").with(csrf()));
+
+    verify(backendApiClient, never()).post(eq("/api/v1/connected-apps/seen"), any(), any());
   }
 
   @Test
