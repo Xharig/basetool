@@ -9,6 +9,10 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Datenaustausch: Schreibjournal.** Das Backend kann Änderungen verbundener Anwendungen an
+  Blueprints, Lager und Hangar mit dem Zustand davor und danach 90 Tage protokollieren – Grundlage
+  für das Rückgängigmachen und die Massenänderungs-Sperre der folgenden Schreibzugriffe; das Journal
+  erscheint im Datenexport (Migration `V253`, REQ-XCH-022).
 - **Datenaustausch: Blueprints lesen.** Das Backend liefert dem Gateway die Blueprints eines
   Mitglieds als Snapshot und als Änderungs-Feed mit Löschmarken samt Quelle; ein abgelaufener Cursor
   antwortet `410 CURSOR_EXPIRED` (`/api/v1/exchange/me/blueprints`, REQ-XCH-013, REQ-XCH-015).

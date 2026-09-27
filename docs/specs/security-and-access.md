@@ -3939,7 +3939,7 @@ one event type.
 ### REQ-SEC-058 — Art. 15 / Art. 20 data export
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The export gains the exchange's member-linked tables. **In since WP 3.1:** the installations with their labels (`connectedApps`, the label scrubbed like other free text) and the client revocations (`connectedAppRevocations`); the deny list is the revoked installations. **In since WP 3.3's first slice:** the change sequence (`exchangeChanges`: resource, key, channel and client of every change to the member's synced data, kept 90 days, ADR-0224). **Still to come:** journal and external refs (WP 3.3).
+> The export gains the exchange's member-linked tables. **In since WP 3.1:** the installations with their labels (`connectedApps`, the label scrubbed like other free text) and the client revocations (`connectedAppRevocations`); the deny list is the revoked installations. **In since WP 3.3's first slice:** the change sequence (`exchangeChanges`: resource, key, channel and client of every change to the member's synced data, kept 90 days, ADR-0224). **In since WP 3.3's second slice:** the write journal (`exchangeJournal`: client, resource, key, action and the entry before and after each client write, kept 90 days; the states scrubbed like other free text, since a note or a ship name can name somebody). **Still to come:** external refs (WP 3.3).
 >
 > *The optional RSI handle is in since WP 1.4 (REQ-SEC-072, 2026-09-26): the account section lists it, and as a name spelling it is scrubbed from other members' free text. The „gestohlen“ marker of Lager rows is in since WP 1.3 (REQ-INV-053): the Lager section lists it.*
 

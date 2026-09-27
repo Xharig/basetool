@@ -84,8 +84,8 @@ public enum ScheduledJob {
   EXCHANGE_REGISTRY_RECONCILE("exchange_registry_reconcile"),
 
   /**
-   * The nightly purge of the exchange change feed's entries past their retention ({@code
-   * ExchangeChangeRetentionTask}, REQ-XCH-013).
+   * The nightly purge of the exchange change feed's and write journal's entries past their
+   * retention ({@code ExchangeChangeRetentionTask}, REQ-XCH-013, REQ-XCH-022).
    */
   EXCHANGE_CHANGE_RETENTION("exchange_change_retention");
 
