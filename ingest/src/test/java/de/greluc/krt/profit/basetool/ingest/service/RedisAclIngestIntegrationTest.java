@@ -28,6 +28,7 @@ import de.greluc.krt.profit.basetool.testsupport.containers.TestImages;
 import de.greluc.krt.profit.basetool.testsupport.redis.RedisAclTemplate;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,8 @@ import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.junit.jupiter.Container;
@@ -161,6 +164,29 @@ class RedisAclIngestIntegrationTest {
           .isInstanceOf(DataAccessException.class);
       assertThat(connection.serverCommands().info("server")).isNotEmpty();
     }
+  }
+
+  @Test
+  void aScriptRunsUnderTheIngestUsersOwnRules() {
+    template(admin).opsForValue().set("basetool:session:sessions:x", "secret");
+    StringRedisTemplate template = template(ingest);
+    RedisScript<String> get =
+        new DefaultRedisScript<>("return redis.call('GET', KEYS[1])", String.class);
+    RedisScript<String> getUndeclared =
+        new DefaultRedisScript<>(
+            "return redis.call('GET', 'basetool:session:sessions:x')", String.class);
+    RedisScript<Long> zrem =
+        new DefaultRedisScript<>("return redis.call('ZREM', KEYS[1], ARGV[1])", Long.class);
+    template.opsForValue().set("ingest:xch:idem-lock:acl", "token");
+
+    assertThat(template.execute(get, List.of("ingest:xch:idem-lock:acl"))).isEqualTo("token");
+    assertThat(template.execute(zrem, List.of("ingest:xch:budget:all"), "x")).isZero();
+    assertThatThrownBy(() -> template.execute(get, List.of("basetool:session:sessions:x")))
+        .as("a declared foreign key is refused")
+        .isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(() -> template.execute(getUndeclared, List.of()))
+        .as("a script cannot reach a key its user could not")
+        .isInstanceOf(DataAccessException.class);
   }
 
   /**

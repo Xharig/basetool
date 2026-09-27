@@ -46,9 +46,10 @@ import tools.jackson.databind.ObjectMapper;
  * Makes exchange writes idempotent (REQ-XCH-020) within the byte budget (REQ-XCH-023). A write
  * needs an {@code Idempotency-Key}; its answer is kept a day per client, member and key and
  * replayed for the same request, a different request under the same key is refused, and a duplicate
- * in flight waits for the first. The gates, limits and quota run before this filter, so a refused
- * request is never cached; neither is any {@code 401}, {@code 403}, {@code 429}, {@code 5xx} or a
- * staged mass change.
+ * in flight waits for the first. Under the lock the cache is read again, so a request that raced
+ * the first one's answer replays it instead of writing twice. The gates, limits and quota run
+ * before this filter, so a refused request is never cached; neither is any {@code 401}, {@code
+ * 403}, {@code 429}, {@code 5xx} or a staged mass change.
  */
 public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
 
@@ -137,95 +138,168 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
     String namespace = ExchangeIdempotency.namespace(context.clientId(), context.member(), key);
     String fingerprint =
         ExchangeIdempotency.fingerprint(request.getMethod(), request.getRequestURI(), body);
+    String token;
     try {
       Optional<ExchangeIdempotency.Stored> stored = idempotency.find(namespace);
       if (stored.isPresent()) {
         replayOrRefuse(context.clientId(), response, stored.get(), fingerprint);
         return;
       }
-      if (!budget.fits(context.clientId(), context.member(), properties.maxResultBytes())) {
-        response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
-        refuse(
-            context.clientId(),
-            response,
-            HttpStatus.SERVICE_UNAVAILABLE,
-            ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
-            "The exchange's storage budget is full; try again later.");
-        return;
-      }
-      if (!idempotency.lock(namespace)) {
-        refuse(
-            context.clientId(),
-            response,
-            HttpStatus.CONFLICT,
-            ExchangeRefusals.IDEMPOTENCY_IN_PROGRESS,
-            "A request with this Idempotency-Key is still being processed.");
-        return;
-      }
-      try {
-        budget.record(
-            context.clientId(),
-            context.member(),
-            ExchangeIdempotency.LOCK_PREFIX + namespace,
-            ExchangeIdempotency.LOCK_PREFIX.length() + namespace.length() + 1L,
-            properties.lockTtl());
-      } catch (ExchangeUnavailableException e) {
-        idempotency.unlock(namespace);
-        throw e;
-      }
+      token = idempotency.lock(namespace).orElse(null);
     } catch (ExchangeUnavailableException e) {
-      response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
+      storeUnavailable(context.clientId(), response);
+      return;
+    }
+    if (token == null) {
       refuse(
           context.clientId(),
           response,
-          HttpStatus.SERVICE_UNAVAILABLE,
-          ExchangeRefusals.SERVICE_UNAVAILABLE,
-          "The idempotency store cannot be reached; try again later.");
+          HttpStatus.CONFLICT,
+          ExchangeRefusals.IDEMPOTENCY_IN_PROGRESS,
+          "A request with this Idempotency-Key is still being processed.");
       return;
     }
     ContentCachingResponseWrapper wrapper = new ContentCachingResponseWrapper(response);
     try {
-      filterChain.doFilter(new CachedBodyRequest(request, body), wrapper);
-      cacheIfAllowed(context, namespace, fingerprint, wrapper);
+      runLocked(
+          new CachedBodyRequest(request, body),
+          wrapper,
+          filterChain,
+          context,
+          namespace,
+          fingerprint);
     } finally {
-      idempotency.unlock(namespace);
+      idempotency.unlock(namespace, token);
       wrapper.copyBodyToResponse();
     }
   }
 
   /**
-   * Caches a finished answer when the contract allows it.
+   * Runs one write under its key's lock: replays an answer another request cached meanwhile,
+   * reserves the largest cacheable answer in the byte budget, then runs the write and settles the
+   * reservation on the answer it cached, or frees it.
+   *
+   * @param request the write with its body
+   * @param wrapper the response being recorded
+   * @param filterChain the rest of the chain
+   * @param context the admitted request
+   * @param namespace the key's namespace
+   * @param fingerprint the request's fingerprint
+   * @throws ServletException if a later filter fails
+   * @throws IOException if reading or writing fails
+   */
+  private void runLocked(
+      @NotNull HttpServletRequest request,
+      @NotNull ContentCachingResponseWrapper wrapper,
+      @NotNull FilterChain filterChain,
+      @NotNull ExchangeRequestContext context,
+      @NotNull String namespace,
+      @NotNull String fingerprint)
+      throws ServletException, IOException {
+    String reservation = ExchangeIdempotency.LOCK_PREFIX + namespace;
+    long reserved = ExchangeIdempotency.lockBytes(namespace) + properties.maxResultBytes();
+    try {
+      Optional<ExchangeIdempotency.Stored> stored = idempotency.find(namespace);
+      if (stored.isPresent()) {
+        replayOrRefuse(context.clientId(), wrapper, stored.get(), fingerprint);
+        return;
+      }
+      if (!budget.reserve(
+          context.clientId(), context.member(), reservation, reserved, properties.lockTtl())) {
+        wrapper.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
+        refuse(
+            context.clientId(),
+            wrapper,
+            HttpStatus.SERVICE_UNAVAILABLE,
+            ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
+            "The exchange's storage budget is full; try again later.");
+        return;
+      }
+    } catch (ExchangeUnavailableException e) {
+      storeUnavailable(context.clientId(), wrapper);
+      return;
+    }
+    boolean settled = false;
+    try {
+      filterChain.doFilter(request, wrapper);
+      settled = cacheIfAllowed(context, namespace, fingerprint, reservation, reserved, wrapper);
+    } finally {
+      if (!settled) {
+        budget.release(context.clientId(), context.member(), reservation, reserved);
+      }
+    }
+  }
+
+  /**
+   * Caches a finished answer when the contract and the byte budget allow it, in place of the
+   * write's reservation.
    *
    * @param context the admitted request
    * @param namespace the key's namespace
    * @param fingerprint the request's fingerprint
+   * @param reservation the reservation's key
+   * @param reserved the reservation's size
    * @param wrapper the finished answer
+   * @return {@code true} when the reservation was settled on the cached answer
    */
-  private void cacheIfAllowed(
+  private boolean cacheIfAllowed(
       @NotNull ExchangeRequestContext context,
       @NotNull String namespace,
       @NotNull String fingerprint,
+      @NotNull String reservation,
+      long reserved,
       @NotNull ContentCachingResponseWrapper wrapper) {
     byte[] content = wrapper.getContentAsByteArray();
     String body = new String(content, StandardCharsets.UTF_8);
     if (!cacheable(wrapper.getStatus(), body) || content.length > properties.maxResultBytes()) {
-      return;
+      return false;
     }
+    ExchangeIdempotency.Stored stored =
+        new ExchangeIdempotency.Stored(
+            fingerprint, wrapper.getStatus(), wrapper.getContentType(), body);
+    String key = ExchangeIdempotency.PREFIX + namespace;
     try {
-      int size =
-          idempotency.store(
-              namespace,
-              new ExchangeIdempotency.Stored(
-                  fingerprint, wrapper.getStatus(), wrapper.getContentType(), body));
-      budget.record(
+      int size = idempotency.sizeOf(namespace, stored);
+      if (!budget.settle(
           context.clientId(),
           context.member(),
-          ExchangeIdempotency.PREFIX + namespace,
+          reservation,
+          reserved,
+          key,
           size,
-          properties.idempotencyTtl());
+          properties.idempotencyTtl())) {
+        logger.warn("An exchange answer does not fit the budget and is not cached for replay");
+        return false;
+      }
+      try {
+        idempotency.store(namespace, stored);
+      } catch (ExchangeUnavailableException e) {
+        budget.release(context.clientId(), context.member(), key, size);
+        logger.warn("An exchange answer could not be cached for replay");
+      }
+      return true;
     } catch (ExchangeUnavailableException e) {
       logger.warn("An exchange answer could not be cached for replay");
+      return false;
     }
+  }
+
+  /**
+   * Refuses a write whose idempotency store cannot be reached.
+   *
+   * @param client the admitted request's registry client id
+   * @param response the response
+   * @throws IOException if writing fails
+   */
+  private void storeUnavailable(@NotNull String client, @NotNull HttpServletResponse response)
+      throws IOException {
+    response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
+    refuse(
+        client,
+        response,
+        HttpStatus.SERVICE_UNAVAILABLE,
+        ExchangeRefusals.SERVICE_UNAVAILABLE,
+        "The idempotency store cannot be reached; try again later.");
   }
 
   /**

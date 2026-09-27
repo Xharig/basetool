@@ -757,12 +757,24 @@ true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and n
 change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
 the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write.
 
+The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
+per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
+first request stored its answer and took the lock after it was released replays that answer (or is
+refused with `422` for another body) instead of running the write twice. The lock is released by a
+compare-and-delete script only while it still holds the request's own token, so a request that
+outlived the two minutes never frees the lock of the request that took the key after it.
+
 **Acceptance**
 
 - [x] Replay, cross-member key, in-flight duplicate, uncached `429`. *The gates, limits and quota run
   before the cache, so a refused request never reaches it (`ExchangeIdempotencyFilterTest`: replay,
   reused key, in-flight duplicate, the cached and uncached statuses, a store that fails; the namespace
   holds the client and member, so one member's key can never answer another's).*
+- [x] A duplicate that raced the first request's answer replays it; a lock is freed only by its
+  holder. *`ExchangeIdempotencyFilterTest` (the lookup under the lock, replay and `422`);
+  `ExchangeStoreRedisIntegrationTest` against a real Redis under the ingest ACL user: a duplicate held
+  between its lookup and its lock replays instead of writing again, sixteen parallel duplicates run
+  the write once per key, and an expired holder's token does not release the next holder's lock.*
 
 **Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest` · **Status:**
 built — WP 3.2 (#2082)
@@ -869,14 +881,28 @@ SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted a
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
 **The byte budget** (`app.exchange.store.*`): every value the gateway stores for the exchange
-registers `<key>|<bytes>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
-`…:c:<client>` and `…:all` — scored by its expiry, and expired entries are pruned before each count,
-so the count falls as keys expire. Before a write runs, the gateway reserves the largest cacheable
-answer (32 KiB) against all three budgets and refuses with `503 EXCHANGE_BUDGET_EXHAUSTED` when one
-would overflow, so a full budget stops writes before they reach the backend. The quota counters (from
-their first write of the day) and the idempotency locks (while a write is in flight) count too.
+registers `<key>|<charge>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
+`…:c:<client>` and `…:all` — scored by its expiry, and each set keeps its running total beside it
+(`ingest:xch:budget-sum:m:…`, `…:c:…`, `…:all`). An entry's charge is the value's bytes plus a fixed
+512 bytes for its three set members and the key's own bookkeeping in Redis. One Lua script does each
+step atomically: it prunes up to 1000 expired entries per set (subtracting them from the total),
+checks all three limits and records the entry — so parallel writes cannot overshoot a budget, and no
+step reads a whole set. A total that is missing is rebuilt from its set once; the sets and totals
+expire together, never before their longest entry.
+
+Before a write runs, the gateway reserves the largest cacheable answer (32 KiB) plus its lock against
+all three budgets under the lock's key and refuses with `503 EXCHANGE_BUDGET_EXHAUSTED` when one
+would overflow, so a full budget stops writes before they reach the backend. A cacheable answer then
+takes the reservation's place in one step, or is not cached when it does not fit; otherwise the
+reservation is freed. A staged draft or mass change reserves its exact staged size under an
+`ingest:xch:pending:<uuid>` name before it is written and is settled on its handoff key afterwards.
+A quota counter is recorded when its day's first write creates it, without a limit check: it exists
+already, and the write still needs its own reservation.
 `basetool_ingest_exchange_budget_used_ratio`
 reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
+
+The ingest ACL user runs these scripts with `EVAL`/`EVALSHA`; Redis checks every command a script
+issues against the same user's key patterns and commands (REQ-SEC-068).
 
 **Acceptance**
 
@@ -884,6 +910,11 @@ reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
   working. *`ExchangeStoreRedisIntegrationTest` fills one member's and then one client's budget in a
   real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
   free their bytes. Sessions live under keys the ingest user cannot reach at all.*
+- [x] Parallel writes never overshoot a budget. *`ExchangeStoreRedisIntegrationTest`: sixteen
+  parallel reservations on one member admit exactly what fits, and across two clients exactly what
+  the total holds; a reservation settles on its value or stays when the value does not fit; a missing
+  total is rebuilt. `RedisAclIngestIntegrationTest`: a script under the ingest user reaches no key the
+  user could not.*
 
 **Status:** built — WP 3.2 (#2082); the production Redis size and ACL follow with the go-live,
 WP 2.1 (#2092)

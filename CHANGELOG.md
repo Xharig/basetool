@@ -246,6 +246,11 @@
 
 ### Fixed
 
+- **Datenaustausch: Doppelte Schreibvorgänge und Budget-Überlauf verhindert.** Eine Wiederholung mit
+  demselben `Idempotency-Key`, die das erste Ergebnis knapp verpasst, liefert es jetzt aus, statt
+  erneut zu schreiben; eine Sperre gibt nur ihr eigener Halter frei. Das Redis-Budget wird per
+  Lua-Skript atomar geprüft und gebucht und hält so auch bei parallelen Schreibvorgängen. Der
+  Redis-Nutzer `basetool-ingest` braucht dafür `EVAL`/`EVALSHA`, `ZREM` und `ZSCORE`.
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.

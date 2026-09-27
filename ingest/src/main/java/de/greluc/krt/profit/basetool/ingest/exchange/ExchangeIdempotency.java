@@ -23,13 +23,18 @@ import de.greluc.krt.profit.basetool.ingest.config.ExchangeStoreProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -38,8 +43,8 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * The exchange's idempotency cache in Redis (REQ-XCH-020): per client, member and key, the answer
  * to a write and the fingerprint of the request that produced it, kept for a day; and a lock while
- * the first request with a key is in flight. Keys are hashed, so no client-chosen text becomes part
- * of a Redis key.
+ * the first request with a key is in flight, held with a random token so only its holder releases
+ * it. Keys are hashed, so no client-chosen text becomes part of a Redis key.
  */
 @Slf4j
 @Component
@@ -51,6 +56,26 @@ public class ExchangeIdempotency {
 
   /** The key prefix of a lock. */
   static final String LOCK_PREFIX = "ingest:xch:idem-lock:";
+
+  /** The random bytes of a lock token. */
+  static final int TOKEN_BYTES = 16;
+
+  /** The characters of a lock token, URL-safe base64 without padding. */
+  static final int TOKEN_LENGTH = 22;
+
+  /** Deletes a lock only while it holds the caller's token. */
+  private static final RedisScript<Long> UNLOCK =
+      new DefaultRedisScript<>(
+          """
+          if redis.call('GET', KEYS[1]) == ARGV[1] then
+            return redis.call('DEL', KEYS[1])
+          end
+          return 0
+          """,
+          Long.class);
+
+  private static final SecureRandom RANDOM = new SecureRandom();
+  private static final Base64.Encoder TOKEN_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
   private final StringRedisTemplate redisTemplate;
   private final ObjectMapper objectMapper;
@@ -120,35 +145,66 @@ public class ExchangeIdempotency {
   }
 
   /**
-   * Takes the lock of a namespace for the first request in flight.
+   * Takes the lock of a namespace for the first request in flight, holding a token of its own.
    *
    * @param namespace the namespace
-   * @return {@code true} when this request holds the lock now
+   * @return the token this request holds the lock with, or empty when another request holds it
    * @throws ExchangeUnavailableException if Redis cannot be written
    */
-  public boolean lock(@NotNull String namespace) {
+  public @NotNull Optional<String> lock(@NotNull String namespace) {
+    byte[] raw = new byte[TOKEN_BYTES];
+    RANDOM.nextBytes(raw);
+    String token = TOKEN_ENCODER.encodeToString(raw);
     try {
       Boolean taken =
           redisTemplate
               .opsForValue()
-              .setIfAbsent(LOCK_PREFIX + namespace, "1", properties.lockTtl());
-      return Boolean.TRUE.equals(taken);
+              .setIfAbsent(LOCK_PREFIX + namespace, token, properties.lockTtl());
+      return Boolean.TRUE.equals(taken) ? Optional.of(token) : Optional.empty();
     } catch (RuntimeException e) {
       throw unavailable(e);
     }
   }
 
   /**
-   * Releases the lock of a namespace; a failure is logged, since the lock expires on its own.
+   * Releases the lock of a namespace only while it still holds the given token, as one atomic step;
+   * a failure is logged, since the lock expires on its own.
    *
    * @param namespace the namespace
+   * @param token the token {@link #lock(String)} returned
+   * @return {@code true} when the lock was this request's and is released
    */
-  public void unlock(@NotNull String namespace) {
+  public boolean unlock(@NotNull String namespace, @NotNull String token) {
     try {
-      redisTemplate.delete(LOCK_PREFIX + namespace);
+      Long released = redisTemplate.execute(UNLOCK, List.of(LOCK_PREFIX + namespace), token);
+      return released != null && released > 0L;
     } catch (RuntimeException e) {
       log.warn("An idempotency lock could not be released: {}", e.getClass().getSimpleName());
+      return false;
     }
+  }
+
+  /**
+   * Returns the bytes a lock of a namespace occupies: its key and its token.
+   *
+   * @param namespace the namespace
+   * @return the size in bytes
+   */
+  public static long lockBytes(@NotNull String namespace) {
+    return (long) LOCK_PREFIX.length() + namespace.length() + TOKEN_LENGTH;
+  }
+
+  /**
+   * Returns the bytes an answer occupies once cached: its key and its stored value.
+   *
+   * @param namespace the namespace
+   * @param stored the answer
+   * @return the size in bytes
+   */
+  public int sizeOf(@NotNull String namespace, @NotNull Stored stored) {
+    return json(stored).getBytes(StandardCharsets.UTF_8).length
+        + PREFIX.length()
+        + namespace.length();
   }
 
   /**
@@ -156,22 +212,30 @@ public class ExchangeIdempotency {
    *
    * @param namespace the namespace
    * @param stored the answer
-   * @return the size of the stored value in bytes
    * @throws ExchangeUnavailableException if Redis cannot be written
    */
-  public int store(@NotNull String namespace, @NotNull Stored stored) {
-    ObjectNode node = objectMapper.createObjectNode();
-    node.put("fingerprint", stored.fingerprint());
-    node.put("status", stored.status());
-    node.put("contentType", stored.contentType());
-    node.put("body", stored.body());
-    String json = objectMapper.writeValueAsString(node);
+  public void store(@NotNull String namespace, @NotNull Stored stored) {
+    String json = json(stored);
     try {
       redisTemplate.opsForValue().set(PREFIX + namespace, json, properties.idempotencyTtl());
     } catch (RuntimeException e) {
       throw unavailable(e);
     }
-    return json.getBytes(StandardCharsets.UTF_8).length + PREFIX.length() + namespace.length();
+  }
+
+  /**
+   * Serializes an answer as it is cached.
+   *
+   * @param stored the answer
+   * @return its JSON
+   */
+  private @NotNull String json(@NotNull Stored stored) {
+    ObjectNode node = objectMapper.createObjectNode();
+    node.put("fingerprint", stored.fingerprint());
+    node.put("status", stored.status());
+    node.put("contentType", stored.contentType());
+    node.put("body", stored.body());
+    return objectMapper.writeValueAsString(node);
   }
 
   /**
