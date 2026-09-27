@@ -23,6 +23,7 @@ import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.ServiceAccountTokenProvider;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -44,6 +45,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -139,7 +141,12 @@ public class ExchangeRelay {
   @PostConstruct
   void register() {
     for (String outcome : new String[] {OUTCOME_OK, OUTCOME_REFUSED, OUTCOME_FAILED}) {
-      meterRegistry.counter(MetricNames.EXCHANGE_RELAY, MetricNames.TAG_OUTCOME, outcome);
+      meterRegistry.counter(
+          MetricNames.EXCHANGE_RELAY,
+          MetricNames.TAG_OUTCOME,
+          outcome,
+          MetricNames.TAG_CLIENT_ID,
+          MetricNames.EXCHANGE_CLIENT_NONE);
     }
   }
 
@@ -159,43 +166,75 @@ public class ExchangeRelay {
       @Nullable JsonNode body,
       @NotNull ExchangeRequestContext context,
       @Nullable String acceptLanguage) {
+    Raw raw;
+    try {
+      raw = call(method, backendPath, body, context, acceptLanguage);
+    } catch (RestClientException
+        | CallNotPermittedException
+        | ServiceAccountTokenProvider.ServiceAccountTokenException e) {
+      log.warn(
+          "Exchange relay to {} could not reach the backend: {}",
+          backendPath,
+          e.getClass().getSimpleName());
+      count(OUTCOME_FAILED, context.clientId());
+      return Result.failed();
+    }
+    return interpret(raw, backendPath, context.clientId());
+  }
+
+  /**
+   * Sends one request to the backend through the circuit breaker.
+   *
+   * @param method the method
+   * @param backendPath the backend path
+   * @param body the JSON body, or {@code null} for none
+   * @param context what the gate established
+   * @param acceptLanguage the caller's {@code Accept-Language}, or {@code null}
+   * @return the backend's raw answer
+   * @throws RestClientException if the backend cannot be reached or its answer read
+   * @throws CallNotPermittedException if the circuit breaker is open
+   * @throws ServiceAccountTokenProvider.ServiceAccountTokenException if the gateway has no token
+   */
+  private @NotNull Raw call(
+      @NotNull HttpMethod method,
+      @NotNull String backendPath,
+      @Nullable JsonNode body,
+      @NotNull ExchangeRequestContext context,
+      @Nullable String acceptLanguage) {
     String token = tokenProvider.currentToken();
     String correlationId = MDC.get(loggingProperties.correlationIdMdcKey());
     String language = BackendImportClient.sanitizedAcceptLanguage(acceptLanguage);
-    Raw raw =
-        circuitBreaker.executeSupplier(
-            () -> {
-              RestClient.RequestBodySpec request =
-                  backendRestClient
-                      .method(method)
-                      .uri(backendPath)
-                      .headers(
-                          headers -> {
-                            headers.setBearerAuth(token);
-                            headers.set(BackendImportClient.ON_BEHALF_OF_HEADER, context.member());
-                            headers.set(CLIENT_HEADER, context.clientId());
-                            headers.set(
-                                CAPABILITIES_HEADER,
-                                String.join(",", new TreeSet<>(context.capabilities())));
-                            headers.set(INSTALLATION_HEADER, context.keyThumbprint());
-                            headers.setAccept(
-                                List.of(
-                                    MediaType.APPLICATION_JSON,
-                                    MediaType.APPLICATION_PROBLEM_JSON));
-                            if (language != null) {
-                              headers.set(HttpHeaders.ACCEPT_LANGUAGE, language);
-                            }
-                            if (correlationId != null && !correlationId.isBlank()) {
-                              headers.set(loggingProperties.correlationIdHeader(), correlationId);
-                            }
-                          });
-              if (body != null) {
-                request.contentType(MediaType.APPLICATION_JSON).body(body);
-              }
-              return request.exchange(
-                  (req, res) -> new Raw(res.getStatusCode().value(), read(res.getBody())));
-            });
-    return interpret(raw, backendPath);
+    return circuitBreaker.executeSupplier(
+        () -> {
+          RestClient.RequestBodySpec request =
+              backendRestClient
+                  .method(method)
+                  .uri(backendPath)
+                  .headers(
+                      headers -> {
+                        headers.setBearerAuth(token);
+                        headers.set(BackendImportClient.ON_BEHALF_OF_HEADER, context.member());
+                        headers.set(CLIENT_HEADER, context.clientId());
+                        headers.set(
+                            CAPABILITIES_HEADER,
+                            String.join(",", new TreeSet<>(context.capabilities())));
+                        headers.set(INSTALLATION_HEADER, context.keyThumbprint());
+                        headers.setAccept(
+                            List.of(
+                                MediaType.APPLICATION_JSON, MediaType.APPLICATION_PROBLEM_JSON));
+                        if (language != null) {
+                          headers.set(HttpHeaders.ACCEPT_LANGUAGE, language);
+                        }
+                        if (correlationId != null && !correlationId.isBlank()) {
+                          headers.set(loggingProperties.correlationIdHeader(), correlationId);
+                        }
+                      });
+          if (body != null) {
+            request.contentType(MediaType.APPLICATION_JSON).body(body);
+          }
+          return request.exchange(
+              (req, res) -> new Raw(res.getStatusCode().value(), read(res.getBody())));
+        });
   }
 
   /**
@@ -203,13 +242,14 @@ public class ExchangeRelay {
    *
    * @param raw the answer
    * @param backendPath the backend path, for the log
+   * @param client the admitted request's registry client id, the counter's {@code client_id}
    * @return the result
    */
   @NotNull
-  Result interpret(@NotNull Raw raw, @NotNull String backendPath) {
+  Result interpret(@NotNull Raw raw, @NotNull String backendPath, @NotNull String client) {
     JsonNode node = parse(raw.body());
     if (raw.status() >= 200 && raw.status() < 300 && node != null) {
-      count(OUTCOME_OK);
+      count(OUTCOME_OK, client);
       return Result.ok(node);
     }
     if (raw.status() >= 400 && raw.status() < 500 && node != null && node.isObject()) {
@@ -218,7 +258,7 @@ public class ExchangeRelay {
       String exchangeCode =
           backendCode == null ? null : TRANSLATED.getOrDefault(backendCode, backendCode);
       if (exchangeCode != null && PASSED_THROUGH.contains(exchangeCode)) {
-        count(OUTCOME_REFUSED);
+        count(OUTCOME_REFUSED, client);
         JsonNode detail = node.get("detail");
         return Result.refused(
             raw.status(),
@@ -231,7 +271,7 @@ public class ExchangeRelay {
         backendPath,
         raw.status(),
         node != null);
-    count(OUTCOME_FAILED);
+    count(OUTCOME_FAILED, client);
     return Result.failed();
   }
 
@@ -239,9 +279,17 @@ public class ExchangeRelay {
    * Counts one outcome.
    *
    * @param outcome the outcome
+   * @param client the admitted request's registry client id
    */
-  private void count(@NotNull String outcome) {
-    meterRegistry.counter(MetricNames.EXCHANGE_RELAY, MetricNames.TAG_OUTCOME, outcome).increment();
+  private void count(@NotNull String outcome, @NotNull String client) {
+    meterRegistry
+        .counter(
+            MetricNames.EXCHANGE_RELAY,
+            MetricNames.TAG_OUTCOME,
+            outcome,
+            MetricNames.TAG_CLIENT_ID,
+            client)
+        .increment();
   }
 
   /**

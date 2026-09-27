@@ -26,12 +26,13 @@ import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 import org.springframework.stereotype.Component;
 
 /**
- * Counts the gateway's exchange refusals by their problem code in snake case (REQ-XCH-025,
- * REQ-XCH-028).
+ * Counts the gateway's exchange refusals by their problem code in snake case and by registry client
+ * (REQ-XCH-025, REQ-XCH-028).
  */
 @Component
 @RequiredArgsConstructor
@@ -119,24 +120,72 @@ public class ExchangeRefusals {
 
   private final MeterRegistry meterRegistry;
 
+  /** Tells a registered client from any other token's {@code azp}. */
+  private final ExchangeRegistryReader registryReader;
+
   /** Registers every reason at zero, so a first refusal is an increase. */
   @PostConstruct
   void register() {
     CODES.forEach(
         code ->
             meterRegistry.counter(
-                MetricNames.EXCHANGE_REFUSED, MetricNames.TAG_REASON, reason(code)));
+                MetricNames.EXCHANGE_REFUSED,
+                MetricNames.TAG_REASON,
+                reason(code),
+                MetricNames.TAG_CLIENT_ID,
+                MetricNames.EXCHANGE_CLIENT_NONE));
   }
 
   /**
    * Counts one refusal.
    *
    * @param code the problem code
+   * @param client the {@code client_id} label, from {@link #clientLabel(String)} or an admitted
+   *     request's registry client id
    */
-  public void count(@NotNull String code) {
+  public void count(@NotNull String code, @NotNull String client) {
     meterRegistry
-        .counter(MetricNames.EXCHANGE_REFUSED, MetricNames.TAG_REASON, reason(code))
+        .counter(
+            MetricNames.EXCHANGE_REFUSED,
+            MetricNames.TAG_REASON,
+            reason(code),
+            MetricNames.TAG_CLIENT_ID,
+            client)
         .increment();
+  }
+
+  /**
+   * Returns the bounded {@code client_id} label of a token's {@code azp}: the client id when the
+   * registry lists it, never an arbitrary value.
+   *
+   * @param azp the token's authorized party, or {@code null} before authentication
+   * @return the client id, {@code none}, {@code unregistered}, or {@code unknown} while the
+   *     registry cannot be read
+   */
+  public @NotNull String clientLabel(@Nullable String azp) {
+    if (azp == null || azp.isBlank()) {
+      return MetricNames.EXCHANGE_CLIENT_NONE;
+    }
+    try {
+      return clientLabel(azp, registryReader.current());
+    } catch (ExchangeUnavailableException e) {
+      return MetricNames.EXCHANGE_CLIENT_UNKNOWN;
+    }
+  }
+
+  /**
+   * Returns the bounded {@code client_id} label of a token's {@code azp} against a registry.
+   *
+   * @param azp the token's authorized party, or {@code null}
+   * @param registry the registry
+   * @return the client id when listed, otherwise {@code none} or {@code unregistered}
+   */
+  public static @NotNull String clientLabel(
+      @Nullable String azp, @NotNull ExchangeRegistry registry) {
+    if (azp == null || azp.isBlank()) {
+      return MetricNames.EXCHANGE_CLIENT_NONE;
+    }
+    return registry.clients().containsKey(azp) ? azp : MetricNames.EXCHANGE_CLIENT_UNREGISTERED;
   }
 
   /**

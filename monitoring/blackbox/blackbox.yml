@@ -141,6 +141,21 @@ modules:
         fail_if_none_matches_regexp:
           - "\\s+\\d+\\s+IN\\s+AAAA\\s+[0-9a-fA-F:.]+$"
 
+  http_401:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [401]
+      method: GET
+      follow_redirects: false
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: false
+      tls_config:
+        insecure_skip_verify: false
+
   http_deny_404:
     prober: http
     timeout: 10s

@@ -280,8 +280,10 @@ class ExchangeDpopGateTest {
     return meterRegistry
         .get(MetricNames.EXCHANGE_REFUSED)
         .tag(MetricNames.TAG_REASON, reason)
-        .counter()
-        .count();
+        .counters()
+        .stream()
+        .mapToDouble(io.micrometer.core.instrument.Counter::count)
+        .sum();
   }
 
   /**

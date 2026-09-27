@@ -91,7 +91,12 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     Optional<ExchangeRoutes.Route> route =
         ExchangeRoutes.find(request.getMethod(), request.getRequestURI());
     if (route.isEmpty()) {
-      refuse(response, HttpStatus.NOT_FOUND, ExchangeRefusals.NOT_FOUND, "No such exchange route.");
+      refuse(
+          refusals.clientLabel(jwt.getClaimAsString("azp")),
+          response,
+          HttpStatus.NOT_FOUND,
+          ExchangeRefusals.NOT_FOUND,
+          "No such exchange route.");
       return;
     }
     ExchangeRequestContext context;
@@ -100,6 +105,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     } catch (ExchangeUnavailableException e) {
       response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
       refuse(
+          refusals.clientLabel(jwt.getClaimAsString("azp")),
           response,
           HttpStatus.SERVICE_UNAVAILABLE,
           ExchangeRefusals.REGISTRY_UNAVAILABLE,
@@ -131,19 +137,22 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
       @NotNull HttpServletResponse response)
       throws IOException {
     ExchangeRegistry registry = registryReader.current();
+    String clientId = jwt.getClaimAsString("azp");
+    String label = ExchangeRefusals.clientLabel(clientId, registry);
     if (!registry.enabled()) {
       response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
       refuse(
+          label,
           response,
           HttpStatus.SERVICE_UNAVAILABLE,
           ExchangeRefusals.EXCHANGE_DISABLED,
           "The exchange is switched off.");
       return null;
     }
-    String clientId = jwt.getClaimAsString("azp");
     ExchangeRegistry.Client client = clientId == null ? null : registry.clients().get(clientId);
     if (client == null) {
       refuse(
+          label,
           response,
           HttpStatus.FORBIDDEN,
           ExchangeRefusals.CLIENT_NOT_ALLOWED,
@@ -152,6 +161,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     }
     if (!client.active()) {
       refuse(
+          label,
           response,
           HttpStatus.FORBIDDEN,
           ExchangeRefusals.CLIENT_SUSPENDED,
@@ -162,6 +172,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     String member = jwt.getSubject();
     if (thumbprint == null || member == null) {
       refuse(
+          label,
           response,
           HttpStatus.UNAUTHORIZED,
           ExchangeRefusals.UNAUTHENTICATED,
@@ -170,6 +181,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     }
     if (revocationReader.isDenied(thumbprint)) {
       refuse(
+          label,
           response,
           HttpStatus.UNAUTHORIZED,
           ExchangeRefusals.INSTALLATION_REVOKED,
@@ -180,6 +192,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     Instant issuedAt = jwt.getIssuedAt();
     if (revokedAt != null && (issuedAt == null || issuedAt.getEpochSecond() <= revokedAt)) {
       refuse(
+          label,
           response,
           HttpStatus.UNAUTHORIZED,
           ExchangeRefusals.CLIENT_REVOKED,
@@ -190,6 +203,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     granted.retainAll(client.capabilities());
     if (!route.admits(granted)) {
       refuse(
+          label,
           response,
           HttpStatus.FORBIDDEN,
           ExchangeRefusals.SCOPE_MISSING,
@@ -199,6 +213,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
     if (!ClientVersions.meets(
         request.getHeader(HttpHeaders.USER_AGENT), client.minClientVersion())) {
       refuse(
+          label,
           response,
           HttpStatus.FORBIDDEN,
           ExchangeRefusals.CLIENT_VERSION_UNSUPPORTED,
@@ -222,6 +237,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
   /**
    * Writes and counts one refusal.
    *
+   * @param client the {@code client_id} label of the refused request
    * @param response the response
    * @param status the status
    * @param code the problem code
@@ -229,12 +245,13 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
    * @throws IOException if writing fails
    */
   private void refuse(
+      @NotNull String client,
       @NotNull HttpServletResponse response,
       @NotNull HttpStatus status,
       @NotNull String code,
       @NotNull String detail)
       throws IOException {
-    refusals.count(code);
+    refusals.count(code, client);
     meterRegistry.counter(MetricNames.HTTP_ERROR, MetricNames.TAG_CODE, code).increment();
     ProblemResponseWriter.write(
         response, objectMapper, loggingProperties, status, "Refused", code, detail);

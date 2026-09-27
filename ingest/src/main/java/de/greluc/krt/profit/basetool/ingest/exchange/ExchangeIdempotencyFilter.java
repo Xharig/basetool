@@ -126,6 +126,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
     String key = request.getHeader(IDEMPOTENCY_KEY);
     if (key == null || !KEY.matcher(key).matches()) {
       refuse(
+          context.clientId(),
           response,
           HttpStatus.BAD_REQUEST,
           ExchangeRefusals.IDEMPOTENCY_KEY_MISSING,
@@ -139,12 +140,13 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
     try {
       Optional<ExchangeIdempotency.Stored> stored = idempotency.find(namespace);
       if (stored.isPresent()) {
-        replayOrRefuse(response, stored.get(), fingerprint);
+        replayOrRefuse(context.clientId(), response, stored.get(), fingerprint);
         return;
       }
       if (!budget.fits(context.clientId(), context.member(), properties.maxResultBytes())) {
         response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
         refuse(
+            context.clientId(),
             response,
             HttpStatus.SERVICE_UNAVAILABLE,
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
@@ -153,6 +155,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
       }
       if (!idempotency.lock(namespace)) {
         refuse(
+            context.clientId(),
             response,
             HttpStatus.CONFLICT,
             ExchangeRefusals.IDEMPOTENCY_IN_PROGRESS,
@@ -173,6 +176,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
     } catch (ExchangeUnavailableException e) {
       response.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
       refuse(
+          context.clientId(),
           response,
           HttpStatus.SERVICE_UNAVAILABLE,
           ExchangeRefusals.SERVICE_UNAVAILABLE,
@@ -245,18 +249,21 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
   /**
    * Replays a cached answer for the same request, or refuses a different one.
    *
+   * @param client the admitted request's registry client id
    * @param response the response
    * @param stored the cached answer
    * @param fingerprint the current request's fingerprint
    * @throws IOException if writing fails
    */
   private void replayOrRefuse(
+      @NotNull String client,
       @NotNull HttpServletResponse response,
       @NotNull ExchangeIdempotency.Stored stored,
       @NotNull String fingerprint)
       throws IOException {
     if (!stored.fingerprint().equals(fingerprint)) {
       refuse(
+          client,
           response,
           HttpStatus.UNPROCESSABLE_CONTENT,
           ExchangeRefusals.IDEMPOTENCY_KEY_REUSED,
@@ -306,6 +313,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
   /**
    * Writes and counts one refusal.
    *
+   * @param client the {@code client_id} label of the refused request
    * @param response the response
    * @param status the status
    * @param code the problem code
@@ -313,12 +321,13 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
    * @throws IOException if writing fails
    */
   private void refuse(
+      @NotNull String client,
       @NotNull HttpServletResponse response,
       @NotNull HttpStatus status,
       @NotNull String code,
       @NotNull String detail)
       throws IOException {
-    refusals.count(code);
+    refusals.count(code, client);
     meterRegistry.counter(MetricNames.HTTP_ERROR, MetricNames.TAG_CODE, code).increment();
     ProblemResponseWriter.write(
         response, objectMapper, loggingProperties, status, "Refused", code, detail);

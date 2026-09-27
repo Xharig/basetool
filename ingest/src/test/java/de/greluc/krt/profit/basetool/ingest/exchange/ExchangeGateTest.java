@@ -143,40 +143,57 @@ class ExchangeGateTest {
   void anUnreadableRegistryFailsClosed() throws Exception {
     when(registryReader.current()).thenThrow(new ExchangeUnavailableException("down", null));
     double before = refused("registry_unavailable");
+    double unknown = refusedBy("registry_unavailable", MetricNames.EXCHANGE_CLIENT_UNKNOWN);
 
     call(HttpMethod.GET, STOCK)
         .andExpect(status().isServiceUnavailable())
         .andExpect(jsonPath("$.code").value("REGISTRY_UNAVAILABLE"));
 
     assertThat(refused("registry_unavailable") - before).isEqualTo(1.0d);
+    assertThat(refusedBy("registry_unavailable", MetricNames.EXCHANGE_CLIENT_UNKNOWN) - unknown)
+        .isEqualTo(1.0d);
   }
 
   @Test
-  void unreadableRevocationsFailClosed() throws Exception {
+  void unreadableRevocationsFailClosedAndStillNameTheClient() throws Exception {
     when(revocationReader.isDenied(anyString()))
         .thenThrow(new ExchangeUnavailableException("down", null));
+    double before = refusedBy("registry_unavailable", CLIENT);
 
     call(HttpMethod.GET, STOCK)
         .andExpect(status().isServiceUnavailable())
         .andExpect(jsonPath("$.code").value("REGISTRY_UNAVAILABLE"));
+
+    assertThat(refusedBy("registry_unavailable", CLIENT) - before).isEqualTo(1.0d);
   }
 
   @Test
   void aClientOutsideTheRegistryIsNotAllowed() throws Exception {
     when(registryReader.current()).thenReturn(new ExchangeRegistry(1L, true, Map.of()));
+    double unregistered = refusedBy("client_not_allowed", MetricNames.EXCHANGE_CLIENT_UNREGISTERED);
 
     call(HttpMethod.GET, STOCK)
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("CLIENT_NOT_ALLOWED"));
+
+    assertThat(
+            refusedBy("client_not_allowed", MetricNames.EXCHANGE_CLIENT_UNREGISTERED)
+                - unregistered)
+        .as("an azp the registry does not list never becomes a label value of its own")
+        .isEqualTo(1.0d);
+    assertThat(refusedBy("client_not_allowed", CLIENT)).isZero();
   }
 
   @Test
-  void aSuspendedClientIsRefused() throws Exception {
+  void aSuspendedClientIsRefusedAndCountedUnderItsOwnId() throws Exception {
     registry(true, false, Set.of("exchange.connect", "exchange.stock.read"), null);
+    double before = refusedBy("client_suspended", CLIENT);
 
     call(HttpMethod.GET, STOCK)
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("CLIENT_SUSPENDED"));
+
+    assertThat(refusedBy("client_suspended", CLIENT) - before).isEqualTo(1.0d);
   }
 
   @Test
@@ -320,7 +337,26 @@ class ExchangeGateTest {
     return meterRegistry
         .get(MetricNames.EXCHANGE_REFUSED)
         .tag(MetricNames.TAG_REASON, reason)
-        .counter()
-        .count();
+        .counters()
+        .stream()
+        .mapToDouble(io.micrometer.core.instrument.Counter::count)
+        .sum();
+  }
+
+  /**
+   * Reads the refusal counter of one reason and one client label.
+   *
+   * @param reason the reason in snake case
+   * @param client the {@code client_id} label
+   * @return the count, zero when the series does not exist
+   */
+  private double refusedBy(@NotNull String reason, @NotNull String client) {
+    io.micrometer.core.instrument.Counter counter =
+        meterRegistry
+            .find(MetricNames.EXCHANGE_REFUSED)
+            .tag(MetricNames.TAG_REASON, reason)
+            .tag(MetricNames.TAG_CLIENT_ID, client)
+            .counter();
+    return counter == null ? 0.0d : counter.count();
   }
 }
