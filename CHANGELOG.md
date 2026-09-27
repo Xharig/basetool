@@ -113,7 +113,9 @@
   Widerrufe erreichen das Gateway sofort (Migration `V249`, REQ-XCH-008, REQ-XCH-032).
   
 - **Audit: Änderungen über eine zugelassene Anwendung nennen diese Anwendung.** Der Client-Filter im
-  Audit-Log bietet die registrierten Anwendungen unter ihrem Produktnamen an (REQ-XCH-010).
+  Audit-Log bietet die registrierten Anwendungen unter ihrem Produktnamen an (REQ-XCH-010). Auch die
+  Metrik `basetool_api_client_requests_total` zählt Gateway-Aufrufe jetzt unter der Client-ID der
+  Anwendung statt unter `none`; ältere Audit-Zeilen bleiben „Ohne Client (System)“.
   
 - **Datenaustausch: Verzeichnis zugelassener Anwendungen.** Admins verwalten zugelassene
   Fremd-Anwendungen samt Fähigkeiten und den globalen Schalter (`/api/v1/admin/exchange-clients`,

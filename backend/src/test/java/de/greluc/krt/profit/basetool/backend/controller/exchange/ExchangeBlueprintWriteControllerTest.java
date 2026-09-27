@@ -43,6 +43,7 @@ import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.BlueprintNameNormalizer;
 import de.greluc.krt.profit.basetool.backend.service.DefaultBlueprintKeyService;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
+import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
@@ -96,6 +97,7 @@ class ExchangeBlueprintWriteControllerTest {
   @Autowired private DefaultBlueprintKeyService defaultKeys;
   @Autowired private PlatformTransactionManager transactionManager;
   @Autowired private JdbcTemplate jdbc;
+  @Autowired private KnownExchangeClients knownClients;
   @Autowired private MeterRegistry meterRegistry;
 
   private MockMvc mockMvc;
@@ -126,6 +128,7 @@ class ExchangeBlueprintWriteControllerTest {
     registered.setCapabilities(
         EnumSet.of(ExchangeCapability.CONNECT, ExchangeCapability.BLUEPRINTS_WRITE));
     clientRepository.saveAndFlush(registered);
+    knownClients.invalidate();
     ExchangeSettings settings =
         settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
     wasEnabled = settings.isEnabled();
@@ -168,6 +171,13 @@ class ExchangeBlueprintWriteControllerTest {
         .andExpect(jsonPath("$.results.length()").value(0));
 
     assertThat(owned()).containsExactly(rifle);
+    assertThat(
+            jdbc.queryForList(
+                "SELECT event_type || ':' || client_id FROM audit_event WHERE actor_user_id = ?"
+                    + " AND event_type IN ('BLUEPRINT_ADDED', 'BLUEPRINT_REMOVED')",
+                String.class,
+                member))
+        .containsExactlyInAnyOrder("BLUEPRINT_ADDED:" + client, "BLUEPRINT_REMOVED:" + client);
     assertThat(frames("blueprints_own")).isEqualTo(framesBefore + 1);
     assertThat(clientCount(MetricNames.EXCHANGE_WRITES, "outcome", "applied")).isEqualTo(2);
     assertThat(clientCount(MetricNames.EXCHANGE_REMOVALS, "resource", "blueprint")).isEqualTo(1);
