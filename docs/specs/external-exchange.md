@@ -447,8 +447,16 @@ purged position as the horizon, below which a cursor has expired.
 - [x] A writer that commits after a later one stays ahead of the readers' watermark.
   *`ExchangeChangeWatermarkIntegrationTest`.*
 
+A snapshot pages by row id and ends with the feed cursor it was taken at, so nothing written during
+it is lost. A feed page answers each key changed after the cursor once, with its current state or a
+tombstone whose `installationId` is the removing installation's id. A feed page that reaches the end
+moves the cursor up to the watermark, so an idle client's cursor never falls behind the horizon.
+Cursors are `s1.<tx>.<seq>.<id>` and `f1.<tx>.<seq>` and stay opaque to clients; one the server did not
+issue also answers `CURSOR_EXPIRED`.
+
 **Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
-(#2083); the feed routes follow with WP 4.1–4.4
+(#2083); the backend's blueprint feed (`/api/v1/exchange/me/blueprints`) is built, the gateway route
+and the stock and ship feeds follow with WP 4.1–4.4
 
 ### REQ-XCH-014 — A client never re-adds what the member removed elsewhere
 
@@ -469,12 +477,19 @@ Ops are `add` and `remove` of products. Default-granted blueprints cannot be rem
 (`DEFAULT_NOT_REMOVABLE`). A blueprint's `note` is read-only in v1. Writes are audited in the
 Blueprints domain with the external client.
 
+A blueprint's `key` and its `ref.bt` are the same value: the normalised product key, or `h:` and
+its SHA-256 in hex when that is longer than 128 characters. The display name is cut to 200. The
+resolver (REQ-XCH-012) answers a blueprint with the same `bt` and accepts it back.
+
 **Acceptance**
 
 - [ ] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
   in the feed of another installation.
+- [x] The feed marks default-granted blueprints and follows a change of the default set.
+  *`ExchangeBlueprintControllerTest`.*
 
-**Status:** planned — WP 4.1 (#2084)
+**Status:** read side built in the backend — WP 4.1 (#2084); the gateway route and the writes
+follow
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 

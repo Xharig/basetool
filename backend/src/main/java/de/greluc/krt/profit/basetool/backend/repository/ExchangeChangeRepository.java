@@ -76,6 +76,39 @@ public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, 
    */
   List<ExchangeChange> findAllByUserIdOrderBySeqAsc(UUID userId);
 
+  /**
+   * Returns the keys of one resource that changed after a feed position and below the watermark,
+   * each once with its latest entry, in the order of those entries.
+   *
+   * @param userId the member
+   * @param resource the resource name
+   * @param tx the position's transaction id
+   * @param seq the position's sequence number
+   * @param watermark the oldest transaction id still running
+   * @param limit the most keys to return
+   * @return the changed keys
+   */
+  @Query(
+      value =
+          """
+          SELECT latest.entity_key AS entityKey, latest.tx AS tx, latest.seq AS seq
+          FROM (SELECT DISTINCT ON (c.entity_key) c.entity_key, c.tx, c.seq
+                FROM exchange_change c
+                WHERE c.user_id = :userId AND c.resource = :resource
+                  AND (c.tx, c.seq) > (:tx, :seq) AND c.tx < :watermark
+                ORDER BY c.entity_key, c.tx DESC, c.seq DESC) latest
+          ORDER BY latest.tx, latest.seq
+          LIMIT :limit
+          """,
+      nativeQuery = true)
+  List<ChangedKey> findChangedKeys(
+      @Param("userId") UUID userId,
+      @Param("resource") String resource,
+      @Param("tx") long tx,
+      @Param("seq") long seq,
+      @Param("watermark") long watermark,
+      @Param("limit") int limit);
+
   /** A feed position as a native query returns it. */
   interface Position {
 
@@ -92,5 +125,16 @@ public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, 
      * @return the number
      */
     long getSeq();
+  }
+
+  /** A changed key with the position of its latest entry. */
+  interface ChangedKey extends Position {
+
+    /**
+     * The entity's key within the resource.
+     *
+     * @return the key
+     */
+    String getEntityKey();
   }
 }
