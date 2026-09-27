@@ -206,6 +206,33 @@ class ExchangeUndoControllerTest {
   }
 
   @Test
+  void aLotWhosePlaceIsGoneIsSkippedAndReported() throws Exception {
+    UUID laranite = material("Laranite");
+    UUID place = location();
+    String name = locationName(place);
+    write("stock", "{\"ops\":[" + lot(laranite, name, "5") + "]}")
+        .andExpect(jsonPath("$.applied").value(1));
+    write(
+            "stock",
+            """
+            {"ops":[{"op":"set-quantity","material":{"bt":"%s"},"location":{"name":"%s"},
+                     "quality":500,"stolen":false,"quantity":{"amount":0,"unit":"SCU"},
+                     "expectedQuantity":{"amount":5,"unit":"SCU"}}]}
+            """
+                .formatted(laranite, name))
+        .andExpect(jsonPath("$.applied").value(1));
+    jdbc.update("DELETE FROM location WHERE id = ?", place);
+    locations.remove(place);
+
+    undo(Instant.now().minus(1, ChronoUnit.HOURS))
+        .andExpect(jsonPath("$.restored").value(0))
+        .andExpect(jsonPath("$.skipped[0].resource").value("STOCK"))
+        .andExpect(jsonPath("$.skipped[0].reason").value("GONE"));
+
+    assertThat(total(laranite)).isZero();
+  }
+
+  @Test
   void shipsAreRemovedRenamedBackAndRecreated() throws Exception {
     UUID cutlass = shipType("Cutlass Black");
     UUID renamed = ship("Old name", cutlass);
