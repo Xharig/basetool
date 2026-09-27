@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,6 +51,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -70,6 +72,7 @@ class InventoryCheckoutServiceAuditTest {
   @Mock private MissionParticipantRepository missionParticipantRepository;
   @Mock private InventoryItemMapper inventoryItemMapper;
   @Mock private OwnerScopeService ownerScopeService;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private AuditService auditService;
 
   @InjectMocks private InventoryCheckoutService service;
@@ -134,13 +137,16 @@ class InventoryCheckoutServiceAuditTest {
 
   @Test
   void deleteAllGlobalInventory_recordsWipedAuditWithScopeAndCount() {
-    when(ownerScopeService.currentScopePredicate())
-        .thenReturn(new ScopePredicate(true, null, Set.of()));
+    ScopePredicate scope = new ScopePredicate(true, null, Set.of());
+    when(ownerScopeService.currentScopePredicate()).thenReturn(scope);
     when(inventoryItemRepository.deleteAllNonPersonal(true, null, Set.of())).thenReturn(42);
 
     int removed = service.deleteAllGlobalInventory();
 
     assertEquals(42, removed);
+    InOrder order = inOrder(offerRatchet, inventoryItemRepository);
+    order.verify(offerRatchet).beforeWipe(scope);
+    order.verify(inventoryItemRepository).deleteAllNonPersonal(true, null, Set.of());
     ArgumentCaptor<CharSequence> details = ArgumentCaptor.forClass(CharSequence.class);
     verify(auditService)
         .record(

@@ -67,6 +67,7 @@ class UserDeletionServiceTest {
   @Mock private MissionParticipantRepository missionParticipantRepository;
   @Mock private MaterialClaimRepository materialClaimRepository;
   @Mock private UserApprovalEventRepository userApprovalEventRepository;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private AuditService auditService;
   @Mock private KeycloakService keycloakService;
   @Mock private PersonalInventoryItemRepository personalInventoryItemRepository;
@@ -128,7 +129,9 @@ class UserDeletionServiceTest {
 
     userDeletionService.deleteUser(userId);
 
-    verify(inventoryItemRepository).deleteByUserId(userId);
+    InOrder purge = inOrder(offerRatchet, inventoryItemRepository);
+    purge.verify(offerRatchet).beforeUserPurge(userId);
+    purge.verify(inventoryItemRepository).deleteByUserId(userId);
     verify(shipRepository).deleteByOwnerId(userId);
     verify(personalInventoryItemRepository).deleteByOwnerUserId(userId);
     verify(personalBlueprintRepository).deleteAllByOwnerUserId(userId);

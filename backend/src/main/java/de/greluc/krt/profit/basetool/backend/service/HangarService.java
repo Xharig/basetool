@@ -305,11 +305,12 @@ public class HangarService {
    *
    * @param userId calling user's id
    * @param shipId ship primary key
+   * @return how many mission units the ship was detached from
    * @throws NotFoundException when the ship does not exist
    * @throws AccessDeniedException when the calling user is not the owner
    */
   @Transactional
-  public void deleteShip(@NotNull UUID userId, @NotNull UUID shipId) {
+  public int deleteShip(@NotNull UUID userId, @NotNull UUID shipId) {
     Ship ship = Entities.require(shipRepository.findById(shipId), "Ship not found");
 
     if (ship.getOwner() == null
@@ -328,6 +329,7 @@ public class HangarService {
         ship.getShipType().getName(),
         userId,
         AuditDetails.of("detachedUnits", detached));
+    return detached;
   }
 
   /**

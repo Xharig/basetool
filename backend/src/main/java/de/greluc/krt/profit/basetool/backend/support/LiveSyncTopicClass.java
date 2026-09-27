@@ -116,6 +116,12 @@ public enum LiveSyncTopicClass {
    */
   INVENTORY_ALL("inventory", false, Set.of("stock"), "inventory_all", LiveSyncAuthorization.MEMBER),
 
+  /** A member's own hangar, keyed by the member's id; only that member may subscribe. */
+  HANGAR_OWN("hangar", true, Set.of("ships"), "hangar_own", LiveSyncAuthorization.SELF),
+
+  /** A member's own blueprints, keyed by the member's id; only that member may subscribe. */
+  BLUEPRINTS_OWN("blueprints", true, Set.of("list"), "blueprints_own", LiveSyncAuthorization.SELF),
+
   /**
    * Global Materialbörse room: {@code board} for the Angebote, {@code requests} for the Gesuche.
    */

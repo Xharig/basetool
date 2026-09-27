@@ -1,0 +1,41 @@
+# Becoming an approved client
+
+The Exchange API is open only to approved third-party applications (REQ-XCH-002, ADR-0217). Approval
+is public, case by case, and for the capabilities a client actually needs.
+
+## How to apply
+
+1. Open an issue with the **Exchange client application** template. It asks for the product, the
+   publisher, a security contact, the privacy statement, the platforms, the capabilities you need,
+   and your confirmation of each of the [client security requirements](client-security.md).
+2. The owner reviews the application and your client against the requirements — the source where it
+   is public, the behaviour of a build where it is not. Closed-source clients can be approved.
+3. A pull request adds your client to
+   [`docs/legal/approved-clients.md`](../legal/approved-clients.md) and to the list the Keycloak
+   provisioner reads. **Its merge is the approval.** An administrator then registers the client with
+   the approved capabilities under „Verbundene Anwendungen".
+
+## Criteria
+
+- Token storage, DPoP and issuer pinning as the [client security requirements](client-security.md)
+  state.
+- A published privacy statement and a security contact.
+- Only the capabilities the client's features need; each further capability is a new pull request to
+  the approved-clients list before an administrator grants it.
+- Code signing of releases is recommended, not required.
+
+## After approval
+
+- A reported token-handling flaw must be fixed in a published release within **7 days**, or the
+  client is suspended, or restricted to a minimum version that has the fix.
+- Administrators can suspend a client, revoke it for every member, or require a minimum version at
+  any time; members can disconnect it themselves.
+- Contract changes are announced; a future `v2` runs alongside `v1` for at least 12 months, and a
+  minimum-version bump is announced in advance except in a security emergency.
+
+## Terms of the integration
+
+Access is limited to the approved capabilities; Basetool data stays on the member's own device, with
+no telemetry and no transfer to third parties; tokens are handled as the security requirements
+state; incidents are reported to the Basetool's security contact; the Basetool may suspend the
+client at any time.

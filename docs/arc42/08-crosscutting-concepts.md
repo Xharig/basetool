@@ -75,6 +75,13 @@ An external catalogue sync never holds a transaction across an HTTP call: it fet
 and writes through `SyncChunkWriter` — short chunk transactions, a failed chunk replayed row by row —
 so one refused row costs only itself (`REQ-DATA-005`).
 
+Every writing transaction names its writer. The backend's transaction manager
+(`ChangeSourceTransactionManager`) sets the transaction variable `basetool.change_source` at the
+start of each transaction that is not read-only — `web`, `app`, `client|<id>|<installation key>` for
+a relayed exchange client, otherwise `system` — and the exchange change feed's triggers read it, so
+a change reaches the feed with its writer whatever path made it, a bulk path included (ADR-0224,
+`REQ-XCH-013`).
+
 ## 8.4 Concurrency — the landmine field
 
 Optimistic locking with `@Version`, surfaced as HTTP 409, with the **finest granularity the data
