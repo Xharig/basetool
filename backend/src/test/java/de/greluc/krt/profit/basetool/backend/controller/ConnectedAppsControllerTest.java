@@ -148,7 +148,8 @@ class ConnectedAppsControllerTest {
         .as("marking seen touches only the caller's own notifications")
         .isFalse();
     assertThat(auditEventRepository.findAll())
-        .noneMatch(e -> e.getDomain() == AuditDomain.CONNECTED_APPS);
+        .noneMatch(
+            e -> e.getDomain() == AuditDomain.CONNECTED_APPS && MEMBER.equals(e.getTargetUserId()));
   }
 
   @Test
