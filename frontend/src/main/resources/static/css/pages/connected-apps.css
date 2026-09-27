@@ -1,0 +1,18 @@
+@layer base, components, page, migration, utilities;
+
+@layer page {
+    .ca-app-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .ca-app-head h2 {
+        margin: 0;
+    }
+    .ca-capabilities {
+        margin: 0 0 1rem;
+        padding-left: 1rem;
+    }
+}

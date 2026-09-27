@@ -685,6 +685,11 @@ installation or a whole client, undo, and confirm a staged mass change. Every ne
 installation raises a notification and stays highlighted until seen. `ADMIN` manages the registry
 on an admin page with a suspend switch. The page is web-only; the app links to it.
 
+The page is `/connected-apps` (sidebar *Persönlich*, every member), over `/api/v1/connected-apps`.
+An installation is always named as `‹client name› – „‹label›"`, the client-supplied label escaped
+and never first, so a label cannot pose as the Basetool. Both disconnects ask first and re-swap the
+`connected-apps :: apps` fragment; the page is the member's own and joins no peer sync.
+
 The notification is the rule-engine event `EXCHANGE_INSTALLATION_CONNECTED` (seed `V251`,
 `EVENT_RECIPIENT`), published when the installation upsert reports that it created the row, so two
 concurrent first calls announce one installation once. It names the client by its registry display
@@ -693,11 +698,18 @@ installation counts as unseen while its notification is unread, `GET /api/v1/con
 per installation (`unseen`), and `POST /api/v1/connected-apps/seen` marks them read — a notification
 change only, not audited.
 
+- [x] List the clients with their capabilities and installations (label, first and last seen), and
+  disconnect one installation or a whole client. *`ConnectedAppsPageControllerMvcTest`.*
+- [x] The admin registry page. *See REQ-XCH-003.*
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
+- [ ] The page highlights an unseen installation until it is seen.
+- [ ] Recent activity, undo and the staged mass-change confirmation (WP 3.3's journal and guard).
+- [ ] The end-to-end run on the sandbox (WP 2.3, #2099).
 
-**Status:** planned — WP 4.5 (#2087); the new-connection notification and the unseen state are built
+**Status:** list, disconnects, the admin page, the new-connection notification and the unseen state
+built — WP 4.5 (#2087); the page's highlight and the rest follow
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 
