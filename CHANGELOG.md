@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: Limits und idempotente Schreibzugriffe.** Das Gateway begrenzt jede Anwendung
+  pro Mitglied (120/min, 500 Schreibzugriffe pro UTC-Tag) und insgesamt (1200/min) und verlangt bei
+  Schreibzugriffen einen `Idempotency-Key`; eine Wiederholung liefert die gespeicherte Antwort,
+  statt doppelt zu schreiben (REQ-XCH-020, REQ-XCH-023).
 - **Datenaustausch: Vertrag öffentlich abrufbar.** Das Ingest-Gateway liefert das OpenAPI-Dokument
   und die JSON-Schemas der Exchange-API anonym unter `/exchange/v1/openapi.json` und
   `/exchange/v1/schemas/<name>.schema.json` aus (REQ-XCH-011). Die alten Extractor-Endpunkte lassen
