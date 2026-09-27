@@ -27,7 +27,7 @@ The backend and frontend emit one access-log line per request and enrich every l
 fields `correlationId`, `userId`, and `orgUnitId` (the last per
 [`org-unit-tenancy.md`](org-unit-tenancy.md) REQ-ORG-007). Logback patterns must include
 `%X{orgUnitId}` to keep audit trails intact. The ingest gateway emits the same
-one-line-per-request access log (`RequestLoggingFilter`, scoped to `/v1`) and carries
+one-line-per-request access log (`RequestLoggingFilter`, scoped to `/v1` and `/exchange`) and carries
 `correlationId` **and `userId`**, but no `orgUnitId` — it relays drafts and owns no
 squadron-scoped data, so that field would be permanently empty.
 
@@ -40,6 +40,18 @@ then overwrites the seed with the caller's JWT `sub` and deliberately does **not
 subject survives into the access-log line emitted after the security chain has unwound. Pre-auth
 rejections (413 / 429 / bot 404) therefore log `anonymous`, which is accurate — at that point no
 caller has been authenticated.
+
+**Exchange requests carry their client and route (REQ-XCH-028).** Once the exchange gate
+(`ExchangeGateFilter`) has a token and a matched route, it sets two more MDC fields through
+`ExchangeLogContext`: `exchangeClientId` — the registry-bounded label the exchange counters use (the
+registry client id, `unregistered`, `unknown` while the registry cannot be read), never the raw
+`azp` — and `exchangeRoute`, the route template (`GET /exchange/v1/me/stock`); an unknown route sets
+no route. Like `userId`, they are not cleared by the filter that sets them but by
+`CorrelationIdFilter` at request end, so the access-log line carries them too. The JSON appender
+emits both, and Alloy attaches them to the ingest stream as Loki structured metadata `client_id` and
+`route` — not as index labels, matching how `userId` and `correlationId` stay in the line body.
+Tokens, key thumbprints, member subjects beyond `userId`, installation keys and payloads never
+enter the MDC.
 
 A relayed backend failure is logged **exactly once, at the level its status warrants.** The
 frontend's `BackendApiClient` boundary logs every backend error once — a 5xx server fault at
@@ -1617,6 +1629,30 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   (warning, 10 m) fires when one registered client is refused more than 30 times in 15 minutes for
   anything but its own limits (`rate_limited`, `quota_exceeded`, `idempotency_in_progress`)
   (REQ-XCH-028).
+- `basetool_exchange_clients{status}` gauge (backend) — the registry clients per status (`ACTIVE`,
+  `SUSPENDED`), registered at zero for both. It is refreshed from the registry snapshot the mirror
+  sync already reads — at startup, by the 60-second reconcile and after every committed registry
+  change — so a scrape never queries the database; while the mirror is disabled it moves only on
+  registry changes. Shown on the Exchange dashboard (REQ-XCH-028).
+- `basetool_exchange_registry_mirror_age_seconds` gauge (ingest) — the seconds since the gateway
+  last read the registry mirror successfully, `NaN` before the first read. The gateway reads the
+  mirror every 30 seconds on its own (`ExchangeRegistryMirrorAge`,
+  `app.exchange.registry-refresh-interval`), so the gauge does not depend on exchange traffic. It
+  is deliberately not the age of the document's `writtenAt`: the backend rewrites the mirror only
+  when the registry changes, so that timestamp dates the last change, not the mirror's health.
+  `ExchangeRegistryMirrorStaleAtGateway` (warning, 10 m) fires above 300 s — or on `NaN` more than
+  5 minutes after the gateway started — only while the backend's
+  `basetool_scheduled_job_enabled{task="exchange_registry_reconcile"}` is 1, i.e. while the mirror is
+  enabled (`exchange_mirror_age_alerts_test.yml`, REQ-XCH-003, REQ-XCH-028).
+- **The Exchange dashboard** (`15-exchange.json`, uid `basetool-exchange`) shows every exchange
+  metric per client through a `client_id` variable — traffic and relay outcomes, refusals by reason,
+  writes, removals, mass changes staged and confirmed, undo, installations, account checks, the Redis
+  budget, the registry clients and the mirror age — plus a Loki panel of the gateway's log lines
+  filtered by the `client_id` structured metadata. The operations dashboard keeps its cross-client
+  exchange panels.
+- `basetool_ingest_gate_enforcing` is **not** extended to the exchange gates (owner decision
+  2026-09-27): it reports gates that can run audit-only, and the exchange gates cannot be switched
+  off, so a posture gauge would be constantly 1 and say nothing.
 - `basetool_ingest_exchange_refused_total{reason,client_id}` counter — every exchange request the gateway
   refused, by its problem code in snake case — `dpop_required`, `dpop_invalid`, `unauthenticated`,
   `not_found`, `registry_unavailable`, `exchange_disabled`, `client_not_allowed`,

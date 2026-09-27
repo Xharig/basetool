@@ -251,6 +251,14 @@ session on its client: `client.offline.session.idle.timeout` 30 days and
 `client.offline.session.max.lifespan` 90 days (owner decision 2026-09-27). Until then those limits
 came only from the realm (90 days max) and Keycloak's own 30-day idle default.
 
+Since security finding H1 (owner decision 2026-09-27) the provisioner also gives the extractor's
+client the template's protections: **consent required**, `dpop.bound.access.tokens` on, only
+`basic` as a default scope, only its five exchange scopes and `offline_access` as optional scopes,
+and every other scope withheld — **both ingest scopes included**, so no extractor token carries
+`aud=basetool-backend` any more. Apply it on production only **after** the legacy switch-off
+(`IRI_INGEST_LEGACY_ENDPOINTS_ENABLED=false`): released extractors up to 2.9.1 still need
+`extractor-ingest-only` for `/v1/*` until then.
+
 **Revoking** a client is the registry's suspend switch (#2087); disabling the Keycloak client also
 stops new tokens being issued. Removing it from the list does **not** delete it — the provisioner
 never deletes and reports it as *only on this realm* from then on.

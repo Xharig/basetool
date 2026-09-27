@@ -236,6 +236,24 @@ class ExchangeRegistryMirrorIntegrationTest {
   }
 
   @Test
+  void theClientGaugesFollowCommittedChangesAndTheReconcile() {
+    ExchangeClient first = register("versekit");
+    register("other-kit");
+
+    assertThat(clients("ACTIVE")).isEqualTo(2.0d);
+    assertThat(clients("SUSPENDED")).isZero();
+
+    registryService.suspendClient(first.getId(), first.getVersion());
+    assertThat(clients("ACTIVE")).isEqualTo(1.0d);
+    assertThat(clients("SUSPENDED")).isEqualTo(1.0d);
+
+    clientRepository.deleteAll();
+    reconcileTask.reconcile();
+    assertThat(clients("ACTIVE")).isZero();
+    assertThat(clients("SUSPENDED")).isZero();
+  }
+
+  @Test
   void removingACapabilityAndSwitchingOffAreMirroredBeforeTheCommit() {
     ExchangeClient client = register("versekit");
     ExchangeSettings settings =
@@ -325,6 +343,16 @@ class ExchangeRegistryMirrorIntegrationTest {
             .tag("outcome", outcome)
             .counter();
     return counter == null ? 0 : counter.count();
+  }
+
+  /**
+   * Reads one registry client gauge.
+   *
+   * @param status the status label
+   * @return the gauge's value
+   */
+  private double clients(@NotNull String status) {
+    return meterRegistry.get("basetool.exchange.clients").tag("status", status).gauge().value();
   }
 
   /**

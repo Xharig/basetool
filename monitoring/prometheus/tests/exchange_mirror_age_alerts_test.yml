@@ -1,0 +1,106 @@
+rule_files:
+  - ../alerts/business.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - the gateway stopped reading the mirror
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_registry_mirror_age_seconds{job="basetool-ingest", instance="ingest:11272", application="basetool-ingest"}'
+        values: "0+60x40"
+      - series: 'basetool_scheduled_job_enabled{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "1x40"
+      - series: 'process_start_time_seconds{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: ExchangeRegistryMirrorStaleAtGateway
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ExchangeRegistryMirrorStaleAtGateway
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: basetool-ingest
+              instance: ingest:11272
+              application: basetool-ingest
+            exp_annotations:
+              summary: "The ingest gateway has not read the exchange registry for over 5 minutes"
+              description: "The ingest gateway reads the exchange registry mirror every 30 seconds, and its last successful read is more than 5 minutes old - or it has not read it once since it started - while the backend's mirror is enabled. Exchange requests are refused 503 REGISTRY_UNAVAILABLE meanwhile, even when no client happens to call. Check that exchange:registry exists in Redis (ExchangeMirrorWriteFailed, ExchangeRegistryReconcileStale), that Redis is up, and that the ingest ACL user still reads ~exchange:* (REQ-XCH-003, REQ-XCH-028)."
+
+  - name: fires - the gateway never read the mirror since it started
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_registry_mirror_age_seconds{job="basetool-ingest", instance="ingest:11272", application="basetool-ingest"}'
+        values: "NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN"
+      - series: 'basetool_scheduled_job_enabled{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "1x40"
+      - series: 'process_start_time_seconds{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRegistryMirrorStaleAtGateway
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: basetool-ingest
+              instance: ingest:11272
+              application: basetool-ingest
+            exp_annotations:
+              summary: "The ingest gateway has not read the exchange registry for over 5 minutes"
+              description: "The ingest gateway reads the exchange registry mirror every 30 seconds, and its last successful read is more than 5 minutes old - or it has not read it once since it started - while the backend's mirror is enabled. Exchange requests are refused 503 REGISTRY_UNAVAILABLE meanwhile, even when no client happens to call. Check that exchange:registry exists in Redis (ExchangeMirrorWriteFailed, ExchangeRegistryReconcileStale), that Redis is up, and that the ingest ACL user still reads ~exchange:* (REQ-XCH-003, REQ-XCH-028)."
+
+  - name: silent - a gateway that reads every 30 seconds
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_registry_mirror_age_seconds{job="basetool-ingest", instance="ingest:11272", application="basetool-ingest"}'
+        values: "15x40"
+      - series: 'basetool_scheduled_job_enabled{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "1x40"
+      - series: 'process_start_time_seconds{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeRegistryMirrorStaleAtGateway
+        exp_alerts: []
+
+  - name: silent - the backend's mirror is disabled
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_registry_mirror_age_seconds{job="basetool-ingest", instance="ingest:11272", application="basetool-ingest"}'
+        values: "NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN"
+      - series: 'process_start_time_seconds{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: ExchangeRegistryMirrorStaleAtGateway
+        exp_alerts: []
+
+  - name: silent - a freshly started gateway before its first read
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_registry_mirror_age_seconds{job="basetool-ingest", instance="ingest:11272", application="basetool-ingest"}'
+        values: "NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN"
+      - series: 'basetool_scheduled_job_enabled{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "1x40"
+      - series: 'process_start_time_seconds{job="basetool-ingest", instance="ingest:11272"}'
+        values: "1080x40"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: ExchangeRegistryMirrorStaleAtGateway
+        exp_alerts: []
+
+  - name: silent - a Redis blip shorter than the hold
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_registry_mirror_age_seconds{job="basetool-ingest", instance="ingest:11272", application="basetool-ingest"}'
+        values: "15x5 60 120 180 240 300 360 420 480 540 600 15x20"
+      - series: 'basetool_scheduled_job_enabled{job="basetool-backend", instance="backend:11261", task="exchange_registry_reconcile"}'
+        values: "1x40"
+      - series: 'process_start_time_seconds{job="basetool-ingest", instance="ingest:11272"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeRegistryMirrorStaleAtGateway
+        exp_alerts: []

@@ -26,6 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.greluc.krt.profit.basetool.ingest.config.ExchangeGatewayProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -183,10 +184,42 @@ class ExchangeRegistryReaderTest {
   }
 
   @Test
+  void theMirrorAgeCountsFromTheLastSuccessfulRead() {
+    when(values.get(KEY))
+        .thenReturn(DOCUMENT)
+        .thenThrow(new RedisConnectionFailureException("down"));
+    SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    ExchangeRegistryMirrorAge age = new ExchangeRegistryMirrorAge(reader, meterRegistry);
+    age.register();
+
+    assertThat(mirrorAge(meterRegistry)).as("before the first read").isNaN();
+
+    age.refresh();
+    now.set(now.get().plusSeconds(90));
+    assertThat(mirrorAge(meterRegistry)).isEqualTo(90.0d);
+
+    age.refresh();
+    now.set(now.get().plusSeconds(30));
+    assertThat(mirrorAge(meterRegistry))
+        .as("a failed read leaves the last good one in place")
+        .isEqualTo(120.0d);
+  }
+
+  @Test
   void aFailedReadIsNotCached() {
     when(values.get(KEY)).thenReturn(null).thenReturn(DOCUMENT);
 
     assertThatThrownBy(reader::current).isInstanceOf(ExchangeUnavailableException.class);
     assertThat(reader.current().enabled()).isTrue();
+  }
+
+  /**
+   * Reads the mirror-age gauge.
+   *
+   * @param meterRegistry the registry it was published to
+   * @return the gauge's value
+   */
+  private static double mirrorAge(SimpleMeterRegistry meterRegistry) {
+    return meterRegistry.get("basetool.exchange.registry.mirror.age").gauge().value();
   }
 }
