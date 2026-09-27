@@ -245,3 +245,24 @@ OAuth-scope path entirely. This is a code change (unlike amendment #4's operator
 orthogonal to every mitigation above; it holds regardless of the rotation setting. Guarded by
 `OAuth2ScopeRequestParamLeakTest` (baseline proves the default mapper leaks; fix proves the override
 drops `scope=all` and `scope=mine`).
+
+## Amendment — 2026-09-27 (amendment #6): the relay refreshes once, at stream open, through the manager
+
+Amendment #3 left the notification SSE relay reading its bearer straight from the
+`OAuth2AuthorizedClientRepository`, which never refreshes. With a 5-minute access-token lifespan, a
+stream opened after the member had been idle carried an expired bearer, the backend answered `401`,
+and the stream failed soft until a page request or the unread-count poll refreshed the session.
+
+**Decision.** `NotificationPageController.stream` obtains the client through the single-flight
+`OAuth2AuthorizedClientManager`, synchronously on the servlet thread at stream open, with the
+principal and the servlet request and response as `OAuth2AuthorizeRequest` attributes. The bearer
+is still sent as a plain `Authorization` header over the filter-free `sseWebClient`, so nothing
+refreshes later in the stream's life. A manager that returns nothing or throws completes the stream
+without calling the backend, as before.
+
+The hazards amendments #1 and #3 closed do not return. The refresh is not deferred onto
+`boundedElastic` against a snapshot; it is the same synchronous, session-keyed, single-flight call a
+page render makes. It does not write a stale client back late in a 30-minute request either: the
+Redis session runs `FlushMode.IMMEDIATE` and saves only changed attributes, so the rotated client is
+stored when it is obtained and the relay writes nothing afterwards. Rotation has been off since
+amendment #4. The `/ws/sync` handshake took the same step for the same reason.

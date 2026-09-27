@@ -42,7 +42,7 @@ import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.MessageSource;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -62,7 +62,7 @@ class NotificationPageControllerTest {
         backendApiClient,
         messageSource,
         mock(WebClient.class),
-        mock(OAuth2AuthorizedClientRepository.class),
+        mock(OAuth2AuthorizedClientManager.class),
         new SimpleMeterRegistry());
   }
 
