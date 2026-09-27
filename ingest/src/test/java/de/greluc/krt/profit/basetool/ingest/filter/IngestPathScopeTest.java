@@ -45,23 +45,45 @@ class IngestPathScopeTest {
 
   @Test
   void matchesAPlainIngestPath() {
-    assertThat(IngestPathScope.isIngestRequest(request("/v1/refinery-extract"))).isTrue();
+    assertThat(IngestPathScope.isProtectedRequest(request("/v1/refinery-extract"))).isTrue();
   }
 
   @Test
   void matchesAPercentEncodedIngestPath() {
-    assertThat(IngestPathScope.isIngestRequest(request("/%761/refinery-extract"))).isTrue();
-    assertThat(IngestPathScope.isIngestRequest(request("/v%31/refinery-extract"))).isTrue();
+    assertThat(IngestPathScope.isProtectedRequest(request("/%761/refinery-extract"))).isTrue();
+    assertThat(IngestPathScope.isProtectedRequest(request("/v%31/refinery-extract"))).isTrue();
   }
 
   @Test
   void doesNotMatchTheUnauthenticatedOperationalEndpoints() {
-    assertThat(IngestPathScope.isIngestRequest(request("/actuator/health"))).isFalse();
-    assertThat(IngestPathScope.isIngestRequest(request("/v3/api-docs"))).isFalse();
+    assertThat(IngestPathScope.isProtectedRequest(request("/actuator/health"))).isFalse();
+    assertThat(IngestPathScope.isProtectedRequest(request("/v3/api-docs"))).isFalse();
   }
 
   @Test
   void doesNotMatchAPathThatMerelyStartsWithTheScopeLiteral() {
-    assertThat(IngestPathScope.isIngestRequest(request("/v1x/refinery-extract"))).isFalse();
+    assertThat(IngestPathScope.isProtectedRequest(request("/v1x/refinery-extract"))).isFalse();
+  }
+
+  @Test
+  void theExchangeIsProtectedButOutsideTheLegacyClientGate() {
+    MockHttpServletRequest exchange = request("/exchange/v1/catalog/resolve");
+
+    assertThat(IngestPathScope.isProtectedRequest(exchange)).isTrue();
+    assertThat(IngestPathScope.isExchangeRequest(exchange)).isTrue();
+    assertThat(IngestPathScope.isLegacyRequest(exchange)).isFalse();
+  }
+
+  @Test
+  void theLegacySurfaceIsProtectedAndCarriesTheClientGate() {
+    MockHttpServletRequest legacy = request("/v1/blueprint-preview");
+
+    assertThat(IngestPathScope.isLegacyRequest(legacy)).isTrue();
+    assertThat(IngestPathScope.isExchangeRequest(legacy)).isFalse();
+  }
+
+  @Test
+  void doesNotMatchAPathThatMerelyStartsWithTheExchangeLiteral() {
+    assertThat(IngestPathScope.isProtectedRequest(request("/exchangex/v1"))).isFalse();
   }
 }
