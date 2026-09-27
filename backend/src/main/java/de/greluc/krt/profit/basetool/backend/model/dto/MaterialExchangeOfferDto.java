@@ -56,6 +56,8 @@ import java.util.UUID;
  * @param viewerInterested whether the requesting member has registered interest on this offer.
  * @param status the offer's lifecycle status (ACTIVE / DEACTIVATED).
  * @param version the optimistic-lock version, echoed for the next edit.
+ * @param stolen whether the offered Lager row is marked „gestohlen" (REQ-INV-053); always {@code
+ *     false} for a free-stated item offer.
  */
 public record MaterialExchangeOfferDto(
     UUID id,
@@ -75,4 +77,5 @@ public record MaterialExchangeOfferDto(
     List<String> interestedHandles,
     boolean viewerInterested,
     MaterialExchangeOfferStatus status,
-    Long version) {}
+    Long version,
+    boolean stolen) {}

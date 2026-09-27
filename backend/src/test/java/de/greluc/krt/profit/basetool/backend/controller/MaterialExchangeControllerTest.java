@@ -65,13 +65,13 @@ class MaterialExchangeControllerTest {
   void boardDelegatesFiltersAndSort() {
     PageResponse<MaterialExchangeOfferDto> page =
         new PageResponse<>(List.of(sampleDto()), 0, 50, 1, 1, List.of());
-    when(boardService.board("mein", "agri", 600, 100.0, "menge", 0, 50)).thenReturn(page);
+    when(boardService.board("mein", "agri", 600, 100.0, "menge", 0, 50, false)).thenReturn(page);
 
     PageResponse<MaterialExchangeOfferDto> result =
-        controller.board("mein", "agri", 600, 100.0, "menge", 0, 50);
+        controller.board("mein", "agri", 600, 100.0, "menge", 0, 50, false);
 
     assertThat(result).isSameAs(page);
-    verify(boardService).board("mein", "agri", 600, 100.0, "menge", 0, 50);
+    verify(boardService).board("mein", "agri", 600, 100.0, "menge", 0, 50, false);
   }
 
   @Test
@@ -181,6 +181,7 @@ class MaterialExchangeControllerTest {
                 796,
                 340.0,
                 "Lorville",
+                false,
                 false));
     when(boardService.myReleasableItems("agri", MaterialExchangeOfferKind.MATERIAL))
         .thenReturn(items);
@@ -208,6 +209,7 @@ class MaterialExchangeControllerTest {
         null,
         false,
         MaterialExchangeOfferStatus.ACTIVE,
-        0L);
+        0L,
+        false);
   }
 }

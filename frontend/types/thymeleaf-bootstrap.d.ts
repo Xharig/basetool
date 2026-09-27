@@ -97,6 +97,8 @@ declare const bulkI18n: KrtI18nDict;
 declare const bulkRebookI18n: KrtI18nDict;
 /** Injected by the page bootstrap (declared in inventory-my.html). */
 declare const orgUnitChangeI18n: KrtI18nDict;
+/** Injected by the page bootstrap (declared in fragments/inventory-stolen-mark.html). */
+declare const stolenMarkI18n: KrtI18nDict;
 
 /** Injected by the page bootstrap (declared in inventory-admin.html). */
 declare const noteI18n: KrtI18nDict;
@@ -283,6 +285,8 @@ declare const MSG_INVENTORY_UNLINK_TOOLTIP: string;
 declare const MSG_LOADING_INVENTORY: string;
 /** Injected by the page bootstrap (declared in orders-detail.html). */
 declare const MSG_LOCATION: string;
+/** Injected by the page bootstrap (declared in orders-detail.html). */
+declare const MSG_STOLEN: string;
 /** Injected by the page bootstrap (declared in orders-detail.html). */
 declare const MSG_OWNER: string;
 /** Injected by the page bootstrap (declared in orders-detail.html). */

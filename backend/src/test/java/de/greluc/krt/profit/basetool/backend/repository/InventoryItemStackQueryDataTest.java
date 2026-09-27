@@ -105,7 +105,9 @@ class InventoryItemStackQueryDataTest {
             null,
             true,
             null,
-            Set.of());
+            Set.of(),
+            false,
+            false);
 
     assertThat(stacks)
         .as(
@@ -146,7 +148,20 @@ class InventoryItemStackQueryDataTest {
 
     List<InventoryStackAggregate> stacks =
         inventoryItemRepository.findUserStacks(
-            user.getId(), false, null, false, null, null, false, null, false, null, false, false);
+            user.getId(),
+            false,
+            null,
+            false,
+            null,
+            null,
+            false,
+            null,
+            false,
+            null,
+            false,
+            false,
+            false,
+            false);
 
     assertThat(stacks)
         .as(
@@ -198,7 +213,20 @@ class InventoryItemStackQueryDataTest {
 
     List<InventoryStackAggregate> personalOnly =
         inventoryItemRepository.findUserStacks(
-            user.getId(), false, null, false, null, null, false, null, false, null, true, false);
+            user.getId(),
+            false,
+            null,
+            false,
+            null,
+            null,
+            false,
+            null,
+            false,
+            null,
+            true,
+            false,
+            false,
+            false);
     assertThat(personalOnly)
         .as("personalOnly=true must return only the caller's personal stock")
         .hasSize(1);
@@ -207,7 +235,20 @@ class InventoryItemStackQueryDataTest {
 
     List<InventoryStackAggregate> nonPersonalOnly =
         inventoryItemRepository.findUserStacks(
-            user.getId(), false, null, false, null, null, false, null, false, null, false, true);
+            user.getId(),
+            false,
+            null,
+            false,
+            null,
+            null,
+            false,
+            null,
+            false,
+            null,
+            false,
+            true,
+            false,
+            false);
     assertThat(nonPersonalOnly)
         .as("nonPersonalOnly=true must return only the caller's shared (non-personal) stock")
         .hasSize(1);
@@ -216,7 +257,20 @@ class InventoryItemStackQueryDataTest {
 
     List<InventoryStackAggregate> all =
         inventoryItemRepository.findUserStacks(
-            user.getId(), false, null, false, null, null, false, null, false, null, false, false);
+            user.getId(),
+            false,
+            null,
+            false,
+            null,
+            null,
+            false,
+            null,
+            false,
+            null,
+            false,
+            false,
+            false,
+            false);
     assertThat(all)
         .as("both toggles false must return the personal and the shared stack")
         .hasSize(2);
@@ -266,7 +320,20 @@ class InventoryItemStackQueryDataTest {
 
     List<InventoryStackAggregate> materialStacks =
         inventoryItemRepository.findUserStacks(
-            user.getId(), false, null, false, null, null, false, null, false, null, false, false);
+            user.getId(),
+            false,
+            null,
+            false,
+            null,
+            null,
+            false,
+            null,
+            false,
+            null,
+            false,
+            false,
+            false,
+            false);
     assertThat(materialStacks)
         .as("the item row must not surface as a (null-material) stack in the material view")
         .hasSize(1);
@@ -274,21 +341,32 @@ class InventoryItemStackQueryDataTest {
 
     List<InventoryStackAggregate> globalStacks =
         inventoryItemRepository.findGlobalStacks(
-            false, null, false, null, null, false, null, false, null, true, null, Set.of());
+            false, null, false, null, null, false, null, false, null, true, null, Set.of(), false,
+            false);
     assertThat(globalStacks)
         .as("no global material stack may carry a null material with an item row present")
         .allSatisfy(stack -> assertThat(stack.material()).isNotNull());
 
     List<InventoryItemStackAggregate> userItemStacks =
         inventoryItemRepository.findUserItemStacks(
-            user.getId(), false, null, false, null, false, null, false, false);
+            user.getId(), false, null, false, null, false, null, false, false, false, false);
     assertThat(userItemStacks).hasSize(1);
     assertThat(userItemStacks.get(0).gameItem().getId()).isEqualTo(gameItem.getId());
     assertThat(userItemStacks.get(0).totalAmount()).isEqualTo(3.0);
 
     List<InventoryItemStackAggregate> globalItemStacks =
         inventoryItemRepository.findGlobalItemStacks(
-            true, List.of(gameItem.getId()), false, null, false, null, true, null, Set.of());
+            true,
+            List.of(gameItem.getId()),
+            false,
+            null,
+            false,
+            null,
+            true,
+            null,
+            Set.of(),
+            false,
+            false);
     assertThat(globalItemStacks).hasSize(1);
     assertThat(globalItemStacks.get(0).gameItem().getId()).isEqualTo(gameItem.getId());
   }
@@ -455,7 +533,20 @@ class InventoryItemStackQueryDataTest {
 
     List<UUID> ids =
         inventoryItemRepository.findUserEntryIds(
-            owner.getId(), false, null, false, null, null, false, null, false, null, false, false);
+            owner.getId(),
+            false,
+            null,
+            false,
+            null,
+            null,
+            false,
+            null,
+            false,
+            null,
+            false,
+            false,
+            false,
+            false);
 
     assertThat(ids)
         .as(
@@ -518,6 +609,8 @@ class InventoryItemStackQueryDataTest {
                 false,
                 null,
                 true,
+                false,
+                false,
                 false))
         .as("personalOnly=true returns only the private entry id")
         .containsExactly(personal.getId());
@@ -534,7 +627,9 @@ class InventoryItemStackQueryDataTest {
                 false,
                 null,
                 false,
-                true))
+                true,
+                false,
+                false))
         .as("nonPersonalOnly=true returns only the shared entry id")
         .containsExactly(shared.getId());
     assertThat(
@@ -549,6 +644,8 @@ class InventoryItemStackQueryDataTest {
                 null,
                 false,
                 null,
+                false,
+                false,
                 false,
                 false))
         .as("both toggles false returns both entry ids")
@@ -609,7 +706,7 @@ class InventoryItemStackQueryDataTest {
 
     List<UUID> ids =
         inventoryItemRepository.findUserItemEntryIds(
-            owner.getId(), false, null, false, null, false, null, false, false);
+            owner.getId(), false, null, false, null, false, null, false, false, false, false);
 
     assertThat(ids)
         .as("item select-all returns every own item entry id, excluding the material row")
@@ -672,6 +769,8 @@ class InventoryItemStackQueryDataTest {
             false,
             null,
             false,
+            false,
+            false,
             false);
 
     assertThat(filtered)
@@ -682,7 +781,20 @@ class InventoryItemStackQueryDataTest {
 
     List<InventoryStackAggregate> unfiltered =
         inventoryItemRepository.findUserStacks(
-            user.getId(), false, null, false, null, null, false, null, false, null, false, false);
+            user.getId(),
+            false,
+            null,
+            false,
+            null,
+            null,
+            false,
+            null,
+            false,
+            null,
+            false,
+            false,
+            false,
+            false);
     assertThat(unfiltered).as("without the filter both location stacks are returned").hasSize(2);
 
     List<InventoryStackAggregate> gateOff =
@@ -697,6 +809,8 @@ class InventoryItemStackQueryDataTest {
             null,
             false,
             null,
+            false,
+            false,
             false,
             false);
     assertThat(gateOff)
@@ -746,7 +860,17 @@ class InventoryItemStackQueryDataTest {
 
     List<InventoryItemStackAggregate> filtered =
         inventoryItemRepository.findUserItemStacks(
-            user.getId(), false, null, true, List.of(arccorp.getId()), false, null, false, false);
+            user.getId(),
+            false,
+            null,
+            true,
+            List.of(arccorp.getId()),
+            false,
+            null,
+            false,
+            false,
+            false,
+            false);
 
     assertThat(filtered)
         .as("item stacks narrow by location exactly like material stacks")
@@ -811,6 +935,8 @@ class InventoryItemStackQueryDataTest {
             null,
             false,
             null,
+            false,
+            false,
             false,
             false);
 

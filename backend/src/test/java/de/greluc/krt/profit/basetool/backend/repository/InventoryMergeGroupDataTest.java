@@ -103,7 +103,7 @@ class InventoryMergeGroupDataTest {
 
     List<InventoryItem> group =
         inventoryItemRepository.findMergeGroupForUpdate(
-            user.getId(), material.getId(), location.getId(), QUALITY, false, null);
+            user.getId(), material.getId(), location.getId(), QUALITY, false, false, null);
 
     assertThat(group)
         .extracting(InventoryItem::getId)
@@ -118,12 +118,18 @@ class InventoryMergeGroupDataTest {
 
     List<InventoryItem> nullGroup =
         inventoryItemRepository.findMergeGroupForUpdate(
-            user.getId(), material.getId(), location.getId(), QUALITY, false, null);
+            user.getId(), material.getId(), location.getId(), QUALITY, false, false, null);
     assertThat(nullGroup).extracting(InventoryItem::getId).containsExactly(nullOrgRow.getId());
 
     List<InventoryItem> orgGroup =
         inventoryItemRepository.findMergeGroupForUpdate(
-            user.getId(), material.getId(), location.getId(), QUALITY, false, orgUnit.getId());
+            user.getId(),
+            material.getId(),
+            location.getId(),
+            QUALITY,
+            false,
+            false,
+            orgUnit.getId());
     assertThat(orgGroup).extracting(InventoryItem::getId).containsExactly(orgStampedRow.getId());
   }
 
@@ -136,7 +142,7 @@ class InventoryMergeGroupDataTest {
 
     List<InventoryItem> group =
         inventoryItemRepository.findMergeGroupForUpdate(
-            user.getId(), material.getId(), location.getId(), QUALITY, false, null);
+            user.getId(), material.getId(), location.getId(), QUALITY, false, false, null);
 
     assertThat(group).extracting(InventoryItem::getId).containsExactly(match.getId());
   }
@@ -159,7 +165,7 @@ class InventoryMergeGroupDataTest {
 
     List<InventoryItem> group =
         inventoryItemRepository.findMergeGroupForUpdate(
-            user.getId(), material.getId(), location.getId(), QUALITY, false, null);
+            user.getId(), material.getId(), location.getId(), QUALITY, false, false, null);
 
     assertThat(group).extracting(InventoryItem::getId).containsExactly(plain.getId());
   }
@@ -176,7 +182,7 @@ class InventoryMergeGroupDataTest {
 
     List<InventoryItem> group =
         inventoryItemRepository.findMergeGroupForUpdate(
-            user.getId(), null, drive.getId(), location.getId(), null, false, null);
+            user.getId(), null, drive.getId(), location.getId(), null, false, false, null);
 
     assertThat(group)
         .extracting(InventoryItem::getId)
@@ -191,7 +197,7 @@ class InventoryMergeGroupDataTest {
 
     List<InventoryItem> group =
         inventoryItemRepository.findMergeGroupForUpdate(
-            user.getId(), material.getId(), location.getId(), QUALITY, false, null);
+            user.getId(), material.getId(), location.getId(), QUALITY, false, false, null);
 
     assertThat(group).extracting(InventoryItem::getId).containsExactly(materialRow.getId());
   }
@@ -205,7 +211,7 @@ class InventoryMergeGroupDataTest {
 
     List<InventoryItem> group =
         inventoryItemRepository.findMergeGroupForUpdate(
-            user.getId(), null, drive.getId(), location.getId(), null, false, null);
+            user.getId(), null, drive.getId(), location.getId(), null, false, false, null);
 
     assertThat(group).extracting(InventoryItem::getId).containsExactly(shared.getId());
   }

@@ -17,7 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/* global MSG_HANDOVER_SUCCESS, MSG_HANDOVER_FAILED, MSG_HANDOVER_NOITEMS, labelPiece, labelScu, scuHintText, labelMenge, ORDER_AGE_YELLOW, ORDER_AGE_RED, MSG_UNIT_SCU, MSG_UNIT_PIECE, MSG_STATUS_SUCCESS, MSG_STATUS_ERROR, ORDER_CONFLICT, MSG_DELETE_TITLE, MSG_DELETE_MESSAGE, MSG_DELETE_CONFIRM, MSG_DELETE_CANCEL, MSG_DELETE_ERROR, MSG_UPDATE_SUCCESS, MSG_UPDATE_ERROR, MSG_MATERIAL_INVALID, MSG_CLAIM_TITLE_ADD, MSG_CLAIM_TITLE_EDIT, MSG_CLAIM_MAX_HINT, MSG_QUALITY_GOOD, MSG_QUALITY_NONE, MSG_CLAIM_SUCCESS, MSG_CLAIM_WITHDRAW_SUCCESS, MSG_CLAIM_ERROR, MSG_CLAIM_VALIDATION_SQUADRON, MSG_CLAIM_VALIDATION_AMOUNT, MSG_CLAIM_VALIDATION_OVERCLAIM, MSG_BP_COUNTING_SUCCESS, MSG_BP_COUNTING_ERROR, MSG_HANDOVER_REPORT_ERROR, MSG_HANDOVER_REPORT_VALIDATION_DATE, MSG_HANDOVER_REPORT_VALIDATION_TIME, MSG_HANDOVER_REPORT_VALIDATION_HANDLE, MSG_HANDOVER_REPORT_VALIDATION_ITEMS, MSG_HANDOVER_REPORT_VALIDATION_AMOUNT, MSG_HANDOVER_MISSION_HERKUNFT, MSG_HANDOVER_MISSION_REST, MSG_HANDOVER_MISSION_MIN, MSG_OWNER, MSG_LOCATION, MSG_QUALITY, MSG_QUANTITY, MSG_SQUADRON, MSG_LOADING_INVENTORY, MSG_EMPTY_INVENTORY, MSG_INVENTORY_UNLINK_TOOLTIP, MSG_INVENTORY_UNLINK_SUCCESS, MSG_INVENTORY_UNLINK_ERROR, IS_LOGISTICIAN, ORDER_REQUESTING_SQUADRON_ID, I18N_ADDED, I18N_REMOVED, I18N_NOTE_SAVED, I18N_NOTE_DELETED, I18N_ADD_ERROR, I18N_REMOVE_ERROR, I18N_NOTE_ERROR, I18N_NOTE_CONFLICT, I18N_NOTE_FORBIDDEN, I18N_NOTE_FOR, showFrontendErrorToast, showFrontendSuccessToast, KRT_ORDER_LIVESYNC_UPDATES, KRT_ORDER_SECTION_REFRESH_ERROR, PRODUCTION_I18N, ORDER_HANDOVER_I18N */
+/* global MSG_HANDOVER_SUCCESS, MSG_HANDOVER_FAILED, MSG_HANDOVER_NOITEMS, labelPiece, labelScu, scuHintText, labelMenge, ORDER_AGE_YELLOW, ORDER_AGE_RED, MSG_UNIT_SCU, MSG_UNIT_PIECE, MSG_STATUS_SUCCESS, MSG_STATUS_ERROR, ORDER_CONFLICT, MSG_DELETE_TITLE, MSG_DELETE_MESSAGE, MSG_DELETE_CONFIRM, MSG_DELETE_CANCEL, MSG_DELETE_ERROR, MSG_UPDATE_SUCCESS, MSG_UPDATE_ERROR, MSG_MATERIAL_INVALID, MSG_CLAIM_TITLE_ADD, MSG_CLAIM_TITLE_EDIT, MSG_CLAIM_MAX_HINT, MSG_QUALITY_GOOD, MSG_QUALITY_NONE, MSG_CLAIM_SUCCESS, MSG_CLAIM_WITHDRAW_SUCCESS, MSG_CLAIM_ERROR, MSG_CLAIM_VALIDATION_SQUADRON, MSG_CLAIM_VALIDATION_AMOUNT, MSG_CLAIM_VALIDATION_OVERCLAIM, MSG_BP_COUNTING_SUCCESS, MSG_BP_COUNTING_ERROR, MSG_HANDOVER_REPORT_ERROR, MSG_HANDOVER_REPORT_VALIDATION_DATE, MSG_HANDOVER_REPORT_VALIDATION_TIME, MSG_HANDOVER_REPORT_VALIDATION_HANDLE, MSG_HANDOVER_REPORT_VALIDATION_ITEMS, MSG_HANDOVER_REPORT_VALIDATION_AMOUNT, MSG_HANDOVER_MISSION_HERKUNFT, MSG_HANDOVER_MISSION_REST, MSG_HANDOVER_MISSION_MIN, MSG_OWNER, MSG_LOCATION, MSG_STOLEN, MSG_QUALITY, MSG_QUANTITY, MSG_SQUADRON, MSG_LOADING_INVENTORY, MSG_EMPTY_INVENTORY, MSG_INVENTORY_UNLINK_TOOLTIP, MSG_INVENTORY_UNLINK_SUCCESS, MSG_INVENTORY_UNLINK_ERROR, IS_LOGISTICIAN, ORDER_REQUESTING_SQUADRON_ID, I18N_ADDED, I18N_REMOVED, I18N_NOTE_SAVED, I18N_NOTE_DELETED, I18N_ADD_ERROR, I18N_REMOVE_ERROR, I18N_NOTE_ERROR, I18N_NOTE_CONFLICT, I18N_NOTE_FORBIDDEN, I18N_NOTE_FOR, showFrontendErrorToast, showFrontendSuccessToast, KRT_ORDER_LIVESYNC_UPDATES, KRT_ORDER_SECTION_REFRESH_ERROR, PRODUCTION_I18N, ORDER_HANDOVER_I18N */
 
 let cachedInventoryItems = [];
 let isInventoryCached = false;
@@ -227,13 +227,14 @@ function addHandoverItemRow() {
         const formattedAmount = isPiece ? inv.amount.toFixed(0) : inv.amount.toFixed(3);
         const matName = (inv.material && inv.material.name) || '';
         const userName = (inv.user && inv.user.effectiveName) || '';
-        const optionLabel = fillPlaceholders(ORDER_HANDOVER_I18N.option, [
-            matName,
-            inv.quality,
-            formattedAmount,
-            qtyLabel,
-            userName,
-        ]);
+        const optionLabel =
+            fillPlaceholders(ORDER_HANDOVER_I18N.option, [
+                matName,
+                inv.quality,
+                formattedAmount,
+                qtyLabel,
+                userName,
+            ]) + (inv.stolen ? ' · ' + MSG_STOLEN : '');
         options += `<option value="${escapeAttr(inv.id)}">${escapeHtml(optionLabel)}</option>`;
     });
 
@@ -1371,6 +1372,8 @@ async function toggleInventory(row) {
     let squadronCell;
     /** @type {string} */
     let unlinkCell;
+    /** @type {string} */
+    let stolenChip;
 
     const nextRow = row.nextElementSibling;
     if (nextRow && nextRow.classList.contains('inventory-details-row')) {
@@ -1427,6 +1430,10 @@ async function toggleInventory(row) {
         for (const item of items) {
             const ownerName = item.user ? item.user.effectiveName : '-';
             const locationName = item.location ? item.location.name : '-';
+            stolenChip = '';
+            if (item.stolen) {
+                stolenChip = ` <span class="chip chip--danger chip-xs" data-testid="stolen-chip">${escapeHtml(MSG_STOLEN)}</span>`;
+            }
             const quality = item.quality !== null ? item.quality : '-';
             const quantity =
                 (item.amount !== null ? item.amount.toFixed(3) : '0.000') +
@@ -1464,7 +1471,7 @@ async function toggleInventory(row) {
                                     <tr class="${escapeAttr(rowClass)}">
                                         <td>${escapeHtml(ownerName)}</td>
                                         <td>${squadronCell}</td>
-                                        <td>${escapeHtml(locationName)}</td>
+                                        <td>${escapeHtml(locationName)}${stolenChip}</td>
                                         <td>${escapeHtml(quality)}</td>
                                         <td>${escapeHtml(quantity)}</td>
                                         ${unlinkCell}
@@ -1726,6 +1733,7 @@ function openProductionModal(button) {
                             inventoryItemId: it.id,
                             ownerName: it.user ? it.user.effectiveName : '-',
                             location: it.location ? it.location.name : '-',
+                            stolen: it.stolen === true,
                             quality: it.quality != null ? it.quality : '-',
                             slice,
                             stock: it.amount != null ? it.amount : 0,
@@ -1759,11 +1767,17 @@ function _renderProdMaterialEntries(card, mat) {
     let html = '';
     mat.entries.forEach(function (e, idx) {
         const cap = Math.min(e.slice, e.stock);
+        let stolenChip = '';
+        if (e.stolen) {
+            stolenChip =
+                ' <span class="chip chip--danger chip-xs">' + escapeHtml(MSG_STOLEN) + '</span>';
+        }
         html +=
             '<div class="od-prod-entry"><div class="od-prod-src">' +
             escapeHtml(e.ownerName) +
             ' · ' +
             escapeHtml(String(e.location)) +
+            stolenChip +
             ' <small>' +
             escapeHtml(MSG_QUALITY) +
             ' ' +

@@ -26,6 +26,8 @@ import de.greluc.krt.profit.basetool.backend.model.dto.BulkOrgUnitChangeRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.BulkOrgUnitChangeResultDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.BulkRebookRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.BulkRebookResultDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.BulkStolenMarkRequest;
+import de.greluc.krt.profit.basetool.backend.model.dto.BulkStolenMarkResultDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.GroupedInventoryDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryAllocationWriteDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryCatalog;
@@ -36,6 +38,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemNoteUpdateRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemOrgUnitChangeDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemPersonalRebookDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemStolenMarkDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.PageResponse;
 import de.greluc.krt.profit.basetool.backend.model.dto.UpdateDeliveredRequest;
 import de.greluc.krt.profit.basetool.backend.service.AuthHelperService;
@@ -43,6 +46,7 @@ import de.greluc.krt.profit.basetool.backend.service.InventoryAggregationService
 import de.greluc.krt.profit.basetool.backend.service.InventoryItemCatalogService;
 import de.greluc.krt.profit.basetool.backend.service.InventoryItemService;
 import de.greluc.krt.profit.basetool.backend.service.InventoryOrgUnitChangeService;
+import de.greluc.krt.profit.basetool.backend.service.InventoryStolenMarkService;
 import de.greluc.krt.profit.basetool.backend.service.UserService;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
 import de.greluc.krt.profit.basetool.backend.web.PaginationUtil;
@@ -119,6 +123,7 @@ public class InventoryItemController {
 
   private final InventoryItemService inventoryItemService;
   private final InventoryOrgUnitChangeService inventoryOrgUnitChangeService;
+  private final InventoryStolenMarkService inventoryStolenMarkService;
   private final InventoryAggregationService inventoryAggregationService;
   private final InventoryItemCatalogService inventoryItemCatalogService;
   private final UserService userService;
@@ -260,6 +265,9 @@ public class InventoryItemController {
    *     false}
    * @param nonPersonalOnly when {@code true}, only the caller's shared rows; defaults to {@code
    *     false} and is mutually exclusive with {@code personalOnly}
+   * @param stolenOnly when {@code true}, only stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, only stock not marked „gestohlen"; mutually exclusive
+   *     with {@code stolenOnly}
    * @param catalog which stock catalog to group; defaults to {@code MATERIAL}; a filter that does
    *     not match the catalog is rejected with 400 (REQ-INV-029/031)
    * @param gameItemIds optional game-item filter ({@code catalog=ITEM} only; 400 otherwise)
@@ -278,6 +286,8 @@ public class InventoryItemController {
       @RequestParam(required = false) List<UUID> missionIds,
       @RequestParam(required = false, defaultValue = "false") boolean personalOnly,
       @RequestParam(required = false, defaultValue = "false") boolean nonPersonalOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean stolenOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean nonStolenOnly,
       @RequestParam(required = false, defaultValue = "MATERIAL") InventoryCatalog catalog) {
     if (catalog == InventoryCatalog.ITEM) {
       rejectMaterialOnlyFilters(minQuality, missionIds, materialIds);
@@ -287,7 +297,9 @@ public class InventoryItemController {
           locationIds,
           jobOrderIds,
           personalOnly,
-          nonPersonalOnly);
+          nonPersonalOnly,
+          stolenOnly,
+          nonStolenOnly);
     }
     rejectItemOnlyFilters(gameItemIds);
     return inventoryItemService.getMyAggregatedInventory(
@@ -298,7 +310,9 @@ public class InventoryItemController {
         jobOrderIds,
         missionIds,
         personalOnly,
-        nonPersonalOnly);
+        nonPersonalOnly,
+        stolenOnly,
+        nonStolenOnly);
   }
 
   /**
@@ -316,6 +330,9 @@ public class InventoryItemController {
    * @param personalOnly when {@code true}, narrows to the caller's private stock rows
    * @param nonPersonalOnly when {@code true}, narrows to the caller's shared stock rows; mutually
    *     exclusive with {@code personalOnly}
+   * @param stolenOnly when {@code true}, only stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, only stock not marked „gestohlen"; mutually exclusive
+   *     with {@code stolenOnly}
    * @param catalog which stock catalog to select from; defaults to {@code MATERIAL}
    * @return the ids of every matching entry, in creation order
    */
@@ -331,6 +348,8 @@ public class InventoryItemController {
       @RequestParam(required = false) List<UUID> missionIds,
       @RequestParam(required = false, defaultValue = "false") boolean personalOnly,
       @RequestParam(required = false, defaultValue = "false") boolean nonPersonalOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean stolenOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean nonStolenOnly,
       @RequestParam(required = false, defaultValue = "MATERIAL") InventoryCatalog catalog) {
     if (catalog == InventoryCatalog.ITEM) {
       rejectMaterialOnlyFilters(minQuality, missionIds, materialIds);
@@ -340,7 +359,9 @@ public class InventoryItemController {
           locationIds,
           jobOrderIds,
           personalOnly,
-          nonPersonalOnly);
+          nonPersonalOnly,
+          stolenOnly,
+          nonStolenOnly);
     }
     rejectItemOnlyFilters(gameItemIds);
     return inventoryItemService.getMyEntryIds(
@@ -351,7 +372,9 @@ public class InventoryItemController {
         jobOrderIds,
         missionIds,
         personalOnly,
-        nonPersonalOnly);
+        nonPersonalOnly,
+        stolenOnly,
+        nonStolenOnly);
   }
 
   /**
@@ -433,6 +456,9 @@ public class InventoryItemController {
    * @param minQuality optional quality floor; rejected for {@code catalog=ITEM}
    * @param jobOrderIds optional job-order filter (both catalogs)
    * @param missionIds optional mission filter; rejected for {@code catalog=ITEM}
+   * @param stolenOnly when {@code true}, only stock marked „gestohlen" (REQ-INV-053)
+   * @param nonStolenOnly when {@code true}, only stock not marked „gestohlen"; mutually exclusive
+   *     with {@code stolenOnly}
    * @param catalog which stock catalog to group; defaults to {@code MATERIAL}
    * @return grouped DTOs
    */
@@ -445,15 +471,17 @@ public class InventoryItemController {
       @RequestParam(required = false) Integer minQuality,
       @RequestParam(required = false) List<UUID> jobOrderIds,
       @RequestParam(required = false) List<UUID> missionIds,
+      @RequestParam(required = false, defaultValue = "false") boolean stolenOnly,
+      @RequestParam(required = false, defaultValue = "false") boolean nonStolenOnly,
       @RequestParam(required = false, defaultValue = "MATERIAL") InventoryCatalog catalog) {
     if (catalog == InventoryCatalog.ITEM) {
       rejectMaterialOnlyFilters(minQuality, missionIds, materialIds);
       return inventoryAggregationService.getAllAggregatedItemInventory(
-          gameItemIds, locationIds, jobOrderIds);
+          gameItemIds, locationIds, jobOrderIds, stolenOnly, nonStolenOnly);
     }
     rejectItemOnlyFilters(gameItemIds);
     return inventoryItemService.getAllAggregatedInventory(
-        materialIds, locationIds, minQuality, jobOrderIds, missionIds);
+        materialIds, locationIds, minQuality, jobOrderIds, missionIds, stolenOnly, nonStolenOnly);
   }
 
   /**
@@ -475,6 +503,7 @@ public class InventoryItemController {
       @RequestParam @NotNull UUID locationId,
       @RequestParam(required = false) Integer quality,
       @RequestParam(required = false, defaultValue = "false") Boolean personal,
+      @RequestParam(required = false, defaultValue = "false") Boolean stolen,
       @RequestParam(required = false) UUID owningOrgUnitId,
       @RequestParam(required = false, defaultValue = "MATERIAL") InventoryCatalog catalog,
       @RequestParam(required = false) Integer page,
@@ -487,6 +516,7 @@ public class InventoryItemController {
               gameItemId,
               locationId,
               personal,
+              stolen,
               owningOrgUnitId,
               stackEntriesPageRequest(page, size)));
     }
@@ -498,6 +528,7 @@ public class InventoryItemController {
             locationId,
             quality,
             personal,
+            stolen,
             owningOrgUnitId,
             stackEntriesPageRequest(page, size));
     return PageResponse.of(p);
@@ -517,6 +548,7 @@ public class InventoryItemController {
       @RequestParam @NotNull UUID userId,
       @RequestParam @NotNull UUID locationId,
       @RequestParam(required = false) Integer quality,
+      @RequestParam(required = false, defaultValue = "false") Boolean stolen,
       @RequestParam(required = false) UUID owningOrgUnitId,
       @RequestParam(required = false, defaultValue = "MATERIAL") InventoryCatalog catalog,
       @RequestParam(required = false) Integer page,
@@ -528,6 +560,7 @@ public class InventoryItemController {
               gameItemId,
               userId,
               locationId,
+              stolen,
               owningOrgUnitId,
               stackEntriesPageRequest(page, size)));
     }
@@ -538,6 +571,7 @@ public class InventoryItemController {
             userId,
             locationId,
             quality,
+            stolen,
             owningOrgUnitId,
             stackEntriesPageRequest(page, size));
     return PageResponse.of(p);
@@ -827,6 +861,70 @@ public class InventoryItemController {
       @AuthenticationPrincipal Jwt jwt, @RequestBody @Valid BulkOrgUnitChangeRequest request) {
     return inventoryOrgUnitChangeService.bulkChangeOrgUnit(
         request, userService.getUserIdFromJwt(jwt));
+  }
+
+  /**
+   * Sets or removes the „gestohlen" marker on a row or on a part of it (REQ-INV-053). A part is
+   * split off as a new row; it and a flipped whole row merge into a stack of the new identity where
+   * the merge rules allow. Whoever may edit the row may change its marker.
+   *
+   * @param jwt the caller's token
+   * @param id the row
+   * @param dto the version, the requested marker and the amount, {@code null} for the whole row
+   * @return the row carrying the requested marker, or the stack row it was merged into
+   */
+  @Operation(
+      summary = "Mark or unmark stock as stolen",
+      description =
+          "Sets or removes the „gestohlen\" marker on a whole row or, with an amount, on a part"
+              + " split off as a new row. Refused while marking is switched off, and when a split"
+              + " would leave the row below the amount it offers on the Materialbörse.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "Changed; the resulting row is returned"),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Amount not positive, larger than the row, or fractional on whole units"),
+    @ApiResponse(responseCode = "403", description = "Access denied - the caller may not edit it"),
+    @ApiResponse(responseCode = "404", description = "Inventory item not found"),
+    @ApiResponse(
+        responseCode = "409",
+        description = "Marking switched off, below the offered amount, or a stale version"),
+    @ApiResponse(responseCode = "422", description = "The rest could not carry its earmarks")
+  })
+  @PostMapping("/{id}/stolen")
+  @PreAuthorize("isAuthenticated() and @ownerScopeService.canEditInventoryItem(#id)")
+  public InventoryItemDto markStolen(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable @NotNull UUID id,
+      @RequestBody @Valid InventoryItemStolenMarkDto dto) {
+    return inventoryStolenMarkService.mark(id, dto, userService.getUserIdFromJwt(jwt));
+  }
+
+  /**
+   * Sets or removes the „gestohlen" marker on a selection of the caller's own rows, whole rows only
+   * (REQ-INV-053); rows already carrying it are skipped and counted.
+   *
+   * @param jwt the caller's token
+   * @param request the selection and the requested marker
+   * @return the changed and skipped counts
+   */
+  @Operation(
+      summary = "Bulk mark or unmark stock as stolen",
+      description =
+          "Sets or removes the „gestohlen\" marker on every listed row of the caller. Rows already"
+              + " carrying it are skipped; an unknown id or a foreign row aborts the whole action.")
+  @ApiResponses({
+    @ApiResponse(responseCode = "200", description = "Changed; changed/skipped counts returned"),
+    @ApiResponse(responseCode = "400", description = "Empty list"),
+    @ApiResponse(responseCode = "403", description = "Access denied - row of another member"),
+    @ApiResponse(responseCode = "404", description = "One or more rows not found"),
+    @ApiResponse(responseCode = "409", description = "Marking switched off")
+  })
+  @PostMapping("/bulk-stolen")
+  @PreAuthorize("isAuthenticated()")
+  public BulkStolenMarkResultDto bulkMarkStolen(
+      @AuthenticationPrincipal Jwt jwt, @RequestBody @Valid BulkStolenMarkRequest request) {
+    return inventoryStolenMarkService.bulkMark(request, userService.getUserIdFromJwt(jwt));
   }
 
   /**

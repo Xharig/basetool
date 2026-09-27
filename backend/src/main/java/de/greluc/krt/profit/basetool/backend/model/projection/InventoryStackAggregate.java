@@ -34,6 +34,7 @@ import de.greluc.krt.profit.basetool.backend.model.User;
  * @param location the storage location shared by every entry
  * @param quality the quality grade shared by every entry, or {@code null}
  * @param personal whether the stack holds private (owner-only) stock
+ * @param stolen whether the stack holds stock marked „gestohlen" (REQ-INV-053)
  * @param owningOrgUnit the owning org-unit pool shared by every entry, or {@code null} for an
  *     ownerless-personal stack
  * @param totalAmount the summed quantity across all entries ({@code SUM(amount)}, null-coalesced)
@@ -49,6 +50,7 @@ public record InventoryStackAggregate(
     Location location,
     Integer quality,
     Boolean personal,
+    Boolean stolen,
     OrgUnit owningOrgUnit,
     Double totalAmount,
     Double weightedQualitySum,

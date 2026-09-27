@@ -102,7 +102,8 @@ class MaterialboersePageControllerMvcTest {
             null,
             false,
             "ACTIVE",
-            0L);
+            0L,
+            false);
     when(backendApiClient.get(contains("/material-exchange/offers?"), anyTypeRef()))
         .thenReturn(new PageResponse<>(List.of(offer), 0, 200, 1, 1, List.of()));
     when(backendApiClient.get(contains("/material-exchange/counts"), anyClass()))
@@ -165,7 +166,8 @@ class MaterialboersePageControllerMvcTest {
             null,
             false,
             "ACTIVE",
-            0L);
+            0L,
+            false);
     when(backendApiClient.get(contains("/material-exchange/offers?"), anyTypeRef()))
         .thenReturn(new PageResponse<>(List.of(piece), 0, 200, 1, 1, List.of()));
     when(backendApiClient.get(contains("/material-exchange/counts"), anyClass()))
@@ -204,7 +206,8 @@ class MaterialboersePageControllerMvcTest {
             null,
             false,
             "ACTIVE",
-            0L);
+            0L,
+            false);
     when(backendApiClient.get(contains("/material-exchange/offers?"), anyTypeRef()))
         .thenReturn(new PageResponse<>(List.of(item), 0, 200, 1, 1, List.of()));
     when(backendApiClient.get(contains("/material-exchange/counts"), anyClass()))
@@ -247,7 +250,8 @@ class MaterialboersePageControllerMvcTest {
             List.of(),
             false,
             "ACTIVE",
-            0L);
+            0L,
+            false);
     when(backendApiClient.get(contains("/material-exchange/offers?"), anyTypeRef()))
         .thenReturn(new PageResponse<>(List.of(stockBacked), 0, 200, 1, 1, List.of()));
     when(backendApiClient.get(contains("/material-exchange/counts"), anyClass()))
@@ -275,6 +279,113 @@ class MaterialboersePageControllerMvcTest {
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("mb-mrow")))
         .andExpect(content().string(containsString("Agricium")));
+  }
+
+  /**
+   * An offer of stock marked „gestohlen" carries the danger chip in the list and the detail
+   * (REQ-INV-053).
+   */
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void page_stolenOffer_rendersTheChipInListAndDetail() throws Exception {
+    MaterialExchangeOfferDto stolen =
+        new MaterialExchangeOfferDto(
+            offerId,
+            "MATERIAL",
+            new MaterialReferenceDto(UUID.randomUUID(), "Agricium", "SCU"),
+            null,
+            null,
+            new UserReferenceDto(UUID.randomUUID(), "Lenoro", "Lenoro", "Lenoro", null),
+            List.of(),
+            false,
+            796,
+            120.0,
+            null,
+            Instant.now(),
+            null,
+            0,
+            null,
+            false,
+            "ACTIVE",
+            0L,
+            true);
+    when(backendApiClient.get(contains("/material-exchange/offers?"), anyTypeRef()))
+        .thenReturn(new PageResponse<>(List.of(stolen), 0, 200, 1, 1, List.of()));
+    when(backendApiClient.get(contains("/material-exchange/counts"), anyClass()))
+        .thenReturn(new MaterialExchangeCountsDto(1, 0));
+    when(backendApiClient.get(contains("/material-exchange/offers/"), anyClass()))
+        .thenReturn(stolen);
+
+    String body =
+        mockMvc
+            .perform(get("/materialboerse"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    org.assertj.core.api.Assertions.assertThat(body.split("data-testid=\"stolen-chip\"", -1))
+        .hasSize(3);
+  }
+
+  /** A legitimate offer carries no stolen chip (REQ-INV-053). */
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void page_legitimateOffer_rendersNoStolenChip() throws Exception {
+    stubBoard();
+
+    mockMvc
+        .perform(get("/materialboerse"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("data-mb-exclude-stolen")))
+        .andExpect(content().string(not(containsString("data-testid=\"stolen-chip\""))));
+  }
+
+  /** The board filter „ohne gestohlene" is relayed as {@code excludeStolen} and stays checked. */
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void page_excludeStolen_isRelayedAndRenderedChecked() throws Exception {
+    stubBoard();
+
+    String body =
+        mockMvc
+            .perform(get("/materialboerse").param("excludeStolen", "true"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    org.assertj.core.api.Assertions.assertThat(body)
+        .containsPattern("data-testid=\"mb-exclude-stolen\"\\s+checked=\"checked\"");
+    verify(backendApiClient).get(contains("excludeStolen=true"), anyTypeRef());
+  }
+
+  /** The release picker relays each row's „gestohlen" marker to the page (REQ-INV-053). */
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
+  void releasableItemsProxy_relaysTheStolenMarker() throws Exception {
+    when(backendApiClient.get(eq("/api/v1/material-exchange/releasable-items"), anyTypeRef()))
+        .thenReturn(
+            List.of(
+                new de.greluc.krt.profit.basetool.frontend.model.dto
+                    .MaterialExchangeReleasableItemDto(
+                    UUID.randomUUID(),
+                    "MATERIAL",
+                    "Agricium",
+                    "SCU",
+                    700,
+                    5.0,
+                    "Port Olisar",
+                    false,
+                    true)));
+
+    mockMvc
+        .perform(get("/materialboerse/releasable-items"))
+        .andExpect(status().isOk())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$[0].stolen")
+                .value(true));
   }
 
   /** The deactivate proxy returns 200 on a successful backend call. */

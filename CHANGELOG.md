@@ -11,6 +11,11 @@
   `/api/v1/admin/exchange-settings`, Migration `V248`); jede Änderung steht im neuen Audit-Bereich
   „Verbundene Anwendungen“ und wird für das Gateway ausfallsicher nach Redis gespiegelt
   (`APP_EXCHANGE_MIRROR_ENABLED`, vorerst aus; REQ-XCH-003).
+- **Lager: Markierung „gestohlen“.** Bestand kann als gestohlen eingebucht oder nachträglich — auch
+  teilweise — markiert werden; gestohlene und reguläre Ware bilden getrennte Stapel, jede Umbuchung
+  behält die Markierung, Lager, Aufträge, Einsätze und Materialbörse zeigen sie an und filtern danach
+  (REQ-INV-053, Migration `V247`). Noch hinter dem Schalter `APP_INVENTORY_STOLEN_MARKING_ENABLED`
+  (aus), bis die App ihn kennt.
 - **Mein Lager: Einheit eines persönlichen Eintrags ändern.** Pro Eintrag und für eine Auswahl
   lässt sich die Einheit eigener persönlicher Einträge nachträglich wechseln — auf eine eigene
   Mitgliedschaft oder „Keine Einheit"; der Dialog sagt, wer den Eintrag dann sieht (REQ-INV-052).

@@ -104,7 +104,8 @@ class InventoryItemServiceVersionFlushTest {
             null,
             auditService,
             null,
-            realCheckoutService);
+            realCheckoutService,
+            new de.greluc.krt.profit.basetool.backend.support.InventoryProperties(false));
   }
 
   private User userWithId(UUID id) {

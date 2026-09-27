@@ -515,7 +515,11 @@
                                 <tr th:each="item : ${inventoryEntries}">
                                     <td th:text="${item.user != null ? item.user.effectiveName : '-'}">Nutzer</td>
                                     <td th:text="${item.location != null ? item.location.name : '-'}">Standort</td>
-                                    <td th:text="${item.material != null ? item.material.name : '-'}">Material</td>
+                                    <td>
+                                        <span th:text="${item.material != null ? item.material.name : '-'}">Material</span>
+                                        <span th:if="${item.stolen}" class="chip chip--danger chip-xs" data-testid="stolen-chip"
+                                              th:title="#{inventory.stolen.chip.title}" th:text="#{inventory.stolen.chip}">Gestohlen</span>
+                                    </td>
                                     <td th:switch="${item.material?.quantityType}">
                                         <span th:case="'PIECE'" th:text="${item.amount != null} ? |${#numbers.formatInteger(item.amount, 1)} #{material.quantity.piece}| : '-'">10 St&uuml;ck</span>
                                         <span th:case="*" th:text="${item.amount != null} ? |${#numbers.formatDecimal(item.amount, 1, 'NONE', 3, 'DEFAULT')} #{material.quantity.scu}| : '-'">10.500 SCU</span>

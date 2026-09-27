@@ -69,6 +69,11 @@ public class JobOrderHandoverItem extends AbstractEntity<UUID> {
   @Column(name = "location_name")
   private String locationName;
 
+  /** Whether the handed-over stock was marked „gestohlen" when it left the Lager (REQ-INV-053). */
+  @Builder.Default
+  @Column(nullable = false)
+  private Boolean stolen = false;
+
   /**
    * Rounds the delivered {@code amount} to SCU scale (three decimals, {@code HALF_UP}) on insert
    * and update; a no-op for whole {@code PIECE} amounts.

@@ -255,6 +255,7 @@ class InventoryPageControllerTest {
             null,
             4.0,
             false,
+            false,
             List.of(),
             null,
             List.of(),
@@ -284,7 +285,7 @@ class InventoryPageControllerTest {
 
     String view =
         controller.viewMyInventory(
-            null, null, null, null, null, null, null, false, false, false, model);
+            null, null, null, null, null, null, null, false, false, false, false, false, model);
 
     assertEquals("inventory-my", view);
     assertTrue(model.containsAttribute("items"));
@@ -309,6 +310,8 @@ class InventoryPageControllerTest {
             null,
             null,
             null,
+            false,
+            false,
             false,
             false,
             false,
@@ -341,7 +344,7 @@ class InventoryPageControllerTest {
 
     String view =
         controller.viewMyInventory(
-            null, null, null, null, null, null, null, true, false, false, model);
+            null, null, null, null, null, null, null, true, false, false, false, false, model);
 
     assertEquals("inventory-my", view);
     assertEquals(true, model.getAttribute("selectedPersonalOnly"));
@@ -365,7 +368,7 @@ class InventoryPageControllerTest {
 
     String view =
         controller.viewMyInventory(
-            null, null, null, null, null, null, null, false, true, false, model);
+            null, null, null, null, null, null, null, false, true, false, false, false, model);
 
     assertEquals("inventory-my", view);
     assertEquals(true, model.getAttribute("selectedNonPersonalOnly"));
@@ -392,7 +395,7 @@ class InventoryPageControllerTest {
 
     String view =
         controller.viewMyInventory(
-            null, null, null, null, null, null, null, false, false, true, model);
+            null, null, null, null, null, null, null, false, false, false, false, true, model);
 
     assertEquals("inventory-my :: inventoryTableFragment", view);
   }
@@ -407,7 +410,17 @@ class InventoryPageControllerTest {
 
     List<UUID> ids =
         controller.myEntryIds(
-            null, List.of(materialId), 500, List.of(jobOrderId), null, null, null, false, false);
+            null,
+            List.of(materialId),
+            500,
+            List.of(jobOrderId),
+            null,
+            null,
+            null,
+            false,
+            false,
+            false,
+            false);
 
     assertEquals(List.of(entryA, entryB), ids);
     org.mockito.ArgumentCaptor<String> urlCaptor =
@@ -431,7 +444,7 @@ class InventoryPageControllerTest {
 
     List<UUID> ids =
         controller.myEntryIds(
-            "items", null, null, null, null, List.of(gameItemId), null, true, false);
+            "items", null, null, null, null, List.of(gameItemId), null, true, false, false, false);
 
     assertEquals(List.of(entry), ids);
     org.mockito.ArgumentCaptor<String> urlCaptor =
@@ -448,7 +461,9 @@ class InventoryPageControllerTest {
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(null);
 
     assertEquals(
-        List.of(), controller.myEntryIds(null, null, null, null, null, null, null, false, false));
+        List.of(),
+        controller.myEntryIds(
+            null, null, null, null, null, null, null, false, false, false, false));
   }
 
   @Test
@@ -460,7 +475,17 @@ class InventoryPageControllerTest {
 
     String view =
         controller.viewAllInventory(
-            null, List.of(UUID.randomUUID()), 100, null, null, null, null, false, model);
+            null,
+            List.of(UUID.randomUUID()),
+            100,
+            null,
+            null,
+            null,
+            null,
+            false,
+            false,
+            false,
+            model);
 
     assertEquals("inventory-admin", view);
     assertTrue(model.containsAttribute("items"));
@@ -494,6 +519,7 @@ class InventoryPageControllerTest {
             null,
             10,
             100.0,
+            false,
             false,
             java.util.List.of(),
             null,
@@ -672,6 +698,7 @@ class InventoryPageControllerTest {
             100,
             10.0,
             false,
+            false,
             java.util.List.of(),
             null,
             java.util.List.of(),
@@ -788,6 +815,7 @@ class InventoryPageControllerTest {
             100,
             45.0,
             false,
+            false,
             java.util.List.of(),
             null,
             java.util.List.of(),
@@ -861,6 +889,7 @@ class InventoryPageControllerTest {
             100,
             10.0,
             false,
+            false,
             java.util.List.of(),
             null,
             java.util.List.of(),
@@ -923,6 +952,7 @@ class InventoryPageControllerTest {
             100,
             5.0,
             true,
+            false,
             java.util.List.of(),
             null,
             java.util.List.of(),
@@ -988,14 +1018,26 @@ class InventoryPageControllerTest {
     UUID locationId = UUID.randomUUID();
     LocationReferenceDto location = new LocationReferenceDto(locationId, "Everus Harbor");
     InventoryStackDto stack =
-        new InventoryStackDto(null, location, 700, false, null, 10.0, 700.0, 700, 1);
+        new InventoryStackDto(null, location, 700, false, false, null, 10.0, 700.0, 700, 1);
     GroupedInventoryDto group =
         new GroupedInventoryDto(null, null, 10.0, 700.0, 700, List.of(stack));
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(List.of(group));
 
     String view =
         controller.viewMyInventory(
-            null, null, null, null, null, null, List.of(locationId), false, false, false, model);
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(locationId),
+            false,
+            false,
+            false,
+            false,
+            false,
+            model);
 
     assertEquals("inventory-my", view);
     assertEquals(List.of(locationId), model.getAttribute("selectedLocationIds"));
@@ -1031,7 +1073,8 @@ class InventoryPageControllerTest {
             10.0,
             700.0,
             700,
-            List.of(new InventoryStackDto(null, picked, 700, false, null, 10.0, 700.0, 700, 1)));
+            List.of(
+                new InventoryStackDto(null, picked, 700, false, false, null, 10.0, 700.0, 700, 1)));
     GroupedInventoryDto unfiltered =
         new GroupedInventoryDto(
             null,
@@ -1040,8 +1083,8 @@ class InventoryPageControllerTest {
             700.0,
             700,
             List.of(
-                new InventoryStackDto(null, picked, 700, false, null, 10.0, 700.0, 700, 1),
-                new InventoryStackDto(null, other, 700, false, null, 20.0, 700.0, 700, 1)));
+                new InventoryStackDto(null, picked, 700, false, false, null, 10.0, 700.0, 700, 1),
+                new InventoryStackDto(null, other, 700, false, false, null, 20.0, 700.0, 700, 1)));
     when(backendApiClient.get(anyString(), anyTypeRef()))
         .thenAnswer(
             invocation -> {
@@ -1053,7 +1096,19 @@ class InventoryPageControllerTest {
             });
 
     controller.viewMyInventory(
-        null, null, null, null, null, null, List.of(pickedId), false, false, false, model);
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        List.of(pickedId),
+        false,
+        false,
+        false,
+        false,
+        false,
+        model);
 
     assertEquals(List.of(other, picked), model.getAttribute("locations"));
   }
@@ -1067,7 +1122,7 @@ class InventoryPageControllerTest {
 
     String view =
         controller.viewAllInventory(
-            null, null, null, null, null, null, List.of(locationId), false, model);
+            null, null, null, null, null, null, List.of(locationId), false, false, false, model);
 
     assertEquals("inventory-admin", view);
     assertEquals(List.of(locationId), model.getAttribute("selectedLocationIds"));
@@ -1093,8 +1148,10 @@ class InventoryPageControllerTest {
     UUID locationId = UUID.randomUUID();
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(List.of());
 
-    controller.myEntryIds(null, null, null, null, null, null, List.of(locationId), false, false);
-    controller.myEntryIds("items", null, null, null, null, null, List.of(locationId), false, false);
+    controller.myEntryIds(
+        null, null, null, null, null, null, List.of(locationId), false, false, false, false);
+    controller.myEntryIds(
+        "items", null, null, null, null, null, List.of(locationId), false, false, false, false);
 
     org.mockito.ArgumentCaptor<String> urlCaptor =
         org.mockito.ArgumentCaptor.forClass(String.class);

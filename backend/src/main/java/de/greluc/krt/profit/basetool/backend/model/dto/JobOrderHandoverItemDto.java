@@ -21,7 +21,10 @@ package de.greluc.krt.profit.basetool.backend.model.dto;
 
 import java.util.UUID;
 
-/** Data transfer record carrying Job Order Handover Item payload. */
+/**
+ * One handed-over line of a job-order handover: the material, quality, amount and origin location
+ * snapshot, and whether the stock was marked „gestohlen" (REQ-INV-053).
+ */
 public record JobOrderHandoverItemDto(
     UUID id,
     UUID jobOrderHandoverId,
@@ -29,4 +32,5 @@ public record JobOrderHandoverItemDto(
     Integer quality,
     Double amount,
     String locationName,
+    Boolean stolen,
     Long version) {}

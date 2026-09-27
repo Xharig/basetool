@@ -40,6 +40,7 @@ public record InventoryItemCreateDto(
     Integer quality,
     Double amount,
     Boolean personal,
+    Boolean stolen,
     UUID missionId,
     UUID jobOrderId,
     UUID owningOrgUnitId,

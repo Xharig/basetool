@@ -36,6 +36,8 @@ import de.greluc.krt.profit.basetool.backend.model.dto.BulkOrgUnitChangeRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.BulkOrgUnitChangeResultDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.BulkRebookRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.BulkRebookResultDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.BulkStolenMarkRequest;
+import de.greluc.krt.profit.basetool.backend.model.dto.BulkStolenMarkResultDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.GroupedInventoryDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryAllocationDimension;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryAllocationWriteDto;
@@ -47,6 +49,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemNoteUpdateRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemOrgUnitChangeDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemPersonalRebookDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.InventoryItemStolenMarkDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.PageResponse;
 import de.greluc.krt.profit.basetool.backend.model.dto.UpdateDeliveredRequest;
 import de.greluc.krt.profit.basetool.backend.service.AuthHelperService;
@@ -54,6 +57,7 @@ import de.greluc.krt.profit.basetool.backend.service.InventoryAggregationService
 import de.greluc.krt.profit.basetool.backend.service.InventoryItemCatalogService;
 import de.greluc.krt.profit.basetool.backend.service.InventoryItemService;
 import de.greluc.krt.profit.basetool.backend.service.InventoryOrgUnitChangeService;
+import de.greluc.krt.profit.basetool.backend.service.InventoryStolenMarkService;
 import de.greluc.krt.profit.basetool.backend.service.UserService;
 import java.util.List;
 import java.util.UUID;
@@ -93,6 +97,7 @@ class InventoryItemControllerTest {
   @Mock private UserService userService;
   @Mock private AuthHelperService authHelperService;
   @Mock private InventoryOrgUnitChangeService inventoryOrgUnitChangeService;
+  @Mock private InventoryStolenMarkService inventoryStolenMarkService;
 
   @InjectMocks private InventoryItemController controller;
 
@@ -113,6 +118,7 @@ class InventoryItemControllerTest {
         null,
         750,
         10.0,
+        false,
         false,
         java.util.List.of(),
         0.0,
@@ -189,6 +195,8 @@ class InventoryItemControllerTest {
             List.of(jobOrderId),
             List.of(missionId),
             false,
+            false,
+            false,
             false))
         .thenReturn(List.of(group));
 
@@ -203,6 +211,8 @@ class InventoryItemControllerTest {
             List.of(missionId),
             false,
             false,
+            false,
+            false,
             InventoryCatalog.MATERIAL);
 
     assertThat(result).containsExactly(group);
@@ -215,6 +225,8 @@ class InventoryItemControllerTest {
             List.of(jobOrderId),
             List.of(missionId),
             false,
+            false,
+            false,
             false);
   }
 
@@ -225,16 +237,27 @@ class InventoryItemControllerTest {
     GroupedInventoryDto group = new GroupedInventoryDto(null, null, 5.0, 600.0, 600, List.of());
     when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
     when(inventoryItemService.getMyAggregatedInventory(
-            ownerId, null, null, null, null, null, true, false))
+            ownerId, null, null, null, null, null, true, false, false, false))
         .thenReturn(List.of(group));
 
     List<GroupedInventoryDto> result =
         controller.getMyGroupedInventory(
-            jwt, null, null, null, null, null, null, true, false, InventoryCatalog.MATERIAL);
+            jwt,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            false,
+            false,
+            false,
+            InventoryCatalog.MATERIAL);
 
     assertThat(result).containsExactly(group);
     verify(inventoryItemService)
-        .getMyAggregatedInventory(ownerId, null, null, null, null, null, true, false);
+        .getMyAggregatedInventory(ownerId, null, null, null, null, null, true, false, false, false);
   }
 
   @Test
@@ -244,16 +267,27 @@ class InventoryItemControllerTest {
     GroupedInventoryDto group = new GroupedInventoryDto(null, null, 5.0, 600.0, 600, List.of());
     when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
     when(inventoryItemService.getMyAggregatedInventory(
-            ownerId, null, null, null, null, null, false, true))
+            ownerId, null, null, null, null, null, false, true, false, false))
         .thenReturn(List.of(group));
 
     List<GroupedInventoryDto> result =
         controller.getMyGroupedInventory(
-            jwt, null, null, null, null, null, null, false, true, InventoryCatalog.MATERIAL);
+            jwt,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            true,
+            false,
+            false,
+            InventoryCatalog.MATERIAL);
 
     assertThat(result).containsExactly(group);
     verify(inventoryItemService)
-        .getMyAggregatedInventory(ownerId, null, null, null, null, null, false, true);
+        .getMyAggregatedInventory(ownerId, null, null, null, null, null, false, true, false, false);
   }
 
   @Test
@@ -287,12 +321,12 @@ class InventoryItemControllerTest {
   @Test
   void getAllGroupedInventory_delegatesWithoutJwt() {
     GroupedInventoryDto group = new GroupedInventoryDto(null, null, 25.0, 750.0, 800, List.of());
-    when(inventoryItemService.getAllAggregatedInventory(null, null, null, null, null))
+    when(inventoryItemService.getAllAggregatedInventory(null, null, null, null, null, false, false))
         .thenReturn(List.of(group));
 
     List<GroupedInventoryDto> result =
         controller.getAllGroupedInventory(
-            null, null, null, null, null, null, InventoryCatalog.MATERIAL);
+            null, null, null, null, null, null, false, false, InventoryCatalog.MATERIAL);
 
     assertThat(result).containsExactly(group);
     verifyNoInteractions(userService, authHelperService);
@@ -316,6 +350,7 @@ class InventoryItemControllerTest {
             eq(locationId),
             eq(800),
             eq(Boolean.TRUE),
+            eq(false),
             eq(owningOrgUnitId),
             any(Pageable.class)))
         .thenReturn(page);
@@ -328,6 +363,7 @@ class InventoryItemControllerTest {
             locationId,
             800,
             true,
+            false,
             owningOrgUnitId,
             InventoryCatalog.MATERIAL,
             0,
@@ -343,6 +379,7 @@ class InventoryItemControllerTest {
             eq(locationId),
             eq(800),
             eq(Boolean.TRUE),
+            eq(false),
             eq(owningOrgUnitId),
             pageable.capture());
     assertThat(pageable.getValue().getPageSize()).isEqualTo(100);
@@ -357,7 +394,13 @@ class InventoryItemControllerTest {
     InventoryItemDto dto = inventoryItem(UUID.randomUUID());
     Page<InventoryItemDto> page = new PageImpl<>(List.of(dto), PageRequest.of(0, 20), 1);
     when(inventoryItemService.getAllStackEntries(
-            eq(materialId), eq(userId), eq(locationId), isNull(), isNull(), any(Pageable.class)))
+            eq(materialId),
+            eq(userId),
+            eq(locationId),
+            isNull(),
+            eq(false),
+            isNull(),
+            any(Pageable.class)))
         .thenReturn(page);
 
     PageResponse<InventoryItemDto> result =
@@ -367,6 +410,7 @@ class InventoryItemControllerTest {
             userId,
             locationId,
             null,
+            false,
             null,
             InventoryCatalog.MATERIAL,
             null,
@@ -377,7 +421,13 @@ class InventoryItemControllerTest {
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
     verify(inventoryItemService)
         .getAllStackEntries(
-            eq(materialId), eq(userId), eq(locationId), isNull(), isNull(), pageable.capture());
+            eq(materialId),
+            eq(userId),
+            eq(locationId),
+            isNull(),
+            eq(false),
+            isNull(),
+            pageable.capture());
     assertThat(pageable.getValue().getPageSize()).isEqualTo(20);
     assertThat(pageable.getValue().getPageNumber()).isZero();
   }
@@ -428,7 +478,18 @@ class InventoryItemControllerTest {
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
                 controller.getMyGroupedInventory(
-                    jwt, null, null, null, 700, null, null, false, false, InventoryCatalog.ITEM))
+                    jwt,
+                    null,
+                    null,
+                    null,
+                    700,
+                    null,
+                    null,
+                    false,
+                    false,
+                    false,
+                    false,
+                    InventoryCatalog.ITEM))
         .isInstanceOf(BadRequestException.class);
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
@@ -440,6 +501,8 @@ class InventoryItemControllerTest {
                     null,
                     null,
                     List.of(UUID.randomUUID()),
+                    false,
+                    false,
                     false,
                     false,
                     InventoryCatalog.ITEM))
@@ -461,6 +524,8 @@ class InventoryItemControllerTest {
                     null,
                     null,
                     null,
+                    false,
+                    false,
                     false,
                     false,
                     InventoryCatalog.ITEM))
@@ -485,6 +550,8 @@ class InventoryItemControllerTest {
                     null,
                     false,
                     false,
+                    false,
+                    false,
                     InventoryCatalog.MATERIAL))
         .isInstanceOf(BadRequestException.class)
         .hasMessageContaining("gameItemIds");
@@ -507,7 +574,7 @@ class InventoryItemControllerTest {
             List.of());
     when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
     when(inventoryAggregationService.getMyAggregatedItemInventory(
-            ownerId, List.of(gameItemId), null, List.of(jobOrderId), true, false))
+            ownerId, List.of(gameItemId), null, List.of(jobOrderId), true, false, false, false))
         .thenReturn(List.of(group));
 
     List<GroupedInventoryDto> result =
@@ -520,6 +587,8 @@ class InventoryItemControllerTest {
             List.of(jobOrderId),
             null,
             true,
+            false,
+            false,
             false,
             InventoryCatalog.ITEM);
 
@@ -545,6 +614,8 @@ class InventoryItemControllerTest {
             List.of(jobOrderId),
             List.of(missionId),
             false,
+            false,
+            false,
             false))
         .thenReturn(List.of(entryA, entryB));
 
@@ -557,6 +628,8 @@ class InventoryItemControllerTest {
             700,
             List.of(jobOrderId),
             List.of(missionId),
+            false,
+            false,
             false,
             false,
             InventoryCatalog.MATERIAL);
@@ -572,6 +645,8 @@ class InventoryItemControllerTest {
             eq(List.of(jobOrderId)),
             eq(List.of(missionId)),
             eq(false),
+            eq(false),
+            eq(false),
             eq(false));
     assertThat(ownerCaptor.getValue()).isEqualTo(ownerId);
     verifyNoInteractions(inventoryAggregationService);
@@ -586,7 +661,7 @@ class InventoryItemControllerTest {
     UUID entry = UUID.randomUUID();
     when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
     when(inventoryAggregationService.getMyItemEntryIds(
-            ownerId, List.of(gameItemId), null, List.of(jobOrderId), true, false))
+            ownerId, List.of(gameItemId), null, List.of(jobOrderId), true, false, false, false))
         .thenReturn(List.of(entry));
 
     List<UUID> result =
@@ -599,6 +674,8 @@ class InventoryItemControllerTest {
             List.of(jobOrderId),
             null,
             true,
+            false,
+            false,
             false,
             InventoryCatalog.ITEM);
 
@@ -613,7 +690,18 @@ class InventoryItemControllerTest {
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
                 controller.getMyEntryIds(
-                    jwt, null, null, null, 700, null, null, false, false, InventoryCatalog.ITEM))
+                    jwt,
+                    null,
+                    null,
+                    null,
+                    700,
+                    null,
+                    null,
+                    false,
+                    false,
+                    false,
+                    false,
+                    InventoryCatalog.ITEM))
         .isInstanceOf(BadRequestException.class);
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
@@ -625,6 +713,8 @@ class InventoryItemControllerTest {
                     null,
                     null,
                     null,
+                    false,
+                    false,
                     false,
                     false,
                     InventoryCatalog.ITEM))
@@ -647,6 +737,8 @@ class InventoryItemControllerTest {
                     null,
                     null,
                     null,
+                    false,
+                    false,
                     false,
                     false,
                     InventoryCatalog.MATERIAL))
@@ -741,7 +833,7 @@ class InventoryItemControllerTest {
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
                 controller.getAllGroupedInventory(
-                    null, null, null, 700, null, null, InventoryCatalog.ITEM))
+                    null, null, null, 700, null, null, false, false, InventoryCatalog.ITEM))
         .isInstanceOf(BadRequestException.class);
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
@@ -752,6 +844,8 @@ class InventoryItemControllerTest {
                     null,
                     null,
                     List.of(UUID.randomUUID()),
+                    false,
+                    false,
                     InventoryCatalog.ITEM))
         .isInstanceOf(BadRequestException.class);
     verifyNoInteractions(inventoryItemService, inventoryAggregationService);
@@ -768,6 +862,8 @@ class InventoryItemControllerTest {
                     null,
                     null,
                     null,
+                    false,
+                    false,
                     InventoryCatalog.ITEM))
         .isInstanceOf(BadRequestException.class)
         .hasMessageContaining("materialIds");
@@ -785,6 +881,8 @@ class InventoryItemControllerTest {
                     null,
                     null,
                     null,
+                    false,
+                    false,
                     InventoryCatalog.MATERIAL))
         .isInstanceOf(BadRequestException.class)
         .hasMessageContaining("gameItemIds");
@@ -802,12 +900,13 @@ class InventoryItemControllerTest {
             null,
             null,
             List.of());
-    when(inventoryAggregationService.getAllAggregatedItemInventory(List.of(gameItemId), null, null))
+    when(inventoryAggregationService.getAllAggregatedItemInventory(
+            List.of(gameItemId), null, null, false, false))
         .thenReturn(List.of(group));
 
     List<GroupedInventoryDto> result =
         controller.getAllGroupedInventory(
-            null, List.of(gameItemId), null, null, null, null, InventoryCatalog.ITEM);
+            null, List.of(gameItemId), null, null, null, null, false, false, InventoryCatalog.ITEM);
 
     assertThat(result).containsExactly(group);
     verifyNoInteractions(inventoryItemService);
@@ -821,7 +920,17 @@ class InventoryItemControllerTest {
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
                 controller.getMyStackEntries(
-                    jwt, null, null, locationId, null, false, null, InventoryCatalog.ITEM, 0, 20))
+                    jwt,
+                    null,
+                    null,
+                    locationId,
+                    null,
+                    false,
+                    false,
+                    null,
+                    InventoryCatalog.ITEM,
+                    0,
+                    20))
         .isInstanceOf(BadRequestException.class);
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () ->
@@ -831,6 +940,7 @@ class InventoryItemControllerTest {
                     UUID.randomUUID(),
                     locationId,
                     800,
+                    false,
                     false,
                     null,
                     InventoryCatalog.ITEM,
@@ -854,13 +964,24 @@ class InventoryItemControllerTest {
             eq(gameItemId),
             eq(locationId),
             eq(Boolean.TRUE),
+            eq(false),
             isNull(),
             any(Pageable.class)))
         .thenReturn(page);
 
     PageResponse<InventoryItemDto> result =
         controller.getMyStackEntries(
-            jwt, null, gameItemId, locationId, null, true, null, InventoryCatalog.ITEM, 0, 20);
+            jwt,
+            null,
+            gameItemId,
+            locationId,
+            null,
+            true,
+            false,
+            null,
+            InventoryCatalog.ITEM,
+            0,
+            20);
 
     assertThat(result.content()).containsExactly(dto);
     verifyNoInteractions(inventoryItemService);
@@ -874,12 +995,21 @@ class InventoryItemControllerTest {
     InventoryItemDto dto = inventoryItem(UUID.randomUUID());
     Page<InventoryItemDto> page = new PageImpl<>(List.of(dto), PageRequest.of(0, 20), 1);
     when(inventoryAggregationService.getAllItemStackEntries(
-            eq(gameItemId), eq(userId), eq(locationId), isNull(), any(Pageable.class)))
+            eq(gameItemId), eq(userId), eq(locationId), eq(false), isNull(), any(Pageable.class)))
         .thenReturn(page);
 
     PageResponse<InventoryItemDto> result =
         controller.getAllStackEntries(
-            null, gameItemId, userId, locationId, null, null, InventoryCatalog.ITEM, null, null);
+            null,
+            gameItemId,
+            userId,
+            locationId,
+            null,
+            false,
+            null,
+            InventoryCatalog.ITEM,
+            null,
+            null);
 
     assertThat(result.content()).containsExactly(dto);
     org.assertj.core.api.Assertions.assertThatThrownBy(
@@ -890,6 +1020,7 @@ class InventoryItemControllerTest {
                     userId,
                     locationId,
                     800,
+                    false,
                     null,
                     InventoryCatalog.ITEM,
                     null,
@@ -949,6 +1080,7 @@ class InventoryItemControllerTest {
             750,
             25.0,
             false,
+            null,
             null,
             null,
             null,
@@ -1144,6 +1276,31 @@ class InventoryItemControllerTest {
   }
 
   @Test
+  void markStolen_passesTheCallerToTheService() {
+    Jwt jwt = jwt("alice-sub");
+    UUID ownerId = UUID.randomUUID();
+    UUID itemId = UUID.randomUUID();
+    InventoryItemStolenMarkDto dto = new InventoryItemStolenMarkDto(1L, true, 2.0);
+    when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
+
+    controller.markStolen(jwt, itemId, dto);
+
+    verify(inventoryStolenMarkService).mark(itemId, dto, ownerId);
+  }
+
+  @Test
+  void bulkMarkStolen_returnsTheServiceCounts() {
+    Jwt jwt = jwt("alice-sub");
+    UUID ownerId = UUID.randomUUID();
+    BulkStolenMarkRequest request = new BulkStolenMarkRequest(List.of(UUID.randomUUID()), false);
+    BulkStolenMarkResultDto expected = new BulkStolenMarkResultDto(1, 0);
+    when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
+    when(inventoryStolenMarkService.bulkMark(request, ownerId)).thenReturn(expected);
+
+    assertThat(controller.bulkMarkStolen(jwt, request)).isSameAs(expected);
+  }
+
+  @Test
   void updateDelivered_logisticianBranch_passesTrueToService() {
     Jwt jwt = jwt("alice-sub");
     UUID ownerId = UUID.randomUUID();
@@ -1244,7 +1401,7 @@ class InventoryItemControllerTest {
     GroupedInventoryDto group = new GroupedInventoryDto(null, null, 12.0, 700.0, 700, List.of());
     when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
     when(inventoryItemService.getMyAggregatedInventory(
-            ownerId, null, List.of(locationId), null, null, null, false, false))
+            ownerId, null, List.of(locationId), null, null, null, false, false, false, false))
         .thenReturn(List.of(group));
 
     List<GroupedInventoryDto> result =
@@ -1256,6 +1413,8 @@ class InventoryItemControllerTest {
             null,
             null,
             null,
+            false,
+            false,
             false,
             false,
             InventoryCatalog.MATERIAL);
@@ -1270,6 +1429,8 @@ class InventoryItemControllerTest {
             isNull(),
             isNull(),
             eq(false),
+            eq(false),
+            eq(false),
             eq(false));
   }
 
@@ -1281,7 +1442,7 @@ class InventoryItemControllerTest {
     GroupedInventoryDto group = new GroupedInventoryDto(null, null, 4.0, null, null, List.of());
     when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
     when(inventoryAggregationService.getMyAggregatedItemInventory(
-            ownerId, null, List.of(locationId), null, false, false))
+            ownerId, null, List.of(locationId), null, false, false, false, false))
         .thenReturn(List.of(group));
 
     List<GroupedInventoryDto> result =
@@ -1295,12 +1456,21 @@ class InventoryItemControllerTest {
             null,
             false,
             false,
+            false,
+            false,
             InventoryCatalog.ITEM);
 
     assertThat(result).containsExactly(group);
     verify(inventoryAggregationService)
         .getMyAggregatedItemInventory(
-            eq(ownerId), isNull(), eq(List.of(locationId)), isNull(), eq(false), eq(false));
+            eq(ownerId),
+            isNull(),
+            eq(List.of(locationId)),
+            isNull(),
+            eq(false),
+            eq(false),
+            eq(false),
+            eq(false));
     verifyNoInteractions(inventoryItemService);
   }
 
@@ -1312,10 +1482,10 @@ class InventoryItemControllerTest {
     UUID entry = UUID.randomUUID();
     when(userService.getUserIdFromJwt(jwt)).thenReturn(ownerId);
     when(inventoryItemService.getMyEntryIds(
-            ownerId, null, List.of(locationId), null, null, null, false, false))
+            ownerId, null, List.of(locationId), null, null, null, false, false, false, false))
         .thenReturn(List.of(entry));
     when(inventoryAggregationService.getMyItemEntryIds(
-            ownerId, null, List.of(locationId), null, false, false))
+            ownerId, null, List.of(locationId), null, false, false, false, false))
         .thenReturn(List.of(entry));
 
     assertThat(
@@ -1327,6 +1497,8 @@ class InventoryItemControllerTest {
                 null,
                 null,
                 null,
+                false,
+                false,
                 false,
                 false,
                 InventoryCatalog.MATERIAL))
@@ -1342,6 +1514,8 @@ class InventoryItemControllerTest {
                 null,
                 false,
                 false,
+                false,
+                false,
                 InventoryCatalog.ITEM))
         .containsExactly(entry);
   }
@@ -1351,18 +1525,35 @@ class InventoryItemControllerTest {
     UUID locationId = UUID.randomUUID();
     GroupedInventoryDto group = new GroupedInventoryDto(null, null, 9.0, 500.0, 500, List.of());
     when(inventoryItemService.getAllAggregatedInventory(
-            null, List.of(locationId), null, null, null))
+            null, List.of(locationId), null, null, null, false, false))
         .thenReturn(List.of(group));
-    when(inventoryAggregationService.getAllAggregatedItemInventory(null, List.of(locationId), null))
+    when(inventoryAggregationService.getAllAggregatedItemInventory(
+            null, List.of(locationId), null, false, false))
         .thenReturn(List.of(group));
 
     assertThat(
             controller.getAllGroupedInventory(
-                null, null, List.of(locationId), null, null, null, InventoryCatalog.MATERIAL))
+                null,
+                null,
+                List.of(locationId),
+                null,
+                null,
+                null,
+                false,
+                false,
+                InventoryCatalog.MATERIAL))
         .containsExactly(group);
     assertThat(
             controller.getAllGroupedInventory(
-                null, null, List.of(locationId), null, null, null, InventoryCatalog.ITEM))
+                null,
+                null,
+                List.of(locationId),
+                null,
+                null,
+                null,
+                false,
+                false,
+                InventoryCatalog.ITEM))
         .containsExactly(group);
 
     verifyNoInteractions(userService);
