@@ -609,7 +609,13 @@ within one batch is not a removal. Only the member's browser session can confirm
 
 - [ ] One test per counting rule, including repeated 89 % cuts and a move.
 
-**Status:** planned — WP 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
+The counting rule is `ExchangeMassChangeGuard`: over the journal's live removals of the client,
+member and resource in the last 24 hours plus the batch's, a batch trips above 25, or when that total
+is at least 5 and more than a fifth of the current count plus the window's removals. Each resource's
+write service decides what in its batch is a removal.
+
+**Status:** the counting rule is built — WP 3.3 (#2083); the resources' removal rules, the staging and
+the confirmation follow with the writes — WP 3.3, WP 3.2 (#2082), WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 
@@ -621,7 +627,14 @@ changed afterwards or a merge removed, and does not restore Materialbörse offer
 
 - [ ] Undo after a later web edit skips that row and reports it.
 
-**Status:** planned — WP 3.3 (#2083), WP 4.5 (#2087)
+The journal is `exchange_journal`: one row per written entry with the client, installation, change
+set, resource, key, action, whether it counts as a removal, the entry before and after as JSON, the
+writing transaction's id and the time. It is written in the write's own transaction, purged with the
+change feed after 90 days by `exchange_change_retention`, exported under Art. 15, stays with the
+source account on a merge, and its states are searched by the Personensuche.
+
+**Status:** journal built — WP 3.3 (#2083); the writes that fill it follow with WP 4.1–4.4, the undo
+with WP 4.5 (#2087)
 
 ### REQ-XCH-023 — Rate limits, quotas and a hard Redis budget
 
