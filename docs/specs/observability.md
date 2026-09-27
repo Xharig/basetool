@@ -1611,6 +1611,9 @@ the boot run carries the last run's values over and re-reads only the reboot fla
 - `basetool_exchange_departures_total{outcome}` counter — a departed member's exchange access
   ended in full (`done`) or in part (`failed`), registered at zero; `ExchangeDepartureIncomplete`
   (warning) fires on any failed one, since the step is not retried (REQ-XCH-008).
+- `basetool_exchange_account_checks_total{outcome}` counter — exchange account checks by answer
+  (`match` / `mismatch` / `unknown`), registered at zero and shown per day beside the disconnects;
+  a rising `mismatch` share means clients see alt accounts (REQ-XCH-031).
 - `basetool_exchange_disconnects_total{kind}` counter — a member disconnecting one installation or
   a whole client (`installation` / `client`, REQ-XCH-008), registered at zero and shown per day on
   the operations dashboard. The relay's `exchange_installation_invalid` refusal joins

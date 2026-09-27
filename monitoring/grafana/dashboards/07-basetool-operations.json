@@ -3639,7 +3639,7 @@
         "y": 232
       },
       "type": "timeseries",
-      "title": "Exchange disconnects and departures/day",
+      "title": "Exchange disconnects, departures and account checks/day",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3680,6 +3680,15 @@
           "expr": "sum by (outcome) (increase(basetool_exchange_departures_total[1d]))",
           "refId": "B",
           "legendFormat": "departure {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (outcome) (increase(basetool_exchange_account_checks_total[1d]))",
+          "refId": "C",
+          "legendFormat": "account check {{outcome}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

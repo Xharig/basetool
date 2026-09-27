@@ -638,7 +638,17 @@ offers changed).
 the member's profile (REQ-SEC-072, stored since WP 1.4), case-insensitively, and answers `match`, `mismatch` or `unknown` (no handle
 stored). It never returns or logs the stored handle and is rate-limited tightly.
 
-**Status:** planned — WP 3.4 (#2106)
+The backend answers the relayed call at `POST /api/v1/exchange/me/account-check` under
+`exchange.connect`, validates the handle with the profile's own pattern (`^[A-Za-z0-9_-]{3,60}$`,
+`400` otherwise, without echoing it) and counts every answer in
+`basetool_exchange_account_checks_total{outcome}`.
+
+- [x] Match, mismatch and unknown, the match case-insensitive; the stored handle is in no answer and
+  neither handle in a log line. *`ExchangeAccountCheckControllerTest`.*
+- [ ] The gateway relays the route inside its own ten-per-hour limit.
+- [ ] End to end on the sandbox (WP 2.3, #2099).
+
+**Status:** backend built — WP 3.4 (#2106); the gateway relay follows
 
 ### REQ-XCH-032 — „Verbundene Anwendungen" shows and controls every connection
 
