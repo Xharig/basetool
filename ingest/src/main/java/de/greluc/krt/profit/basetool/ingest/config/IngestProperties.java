@@ -48,6 +48,7 @@ import org.springframework.validation.annotation.Validated;
  * @param maxHandoffsPerSubject maximum live staged handoffs per subject; the oldest are evicted
  * @param verifyBackendHostname whether the backend relay also verifies the certificate's host name
  *     on top of the pinned chain (REQ-SEC-070, ADR-0211); ignored under {@code dev}/{@code test}
+ * @param legacyEndpoints the switch for the legacy extractor endpoints under {@code /v1}
  */
 @Validated
 @ConfigurationProperties(prefix = "app.ingest")
@@ -61,7 +62,8 @@ public record IngestProperties(
     @Min(1024) @DefaultValue("2097152") long maxPayloadBytes,
     @Min(1024) @DefaultValue("262144") long maxHandoffBytes,
     @Min(1) @DefaultValue("10") int maxHandoffsPerSubject,
-    @DefaultValue("false") boolean verifyBackendHostname) {
+    @DefaultValue("false") boolean verifyBackendHostname,
+    @NotNull @DefaultValue LegacyEndpoints legacyEndpoints) {
 
   /**
    * Normalises an absent public origin to empty, the documented "not configured" value, so {@link
@@ -70,4 +72,13 @@ public record IngestProperties(
   public IngestProperties {
     publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl;
   }
+
+  /**
+   * The legacy extractor endpoints ({@code app.ingest.legacy-endpoints}).
+   *
+   * @param enabled whether {@code /v1/refinery-extract} and {@code /v1/blueprint-preview} still
+   *     answer; switched off at the exchange go-live, after which they answer {@code 410
+   *     LEGACY_ENDPOINT_GONE} (REQ-XCH-033)
+   */
+  public record LegacyEndpoints(@DefaultValue("true") boolean enabled) {}
 }

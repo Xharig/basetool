@@ -73,6 +73,7 @@
                         <a th:href="@{/personal-inventory}" th:text="#{nav.personal.items}">Mein Inventar</a>
                         <a th:href="@{/personal-inventory/blueprints}" th:text="#{nav.personal.blueprints}">Meine Blueprints</a>
                         <a th:href="@{/profile}" th:text="#{nav.profile}">Profile</a>
+                        <a th:href="@{/connected-apps}" data-testid="nav-connected-apps" th:text="#{nav.personal.connectedApps}">Verbundene Anwendungen</a>
                     </div>
                 </details>
                 <details class="sidebar-group" data-group-key="promotion" th:if="${promotionFeatureEnabled}">
