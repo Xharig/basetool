@@ -294,6 +294,10 @@
             },
             "fitted": {
               "type": "boolean"
+            },
+            "override": {
+              "type": "boolean",
+              "description": "Bring back a ship removed elsewhere; only after asking the member."
             }
           },
           "required": [
