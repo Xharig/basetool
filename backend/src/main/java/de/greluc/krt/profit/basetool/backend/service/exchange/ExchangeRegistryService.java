@@ -33,6 +33,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeClientUpdateReque
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.support.AuditDetails;
+import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
 import de.greluc.krt.profit.basetool.backend.support.OptimisticLock;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -66,6 +67,7 @@ public class ExchangeRegistryService {
   private final ExchangeRegistryMirrorSync mirrorSync;
   private final AuditService auditService;
   private final MeterRegistry meterRegistry;
+  private final KnownExchangeClients knownExchangeClients;
 
   /**
    * Registers {@code basetool_exchange_registry_changes_total} for every action at zero, so the
@@ -378,6 +380,7 @@ public class ExchangeRegistryService {
         new TransactionSynchronization() {
           @Override
           public void afterCommit() {
+            knownExchangeClients.invalidate();
             meterRegistry
                 .counter(
                     MetricNames.EXCHANGE_REGISTRY_CHANGES, MetricNames.TAG_ACTION, action.getTag())

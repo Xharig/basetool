@@ -39,6 +39,7 @@ public class ClientAttribution {
 
   private final ApiClientMetricsProperties clientProperties;
   private final IngestGatewayProperties gatewayProperties;
+  private final KnownExchangeClients knownExchangeClients;
 
   /**
    * Returns the bounded client label for the given authentication.
@@ -51,8 +52,31 @@ public class ClientAttribution {
   }
 
   /**
-   * Maps an {@code azp} claim onto a bounded value. Configured ingest gateways ({@link
-   * IngestGatewayProperties}) count as known.
+   * Returns the bounded client label of a request that may relay an exchange client: when the
+   * caller is a configured gateway and names one, the label is that client if the registry holds
+   * it, else {@link MetricNames#CLIENT_ID_OTHER}; otherwise it is {@link #labelOf(Authentication)}.
+   *
+   * @param authentication the caller's authentication, may be {@code null}
+   * @param relayedClient the {@code X-Exchange-Client} header, may be {@code null}
+   * @return the bounded label
+   */
+  public @NotNull String relayedLabelOf(
+      @Nullable Authentication authentication, @Nullable String relayedClient) {
+    if (relayedClient != null
+        && !relayedClient.isBlank()
+        && gatewayProperties.isGatewayClient(
+            AuthenticatedSubject.authorizedParty(authentication).orElse(null))) {
+      return knownExchangeClients.isRegistered(relayedClient)
+          ? relayedClient
+          : MetricNames.CLIENT_ID_OTHER;
+    }
+    return labelOf(authentication);
+  }
+
+  /**
+   * Maps a client id onto a bounded value. Configured ingest gateways ({@link
+   * IngestGatewayProperties}) and exchange registry clients ({@link KnownExchangeClients}) count as
+   * known.
    *
    * @param authorizedParty the token's {@code azp}, may be {@code null} or blank
    * @return the claim itself for a known client, else {@link MetricNames#CLIENT_ID_NONE} for an
@@ -63,7 +87,8 @@ public class ClientAttribution {
       return MetricNames.CLIENT_ID_NONE;
     }
     if (clientProperties.isKnownClient(authorizedParty)
-        || gatewayProperties.isGatewayClient(authorizedParty)) {
+        || gatewayProperties.isGatewayClient(authorizedParty)
+        || knownExchangeClients.isRegistered(authorizedParty)) {
       return authorizedParty;
     }
     return MetricNames.CLIENT_ID_OTHER;

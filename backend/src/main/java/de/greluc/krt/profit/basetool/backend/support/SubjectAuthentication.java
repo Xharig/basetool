@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.support;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * An {@link org.springframework.security.core.Authentication} that carries an OIDC subject without
@@ -37,4 +38,14 @@ public interface SubjectAuthentication {
    */
   @NotNull
   String subject();
+
+  /**
+   * The external client the request was relayed for, when there is one.
+   *
+   * @return the registry client id, or {@code null} when the request came from no external client
+   */
+  @Nullable
+  default String externalClient() {
+    return null;
+  }
 }
