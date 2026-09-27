@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.ingest.filter;
 
+import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import jakarta.servlet.http.HttpServletRequest;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.http.server.PathContainer;
@@ -33,7 +34,7 @@ import org.springframework.web.util.pattern.PathPatternParser;
  * <p>Matches the decoded path, as the dispatcher does, so a percent-encoded path cannot bypass the
  * filters while still reaching a controller.
  */
-final class IngestPathScope {
+public final class IngestPathScope {
 
   /** The parsed {@code /v1/**} pattern of the legacy extractor surface. */
   private static final PathPattern LEGACY_PATHS = PathPatternParser.defaultInstance.parse("/v1/**");
@@ -52,7 +53,7 @@ final class IngestPathScope {
    * @param request the current request
    * @return {@code true} when the path is under {@code /v1} or {@code /exchange}
    */
-  static boolean isProtectedRequest(@NotNull HttpServletRequest request) {
+  public static boolean isProtectedRequest(@NotNull HttpServletRequest request) {
     return isLegacyRequest(request) || isExchangeRequest(request);
   }
 
@@ -62,8 +63,23 @@ final class IngestPathScope {
    * @param request the current request
    * @return {@code true} when the path is under {@code /v1}
    */
-  static boolean isLegacyRequest(@NotNull HttpServletRequest request) {
+  public static boolean isLegacyRequest(@NotNull HttpServletRequest request) {
     return LEGACY_PATHS.matches(PathContainer.parsePath(request.getRequestURI()));
+  }
+
+  /**
+   * Returns the metric label of the surface the request targets.
+   *
+   * @param request the current request
+   * @return {@code legacy}, {@code exchange} or {@code other}
+   */
+  public static @NotNull String scopeLabel(@NotNull HttpServletRequest request) {
+    if (isLegacyRequest(request)) {
+      return MetricNames.PATH_SCOPE_LEGACY;
+    }
+    return isExchangeRequest(request)
+        ? MetricNames.PATH_SCOPE_EXCHANGE
+        : MetricNames.PATH_SCOPE_OTHER;
   }
 
   /**
@@ -72,7 +88,7 @@ final class IngestPathScope {
    * @param request the current request
    * @return {@code true} when the path is under {@code /exchange}
    */
-  static boolean isExchangeRequest(@NotNull HttpServletRequest request) {
+  public static boolean isExchangeRequest(@NotNull HttpServletRequest request) {
     return EXCHANGE_PATHS.matches(PathContainer.parsePath(request.getRequestURI()));
   }
 }
