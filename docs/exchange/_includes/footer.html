@@ -1,0 +1,17 @@
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <ul class="site-footer__links">
+      {%- unless page.generated %}
+      <li><a class="site-footer__edit" href="{{ site.edit_base }}{{ page.path }}">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#krt-icon-edit"/></svg>Improve this page</a></li>
+      {%- endunless %}
+      <li><a href="https://github.com/{{ site.repository }}/blob/main/LICENSE.md">Licence</a></li>
+      <li><a href="https://github.com/{{ site.repository }}/security/policy">Security policy</a></li>
+      <li><a href="https://github.com/{{ site.repository }}/issues">Issues</a></li>
+    </ul>
+    <p class="site-footer__meta">
+      Profit Basetool · Exchange API v1
+      {%- if site.github.build_revision %} · <a class="site-footer__revision" href="https://github.com/{{ site.repository }}/commit/{{ site.github.build_revision }}">{{ site.github.build_revision | slice: 0, 9 }}</a>{% endif %}
+    </p>
+  </div>
+</footer>

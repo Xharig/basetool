@@ -1,0 +1,20 @@
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="{{ '/' | relative_url }}">
+      <img class="brand__mark" src="{{ '/assets/logos/basetool-logo.svg' | relative_url }}" alt="" width="48" height="48">
+      <span class="brand__text">
+        <span class="brand__name">Profit Basetool</span>
+        <span class="brand__sub">Exchange API</span>
+      </span>
+    </a>
+    <nav class="site-header__links" aria-label="Site">
+      <a href="{{ '/' | relative_url }}"{% if include.area == 'docs' %} aria-current="true"{% endif %}>Docs</a>
+      <a href="{{ '/reference/' | relative_url }}" aria-label="API reference"{% if include.area == 'reference' %} aria-current="true"{% endif %}>API<span class="site-header__long"> reference</span></a>
+      <a class="site-header__github" href="https://github.com/{{ site.repository }}" aria-label="GitHub repository">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#krt-icon-github"/></svg>
+        <span class="site-header__github-text">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>

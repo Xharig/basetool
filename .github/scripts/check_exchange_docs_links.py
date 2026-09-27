@@ -5,6 +5,9 @@ that exists; a link to a directory needs an index page there (README.md, index.m
 or the site answers 404. Links into the site's generated parts (the OpenAPI reference and the
 schema copies, both with generated index pages) are checked against their sources in the
 repository. Anchors and absolute URLs are not followed.
+
+Every page the site navigation (`_data/navigation.yml`) lists must exist too, or the layout would
+silently drop its entry.
 """
 
 import argparse
@@ -22,6 +25,37 @@ GENERATED = {
     "reference/exchange-v1.openapi.json": "ingest/src/main/resources/api/exchange-v1.openapi.json",
     "schemas": "ingest/src/main/resources/exchange/v1/schemas",
 }
+
+GENERATED_PAGES = {
+    "reference/index.html": "ingest/src/main/resources/api/exchange-v1.openapi.json",
+    "schemas/index.md": "ingest/src/main/resources/exchange/v1/schemas",
+}
+
+NAV_PATH = re.compile(r"^\s*path:\s*(\S+)\s*$", re.M)
+
+
+def broken_navigation(repo: pathlib.Path) -> list[str]:
+    """Returns every page the site navigation lists that the site would not have.
+
+    Args:
+        repo: the repository root.
+
+    Returns:
+        One ``_data/navigation.yml: path (reason)`` line per missing page.
+    """
+    docs = repo / "docs" / "exchange"
+    navigation = docs / "_data" / "navigation.yml"
+    if not navigation.is_file():
+        return ["docs/exchange/_data/navigation.yml (missing)"]
+    broken = []
+    for path in NAV_PATH.findall(navigation.read_text(encoding="utf-8")):
+        where = f"docs/exchange/_data/navigation.yml: {path}"
+        if path in GENERATED_PAGES:
+            if not (repo / GENERATED_PAGES[path]).exists():
+                broken.append(f"{where} (source missing)")
+        elif not (docs / path).is_file():
+            broken.append(f"{where} (missing)")
+    return broken
 
 
 def broken_links(repo: pathlib.Path) -> list[str]:
@@ -84,6 +118,20 @@ def selftest() -> None:
         (spec / "exchange-v1.openapi.json").write_text("{}", encoding="utf-8")
         found = broken_links(repo)
         assert len(found) == 3, found
+        assert broken_navigation(repo) == ["docs/exchange/_data/navigation.yml (missing)"]
+        (docs / "_data").mkdir()
+        (docs / "_data" / "navigation.yml").write_text(
+            "- section: S\n  items:\n    - title: B\n      path: b.md\n"
+            "    - title: Gone\n      path: gone.md\n"
+            "    - title: Reference\n      path: reference/index.html\n"
+            "    - title: Schemas\n      path: schemas/index.md\n",
+            encoding="utf-8",
+        )
+        found = broken_navigation(repo)
+        assert found == [
+            "docs/exchange/_data/navigation.yml: gone.md (missing)",
+            "docs/exchange/_data/navigation.yml: schemas/index.md (source missing)",
+        ], found
     print("selftest ok")
 
 
@@ -100,7 +148,7 @@ def main() -> int:
         selftest()
         return 0
     repo = pathlib.Path(__file__).resolve().parents[2]
-    broken = broken_links(repo)
+    broken = broken_links(repo) + broken_navigation(repo)
     for line in broken:
         print(f"broken link: {line}")
     return 1 if broken else 0

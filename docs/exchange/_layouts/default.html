@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang }}">
+<head>
+{% include head.html %}
+</head>
+<body>
+{% include icons.html %}
+{% include header.html area="docs" %}
+<div class="site-shell">
+  <aside class="site-shell__nav">
+    {% include nav.html label="Documentation" %}
+  </aside>
+  <main id="content" class="site-main">
+    <details class="nav-drawer">
+      <summary class="nav-drawer__toggle">
+        <span>Contents</span>
+        <svg class="icon nav-drawer__chevron" aria-hidden="true" focusable="false"><use href="#krt-icon-chevron-down"/></svg>
+      </summary>
+      {% include nav.html label="Documentation (menu)" %}
+    </details>
+    {%- assign wrapped = content | replace: '<table>', '<div class="table-scroll" role="region" aria-label="Table" tabindex="0"><table>' | replace: '</table>', '</table></div>' | replace: '<th> </th>', '<th></th>' %}
+    <article class="doc">
+      {% include anchored.html html=wrapped %}
+    </article>
+  </main>
+</div>
+{% include footer.html %}
+</body>
+</html>

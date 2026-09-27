@@ -3,7 +3,8 @@
 The committed document refers to its schemas by their published URLs. This writes a copy whose
 references point at local copies of the schemas, each without its absolute $id, so the page
 resolves every reference from the site instead of fetching it. Beside them it writes the page
-itself, which renders the copy with the Redoc bundle placed next to it.
+itself: a Jekyll page whose layout, `docs/exchange/_layouts/reference.html`, renders the copy with
+the Redoc bundle placed next to it, themed from the site's design tokens.
 
 With --schema-index it instead writes the index page of the site's schema directory, a table of
 every schema with its title and description.
@@ -14,28 +15,25 @@ committed schemas stay as they are.
 """
 
 import argparse
-import html
 import json
 import pathlib
+import re
 import sys
 import tempfile
 
 BASE = "https://ingest.profit-base.online/exchange/v1/schemas/"
 TITLE = "Profit Basetool Exchange API reference"
 BUNDLE = "redoc.standalone.js"
-PAGE = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
-<style>body {{ margin: 0; padding: 0; }}</style>
-</head>
-<body>
-<redoc spec-url="openapi.json"></redoc>
-<script src="{bundle}"></script>
-</body>
-</html>
+SPEC = "openapi.json"
+LAYOUT = "reference"
+PAGE = """---
+layout: {layout}
+title: {title}
+generated: true
+spec: {spec}
+bundle: {bundle}
+---
+<div id="redoc" class="reference" data-spec="{spec}"></div>
 """
 
 
@@ -102,12 +100,61 @@ def prepare(openapi: pathlib.Path, schemas: pathlib.Path, out: pathlib.Path) -> 
         document.pop("$id", None)
         (out / "schemas" / schema.name).write_text(
             json.dumps(soften(localise(document, "")), indent=2), encoding="utf-8")
-    prepared = out / "openapi.json"
+    prepared = out / SPEC
     document = json.loads(openapi.read_text(encoding="utf-8"))
     prepared.write_text(json.dumps(soften(localise(document, "schemas/")), indent=2), encoding="utf-8")
     (out / "index.html").write_text(
-        PAGE.format(title=html.escape(TITLE), bundle=BUNDLE), encoding="utf-8")
+        PAGE.format(layout=LAYOUT, title=json.dumps(TITLE), spec=SPEC, bundle=BUNDLE),
+        encoding="utf-8")
     return prepared
+
+
+def front_matter(page: str) -> tuple[dict[str, str], str]:
+    """Splits a Jekyll page into its flat front matter and its body.
+
+    Args:
+        page: the page's text, starting with a `---` line.
+
+    Returns:
+        The front matter as key/value strings, and the body after the closing `---` line.
+    """
+    _, head, body = page.split("---\n", 2)
+    return dict(line.split(": ", 1) for line in head.splitlines()), body
+
+
+def check_site(docs: pathlib.Path) -> list[str]:
+    """Checks that the site renders the page: its layout exists and loads the bundle and the theme.
+
+    Every design token the theme script reads must be defined by the site's stylesheet, or the
+    reference would silently fall back to Redoc's default colours.
+
+    Args:
+        docs: the docs/exchange directory.
+
+    Returns:
+        One line per problem found.
+    """
+    problems = []
+    layout = docs / "_layouts" / f"{LAYOUT}.html"
+    script = docs / "assets" / "js" / "reference.js"
+    stylesheet = docs / "assets" / "css" / "krt-docs.css"
+    for path in (layout, script, stylesheet):
+        if not path.is_file():
+            problems.append(f"{path.relative_to(docs).as_posix()} is missing")
+    if problems:
+        return problems
+    text = layout.read_text(encoding="utf-8")
+    for needle in ("page.bundle", "page.spec", "/assets/js/reference.js"):
+        if needle not in text:
+            problems.append(f"_layouts/{LAYOUT}.html does not use {needle}")
+    code = script.read_text(encoding="utf-8")
+    for needle in ("Redoc.init", "dataset.spec", "theme:"):
+        if needle not in code:
+            problems.append(f"assets/js/reference.js does not contain {needle}")
+    defined = set(re.findall(r"^\s*(--[a-z0-9-]+):", stylesheet.read_text(encoding="utf-8"), re.M))
+    for name in sorted(set(re.findall(r"token\(\"(--[a-z0-9-]+)\"\)", code)) - defined):
+        problems.append(f"assets/js/reference.js reads {name}, which krt-docs.css does not define")
+    return problems
 
 
 def cell(text: str) -> str:
@@ -175,7 +222,32 @@ def selftest() -> None:
         assert conditional["then"]["properties"]["n"] == {"multipleOf": 1}, conditional
         assert conditional["then"]["properties"]["s"] == {"type": "integer"}, conditional
         page = (root / "out" / "index.html").read_text(encoding="utf-8")
-        assert 'spec-url="openapi.json"' in page and f'src="{BUNDLE}"' in page, page
+        meta, body = front_matter(page)
+        assert meta == {"layout": LAYOUT, "title": json.dumps(TITLE), "generated": "true",
+                        "spec": SPEC, "bundle": BUNDLE}, meta
+        assert f'data-spec="{SPEC}"' in body and "<script" not in body, body
+        docs = root / "docs"
+        (docs / "_layouts").mkdir(parents=True)
+        (docs / "assets" / "js").mkdir(parents=True)
+        (docs / "assets" / "css").mkdir(parents=True)
+        (docs / "_layouts" / f"{LAYOUT}.html").write_text(
+            '<script src="{{ page.bundle }}"></script>{{ page.spec }}'
+            "<script src=\"{{ '/assets/js/reference.js' | relative_url }}\"></script>",
+            encoding="utf-8")
+        (docs / "assets" / "js" / "reference.js").write_text(
+            'Redoc.init(c.dataset.spec, { theme: { a: token("--color-primary"), '
+            'b: token("--color-gone") } });', encoding="utf-8")
+        (docs / "assets" / "css" / "krt-docs.css").write_text(
+            ":root {\n  --color-primary: #E77E23;\n}\n", encoding="utf-8")
+        problems = check_site(docs)
+        assert problems == [
+            "assets/js/reference.js reads --color-gone, which krt-docs.css does not define",
+        ], problems
+        (docs / "_layouts" / f"{LAYOUT}.html").write_text("<main></main>", encoding="utf-8")
+        assert len(check_site(docs)) == 4, check_site(docs)
+        repo = pathlib.Path(__file__).resolve().parents[2]
+        problems = check_site(repo / "docs" / "exchange")
+        assert problems == [], problems
         (root / "in" / "a.schema.json").write_text(
             json.dumps({"title": "A", "description": "One | two\nthree"}), encoding="utf-8")
         index = schema_index(root / "in").read_text(encoding="utf-8")
