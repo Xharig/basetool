@@ -156,13 +156,13 @@ covered, it is **persisted down** to the row's new stock **in the same transacti
 via an atomic conditional update (`ACTIVE` offers only; only when the stored value `> newStock`). This
 is **kind-aware** (REQ-MARKET-014, ADR-0108): a **material** offer clamps its `offeredAmount`
 (`MaterialExchangeOfferRepository.clampOfferedAmountToStock`), a **stock-backed item** offer clamps its
-whole-unit `itemQuantity` (`clampItemQuantityToStock`); both run at the book-out / transfer / rebooking
-decrement sites in `InventoryCheckoutService`. The job-order handover sites decrement one row kind each
-and clamp only that kind: a **material** handover reduces material rows (`JobOrderHandoverService`,
-`clampOfferedAmountToStock`), an **item** delivery reduces game-item rows (`JobOrderItemHandoverService`,
-REQ-ORDERS-030, `clampItemQuantityToStock`), and booking production against an item order consumes
-material rows and clamps their material offers (`JobOrderItemProductionService`, REQ-ORDERS-025,
-`clampOfferedAmountToStock`). There is no direct amount-edit path on a Lager row: the former
+whole-unit `itemQuantity` (`clampItemQuantityToStock`). Every decrement site runs both through one
+component, `MaterialExchangeOfferRatchet#lower`: the book-out / transfer / rebooking sites in
+`InventoryCheckoutService`, a **material** handover (`JobOrderHandoverService`), an **item** delivery
+(`JobOrderItemHandoverService`, REQ-ORDERS-030), booking production against an item order
+(`JobOrderItemProductionService`, REQ-ORDERS-025), and a connected application's stock write
+(REQ-XCH-016); a row holds offers of one kind only, so the other clamp is a no-op. There is no direct
+amount-edit path on a Lager row: the former
 `PUT /api/v1/inventory/{id}` and its `clampOffersToStock` seam were removed (d03a9238b, 2026-07-14;
 the unused seam itself on 2026-09-22). This is the *persisting* counterpart to the display-time
 clamp-on-read
@@ -175,17 +175,31 @@ themselves). A **full** book-out deletes the row and cascade-removes the offer (
 needed there. The offer's `@Version` is intentionally left untouched by the ratchet; a concurrent
 owner edit is guarded independently by the release/edit `offeredAmount <= current stock` validation.
 
+**Both effects are audited** (REQ-MARKET-008, REQ-AUDIT-001). Every offer the ratchet lowers records
+`MARKET_OFFER_REDUCED` (`kind`, `from`, `to`, `reason`); every active offer on a row that is about to
+be deleted records `MARKET_OFFER_REMOVED` (`kind`, `reason`), read **before** the delete because the
+cascade leaves nothing to read afterwards. That covers each delete path: a depleting book-out,
+transfer or rebooking, the bulk checkout, a bulk rebooking (which deletes every moved row), the global
+wipe of the shared Lager, a depleting handover, item delivery or production booking, a connected
+application emptying a lot, and the purge of a deleted member's rows. The `reason` names the path:
+`checkout`, `bulk-checkout`, `transfer`, `rebook`, `wipe`, `handover`, `production`, `stock`,
+`user-deletion`. The stock-merge fold never deletes an offer-backed row, so it needs neither.
+
 **Acceptance**
 - [ ] Reducing a backing row below its active offer's `offeredAmount` persists `offeredAmount` down to
 the new stock (book-out, transfer, rebooking, handover / item delivery, production booking).
 - [ ] Increasing the backing row leaves the offer's `offeredAmount` unchanged (no auto-expand).
 - [ ] A deactivated offer is not touched by the ratchet.
 - [ ] A fully booked-out row's offer is cascade-removed (unchanged from REQ-MARKET-002).
+- [ ] Each lowered offer records one `MARKET_OFFER_REDUCED` and each cascade-removed active offer one
+`MARKET_OFFER_REMOVED`, on every path above, with the path's `reason`.
 
-**Enforced by:** `MaterialExchangeOfferClampDataTest`, `InventoryItemServiceBookOutTest` · **Code:**
-`MaterialExchangeOfferRepository#clampOfferedAmountToStock` / `#clampItemQuantityToStock`,
-`InventoryCheckoutService#bookOutInventoryItem` / `#rebookPersonal` / transfer path (via
-`ratchetBoardOffersToStock`), `JobOrderHandoverService#createHandover`,
+**Enforced by:** `MaterialExchangeOfferClampDataTest`, `MaterialExchangeOfferRatchetTest`,
+`MaterialExchangeOfferRatchetDataTest`, `InventoryItemServiceBookOutTest` · **Code:**
+`MaterialExchangeOfferRatchet`, `MaterialExchangeOfferRepository#clampOfferedAmountToStock` /
+`#clampItemQuantityToStock`, `InventoryCheckoutService#bookOutInventoryItem` / `#rebookPersonal` /
+`#bulkCheckout` / `#bulkRebook` / `#deleteAllGlobalInventory` / transfer path,
+`UserDeletionService#deleteUser`, `JobOrderHandoverService#createHandover`,
 `JobOrderItemHandoverService#createItemHandover` (item-delivery decrement, REQ-ORDERS-030),
 `JobOrderItemProductionService` (production consumption, REQ-ORDERS-025) · **Issues:** #1182
 
@@ -260,7 +274,9 @@ listed.
 
 Every state-mutating Materialbörse activity (offer release `MARKET_OFFER_RELEASED`, offer edit
 `MARKET_REMARK_UPDATED` — amount and/or remark, offer deactivate `MARKET_OFFER_DEACTIVATED`, interest
-register `MARKET_INTEREST_REGISTERED`, interest withdraw `MARKET_INTEREST_WITHDRAWN`) writes exactly
+register `MARKET_INTEREST_REGISTERED`, interest withdraw `MARKET_INTEREST_WITHDRAWN`, and the
+offer effects of a stock change on any channel — `MARKET_OFFER_REDUCED` / `MARKET_OFFER_REMOVED`,
+REQ-MARKET-013) writes exactly
 one `audit_event` row under `AuditDomain.MARKET`, in the
 business transaction, with a PII-free `key=value` details payload (kind/ids/quality/offered
 amount/stock/remark **length** only — never the remark body, never usernames). Item offers
@@ -275,7 +291,7 @@ carries the area's generic `MARKET_AUDIT_EXPORTED` / `MARKET_AUDIT_PURGED` event
 - [ ] Each mutation records its `MARKET_*` event; no name or remark body appears in `details`.
 
 **Enforced by:** `docs/specs/audit.md` coverage · **Code:** `MaterialExchangeService`,
-`AuditEventType`, `AuditDomain`, `AdminAuditLogPageController`
+`MaterialExchangeOfferRatchet`, `AuditEventType`, `AuditDomain`, `AdminAuditLogPageController`
 
 ### REQ-MARKET-009 — UI: locked master-detail, live update, DS-only
 

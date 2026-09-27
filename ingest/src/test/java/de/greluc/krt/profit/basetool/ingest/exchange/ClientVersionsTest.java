@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -47,5 +48,14 @@ class ClientVersionsTest {
       })
   void meetsTheMinimum(String userAgent, String minimum, boolean expected) {
     assertThat(ClientVersions.meets(userAgent, minimum)).isEqualTo(expected);
+  }
+
+  @Test
+  void numbersCompareByValueWhateverTheirLeadingZerosOrLength() {
+    assertThat(ClientVersions.compareNumbers("10", "9")).isPositive();
+    assertThat(ClientVersions.compareNumbers("007", "7")).isZero();
+    assertThat(ClientVersions.compareNumbers("0", "000")).isZero();
+    assertThat(ClientVersions.compareNumbers("999999999", "1000000000")).isNegative();
+    assertThat(ClientVersions.compareNumbers("12", "13")).isNegative();
   }
 }

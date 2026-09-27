@@ -82,7 +82,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Inventory is append-only: a transfer or rebooking inserts a new row and decrements or deletes
  * the source, and only {@link #mergeStockIfRequested} folds rows together. Partial moves {@code
- * saveAndFlush} the reduced source so its {@code @Version} stays current (REQ-FE-003).
+ * saveAndFlush} the reduced source so its {@code @Version} stays current (REQ-FE-003). Every
+ * reduced or deleted row passes through {@link MaterialExchangeOfferRatchet}, which lowers or
+ * audits the removal of the Materialbörse offers on it.
  */
 @Slf4j
 @Service
@@ -111,6 +113,7 @@ public class InventoryCheckoutService {
   private final MissionFinanceEntryRepository missionFinanceEntryRepository;
   private final MissionParticipantRepository missionParticipantRepository;
   private final MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  private final MaterialExchangeOfferRatchet offerRatchet;
   private final InventoryItemMapper inventoryItemMapper;
   private final OwnerScopeService ownerScopeService;
   private final AuditService auditService;
@@ -132,6 +135,47 @@ public class InventoryCheckoutService {
   @Transactional
   public InventoryItemDto bookOutInventoryItem(
       UUID id, InventoryItemBookOutDto dto, UUID currentUserId, boolean isAdmin) {
+    return bookOut(id, dto, currentUserId, isAdmin, null).item();
+  }
+
+  /**
+   * Books out part of a member's row for a connected application as {@link #bookOutInventoryItem}
+   * does, auditing the Materialbörse offers it lowers or removes with the reason {@code stock}
+   * (REQ-XCH-016).
+   *
+   * @param id the row
+   * @param dto the book-out
+   * @param memberId the member who owns the row
+   * @return the offers the book-out lowered and removed
+   * @throws NotFoundException when the row is unknown
+   * @throws BadRequestException when the book-out is invalid for the row
+   */
+  @NotNull
+  @Transactional(propagation = Propagation.MANDATORY)
+  public MaterialExchangeOfferRatchet.Effects bookOutForClient(
+      UUID id, InventoryItemBookOutDto dto, UUID memberId) {
+    return bookOut(id, dto, memberId, false, MaterialExchangeOfferRatchet.Reason.STOCK).offers();
+  }
+
+  /**
+   * Books out part of a row and keeps its Materialbörse offers in step.
+   *
+   * @param id the row
+   * @param dto the book-out
+   * @param currentUserId the caller
+   * @param isAdmin whether the caller may book out another member's row
+   * @param offerReason the audit reason of the offer effects, or {@code null} for the checkout
+   *     type's
+   * @return the remaining row, or {@code null} for a depleted discard or sale, and the offer
+   *     effects
+   */
+  @NotNull
+  private BookOut bookOut(
+      UUID id,
+      InventoryItemBookOutDto dto,
+      UUID currentUserId,
+      boolean isAdmin,
+      MaterialExchangeOfferRatchet.@Nullable Reason offerReason) {
     InventoryItem item =
         Entities.require(inventoryItemRepository.findById(id), "Inventory item not found");
 
@@ -191,8 +235,17 @@ public class InventoryCheckoutService {
 
     if (checkoutType == CheckoutType.TRANSFER) {
       return bookOutTransfer(
-          item, dto, remainingAmount, sourceId, sourceLabel, materialName, depleted);
+          item,
+          dto,
+          remainingAmount,
+          sourceId,
+          sourceLabel,
+          materialName,
+          depleted,
+          offerReason != null ? offerReason : MaterialExchangeOfferRatchet.Reason.TRANSFER);
     }
+    final MaterialExchangeOfferRatchet.Reason reason =
+        offerReason != null ? offerReason : MaterialExchangeOfferRatchet.Reason.CHECKOUT;
 
     Map<UUID, Double> orderReductions =
         AllocationReductions.resolveReductionPlan(
@@ -208,6 +261,7 @@ public class InventoryCheckoutService {
     AllocationReductions.applyPlan(item, missionReductions, false);
 
     if (remainingAmount <= QUANTITY_EPSILON) {
+      int removed = offerRatchet.beforeDelete(List.of(sourceId), reason);
       inventoryItemRepository.delete(item);
       recordBookOutTail(
           checkoutType,
@@ -218,14 +272,14 @@ public class InventoryCheckoutService {
           dto,
           0.0,
           financeEntryIds);
-      return null;
+      return new BookOut(null, new MaterialExchangeOfferRatchet.Effects(0, removed));
     } else {
       item.setAmount(remainingAmount);
       if (!InventoryAllocations.fits(item)) {
         throw new OverAllocationException();
       }
       InventoryItem saved = inventoryItemRepository.saveAndFlush(item);
-      ratchetBoardOffersToStock(sourceId, remainingAmount);
+      int reduced = offerRatchet.lower(sourceId, remainingAmount, reason);
       recordBookOutTail(
           checkoutType,
           sourceId,
@@ -235,7 +289,8 @@ public class InventoryCheckoutService {
           dto,
           remainingAmount,
           financeEntryIds);
-      return inventoryItemMapper.toDto(saved);
+      return new BookOut(
+          inventoryItemMapper.toDto(saved), new MaterialExchangeOfferRatchet.Effects(reduced, 0));
     }
   }
 
@@ -250,18 +305,21 @@ public class InventoryCheckoutService {
    * @param sourceLabel the source row's {@code material @ location} label snapshot
    * @param materialName the material name snapshot
    * @param depleted whether the source row depletes to zero
-   * @return the DTO of the newly created target row
+   * @param offerReason the audit reason of the source's offer effects
+   * @return the DTO of the newly created target row, and the source's offer effects
    * @throws NotFoundException when the target user or location is unknown
    * @throws BadRequestException when the transfer changes neither user nor location
    */
-  private InventoryItemDto bookOutTransfer(
+  @NotNull
+  private BookOut bookOutTransfer(
       @NotNull InventoryItem item,
       InventoryItemBookOutDto dto,
       double remainingAmount,
       UUID sourceId,
       String sourceLabel,
       String materialName,
-      boolean depleted) {
+      boolean depleted,
+      MaterialExchangeOfferRatchet.@NotNull Reason offerReason) {
     User targetUser = item.getUser();
     if (dto.targetUserId() != null && !dto.targetUserId().equals(item.getUser().getId())) {
       targetUser =
@@ -305,7 +363,11 @@ public class InventoryCheckoutService {
     final InventoryItem savedNew = inventoryItemRepository.save(newItem);
     AllocationReductions.applyPlan(item, orderReductions, true);
     AllocationReductions.applyPlan(item, missionReductions, false);
+    final MaterialExchangeOfferRatchet.Effects offers;
     if (remainingAmount <= QUANTITY_EPSILON) {
+      offers =
+          new MaterialExchangeOfferRatchet.Effects(
+              0, offerRatchet.beforeDelete(List.of(sourceId), offerReason));
       inventoryItemRepository.delete(item);
     } else {
       item.setAmount(remainingAmount);
@@ -313,7 +375,9 @@ public class InventoryCheckoutService {
         throw new OverAllocationException();
       }
       inventoryItemRepository.saveAndFlush(item);
-      ratchetBoardOffersToStock(sourceId, remainingAmount);
+      offers =
+          new MaterialExchangeOfferRatchet.Effects(
+              offerRatchet.lower(sourceId, remainingAmount, offerReason), 0);
     }
     auditService.record(
         AuditEventType.INVENTORY_ITEM_TRANSFERRED,
@@ -327,7 +391,7 @@ public class InventoryCheckoutService {
             .with("depleted", depleted));
     final InventoryItem mergedTarget =
         mergeStockIfRequested(savedNew, Boolean.TRUE.equals(dto.mergeStock()));
-    return inventoryItemMapper.toDto(mergedTarget);
+    return new BookOut(inventoryItemMapper.toDto(mergedTarget), offers);
   }
 
   /**
@@ -559,6 +623,7 @@ public class InventoryCheckoutService {
     InventoryItem savedNew = inventoryItemRepository.save(newItem);
 
     if (depleted) {
+      offerRatchet.beforeDelete(List.of(sourceId), MaterialExchangeOfferRatchet.Reason.REBOOK);
       inventoryItemRepository.delete(item);
     } else {
       item.setAmount(remainingAmount);
@@ -566,7 +631,7 @@ public class InventoryCheckoutService {
         throw new OverAllocationException();
       }
       inventoryItemRepository.saveAndFlush(item);
-      ratchetBoardOffersToStock(sourceId, remainingAmount);
+      offerRatchet.lower(sourceId, remainingAmount, MaterialExchangeOfferRatchet.Reason.REBOOK);
     }
 
     auditService.record(
@@ -742,19 +807,6 @@ public class InventoryCheckoutService {
   }
 
   /**
-   * Clamps any active Materialbörse offer on a Lager row down to the row's reduced stock
-   * (REQ-MARKET-013): SCU for a material offer, whole units for an item offer. A no-op for rows
-   * backing no offer; does not detach the persistence context.
-   *
-   * @param itemId the backing Lager row whose active offer to clamp
-   * @param stock the row's new (reduced) stock
-   */
-  private void ratchetBoardOffersToStock(UUID itemId, double stock) {
-    materialExchangeOfferRepository.clampOfferedAmountToStock(itemId, stock);
-    materialExchangeOfferRepository.clampItemQuantityToStock(itemId, (int) Math.floor(stock));
-  }
-
-  /**
    * Deletes every non-personal inventory item in one bulk statement (the admin "globales Lager
    * leeren" action). Personal rows are kept.
    *
@@ -768,6 +820,7 @@ public class InventoryCheckoutService {
         scope.adminAllScope(),
         scope.activeOrgUnitId(),
         scope.memberOrgUnitIds().size());
+    offerRatchet.beforeWipe(scope);
     int removed =
         inventoryItemRepository.deleteAllNonPersonal(
             scope.adminAllScope(), scope.activeOrgUnitId(), scope.memberOrgUnitIds());
@@ -820,6 +873,7 @@ public class InventoryCheckoutService {
       toDelete.add(itemId);
     }
 
+    offerRatchet.beforeDelete(toDelete, MaterialExchangeOfferRatchet.Reason.BULK_CHECKOUT);
     inventoryItemRepository.deleteAllById(toDelete);
     log.info(
         "Bulk checkout completed: {} items removed for user {}", toDelete.size(), currentUserId);
@@ -1094,6 +1148,7 @@ public class InventoryCheckoutService {
         AllocationReductions.resolveReductionPlan(source, null, amount, false);
     applyTransferInherit(source, newItem, orderReductions, missionReductions);
     final InventoryItem savedNew = inventoryItemRepository.save(newItem);
+    offerRatchet.beforeDelete(List.of(source.getId()), MaterialExchangeOfferRatchet.Reason.REBOOK);
     inventoryItemRepository.delete(source);
 
     mergeStockIfRequested(savedNew, mergeStock);
@@ -1145,4 +1200,14 @@ public class InventoryCheckoutService {
         .toDto(saved)
         .withVersion(InventoryAllocations.forcedNextVersion(saved));
   }
+
+  /**
+   * The outcome of one book-out.
+   *
+   * @param item the remaining source row, the new target row of a transfer, or {@code null} for a
+   *     depleted discard or sale
+   * @param offers the Materialbörse offers the book-out lowered and removed
+   */
+  private record BookOut(
+      @Nullable InventoryItemDto item, MaterialExchangeOfferRatchet.@NotNull Effects offers) {}
 }

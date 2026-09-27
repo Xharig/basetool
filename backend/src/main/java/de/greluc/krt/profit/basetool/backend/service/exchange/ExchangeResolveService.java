@@ -90,6 +90,9 @@ public class ExchangeResolveService {
   /** Stands in for an empty text-key list; no catalogue key is empty. */
   private static final String NO_TEXT = "";
 
+  /** The longest display name the published item reference carries. */
+  private static final int MAX_NAME = 200;
+
   private final BlueprintProductService blueprintProductService;
   private final BlueprintImportService blueprintImportService;
   private final BlueprintNameNormalizer normalizer;
@@ -255,8 +258,11 @@ public class ExchangeResolveService {
   @NotNull
   private Catalog blueprintCatalog(@NotNull List<ExchangeItemRef> refs) {
     Map<String, Entry> products = new LinkedHashMap<>();
+    Map<String, Entry> byBt = new HashMap<>();
     for (ResolvedProduct product : blueprintProductService.allProducts()) {
-      products.putIfAbsent(product.productKey(), toEntry(product));
+      Entry entry = toEntry(product);
+      products.putIfAbsent(product.productKey(), entry);
+      byBt.putIfAbsent(entry.bt(), entry);
     }
 
     Map<String, Set<Entry>> byScRecord = new HashMap<>();
@@ -292,7 +298,7 @@ public class ExchangeResolveService {
     }
 
     return new Catalog(
-        bt -> Outcome.ofOne(products.get(bt)),
+        bt -> Outcome.ofOne(byBt.get(bt)),
         byScRecord,
         byScGuid,
         byUexId,
@@ -528,6 +534,21 @@ public class ExchangeResolveService {
   }
 
   /**
+   * Builds a blueprint's entry with the key the blueprint feed issues as {@code bt}: the product
+   * key, or its hash when it is longer than the published limit (REQ-XCH-015).
+   *
+   * @param productKey the normalized product key
+   * @param productName the display name
+   * @return the entry, its name cut to the published limit
+   */
+  @NotNull
+  private static Entry blueprintEntry(@NotNull String productKey, @NotNull String productName) {
+    return new Entry(
+        ExchangeBlueprintFeedService.keyOf(productKey),
+        productName.length() > MAX_NAME ? productName.substring(0, MAX_NAME) : productName);
+  }
+
+  /**
    * Maps a blueprint product to its entry.
    *
    * @param product the product
@@ -535,7 +556,7 @@ public class ExchangeResolveService {
    */
   @NotNull
   private static Entry toEntry(@NotNull ResolvedProduct product) {
-    return new Entry(product.productKey(), product.productName());
+    return blueprintEntry(product.productKey(), product.productName());
   }
 
   /**
@@ -546,7 +567,7 @@ public class ExchangeResolveService {
    */
   @NotNull
   private static Entry toEntry(@NotNull BlueprintImportSuggestionDto suggestion) {
-    return new Entry(suggestion.productKey(), suggestion.productName());
+    return blueprintEntry(suggestion.productKey(), suggestion.productName());
   }
 
   /**

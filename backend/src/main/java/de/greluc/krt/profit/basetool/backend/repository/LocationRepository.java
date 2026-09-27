@@ -118,4 +118,34 @@ public interface LocationRepository extends LookupTableRepository<Location, UUID
       AND (c.hasRefineryTerminal = true OR s.hasRefineryTerminal = true)
       """)
   List<Location> findLocationsWithRefinery();
+
+  /**
+   * Lists the non-hidden locations linked to a UEX city, by name.
+   *
+   * @param idCity the UEX city id
+   * @return the locations
+   */
+  @Query(
+      "SELECT l FROM Location l JOIN l.city c WHERE c.idCity = :idCity AND l.hidden = false"
+          + " ORDER BY l.name ASC")
+  List<Location> findExchangeByCity(@Param("idCity") Integer idCity);
+
+  /**
+   * Lists the non-hidden locations linked to a UEX space station, by name.
+   *
+   * @param idSpaceStation the UEX space station id
+   * @return the locations
+   */
+  @Query(
+      "SELECT l FROM Location l JOIN l.spaceStation s WHERE s.idSpaceStation = :idSpaceStation"
+          + " AND l.hidden = false ORDER BY l.name ASC")
+  List<Location> findExchangeBySpaceStation(@Param("idSpaceStation") Integer idSpaceStation);
+
+  /**
+   * Finds the non-hidden location with an exact name.
+   *
+   * @param name the name
+   * @return the location, or empty
+   */
+  Optional<Location> findFirstByNameAndHiddenFalseOrderByIdAsc(String name);
 }

@@ -82,6 +82,7 @@ class InventoryItemServiceTest {
   @Mock private MissionFinanceEntryRepository missionFinanceEntryRepository;
   @Mock private MissionParticipantRepository missionParticipantRepository;
   @Mock private MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private InventoryItemMapper inventoryItemMapper;
 
   @Mock private MaterialMapper materialMapper;
@@ -115,6 +116,7 @@ class InventoryItemServiceTest {
             missionFinanceEntryRepository,
             missionParticipantRepository,
             materialExchangeOfferRepository,
+            offerRatchet,
             inventoryItemMapper,
             ownerScopeService,
             auditService);

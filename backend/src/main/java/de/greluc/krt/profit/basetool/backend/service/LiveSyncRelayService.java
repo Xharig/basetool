@@ -141,6 +141,28 @@ public class LiveSyncRelayService {
   }
 
   /**
+   * Delivers a frame the backend raises itself after a committed write, locally first, then to
+   * peers; no bucket applies, since the write that raised it is bounded already.
+   *
+   * @param topic the room
+   * @param sections the sections, clipped to the class's whitelist
+   */
+  public void publishFromServer(@NotNull LiveSyncTopic topic, @NotNull List<String> sections) {
+    List<String> clipped = topic.topicClass().clipSections(sections);
+    if (clipped.isEmpty()) {
+      return;
+    }
+    streamService.deliver(topic, clipped);
+    fanout.publish(topic, clipped);
+    meterRegistry
+        .counter(
+            MetricNames.LIVESYNC_PUBLISH_ACCEPTED,
+            MetricNames.TAG_TOPIC_CLASS,
+            topic.topicClass().metricLabel())
+        .increment();
+  }
+
+  /**
    * Builds a greedy-refill bucket.
    *
    * @param burst the capacity

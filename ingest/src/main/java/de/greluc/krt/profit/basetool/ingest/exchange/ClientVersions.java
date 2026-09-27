@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -62,13 +63,40 @@ public final class ClientVersions {
       return false;
     }
     for (int group = 1; group <= 3; group++) {
-      int compared =
-          Long.compare(Long.parseLong(agent.group(group)), Long.parseLong(min.group(group)));
+      int compared = compareNumbers(agent.group(group), min.group(group));
       if (compared != 0) {
         return compared > 0;
       }
     }
     String suffix = agent.group(4);
     return suffix == null || suffix.startsWith("+");
+  }
+
+  /**
+   * Compares two runs of ASCII digits as the numbers they spell, without parsing them.
+   *
+   * @param left one run of digits
+   * @param right the other run of digits
+   * @return a negative number, zero or a positive number as {@code left} is below, equal to or
+   *     above {@code right}
+   */
+  static int compareNumbers(@NotNull String left, @NotNull String right) {
+    String a = stripLeadingZeros(left);
+    String b = stripLeadingZeros(right);
+    return a.length() != b.length() ? Integer.compare(a.length(), b.length()) : a.compareTo(b);
+  }
+
+  /**
+   * Drops the leading zeros of a run of digits, keeping one digit.
+   *
+   * @param digits the digits
+   * @return the digits without leading zeros, {@code 0} for all zeros
+   */
+  private static @NotNull String stripLeadingZeros(@NotNull String digits) {
+    int start = 0;
+    while (start < digits.length() - 1 && digits.charAt(start) == '0') {
+      start++;
+    }
+    return digits.substring(start);
   }
 }
