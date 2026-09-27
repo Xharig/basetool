@@ -156,7 +156,8 @@ something broke once.
     unique index (V246, REQ-SEC-072).
   - **Lager** — the „gestohlen“ marker on `inventory_item` (V247, REQ-INV-053).
   - **External exchange** — the client registry, its capabilities, the global switch and the
-    mirror's revision sequence (V248, REQ-XCH-003).
+    mirror's revision sequence (V248, REQ-XCH-003); installations and client revocations (V249,
+    REQ-XCH-007/-008).
 
 This timeline is curated, not exhaustive (checked against the directory on
 2026-09-27, tip V248). `ls | sort -V | tail -1` in this directory is the only reliable

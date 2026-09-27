@@ -23,6 +23,7 @@ import de.greluc.krt.profit.basetool.frontend.config.UsesLayoutModel;
 import de.greluc.krt.profit.basetool.frontend.model.dto.AuditEventDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.AuditRowView;
 import de.greluc.krt.profit.basetool.frontend.model.dto.BankAuditEventDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.ExchangeClientDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.PageResponse;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import de.greluc.krt.profit.basetool.frontend.service.BackendServiceException;
@@ -30,8 +31,10 @@ import de.greluc.krt.profit.basetool.frontend.support.AuditDomains;
 import de.greluc.krt.profit.basetool.frontend.support.RelayParams;
 import de.greluc.krt.profit.basetool.frontend.support.Roles;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -77,12 +80,17 @@ public class AdminAuditLogPageController {
   private static final String GENERIC_EVENT_PREFIX = "admin.audit.event.";
 
   /**
-   * The originating-client values the audit filter offers (REQ-AUDIT-005), in filter order: the two
-   * first-party clients plus {@code other} and {@code none}. Must match the backend's known client
-   * ids.
+   * The first-party client values the audit filter offers (REQ-AUDIT-005), in filter order; the
+   * exchange registry's clients follow them, then {@link #TRAILING_CLIENT_IDS}.
    */
-  private static final List<String> CLIENT_IDS =
-      List.of("basetool-frontend", "basetool-android", "other", "none");
+  private static final List<String> CLIENT_IDS = List.of("basetool-frontend", "basetool-android");
+
+  /** The catch-all client values that close the filter list. */
+  private static final List<String> TRAILING_CLIENT_IDS = List.of("other", "none");
+
+  /** Response type of the exchange registry list. */
+  private static final ParameterizedTypeReference<List<ExchangeClientDto>> EXCHANGE_CLIENT_LIST =
+      new ParameterizedTypeReference<>() {};
 
   /** The event types offered in the per-tab filter dropdown, by domain (in a sensible order). */
   private static final Map<String, List<String>> EVENT_TYPES_BY_DOMAIN =
@@ -356,6 +364,8 @@ public class AdminAuditLogPageController {
                   "EXCHANGE_CLIENT_SUSPENDED",
                   "EXCHANGE_CLIENT_ACTIVATED",
                   "EXCHANGE_SWITCH_CHANGED",
+                  "EXCHANGE_CLIENT_DISCONNECTED",
+                  "EXCHANGE_INSTALLATION_DISCONNECTED",
                   "CONNECTED_APPS_AUDIT_EXPORTED",
                   "CONNECTED_APPS_AUDIT_PURGED")));
 
@@ -386,7 +396,7 @@ public class AdminAuditLogPageController {
    * @param to period end filter, or absent
    * @param actorUserId actor filter (the actor's Keycloak {@code sub}), or absent
    * @param eventType event-type filter; ignored unless it is one of the active tab's own types
-   * @param clientId originating-client filter; ignored unless it is one of {@link #CLIENT_IDS}
+   * @param clientId originating-client filter; ignored unless the filter offers it
    * @param page zero-based page index
    * @param fragment {@code "results"} to render only the results fragment; otherwise the full page
    * @param model Thymeleaf model
@@ -412,7 +422,11 @@ public class AdminAuditLogPageController {
     final String activeEventType =
         RelayParams.oneOfOrNull(
             eventType, EVENT_TYPES_BY_DOMAIN.getOrDefault(activeDomain, List.of()));
-    final String activeClientId = RelayParams.oneOfOrNull(clientId, CLIENT_IDS);
+    Map<String, String> exchangeClientNames = exchangeClientNames();
+    List<String> clientIds = new ArrayList<>(CLIENT_IDS);
+    clientIds.addAll(exchangeClientNames.keySet());
+    clientIds.addAll(TRAILING_CLIENT_IDS);
+    final String activeClientId = RelayParams.oneOfOrNull(clientId, clientIds);
 
     String backendPath = isBank ? "/api/v1/bank/admin/audit" : "/api/v1/audit/" + activeDomain;
     UriComponentsBuilder uri =
@@ -449,7 +463,8 @@ public class AdminAuditLogPageController {
     model.addAttribute("filterTo", to);
     model.addAttribute("filterActorUserId", actorUserId);
     model.addAttribute("filterEventType", activeEventType);
-    model.addAttribute("clientIds", CLIENT_IDS);
+    model.addAttribute("clientIds", clientIds);
+    model.addAttribute("clientNames", exchangeClientNames);
     model.addAttribute("filterClientId", activeClientId);
     model.addAttribute(
         "paginationBaseUrl",
@@ -561,5 +576,26 @@ public class AdminAuditLogPageController {
     appendIfPresent(base, "eventType", eventType);
     appendIfPresent(base, "clientId", clientId);
     return base.toUriString();
+  }
+
+  /**
+   * Reads the exchange registry's clients, so the filter offers them and both the filter and the
+   * rows show their product names (REQ-XCH-010); an unreachable registry offers none.
+   *
+   * @return display names by client id, ordered by client id
+   */
+  @NotNull
+  private Map<String, String> exchangeClientNames() {
+    Map<String, String> names = new TreeMap<>();
+    try {
+      List<ExchangeClientDto> clients =
+          backendApiClient.get("/api/v1/admin/exchange-clients", EXCHANGE_CLIENT_LIST);
+      if (clients != null) {
+        clients.forEach(c -> names.put(c.clientId(), c.displayName()));
+      }
+    } catch (Exception e) {
+      log.debug("Could not load the exchange registry for the audit client filter", e);
+    }
+    return names;
   }
 }

@@ -61,7 +61,7 @@ not a new write path.
 ### REQ-INGEST-001 — Dedicated gateway, minimal forward-only surface
 
 > [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The route table gains `/exchange/v1/**` (REQ-XCH-001). `ActingMemberFilter.ACTING_PATHS` stays an explicit list and grows by the exchange routes one by one, never by a prefix (ADR-0216). The gateway then keeps idempotency results and daily quotas in Redis and a little policy logic (REQ-XCH-020, REQ-XCH-023). The legacy `/v1/*` routes end at the go-live (REQ-XCH-033). Until WP 3.2 (#2082) ships, the text below is current.
+> The route table gains `/exchange/v1/**` (REQ-XCH-001). `ActingMemberFilter` keeps the exchange routes as their own explicit list next to the two ingest routes and grows it route by route, never by a prefix (ADR-0216); the first is `/api/v1/exchange/catalog/locations` (WP 3.1). The gateway then keeps idempotency results and daily quotas in Redis and a little policy logic (REQ-XCH-020, REQ-XCH-023). The legacy `/v1/*` routes end at the go-live (REQ-XCH-033). Until WP 3.2 (#2082) ships, the text below is current.
 
 A new standalone service (the `ingest` gateway) is the only new internet-reachable
 surface. It exposes **exactly two** endpoints, one per existing import draft:

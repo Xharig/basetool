@@ -1,0 +1,56 @@
+rule_files:
+  - ../alerts/business.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - forged exchange headers keep arriving
+    interval: 1m
+    input_series:
+      - series: 'basetool_on_behalf_of_refused_total{job="basetool-backend", instance="backend:11261", reason="forged_exchange_header"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: ExchangeRelayHeaderForged
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Exchange relay headers from something other than the gateway"
+              description: "Something other than the ingest gateway acting for a member sent X-Exchange-Client or X-Exchange-Capabilities, or the gateway sent them on an ingest endpoint, repeatedly. A browser session or the app naming an external client is trying to borrow its attribution or capabilities (REQ-XCH-010). Find the source via the correlationId in the backend log."
+
+  - name: silent - other refusal reasons do not count as forged headers
+    interval: 1m
+    input_series:
+      - series: 'basetool_on_behalf_of_refused_total{job="basetool-backend", instance="backend:11261", reason="endpoint_not_bound"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: ExchangeRelayHeaderForged
+        exp_alerts: []
+
+  - name: fires - the gate keeps refusing a suspended client
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_gate_refused_total{job="basetool-backend", instance="backend:11261", reason="client_suspended"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: ExchangeGateRefusing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              reason: client_suspended
+            exp_annotations:
+              summary: "Backend exchange gate refusing (client_suspended)"
+              description: "The backend's ExchangeGate has been refusing exchange requests the gateway let through for 15 minutes (client_suspended). The gateway checks the same registry first, so a sustained backend refusal means the two disagree: a stale gateway cache, a mirror that is behind the database (see ExchangeMirrorWriteFailed), or a gateway that no longer relays capabilities. Members' clients get 403 meanwhile."
+
+  - name: silent - a single refusal during a suspension race
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_gate_refused_total{job="basetool-backend", instance="backend:11261", reason="client_suspended"}'
+        values: "0x5 1x55"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: ExchangeGateRefusing
+        exp_alerts: []
