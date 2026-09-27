@@ -530,7 +530,8 @@ client.
 **Acceptance**
 
 - [ ] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
-- [ ] A book-out below an offered amount lowers the offer and records the audit event.
+- [x] A book-out below an offered amount lowers the offer and records the audit event.
+  *`ExchangeStockWriteControllerTest`.*
 - [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
   tombstone when its rows are gone or rebooked to the shared pool. *`ExchangeStockControllerTest`.*
 
@@ -539,8 +540,25 @@ or `i:<item>|…`; a snapshot pages lots by their lowest row id. The material re
 material's or item's id as `bt`, an item lot has quality 0 and counts whole pieces, and an SCU amount
 is rounded to three decimals.
 
-**Status:** read side built in the backend (`/api/v1/exchange/me/stock`) — WP 4.2 (#2085); the gateway
-route and the writes follow
+The backend applies a change set at `POST /api/v1/exchange/me/stock/changes`
+(`exchange.stock.write`) in one transaction. Each op resolves its material — a material first, an
+item otherwise — and its place, the UEX link first, then the exact name of a non-hidden location
+(`LOCATION_UNKNOWN`), checks both units against the material's (`UNIT_MISMATCH`), locks the lot's
+rows and compares `expectedQuantity` (`VERSION_CONFLICT`). A trade good is stored at quality 0. A
+lot emptied by another channel or installation is refilled only with `override`
+(`REMOVED_ELSEWHERE`); stock reserved for a job order or mission is never taken (`STOCK_EARMARKED`,
+owner decision 2026-09-27 — personal rows carry no reservations, so this guards the invariant);
+a stolen lot waits for `APP_INVENTORY_STOLEN_MARKING_ENABLED` (`STOLEN_MARKING_DISABLED`). The
+mass-change guard counts a lot set to 0 or cut to a tenth of what it held when the client's window
+opened, except when another lot of the same material rises in the same batch. A book-in is a new
+personal row without an org unit (`INVENTORY_ITEM_CREATED`); a book-out runs the Lager's own
+`DISCARD` book-out over the rows without an org unit first, then the oldest, and every offer it
+lowers or removes is audited by that book-out (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`,
+`reason=stock`, REQ-MARKET-013) and counted in
+`offersReduced` / `offersRemoved`. Each changed lot is journaled.
+
+**Status:** read and write sides built in the backend — WP 4.2 (#2085); the gateway routes are
+built on the gateway stack
 
 ### REQ-XCH-017 — Ships sync with a link step before the first create
 
@@ -635,10 +653,14 @@ member and resource in the last 24 hours plus the batch's, a batch trips above 2
 is at least 5 and more than a fifth of the current count plus the window's removals. Each resource's
 write service decides what in its batch is a removal.
 
-**Status:** the counting rule and the blueprint removals are built — WP 3.3 (#2083), WP 4.1 (#2084):
-a blueprint batch that trips the rule answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED` and writes
-nothing, and the gateway stages it; the stock and ship removal rules, the confirmation page and the
-apply follow — WP 3.3, WP 3.2 (#2082), WP 4.5 (#2087)
+A stock lot counts as removed when it is set to 0 or cut to at most a tenth of what it held when the
+client's window opened, taken from the lot's first journal entry in the window; a lot of a material
+that rises elsewhere in the same batch is a move and does not count.
+
+**Status:** the counting rule and the blueprint and stock removals are built — WP 3.3 (#2083), WP 4.1
+(#2084), WP 4.2 (#2085): a batch that trips the rule answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED`
+and writes nothing, and the gateway stages it; the ship removal rule, the confirmation page and the
+apply follow — WP 4.4 (#2086), WP 3.2 (#2082), WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 
@@ -656,8 +678,8 @@ writing transaction's id and the time. It is written in the write's own transact
 change feed after 90 days by `exchange_change_retention`, exported under Art. 15, stays with the
 source account on a merge, and its states are searched by the Personensuche.
 
-**Status:** journal built and filled by the blueprint writes — WP 3.3 (#2083), WP 4.1 (#2084); the
-stock and ship writes and the undo follow — WP 4.2–4.4, WP 4.5 (#2087)
+**Status:** journal built and filled by the blueprint and stock writes — WP 3.3 (#2083), WP 4.1
+(#2084), WP 4.2 (#2085); the ship writes and the undo follow — WP 4.4 (#2086), WP 4.5 (#2087)
 
 ### REQ-XCH-023 — Rate limits, quotas and a hard Redis budget
 

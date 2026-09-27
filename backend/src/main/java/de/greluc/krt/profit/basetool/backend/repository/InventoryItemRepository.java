@@ -1109,4 +1109,65 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("includeMaterial") boolean includeMaterial,
       @Param("includeItem") boolean includeItem,
       Pageable pageable);
+
+  /**
+   * Locks a member's personal rows of one material lot for the exchange (REQ-XCH-016).
+   *
+   * @param member the member
+   * @param materialId the material
+   * @param locationId the location
+   * @param quality the quality
+   * @param stolen whether the lot is stolen
+   * @return the rows, locked for the transaction
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      """
+      SELECT i FROM InventoryItem i WHERE i.user.id = :member AND i.personal = true
+        AND i.material.id = :materialId AND i.location.id = :locationId
+        AND COALESCE(i.quality, 0) = :quality AND i.stolen = :stolen
+      """)
+  List<InventoryItem> lockPersonalMaterialLot(
+      @Param("member") UUID member,
+      @Param("materialId") UUID materialId,
+      @Param("locationId") UUID locationId,
+      @Param("quality") int quality,
+      @Param("stolen") boolean stolen);
+
+  /**
+   * Locks a member's personal rows of one item lot for the exchange (REQ-XCH-016).
+   *
+   * @param member the member
+   * @param gameItemId the item
+   * @param locationId the location
+   * @param stolen whether the lot is stolen
+   * @return the rows, locked for the transaction
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      """
+      SELECT i FROM InventoryItem i WHERE i.user.id = :member AND i.personal = true
+        AND i.gameItem.id = :gameItemId AND i.location.id = :locationId AND i.stolen = :stolen
+      """)
+  List<InventoryItem> lockPersonalItemLot(
+      @Param("member") UUID member,
+      @Param("gameItemId") UUID gameItemId,
+      @Param("locationId") UUID locationId,
+      @Param("stolen") boolean stolen);
+
+  /**
+   * Counts a member's personal lots, as the exchange keys them.
+   *
+   * @param member the member
+   * @return the number of lots
+   */
+  @Query(
+      value =
+          """
+          SELECT COUNT(DISTINCT exchange_stock_lot_key(material_id, game_item_id, location_id,
+                                                       quality, stolen))
+          FROM inventory_item WHERE user_id = :member AND personal
+          """,
+      nativeQuery = true)
+  long countPersonalLots(@Param("member") UUID member);
 }

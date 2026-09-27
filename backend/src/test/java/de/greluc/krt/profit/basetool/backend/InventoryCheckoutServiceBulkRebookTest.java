@@ -54,6 +54,7 @@ import de.greluc.krt.profit.basetool.backend.repository.MissionParticipantReposi
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.service.InventoryCheckoutService;
+import de.greluc.krt.profit.basetool.backend.service.MaterialExchangeOfferRatchet;
 import de.greluc.krt.profit.basetool.backend.service.OwnerScopeService;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
 import java.util.List;
@@ -84,6 +85,7 @@ class InventoryCheckoutServiceBulkRebookTest {
   @Mock private MaterialExchangeOfferRepository materialExchangeOfferRepository;
   @Mock private InventoryItemMapper inventoryItemMapper;
   @Mock private OwnerScopeService ownerScopeService;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private AuditService auditService;
 
   @InjectMocks private InventoryCheckoutService checkoutService;
@@ -164,6 +166,10 @@ class InventoryCheckoutServiceBulkRebookTest {
     verify(inventoryItemRepository).save(saved.capture());
     assertEquals(there.getId(), saved.getValue().getLocation().getId());
     assertEquals(12.0, saved.getValue().getAmount(), 1e-9, "the whole quantity moves");
+    verify(offerRatchet)
+        .beforeDelete(List.of(moving.getId()), MaterialExchangeOfferRatchet.Reason.REBOOK);
+    verify(offerRatchet, never())
+        .beforeDelete(List.of(already.getId()), MaterialExchangeOfferRatchet.Reason.REBOOK);
     verify(inventoryItemRepository).delete(moving);
     verify(inventoryItemRepository, never()).delete(already);
   }

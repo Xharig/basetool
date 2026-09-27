@@ -34,13 +34,20 @@ import org.jetbrains.annotations.Unmodifiable;
  * @param unchanged the ops that found the state they asked for
  * @param notApplied the ops refused, unmatched or ambiguous
  * @param results the detail of every op that was not applied
+ * @param offersReduced the Materialbörse offers a stock book-out lowered, or {@code null} for other
+ *     resources
+ * @param offersRemoved the Materialbörse offers a stock book-out removed, or {@code null} for other
+ *     resources
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ExchangeChangeResultDto(
     boolean dryRun,
     int applied,
     int unchanged,
     int notApplied,
-    @NotNull @Unmodifiable List<OpResult> results) {
+    @NotNull @Unmodifiable List<OpResult> results,
+    @Nullable Integer offersReduced,
+    @Nullable Integer offersRemoved) {
 
   /**
    * The outcome of one op that was not applied.

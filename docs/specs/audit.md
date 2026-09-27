@@ -173,7 +173,13 @@ Coverage is **complete**, including the cross-area writers and the system/automa
   REQ-MARKET-008) — every trade-board mutation: offer release (`MARKET_OFFER_RELEASED`), offer
   edit — offered amount + remark (`MARKET_REMARK_UPDATED`), offer deactivate
   (`MARKET_OFFER_DEACTIVATED`), interest register (`MARKET_INTEREST_REGISTERED`) and interest withdraw
-  (`MARKET_INTEREST_WITHDRAWN`). Both offer **kinds** reuse these five events (REQ-MARKET-012). The
+  (`MARKET_INTEREST_WITHDRAWN`); and every stock change on any channel that lowers an offer
+  (`MARKET_OFFER_REDUCED`, details `kind`, `from`, `to`, `reason`) or deletes the row it stands
+  on, which cascade-removes it (`MARKET_OFFER_REMOVED`, details `kind`, `reason`), REQ-MARKET-013.
+  `reason` names the path — `checkout` (discard or sale), `bulk-checkout`, `transfer`, `rebook`
+  (single or bulk rebooking), `wipe` (the global wipe), `handover` (material handover or item
+  delivery), `production`, `stock` (a connected application, REQ-XCH-016) or `user-deletion`
+  (the purge of REQ-DATA-008). Both offer **kinds** reuse these events (REQ-MARKET-012). The
   subject is the offer, labelled by the **material name** for a material offer or the **item name** for
   an item offer (both non-personal game-asset values); the anbieter is the target reference. The
   details payload carries only bounded facts — the offer `kind`, plus for a material offer the item id

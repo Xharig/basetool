@@ -13,6 +13,11 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Datenaustausch: Lager schreiben.** Verbundene Anwendungen setzen die Menge eines persönlichen
+  Postens gegen die zuletzt gesehene Menge (`/api/v1/exchange/me/stock/changes`); die Differenz wird
+  wie im Lager ein- oder ausgebucht, gekürzte oder entfernte Materialbörse-Angebote stehen im Audit
+  (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`), und reservierte Mengen bleiben unangetastet
+  (REQ-XCH-016).
 - **Datenaustausch: Blueprints schreiben.** Verbundene Anwendungen können Blueprints hinzufügen
   und entfernen (`/api/v1/exchange/me/blueprints/changes`); Standard-Blueprints bleiben, was ein
   anderes Gerät oder das Web entfernt hat, kommt nur nach Rückfrage wieder, zu große Löschungen
@@ -134,6 +139,12 @@
   einem Lauf der Ansible-Rolle (`--tags deploy,scripts`).
 
 ### Fixed
+
+- **Audit-Log der Materialbörse: Kürzungen und Entfernungen durch Lagerbewegungen fehlten.** Wenn
+  eine Ausbuchung, Übertragung, Umbuchung, Übergabe, Produktion, das Leeren des Lagers oder das
+  Löschen eines Kontos ein Angebot kürzte oder mitlöschte, stand das bisher nicht im Audit; jetzt
+  gibt es dafür `MARKET_OFFER_REDUCED` bzw. `MARKET_OFFER_REMOVED` mit dem Anlass (REQ-MARKET-013,
+  REQ-AUDIT-001).
 
 - **Lager: die Org-Einheiten-Auswahl in „Mein Lager“ ist nicht mehr leer.** Beim Sammel-Umbuchen
   und beim Ändern der Org-Einheit fragte die Seite die eigenen Mitgliedschaften mit dem Benutzernamen
