@@ -78,16 +78,20 @@ The mobile provisioner stays the focused tool for that one client.
   > [`INGEST_KEYCLOAK_SETUP.md` step 7a](../INGEST_KEYCLOAK_SETUP.md).
 
 The throwaway **test** realm used by the Playwright e2e suite lives elsewhere, at
-[`frontend/src/e2e/resources/realm-export.e2e.json`](../../frontend/src/e2e/resources/realm-export.e2e.json),
-and is deliberately different (10 h test token lifetimes, synthetic users, `directAccessGrants`
-on for ROPC test logins). Do not cross-contaminate the two.
+[`frontend/src/e2e/resources/realm-export.e2e.json`](../../frontend/src/e2e/resources/realm-export.e2e.json).
+It is **generated** by [`scripts/build-sandbox-realm.py`](../../scripts/build-sandbox-realm.py) from
+the shared base [`scripts/keycloak/test-realm-base.json`](../../scripts/keycloak/test-realm-base.json)
+and the production provisioner (ADR-0225): production's token and session settings, login theme,
+client scopes, ingest gateway client and third-party template, plus synthetic users and
+`directAccessGrants` on for ROPC test logins. Change the base or the provisioner and regenerate; do
+not hand-edit the output, and do not cross-contaminate it with this reference.
 
 > **One thing the two realms deliberately agree on: the `basetool-backend` audience.** The e2e
 > realm's `basetool-frontend` client carries an `aud-basetool-backend` audience mapper with the
 > same config as the prod `extractor-ingest` scope's mapper — access token only, never the ID
 > token — because the e2e backend runs with `app.security.jwt.expected-audiences` **enabled**
-> (audit L-1, REQ-SEC-024). It sits directly on the client rather than on a client scope only
-> because the e2e realm declares no `clientScopes` at all; the emitted claim is identical. Changing
+> (audit L-1, REQ-SEC-024). It sits directly on the client rather than on a client scope, as it
+> did before the e2e realm was generated with client scopes; the emitted claim is identical. Changing
 > the mapper here breaks every e2e test with a 401 — `E2eAudienceEnforcementParityTest` fails first
 > with an explanation.
 

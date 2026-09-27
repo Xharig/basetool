@@ -1254,7 +1254,9 @@ from masquerading as an application outage (the failure mode that drove the fron
   `IRI_BACKEND_EXPECTED_AUDIENCES=basetool-backend`, so every e2e-labelled PR runs the whole suite
   through the audience validator against real Keycloak-minted tokens. `E2eAudienceEnforcementParityTest`
   pins the enforced constant to the realm's mapper so the two cannot drift into a suite-wide 401.
-  The **ingest gateway** is not part of the E2E stack and keeps unit coverage only.
+  The **ingest gateway** runs in the E2E stack too (ADR-0225), armed with
+  `IRI_INGEST_EXPECTED_AUDIENCES=basetool-ingest`; `ExchangeRoundTripE2eTest` carries a
+  Keycloak-minted exchange token with `aud=basetool-ingest` through it.
 
 **Enforced by (both resource servers):** backend `SecurityConfig#resourceServerJwtDecoder` +
 `KeycloakTrustSupport` + `IdentityProviderUnavailableFilter` (tests:

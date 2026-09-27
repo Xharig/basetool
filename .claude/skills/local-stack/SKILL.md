@@ -19,7 +19,7 @@ docker compose --env-file .env.test -f docker-compose.yml -f docker-compose.test
 
 Further overrides, layered on top in this order when needed: `docker-compose.build.yml` (build the
 images from this checkout, tag `:local`, instead of pulling `:stable`), `docker-compose.e2e.yml`
-(project-scoped volumes, what `:frontend:e2eTest` uses — it runs under its own per-checkout image tag and compose project, and checks the served build is this checkout's; only one E2E stack per machine because the ports are fixed) and `docker-compose.localtest.yml` (append
+(project-scoped volumes, what `:frontend:e2eTest` uses — it runs under its own per-checkout image tag and compose project, and checks the served build is this checkout's; it also builds the sandbox Keycloak image with the SPI and the login theme, mounts the generated E2E realm over its realm and starts `ingest-dev`, ADR-0225; only one E2E stack per machine because the ports are fixed) and `docker-compose.localtest.yml` (append
 **last**: republishes Keycloak for a manual host browser and switches the UEX / SC-wiki syncs off so
 seeded data stays put). Each file's header carries its exact command line.
 

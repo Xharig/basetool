@@ -36,6 +36,6 @@ Der Extractor öffnet `/refinery-orders/create?handoff=<id>` im Browser des Nutz
 
 ## Sonderfälle & Lehren
 
-- **Das Gateway läuft hier nicht.** Der Test stellt nach, was das Ingest-Gateway tut, und nutzt dafür den echten Matcher. So bleibt die Form des Entwurfs ehrlich — es ist genau das JSON, das die Produktion ablegt — ohne den Device-Grant aufzubauen. Den Gateway selbst decken die Tests des `ingest`-Moduls ab.
+- **Das Gateway wird hier nicht aufgerufen.** Es läuft seit [ADR-0225](../adr/0225-the-e2e-stack-runs-the-sandbox-keycloak-and-the-ingest-gateway.md) im Stack, aber dieser Test stellt nach, was es auf dem alten `/v1`-Pfad tut, und nutzt dafür den echten Matcher; den Austausch über das Gateway fährt [UC-46](UC-46-austausch-rundlauf.md). So bleibt die Form des Entwurfs ehrlich — es ist genau das JSON, das die Produktion ablegt — ohne den Device-Grant aufzubauen. Den Gateway selbst decken die Tests des `ingest`-Moduls ab.
 - **Schlüssel pro `sub`.** Weil der Schlüssel die Subject-Id enthält, sieht ein anderer Nutzer den Eintrag gar nicht erst; die Isolation hängt nicht an einer nachgelagerten Prüfung.
 - **Aufbewahrung:** Ein abgelegter Handoff läuft nach `app.ingest.handoff-ttl` (Standard 30 Minuten) ab; dieser Test prüft die Ablaufzeit nicht.
