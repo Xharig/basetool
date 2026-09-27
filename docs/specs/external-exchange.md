@@ -1009,10 +1009,21 @@ backend is healthy, idempotently. It publishes loopback ports only
       the marker under `prod`) and fails on any secret Trivy finds. It publishes `edge` when run by
       hand on `main` and the version and `latest` on a release tag; the production packages stay
       private and untouched. The packages' public visibility is set once by the owner.*
-- [ ] The CI job that pulls them anonymously and runs the conformance fixtures and the
-      device-grant + DPoP smoke test; the E2E extension with ingest.
+- [x] The CI job that pulls them anonymously and runs the conformance fixtures and the
+      device-grant + DPoP smoke test.
+      *`.github/workflows/sandbox-smoke.yml` runs after every publish (called by
+      `sandbox-images.yml`), weekly and by hand, with `contents: read` only, so every image is
+      pulled without a registry login. It starts the sandbox with `scripts/sandbox.sh up` and runs
+      `scripts/sandbox-smoke.py`: device login with DPoP through the sandbox Keycloak, a token bound
+      to the key (`cnf.jkt`) for `basetool-ingest`, the service document, the installation, every
+      read resource, a resolve per kind, one blueprint, stock and ship sync, and with
+      `--conformance` every change-set fixture of `docs/exchange/examples/v1` (valid ones as dry
+      runs accepted, invalid ones refused); then the same without the fixtures as the second
+      member.*
+- [ ] The E2E extension with ingest.
 
-**Status:** local sandbox and the image pipeline built — WP 2.3 (#2099); the CI job follows
+**Status:** local sandbox, the image pipeline and its smoke job built — WP 2.3 (#2099); the E2E
+extension follows
 
 ### REQ-XCH-030 — Exchange writes appear live
 
