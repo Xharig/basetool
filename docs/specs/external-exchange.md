@@ -1461,6 +1461,9 @@ it changed, and is audited and instrumented. Re-activating the client stays a se
 - [x] Each member whose data the run changed gets one notification per run; the admin page lists the
   runs, refreshes while one runs and shows a run's skipped entries.
   *`ExchangeBulkUndoControllerTest`, `AdminExchangeClientsPageControllerMvcTest`.*
+- [x] Another admin's open page follows a start and every registry write through the page's
+  `exchange-clients` live-sync room, and then the run's progress and end (REQ-FE-015).
+  *`LiveSyncSectionMapParityTest`, `LiveSyncTopicTest`, `LiveSyncTopicRegistryParityTest`.*
 
 **The scope.** `POST /api/v1/admin/exchange-clients/{id}/undo {since, installationId?, resource?}`
 (`ADMIN`, answers `202` with the run) undoes the client's journal entries recorded at or after

@@ -231,7 +231,23 @@ public enum LiveSyncTopicClass {
       false,
       "org_structure",
       null,
-      null);
+      null),
+
+  /**
+   * Global admin room for {@code /admin/exchange-clients} with sections {@code registry} (the
+   * switch and the client table) and {@code undoRuns} (the bulk undo runs, REQ-XCH-034), authorized
+   * locally by {@code ROLE_ADMIN} ({@link #requiredAnyRole}).
+   */
+  EXCHANGE_CLIENTS(
+      "exchange-clients",
+      false,
+      Set.of("registry", "undoRuns"),
+      false,
+      "exchange_clients",
+      null,
+      null,
+      null,
+      Set.of(Roles.authority(Roles.ADMIN)));
 
   /** The wire prefix identifying the class. */
   private final @NotNull String prefix;

@@ -59,6 +59,31 @@ class LiveSyncSectionMapParityTest {
   }
 
   @Test
+  void exchangeClientsSeamMap_matchesTheAdminExchangeClientsTopicWhitelist() throws IOException {
+    Set<String> jsKeys =
+        seamMapKeys("/static/js/admin-exchange-clients.js", "EXCHANGE_CLIENTS_SECTIONS");
+    assertThat(jsKeys)
+        .as(
+            "EXCHANGE_CLIENTS_SECTIONS keys in admin-exchange-clients.js vs"
+                + " LiveSyncTopicClass.EXCHANGE_CLIENTS whitelist")
+        .containsExactlyInAnyOrderElementsOf(LiveSyncTopicClass.EXCHANGE_CLIENTS.allowedSections());
+  }
+
+  @Test
+  void exchangeClientsPage_broadcastsEveryWriteWithWhitelistedKeys() throws IOException {
+    String js = readResource("/static/js/admin-exchange-clients.js");
+    assertSendChangedKeysWhitelisted(
+        js, "'exchange-clients'", LiveSyncTopicClass.EXCHANGE_CLIENTS.allowedSections());
+    assertThat(js)
+        .as("a bulk undo start must refresh the peers' client table and run list")
+        .contains("sendChanged('exchange-clients', ['registry', 'undoRuns'])")
+        .as("a registry write must refresh the peers' client table")
+        .contains("sendChanged('exchange-clients', ['registry'])")
+        .as("the page must receive the peers' changes")
+        .contains("topic: 'exchange-clients'");
+  }
+
+  @Test
   void hangarSeamMap_matchesTheOwnHangarTopicWhitelist() throws IOException {
     Set<String> jsKeys = seamMapKeys("/static/js/hangar.js", "HANGAR_SECTIONS");
     assertThat(jsKeys)

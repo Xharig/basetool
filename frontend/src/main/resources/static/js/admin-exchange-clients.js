@@ -19,11 +19,30 @@
 
 // @ts-check
 
+const EXCHANGE_CLIENTS_SECTIONS = {
+    registry: { container: '#xc-registry-host', fragmentValue: 'registry' },
+    undoRuns: { container: '#xc-undo-runs-host', fragmentValue: 'undoRuns' },
+};
+
 (function () {
     const BASE = '/admin/exchange-clients';
     const RUN_POLL_MS = 3000;
 
     wireUndo();
+
+    /** Tells the other admins' open pages that the switch or the client table changed. */
+    function broadcastRegistry() {
+        if (window.krtLiveSync && typeof window.krtLiveSync.sendChanged === 'function') {
+            window.krtLiveSync.sendChanged('exchange-clients', ['registry']);
+        }
+    }
+
+    /** Tells the other admins' open pages that a bulk undo started and suspended its client. */
+    function broadcastUndoStart() {
+        if (window.krtLiveSync && typeof window.krtLiveSync.sendChanged === 'function') {
+            window.krtLiveSync.sendChanged('exchange-clients', ['registry', 'undoRuns']);
+        }
+    }
 
     const form = document.getElementById('xc-form');
     const title = document.getElementById('xc-form-title');
@@ -270,6 +289,7 @@
                     submitter,
                     onSuccess() {
                         resetForm();
+                        broadcastRegistry();
                         return refreshRegistry();
                     },
                 });
@@ -302,6 +322,7 @@
                     errorMessage: i18n.error,
                     submitter,
                     onSuccess() {
+                        broadcastRegistry();
                         return refreshRegistry();
                     },
                 });
@@ -336,6 +357,7 @@
                         errorMessage: i18n.error,
                         submitter,
                         onSuccess() {
+                            broadcastRegistry();
                             return refreshRegistry();
                         },
                     });
@@ -387,7 +409,8 @@
 
     /**
      * Installs the admin's bulk undo: the dialog with its check-then-confirm steps, the run list
-     * that refreshes itself while a run is going, and the run detail dialog (REQ-XCH-034).
+     * that refreshes itself while a run is going, the run detail dialog (REQ-XCH-034), and the
+     * page's live-sync receiver, so another admin's write or start refreshes this page too.
      */
     function wireUndo() {
         const formEl = document.getElementById('xc-undo-form');
@@ -638,6 +661,7 @@
                     submitter: submit,
                     onSuccess() {
                         window.krtModal.close('xc-undo-modal');
+                        broadcastUndoStart();
                         return Promise.all([refreshRegistry(), refreshRuns()]);
                     },
                 });
@@ -802,5 +826,22 @@
         });
 
         schedulePoll();
+
+        if (window.krtLiveSync && typeof window.krtLiveSync.createReceiver === 'function') {
+            window.krtLiveSync.createReceiver({
+                topic: 'exchange-clients',
+                sections: EXCHANGE_CLIENTS_SECTIONS,
+                coalesceMs: 1500,
+                /** @param {string[]} keys the sections another admin changed */
+                refresh(keys) {
+                    if (keys.includes('registry')) {
+                        refreshRegistry();
+                    }
+                    if (keys.includes('undoRuns')) {
+                        refreshRuns();
+                    }
+                },
+            });
+        }
     }
 })();

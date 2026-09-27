@@ -1135,6 +1135,7 @@ this requirement exists to prevent, #1102). Covered topics and their section whi
 | `missions` (global list) | list                                                                                                                          | no            | authenticated (the `/missions` list gate; each viewer re-pulls its own scoped, peer-redacted page)    |
 | `refinery` (global)      | queue                                                                                                                         | no            | authenticated (the `/refinery-orders` list gate; the `onlyMine` filter is applied per viewer)         |
 | `members` (global)       | roster                                                                                                                        | no            | `ROLE_ADMIN` (local check — the `/members` class-level page gate)                                     |
+| `exchange-clients` (global) | registry, undoRuns (the admin bulk undo runs, REQ-XCH-034)                                                                    | no            | `ROLE_ADMIN` (local check — the `/admin/exchange-clients` class-level page gate)                      |
 | `org-structure` (global) | units, forms, chart                                                                                                           | no            | authenticated (the Organigramm is member-visible; the admin sections stay protected per fragment)     |
 | `hangar:{userId}`        | ships                                                                                                                         | no            | the member whose id it is, and nobody else (local check against the socket's subject, fails closed)   |
 | `blueprints:{userId}`    | list                                                                                                                          | no            | the member whose id it is, and nobody else (local check against the socket's subject, fails closed)   |
@@ -1194,6 +1195,16 @@ whose receivers re-fetch the viewer's *own* filter and page:
   opaque `roster` key covering a member edit (rank, display name, Staffel membership and its
   LOGISTICIAN / MISSION_MANAGER flags), a delete and the manual Keycloak sync. It is the only
   Phase-3 room with a role gate, matching the page's own ADMIN restriction.
+- **`exchange-clients`** — the admin page *Verbundene Anwendungen* (`/admin/exchange-clients`):
+  `registry` is the global switch and the client table, `undoRuns` the admin bulk undo runs
+  (REQ-XCH-034). Every write of the page broadcasts from the client — a registration, edit,
+  suspension, activation or switch flip pokes `registry`, a bulk undo start pokes both, since it
+  suspends the client. A run's progress and end happen in the backend, not in a page, so they cannot
+  be published by a client, and this room, like `members` and `org-structure`, is web-only and out of
+  the backend's registry: every viewer whose run list shows a running run — its own start, a peer's
+  start arriving through the room, or a page opened while one runs — re-reads the list every 3 s
+  until no run is running. Role-gated like `members`. *Added 2026-09-27; before, the registry section
+  had no room at all and another admin's change showed only after a reload.*
 - **`org-structure`** — shared by the admin Organisationsstruktur editor (`units` = the unit +
   parent-edge table, `forms` = its create forms, whose Bereich/OL pickers go stale when a peer adds
   one) and the member-visible Organigramm (`chart`). One room because both render the same
@@ -1322,7 +1333,7 @@ subscribe-deny `reason`, and for the same reason: drift here fails silently.
 **Pill, coalescing and resync follow REQ-FE-010 unchanged**, with one sizing addition (5000
 accounts / ≥200 concurrent, ADR-0094): detail-topic receivers keep the 400 ms jittered coalesce
 window; **every global-room receiver (`orders`, `bank`, `orgunit-bank`, `materialboard`, `inventory`,
-`missions`, `refinery`, `members`, `org-structure`) uses 1500 ms** so a change seen by
+`missions`, `refinery`, `members`, `org-structure`, `exchange-clients`) uses 1500 ms** so a change seen by
 up to ~200 viewers spreads its fragment re-fetch herd instead of spiking. Peer-driven re-fetches
 always preserve the **peer's own** query state (filters, paging, view toggles — the page-URL getter
 is late-bound per viewer); only the acting client's own refresh may deliberately reset paging.
