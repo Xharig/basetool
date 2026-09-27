@@ -74,7 +74,11 @@ import org.springframework.web.context.WebApplicationContext;
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@TestPropertySource(properties = "app.security.ingest-gateway.client-ids=test-ingest-gateway")
+@TestPropertySource(
+    properties = {
+      "app.security.ingest-gateway.client-ids=test-ingest-gateway",
+      "app.inventory.stolen-marking-enabled=true"
+    })
 class ExchangeStockWriteControllerTest {
 
   private static final String PATH = "/api/v1/exchange/me/stock/changes";
@@ -339,10 +343,104 @@ class ExchangeStockWriteControllerTest {
     assertThat(total(laranite)).isEqualTo(50.0);
 
     String target = locationName(location(null));
+    change("{\"ops\":[" + emptying + "," + op(laranite, target, 500, "1", "0", "SCU") + "]}")
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("MASS_CHANGE_CONFIRMATION_REQUIRED"));
+    assertThat(total(laranite)).isEqualTo(50.0);
+
     change("{\"ops\":[" + emptying + "," + op(laranite, target, 500, "50", "0", "SCU") + "]}")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.applied").value(6));
     assertThat(total(laranite)).isEqualTo(50.0);
+  }
+
+  @Test
+  void movingPartOfALotToItsStolenTwinSplitsTheRowAsTheLagerDoes() throws Exception {
+    UUID laranite = material("SCU", null);
+    UUID area18 = location(null);
+    UUID loose = row(laranite, area18, 500, 10, null);
+    String place = locationName(area18);
+
+    change(
+            "{\"ops\":["
+                + op(laranite, place, 500, false, "6", "10", "SCU")
+                + ","
+                + op(laranite, place, 500, true, "4", "0", "SCU")
+                + "]}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.applied").value(2));
+
+    assertThat(amount(loose)).isEqualTo(6.0);
+    assertThat(
+            jdbc.queryForList(
+                "SELECT amount FROM inventory_item WHERE user_id = ? AND stolen",
+                Double.class,
+                member))
+        .containsExactly(4.0);
+    assertThat(details("INVENTORY_STOLEN_MARKED", loose)).startsWith("amount=4.0 split=true");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE actor_user_id = ?"
+                    + " AND event_type = 'INVENTORY_ITEM_CREATED'",
+                Integer.class,
+                member))
+        .isZero();
+  }
+
+  @Test
+  void movingAWholeLotToItsStolenTwinMarksTheRow() throws Exception {
+    UUID laranite = material("SCU", null);
+    UUID area18 = location(null);
+    UUID loose = row(laranite, area18, 500, 10, null);
+    String place = locationName(area18);
+
+    change(
+            "{\"ops\":["
+                + op(laranite, place, 500, false, "0", "10", "SCU")
+                + ","
+                + op(laranite, place, 500, true, "10", "0", "SCU")
+                + "]}")
+        .andExpect(status().isOk());
+
+    assertThat(
+            jdbc.queryForList(
+                "SELECT id FROM inventory_item WHERE user_id = ? AND stolen", UUID.class, member))
+        .containsExactly(loose);
+    assertThat(amount(loose)).isEqualTo(10.0);
+  }
+
+  @Test
+  void aPieceBookInJoinsTheExistingRow() throws Exception {
+    UUID helmet = item();
+    UUID orison = location(null);
+    UUID existing = UUID.randomUUID();
+    jdbc.update(
+        """
+        INSERT INTO inventory_item (id, user_id, game_item_id, location_id, amount, personal,
+                                    stolen, created_at, version)
+        VALUES (?, ?, ?, ?, 3, true, false, now(), 0)
+        """,
+        existing,
+        member,
+        helmet,
+        orison);
+
+    change(
+            """
+            {"ops":[{"op":"set-quantity","material":{"bt":"%s"},"location":{"name":"%s"},
+                     "quality":0,"stolen":false,"quantity":{"amount":5,"unit":"PIECE"},
+                     "expectedQuantity":{"amount":3,"unit":"PIECE"}}]}
+            """
+                .formatted(helmet, locationName(orison)))
+        .andExpect(jsonPath("$.applied").value(1));
+
+    assertThat(
+            jdbc.queryForList(
+                "SELECT amount FROM inventory_item WHERE user_id = ? AND game_item_id = ?",
+                Double.class,
+                member,
+                helmet))
+        .containsExactly(5.0);
   }
 
   @Test
@@ -402,12 +500,35 @@ class ExchangeStockWriteControllerTest {
       @NotNull String quantity,
       @NotNull String expected,
       @NotNull String unit) {
+    return op(material, place, quality, false, quantity, expected, unit);
+  }
+
+  /**
+   * Builds one set-quantity op for a stolen or not-stolen lot.
+   *
+   * @param material the material
+   * @param place the location name
+   * @param quality the quality
+   * @param stolen whether the lot is stolen
+   * @param quantity the new quantity
+   * @param expected the expected quantity
+   * @param unit the unit of both
+   * @return the op as JSON
+   */
+  private static @NotNull String op(
+      @NotNull UUID material,
+      @NotNull String place,
+      int quality,
+      boolean stolen,
+      @NotNull String quantity,
+      @NotNull String expected,
+      @NotNull String unit) {
     return """
     {"op":"set-quantity","material":{"bt":"%s"},"location":{"name":"%s"},"quality":%d,
-     "stolen":false,"quantity":{"amount":%s,"unit":"%s"},
+     "stolen":%s,"quantity":{"amount":%s,"unit":"%s"},
      "expectedQuantity":{"amount":%s,"unit":"%s"}}\
     """
-        .formatted(material, place, quality, quantity, unit, expected, unit);
+        .formatted(material, place, quality, stolen, quantity, unit, expected, unit);
   }
 
   /**

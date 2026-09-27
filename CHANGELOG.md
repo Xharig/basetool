@@ -138,6 +138,10 @@
 
 ### Changed
 
+- **Datenaustausch: Lager-Änderungen wie im Web.** Ein Umbuchen auf „gestohlen“ oder zurück markiert
+  die Zeilen wie im Lager (Teilmengen werden abgespalten) statt aus- und neu einzubuchen; Stück-Einbuchungen
+  werden mit der vorhandenen Zeile zusammengeführt. Als Verschiebung zählt ein Abbau nur noch, wenn
+  Zugänge desselben Materials ihn vollständig decken.
 - **Monitoring: ein Audit-Bereich alarmiert erst nach 30 statt 14 Tagen Stille; Hangar und Blueprints
   sind wie Materialbörse und Rollen ausgenommen.** Auf Produktion gab es beim Hangar eine echte Pause
   von gut 15 Tagen; beide Bereiche werden über die 30-/60-Tage-Tabellen im Betriebs-Dashboard

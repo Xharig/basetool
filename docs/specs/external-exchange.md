@@ -565,11 +565,14 @@ client.
   *`ExchangeStockWriteControllerTest`.*
 - [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
   tombstone when its rows are gone or rebooked to the shared pool. *`ExchangeStockControllerTest`.*
+- [x] Moving stock to the lot's stolen twin marks the rows — a part split off, a whole lot flipped —
+  and a piece book-in joins the existing row. *`ExchangeStockWriteControllerTest`.*
 
 The feed's lot key is the one the change log records, `m:<material>|l:<location>|q:<quality>|s:<0|1>`
 or `i:<item>|…`; a snapshot pages lots by their lowest row id. The material reference carries the
 material's or item's id as `bt`, an item lot has quality 0 and counts whole pieces, and an SCU amount
-is rounded to three decimals.
+is rounded to three decimals. Game items stay in the stock sync beside materials (owner decision
+2026-09-27).
 
 The backend applies a change set at `POST /api/v1/exchange/me/stock/changes`
 (`exchange.stock.write`) in one transaction. Each op resolves its material — a material first, an
@@ -581,8 +584,14 @@ lot emptied by another channel or installation is refilled only with `override`
 owner decision 2026-09-27 — personal rows carry no reservations, so this guards the invariant);
 a stolen lot waits for `APP_INVENTORY_STOLEN_MARKING_ENABLED` (`STOLEN_MARKING_DISABLED`). The
 mass-change guard counts a lot set to 0 or cut to a tenth of what it held when the client's window
-opened, except when another lot of the same material rises in the same batch. A book-in is a new
-personal row without an org unit (`INVENTORY_ITEM_CREATED`); a book-out runs the Lager's own
+opened, unless the batch's rises of the same material cover the whole fall (REQ-XCH-021). A fall and
+a rise of the lot's stolen or not-stolen twin — same material, place and quality — are a marking,
+not a book-out and a book-in: as much as both allow is marked through the Lager's own marking
+(REQ-INV-053, a part split off as a new row, `INVENTORY_STOLEN_MARKED` / `_UNMARKED`), leaving
+out rows backing a Materialbörse offer and the earmarked part of a row; the rest is booked (owner
+decision 2026-09-27). A book-in is a new personal row without an org unit
+(`INVENTORY_ITEM_CREATED`), which piece-counted stock then joins to the existing row as a book-in in
+the Lager does (REQ-INV-026, owner decision 2026-09-27); a book-out runs the Lager's own
 `DISCARD` book-out over the rows without an org unit first, then the oldest, and every offer it
 lowers or removes is audited by that book-out (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`,
 `reason=stock`, REQ-MARKET-013) and counted in
@@ -716,8 +725,10 @@ is at least 5 and more than a fifth of the current count plus the window's remov
 write service decides what in its batch is a removal.
 
 A stock lot counts as removed when it is set to 0 or cut to at most a tenth of what it held when the
-client's window opened, taken from the lot's first journal entry in the window; a lot of a material
-that rises elsewhere in the same batch is a move and does not count.
+client's window opened, taken from the lot's first journal entry in the window. A fall is a move and
+does not count when the batch's rises of the same material or item still cover all of it, the falls
+taken in the batch's order — a single piece added elsewhere does not hide an emptied lot (owner
+decision 2026-09-27).
 
 A ship counts as removed by `remove`, and by an `upsert` that changes both its name and its type.
 
