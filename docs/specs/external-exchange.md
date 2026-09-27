@@ -146,7 +146,9 @@ only by property.
 **Acceptance**
 
 - [ ] Gate tests for a scope missing from the token, a scope not granted in the registry, and a
-  wrong audience with the audience property blank.
+  wrong audience with the audience property blank. *The audience half is in: the gateway requires
+  `aud` ∋ `basetool-ingest` on exchange routes in code and refuses anything else `401
+  UNAUTHENTICATED` (`ExchangeDpopGateTest`); the scope gates follow with the registry read.*
 - [ ] ArchUnit: every exchange controller method carries the exchange gate.
 
 **Status:** the scopes (WP 2.2, #2081) and the registry's per-client grants (`ExchangeCapability`,
@@ -188,11 +190,22 @@ A request to an exchange route without a valid DPoP proof bound to the token's `
 (`401 DPOP_REQUIRED` / `401 DPOP_INVALID`). The legacy `/v1/*` routes keep today's behaviour
 (`REQ-INGEST-012`) until they end (REQ-XCH-033).
 
+Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and a
+replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
+proof without a current one is answered `401 DPOP_INVALID` with `WWW-Authenticate: DPoP …,
+error="use_dpop_nonce"` and a fresh `DPoP-Nonce`, and the client retries once with it. Every exchange
+response carries the current nonce. A nonce is stateless — a five-minute window and its HMAC under a
+key drawn at startup — and holds for its window and the next; a restart invalidates them all, which
+costs a client one retry. A bearer-scheme request, or a token without `cnf.jkt`, is `401
+DPOP_REQUIRED` with the DPoP challenge.
+
 **Acceptance**
 
-- [ ] Tests for a bearer token, a proof for another key, a replayed proof and a missing nonce.
+- [x] Tests for a bearer token, an unbound token, a proof for another key, a replayed proof and a
+  missing nonce, and that the retry with the nonce passes (`ExchangeDpopGateTest`,
+  `ExchangeDpopNoncesTest`).
 
-**Status:** planned — WP 3.2 (#2082)
+**Enforced by:** `ExchangeDpopGateTest` · **Status:** built — WP 3.2 (#2082)
 
 ### REQ-XCH-007 — Installations are identified by their DPoP key and labelled by the client
 

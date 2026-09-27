@@ -23,6 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.support.LogCapture;
 import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
@@ -49,7 +51,11 @@ class SecurityProblemResponseHandlerTest {
 
   private final SecurityProblemResponseHandler handler =
       new SecurityProblemResponseHandler(
-          JsonMapper.builder().build(), meterRegistry, TestLoggingProperties.defaults());
+          JsonMapper.builder().build(),
+          meterRegistry,
+          TestLoggingProperties.defaults(),
+          new ExchangeDpopNonces(),
+          new ExchangeRefusals(meterRegistry));
 
   @AfterEach
   void clearMdc() {
