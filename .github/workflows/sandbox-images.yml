@@ -65,9 +65,9 @@ jobs:
           MODULE: ${{ matrix.module }}
         run: |
           set -uo pipefail
+          status=0
           output="$(timeout 120 docker run --rm -e SPRING_PROFILES_ACTIVE=prod \
-            "basetool-sandbox-${MODULE}:local" 2>&1)"
-          status=$?
+            "basetool-sandbox-${MODULE}:local" 2>&1)" || status=$?
           if [ "$status" -eq 0 ] || [ "$status" -eq 124 ]; then
             echo "::error::basetool-sandbox-${MODULE} did not refuse the prod profile (exit ${status})" >&2
             printf '%s\n' "$output" | tail -40 >&2
