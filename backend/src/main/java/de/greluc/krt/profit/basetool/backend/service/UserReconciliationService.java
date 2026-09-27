@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.service;
 
 import de.greluc.krt.profit.basetool.backend.event.DiscordRegistrationPendingEvent;
+import de.greluc.krt.profit.basetool.backend.event.MemberDepartedEvent;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
 import de.greluc.krt.profit.basetool.backend.model.Role;
@@ -172,6 +173,10 @@ public class UserReconciliationService {
 
     if (mayPersistRoles) {
       if (!user.getRoles().equals(localRoles)) {
+        if (!created && !user.getRoles().isEmpty() && localRoles.isEmpty()) {
+          eventPublisher.publishEvent(
+              new MemberDepartedEvent(user.getId(), MemberDepartedEvent.REASON_ROLE_LOST));
+        }
         user.setRoles(localRoles);
         changed = true;
       }
@@ -247,6 +252,8 @@ public class UserReconciliationService {
             });
 
     boolean changed = false;
+    final boolean wasActive =
+        !created && user.isInKeycloak() && user.isEnabledInKeycloak() && !user.getRoles().isEmpty();
 
     if (!user.isInKeycloak()) {
       user.setInKeycloak(true);
@@ -301,6 +308,14 @@ public class UserReconciliationService {
     } else if (created
         && localRoles.stream().anyMatch(r -> Roles.ADMIN.equalsIgnoreCase(r.getCode()))) {
       meterRegistry.counter(MetricNames.ADMIN_REGISTRATION_AUTO_ACTIVATED).increment();
+    }
+
+    if (wasActive && !enabled) {
+      eventPublisher.publishEvent(
+          new MemberDepartedEvent(user.getId(), MemberDepartedEvent.REASON_DISABLED));
+    } else if (wasActive && localRoles.isEmpty()) {
+      eventPublisher.publishEvent(
+          new MemberDepartedEvent(user.getId(), MemberDepartedEvent.REASON_ROLE_LOST));
     }
 
     if (changed || user.isNew()) {
@@ -361,7 +376,13 @@ public class UserReconciliationService {
     if (currentIds.isEmpty()) {
       return 0;
     }
-    return userRepository.markMissingUsers(currentIds, Instant.now());
+    java.util.List<UUID> departing = userRepository.findIdsMissingFrom(currentIds);
+    int flagged = userRepository.markMissingUsers(currentIds, Instant.now());
+    departing.forEach(
+        id ->
+            eventPublisher.publishEvent(
+                new MemberDepartedEvent(id, MemberDepartedEvent.REASON_REMOVED)));
+    return flagged;
   }
 
   /**

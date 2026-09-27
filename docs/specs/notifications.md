@@ -52,6 +52,7 @@ is the notification-engine view of it; the linked requirement is canonical.
 | `ACCOUNT_DELETION_REQUESTED` | `ACCOUNT_DELETION_REQUESTED` | V243 | `ROLE` ADMIN (`exclude_actor = false`) | [REQ-SEC-061](security-and-access.md) |
 | `ACCOUNT_DELETION_REQUEST_DECLINED` | `ACCOUNT_DELETION_REQUEST_DECLINED` | V243 | `EVENT_RECIPIENT` (requesting member); supersedes `ACCOUNT_DELETION_REQUESTED` | REQ-SEC-061 |
 | `ACCOUNT_DELETION_REQUEST_RESOLVED` | none (no rule) | — | supersedes `ACCOUNT_DELETION_REQUESTED` only | REQ-SEC-061, REQ-NOTIF-018 |
+| `EXCHANGE_INSTALLATION_CONNECTED` | `EXCHANGE_INSTALLATION_CONNECTED` | V251 | `EVENT_RECIPIENT` (the connected member); rendered with the registry's `client` name only, never the client-supplied label; read by opening „Verbundene Anwendungen" | [REQ-XCH-032](external-exchange.md) |
 
 Every notification type renders through `notifications.type.<TYPE>` in all three frontend bundles.
 The e-mail consumers of REQ-NOTIF-013 (`UserApprovalMailService`, `PendingRegistrationMailService`)

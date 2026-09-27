@@ -366,6 +366,7 @@ public class AdminAuditLogPageController {
                   "EXCHANGE_SWITCH_CHANGED",
                   "EXCHANGE_CLIENT_DISCONNECTED",
                   "EXCHANGE_INSTALLATION_DISCONNECTED",
+                  "EXCHANGE_MEMBER_DEPARTED",
                   "CONNECTED_APPS_AUDIT_EXPORTED",
                   "CONNECTED_APPS_AUDIT_PURGED")));
 

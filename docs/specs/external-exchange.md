@@ -127,15 +127,19 @@ finds no document, refuses every exchange request.
   answers them `503 REGISTRY_UNAVAILABLE` with `Retry-After` (WP 3.2).*
 - [x] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
   `ExchangeRegistryChanged` alert.
+- [x] The admin page *Administration → Verbundene Anwendungen* (`/admin/exchange-clients`)
+  registers, edits, suspends and activates clients and flips the switch in place; suspending, either
+  direction of the switch and granting a client more capabilities each ask for confirmation first.
+  *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`.*
 
 **Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
-`AdminExchangeRegistryControllerTest`, `RedisAclBackendIntegrationTest`,
+`AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `RedisAclBackendIntegrationTest`,
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
 **Code:** `ExchangeRegistryService`, `ExchangeRegistryMirrorSync`, `RedisExchangeRegistryMirror`,
 `ExchangeRegistryReconcileTask`, `AdminExchangeRegistryController` · **Status:** registry, admin
 API and mirror built — WP 3.1 (#2083); the gateway's read — `ExchangeRegistryReader`, a
 five-second cache (`app.exchange.registry-cache-ttl`) of the `app.exchange.registry-key` document —
-built with WP 3.2 (#2082); the admin page with WP 4.5 (#2087)
+built with WP 3.2 (#2082); the admin page built — WP 4.5 (#2087)
 
 ### REQ-XCH-004 — Capabilities are OAuth scopes, enforced at the gateway and re-checked at the backend
 
@@ -291,7 +295,15 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
   in: it reads `exchange:revoked:<client>:<member>` per request and refuses a token issued at or
   before that second `401 CLIENT_REVOKED`, while a token issued after it passes
   (`ExchangeGateTest`).*
-- [ ] A departed member is refused on the next request.
+- [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
+  sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
+  every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
+  commit, only while the registry holds a client — writes a revocation for every client (mirror and
+  database), removes the member's consent for each and logs them out of every session, auditing
+  `EXCHANGE_MEMBER_DEPARTED`; a failed step is counted and alerts (`ExchangeDepartureIncomplete`)
+  instead of failing the sync (`ExchangeDepartureIntegrationTest`, `UserReconciliationServiceTest`).
+  The gateway refuses the member through the per-client revocations those steps write
+  (`ExchangeGateTest`); the end-to-end run follows with the sandbox (WP 2.3).*
 
 **Status:** planned — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
 
@@ -397,17 +409,40 @@ WP 3.2 (#2082)
 compared case-insensitively with `blueprint.scwiki_key`, which is not unique; `scGuid` is matched
 against blueprint records and output items, and duplicates resolve `ambiguous`. Names resolve
 through `BlueprintImportService.resolve()` — REQ-INV-006, REQ-INV-019, REQ-INV-021, REQ-INV-050 —
-never through a second logic. `locKey` resolves once the catalogue carries name keys and until then
-falls through to the name with a warning. Places resolve against the Lager's `location` table; a
+never through a second logic. `locKey` is compared case-insensitively with the catalogue's
+`name_key` — the `global.ini` name key without its `@`, which the P4K import stores for items,
+materials and ship types (migration `V250`; `LOC_` placeholders are not stored), and which a
+blueprint takes from its output item; a `locKey` that resolves to no single entry falls through to
+the name with a warning. Places resolve against the Lager's `location` table; a
 place without a row is `LOCATION_UNKNOWN`.
+
+A reference takes the first of its fields, in the order `bt`, `scRecord`, `scGuid`, `uexId`,
+`locKey`, `name`, that resolves to exactly one entry; if none does, the first that resolved to
+several is the answer, so an ambiguous `scRecord` still yields to a name that resolves. `ambiguous`
+lists at most ten candidates as `{bt, name}`; fuzzy suggestions are always `ambiguous`, even when
+there is only one, because they are never taken without the member. `LOC_KEY_UNRESOLVED` points at
+`/refs/<i>/locKey` of every reference that carries a `locKey` and whose keys, `locKey` included, did
+not resolve; a response carries at most 50 warnings. Per catalogue:
+
+| `kind` | `bt` | `scRecord` | `scGuid` | `uexId` | `locKey` | `name` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `BLUEPRINT` | the product key (normalized output name) | `blueprint.scwiki_key` | the blueprint's Wiki or game-file UUID, or its output item's | the output item's UEX id | the output item's `name_key` | the web import's chain: exact, alias, pack-tag strip, fuzzy |
+| `ITEM` | the item id | `class_name` | Wiki or game-file UUID | UEX item id | `name_key` | exact, case-insensitive; duplicates `ambiguous` |
+| `MATERIAL` | the material id | `scwiki_key` | Wiki or game-file UUID | UEX commodity id | `name_key` | exact, canonical (`MaterialNameCanonicalizer`), external alias, fuzzy — visible materials only |
+| `SHIP_TYPE` | the ship type id | `class_name` | Wiki UUID | UEX vehicle id | `name_key` | the hangar import's `ShipTypeMatcher` |
+
+The backend answers on `POST /api/v1/exchange/catalog/resolve` for any exchange capability; the
+gateway reports unknown request fields as `UNKNOWN_FIELD` warnings (WP 3.2).
 
 **Acceptance**
 
-- [ ] The anonymised corpus fixture
+- [x] The anonymised corpus fixture
   (`backend/src/test/resources/fixtures/blueprint-corpus/game-log-corpus-v1.json`) resolves the same
-  through the exchange and through the web import.
+  through the exchange and through the web import (`ExchangeResolveCorpusTest`).
 
-**Status:** planned — WP 3.3 (#2083)
+**Enforced by:** `ExchangeResolveCorpusTest`, `ExchangeResolveServiceTest`,
+`ExchangeResolveControllerTest` · **Status:** backend built — WP 3.1 (#2083); served by the gateway
+with WP 3.2 (#2082)
 
 ### REQ-XCH-013 — Each resource has a snapshot and a database-sequenced change feed
 
@@ -713,6 +748,11 @@ offers changed).
 the member's profile (REQ-SEC-072, stored since WP 1.4), case-insensitively, and answers `match`, `mismatch` or `unknown` (no handle
 stored). It never returns or logs the stored handle and is rate-limited tightly.
 
+The backend answers the relayed call at `POST /api/v1/exchange/me/account-check` under
+`exchange.connect`, validates the handle with the profile's own pattern (`^[A-Za-z0-9_-]{3,60}$`,
+`400` otherwise, without echoing it) and counts every answer in
+`basetool_exchange_account_checks_total{outcome}`.
+
 The gateway checks the body against `account-check-request.schema.json` — a value that is no RSI
 handle is `400 SCHEMA_INVALID` naming only the pointer, never the value — relays it to the backend's
 `POST /api/v1/exchange/me/account-check`, and passes on only an answer that matches
@@ -720,10 +760,13 @@ handle is `400 SCHEMA_INVALID` naming only the pointer, never the value — rela
 not count against the daily quota, but it has its own limit of ten per hour per client and member
 (REQ-XCH-023).
 
+- [x] Match, mismatch and unknown, the match case-insensitive; the stored handle is in no answer and
+  neither handle in a log line. *`ExchangeAccountCheckControllerTest`.*
 - [x] The gateway relays the route inside its own hourly limit; a value that is no handle is neither
   relayed, echoed nor logged. *`ExchangeControllerTest`, `ExchangeLimitFilterTest`.*
+- [ ] End to end on the sandbox (WP 2.3, #2099).
 
-**Status:** gateway relay built — WP 3.4 (#2106); the backend answer with its own PR
+**Status:** backend and gateway relay built — WP 3.4 (#2106); the sandbox run follows with WP 2.3
 
 ### REQ-XCH-032 — „Verbundene Anwendungen" shows and controls every connection
 
@@ -733,7 +776,19 @@ installation or a whole client, undo, and confirm a staged mass change. Every ne
 installation raises a notification and stays highlighted until seen. `ADMIN` manages the registry
 on an admin page with a suspend switch. The page is web-only; the app links to it.
 
-**Status:** planned — WP 4.5 (#2087)
+The notification is the rule-engine event `EXCHANGE_INSTALLATION_CONNECTED` (seed `V251`,
+`EVENT_RECIPIENT`), published when the installation upsert reports that it created the row, so two
+concurrent first calls announce one installation once. It names the client by its registry display
+name only: the client-supplied label arrives with a later call and could pose as the Basetool. An
+installation counts as unseen while its notification is unread, `GET /api/v1/connected-apps` says so
+per installation (`unseen`), and `POST /api/v1/connected-apps/seen` marks them read — a notification
+change only, not audited.
+
+- [x] A new installation notifies its member once, by the client's name; the list reports it
+  unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
+  `ConnectedAppsControllerTest`.*
+
+**Status:** planned — WP 4.5 (#2087); the new-connection notification and the unseen state are built
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 
