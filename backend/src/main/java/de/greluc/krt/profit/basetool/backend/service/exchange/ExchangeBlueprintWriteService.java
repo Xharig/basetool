@@ -103,6 +103,7 @@ public class ExchangeBlueprintWriteService {
   private final ExchangeJournalService journalService;
   private final ExchangeMassChangeGuard guard;
   private final MeterRegistry meterRegistry;
+  private final ExchangeLiveSync liveSync;
 
   /** Registers the write counter at zero for every resource and outcome. */
   @PostConstruct
@@ -158,6 +159,9 @@ public class ExchangeBlueprintWriteService {
         }
         results.add(new ExchangeChangeResultDto.OpResult(i, opId, skip.result(), skip.reason()));
       }
+    }
+    if (!changeSet.dryRun() && applied > 0) {
+      liveSync.blueprintsChanged(caller.member());
     }
     return new ExchangeChangeResultDto(
         changeSet.dryRun(),

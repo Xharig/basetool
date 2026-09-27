@@ -27,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
@@ -41,6 +42,7 @@ import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.KnownExchangeClients;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -90,6 +92,7 @@ class ExchangeShipWriteControllerTest {
   @Autowired private ExchangeSettingsRepository settingsRepository;
   @Autowired private ExchangeJournalRepository journalRepository;
   @Autowired private JdbcTemplate jdbc;
+  @Autowired private MeterRegistry meterRegistry;
   @Autowired private KnownExchangeClients knownClients;
 
   private MockMvc mockMvc;
@@ -268,6 +271,7 @@ class ExchangeShipWriteControllerTest {
     UUID first = ship(member, "Blackbird", cutlass, "LTI");
     UUID mission = mission();
     UUID unit = missionUnit(mission, first);
+    double framesBefore = frames("hangar_own");
 
     change(ops(remove(first, 0L)))
         .andExpect(status().isOk())
@@ -275,6 +279,7 @@ class ExchangeShipWriteControllerTest {
         .andExpect(jsonPath("$.detachedFromMissions").value(1));
 
     assertThat(ships(member)).isZero();
+    assertThat(frames("hangar_own")).isEqualTo(framesBefore + 1);
     assertThat(
             jdbc.queryForObject(
                 "SELECT COUNT(*) FROM mission_unit WHERE id = ? AND ship_id IS NULL",
@@ -546,5 +551,20 @@ class ExchangeShipWriteControllerTest {
         Integer.class,
         type,
         subject);
+  }
+
+  /**
+   * Reads how many live-sync frames the backend accepted for one room class.
+   *
+   * @param topicClass the room class's metric label
+   * @return the count so far
+   */
+  private double frames(@NotNull String topicClass) {
+    io.micrometer.core.instrument.Counter counter =
+        meterRegistry
+            .find(MetricNames.LIVESYNC_PUBLISH_ACCEPTED)
+            .tag(MetricNames.TAG_TOPIC_CLASS, topicClass)
+            .counter();
+    return counter == null ? 0 : counter.count();
   }
 }

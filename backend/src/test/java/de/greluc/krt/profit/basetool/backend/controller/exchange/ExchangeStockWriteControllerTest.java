@@ -25,6 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
@@ -38,6 +39,7 @@ import de.greluc.krt.profit.basetool.backend.repository.RoleRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -87,6 +89,7 @@ class ExchangeStockWriteControllerTest {
   @Autowired private ExchangeJournalRepository journalRepository;
   @Autowired private PlatformTransactionManager transactionManager;
   @Autowired private JdbcTemplate jdbc;
+  @Autowired private MeterRegistry meterRegistry;
 
   private MockMvc mockMvc;
   private UUID member;
@@ -190,6 +193,8 @@ class ExchangeStockWriteControllerTest {
     UUID pooled = row(laranite, area18, 500, 6, unit);
     UUID loose = row(laranite, area18, 500, 4, null);
     UUID offer = offer(loose, 3.0);
+    double lagerBefore = frames("inventory_all");
+    double boardBefore = frames("materialboard");
 
     set(laranite, locationName(area18), 500, "7.5", "10", "SCU")
         .andExpect(jsonPath("$.applied").value(1))
@@ -205,6 +210,8 @@ class ExchangeStockWriteControllerTest {
                 offer))
         .isEqualTo(1.5);
     assertThat(audit("MARKET_OFFER_REDUCED", offer)).isEqualTo(1);
+    assertThat(frames("inventory_all")).isEqualTo(lagerBefore + 1);
+    assertThat(frames("materialboard")).isEqualTo(boardBefore + 1);
   }
 
   @Test
@@ -566,5 +573,20 @@ class ExchangeStockWriteControllerTest {
         Integer.class,
         type,
         subject);
+  }
+
+  /**
+   * Reads how many live-sync frames the backend accepted for one room class.
+   *
+   * @param topicClass the room class's metric label
+   * @return the count so far
+   */
+  private double frames(@NotNull String topicClass) {
+    io.micrometer.core.instrument.Counter counter =
+        meterRegistry
+            .find(MetricNames.LIVESYNC_PUBLISH_ACCEPTED)
+            .tag(MetricNames.TAG_TOPIC_CLASS, topicClass)
+            .counter();
+    return counter == null ? 0 : counter.count();
   }
 }

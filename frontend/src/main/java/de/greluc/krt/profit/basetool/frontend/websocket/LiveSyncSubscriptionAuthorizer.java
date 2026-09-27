@@ -143,6 +143,33 @@ public class LiveSyncSubscriptionAuthorizer {
       @Nullable String accessToken,
       @Nullable UUID activeOrgUnitId,
       @Nullable Set<String> authorities) {
+    return authorize(topic, accessToken, activeOrgUnitId, authorities, null);
+  }
+
+  /**
+   * Decides whether a subscribe to {@code topic} is authorized, additionally admitting a member's
+   * personal room only for the member whose id it carries.
+   *
+   * @param topic the parsed topic being subscribed to
+   * @param accessToken the access token captured at handshake, or {@code null}
+   * @param activeOrgUnitId the org-unit pin captured at handshake, or {@code null}
+   * @param authorities the authorities captured at handshake, or {@code null}
+   * @param subject the socket's own user id captured at handshake, or {@code null} (then a personal
+   *     room is refused)
+   * @return {@link Decision#ALLOW}, including every fail-open case of a shared room; {@link
+   *     Decision#DENY} on an explicit refusal, a missing role or a personal room of someone else;
+   *     or {@link Decision#DENY_INDETERMINATE} when a presence-enabled class failed closed
+   */
+  @NotNull
+  public Decision authorize(
+      @NotNull LiveSyncTopic topic,
+      @Nullable String accessToken,
+      @Nullable UUID activeOrgUnitId,
+      @Nullable Set<String> authorities,
+      @Nullable UUID subject) {
+    if (topic.topicClass().selfOnly()) {
+      return subject != null && subject.equals(topic.resourceId()) ? Decision.ALLOW : Decision.DENY;
+    }
     Set<String> requiredAnyRole = topic.topicClass().requiredAnyRole();
     if (requiredAnyRole != null) {
       if (authorities == null) {

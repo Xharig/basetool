@@ -133,6 +133,7 @@ public class ExchangeStockWriteService {
   private final ExchangeMassChangeGuard guard;
   private final MeterRegistry meterRegistry;
   private final ObjectMapper objectMapper;
+  private final ExchangeLiveSync liveSync;
   private final Clock clock = Clock.systemUTC();
 
   /**
@@ -181,6 +182,9 @@ public class ExchangeStockWriteService {
         }
         results.add(new ExchangeChangeResultDto.OpResult(i, opId, skip.result(), skip.reason()));
       }
+    }
+    if (!changeSet.dryRun() && applied > 0) {
+      liveSync.stockChanged(offers.reduced + offers.removed > 0);
     }
     return new ExchangeChangeResultDto(
         changeSet.dryRun(),

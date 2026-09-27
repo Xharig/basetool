@@ -25,6 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
@@ -43,6 +44,7 @@ import de.greluc.krt.profit.basetool.backend.service.BlueprintNameNormalizer;
 import de.greluc.krt.profit.basetool.backend.service.DefaultBlueprintKeyService;
 import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -94,6 +96,7 @@ class ExchangeBlueprintWriteControllerTest {
   @Autowired private DefaultBlueprintKeyService defaultKeys;
   @Autowired private PlatformTransactionManager transactionManager;
   @Autowired private JdbcTemplate jdbc;
+  @Autowired private MeterRegistry meterRegistry;
 
   private MockMvc mockMvc;
   private UUID member;
@@ -150,6 +153,7 @@ class ExchangeBlueprintWriteControllerTest {
     String rifle = product("Arrowhead Rifle");
     String pistol = product("Arclight Pistol");
     owns(pistol);
+    double framesBefore = frames("blueprints_own");
 
     change(
             """
@@ -164,6 +168,7 @@ class ExchangeBlueprintWriteControllerTest {
         .andExpect(jsonPath("$.results.length()").value(0));
 
     assertThat(owned()).containsExactly(rifle);
+    assertThat(frames("blueprints_own")).isEqualTo(framesBefore + 1);
     List<ExchangeJournalEntry> journal =
         journalRepository.findAllByUserIdOrderByRecordedAtAsc(member);
     assertThat(journal)
@@ -370,5 +375,20 @@ class ExchangeBlueprintWriteControllerTest {
   private @NotNull List<String> owned() {
     return jdbc.queryForList(
         "SELECT product_key FROM personal_blueprint WHERE owner_user_id = ?", String.class, member);
+  }
+
+  /**
+   * Reads how many live-sync frames the backend accepted for one room class.
+   *
+   * @param topicClass the room class's metric label
+   * @return the count so far
+   */
+  private double frames(@NotNull String topicClass) {
+    io.micrometer.core.instrument.Counter counter =
+        meterRegistry
+            .find(MetricNames.LIVESYNC_PUBLISH_ACCEPTED)
+            .tag(MetricNames.TAG_TOPIC_CLASS, topicClass)
+            .counter();
+    return counter == null ? 0 : counter.count();
   }
 }
