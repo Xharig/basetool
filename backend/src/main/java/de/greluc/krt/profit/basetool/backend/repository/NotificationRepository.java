@@ -82,6 +82,41 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
   long countByRecipientUserIdAndReadFalse(UUID recipientUserId);
 
   /**
+   * Returns the entity ids of a recipient's unread notifications of one type.
+   *
+   * @param recipientUserId the recipient
+   * @param type the notification type
+   * @return the entity ids, one per unread notification that carries one
+   */
+  @Query(
+      """
+      select n.entityId from Notification n
+      where n.recipientUserId = :recipientUserId and n.type = :type and n.read = false
+        and n.entityId is not null
+      """)
+  List<UUID> findUnreadEntityIds(
+      @Param("recipientUserId") UUID recipientUserId, @Param("type") NotificationType type);
+
+  /**
+   * Marks a recipient's unread notifications of one type read.
+   *
+   * @param recipientUserId the recipient
+   * @param type the notification type
+   * @param readAt the read time
+   * @return the number of notifications marked
+   */
+  @Modifying(clearAutomatically = true)
+  @Query(
+      """
+      update Notification n set n.read = true, n.readAt = :readAt
+      where n.recipientUserId = :recipientUserId and n.type = :type and n.read = false
+      """)
+  int markReadOfType(
+      @Param("recipientUserId") UUID recipientUserId,
+      @Param("type") NotificationType type,
+      @Param("readAt") Instant readAt);
+
+  /**
    * Marks every unread notification of a recipient read in one atomic statement, stamping {@code
    * readAt}. Clears the persistence context so callers re-read fresh state.
    *

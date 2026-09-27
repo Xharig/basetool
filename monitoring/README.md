@@ -233,6 +233,7 @@ section above.
 | **ExchangeDpopProofsFailing** | Exchange clients keep presenting DPoP proofs the gateway refuses — invalid, replayed or for another key (REQ-XCH-006). A misimplemented client or a replay attempt; nonce challenges do not count. |
 | **ExchangeRelayHeaderForged** | `X-Exchange-Client` / `X-Exchange-Capabilities` keep arriving from something other than the gateway acting for a member on an exchange path — somebody is trying to borrow an external client's attribution or capabilities (REQ-XCH-010). The correlationId in the backend log names the request. |
 | **ExchangeGateRefusing** | The backend's `ExchangeGate` has refused exchange requests the gateway let through for 15 minutes (`reason` label). Gateway and backend disagree about the registry — check `ExchangeMirrorWriteFailed` and the gateway's registry cache. |
+| **ExchangeDepartureIncomplete** | A departed member's exchange access could not be fully ended — a revocation, a consent removal or the Keycloak logout failed, and the step is not retried. End the member's sessions and consents in Keycloak by hand (REQ-XCH-008). |
 | **UserSyncZeroItems** | User sync succeeds but processes zero users (Keycloak returned an empty roster) — local accounts will drift. Check Keycloak reachability and the sync path. |
 | **IngestHandoffErrors / IngestBackendUnavailable** | The ingest gateway is failing to relay handoffs. Check the ingest logs and the ingest→backend path; `backend_unavailable` points at backend health. |
 | **IngestStagingUnavailable** | The gateway reached the backend but could not park the draft in Redis. Check the `redis` unit and the gateway's Redis configuration — the backend itself is fine. |
@@ -817,15 +818,15 @@ scripts/check-monitoring-configs.test.sh
 # with the directory elsewhere it matches nothing and promtool silently checks no rule file at all.
 docker run --rm --entrypoint promtool \
   -v "$PWD/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
-  -v "$PWD/monitoring/prometheus/alerts:/etc/prometheus/alerts:ro" prom/prometheus:v3.14.0 \
+  -v "$PWD/monitoring/prometheus/alerts:/etc/prometheus/alerts:ro" prom/prometheus:v3.15.0 \
   check config /etc/prometheus/prometheus.yml
 # The glob'd commands go through `sh -c` so the pattern is expanded INSIDE the container.
-docker run --rm --entrypoint sh -v "$PWD/monitoring/prometheus:/cfg" prom/prometheus:v3.14.0 \
+docker run --rm --entrypoint sh -v "$PWD/monitoring/prometheus:/cfg" prom/prometheus:v3.15.0 \
   -c 'promtool check rules /cfg/alerts/*.yml'
 
 # Alert-rule unit tests (-w /work makes the tests' ../alerts paths resolve)
 docker run --rm --entrypoint sh -v "$PWD/monitoring/prometheus:/work" -w /work \
-  prom/prometheus:v3.14.0 -c 'promtool test rules tests/*_test.yml'
+  prom/prometheus:v3.15.0 -c 'promtool test rules tests/*_test.yml'
 
 # Loki ruler rules — every file parses and every expr is valid LogQL (CI: repo-lint)
 scripts/check-loki-rules.sh
@@ -849,9 +850,9 @@ done
 docker rm -f bb-lint
 
 # Alloy — format check + validate. `validate` exits 0 even on failure: read its output.
-docker run --rm -v "$PWD/monitoring/alloy:/cfg" grafana/alloy:v1.19.2 \
+docker run --rm -v "$PWD/monitoring/alloy:/cfg" grafana/alloy:v1.20.0 \
   fmt --test /cfg/config.alloy
-docker run --rm -v "$PWD/monitoring/alloy:/cfg" grafana/alloy:v1.19.2 \
+docker run --rm -v "$PWD/monitoring/alloy:/cfg" grafana/alloy:v1.20.0 \
   validate /cfg/config.alloy
 # The shipper-side masks (CI: repo-lint -> alloy-log-masking)
 python3 scripts/check-alloy-log-masking.py

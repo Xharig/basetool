@@ -702,6 +702,15 @@ groups:
           summary: "Backend exchange gate refusing ({{ $labels.reason }})"
           description: "The backend's ExchangeGate has been refusing exchange requests the gateway let through for 15 minutes ({{ $labels.reason }}). The gateway checks the same registry first, so a sustained backend refusal means the two disagree: a stale gateway cache, a mirror that is behind the database (see ExchangeMirrorWriteFailed), or a gateway that no longer relays capabilities. Members' clients get 403 meanwhile."
 
+      - alert: ExchangeDepartureIncomplete
+        expr: >-
+          sum(increase(basetool_exchange_departures_total{outcome="failed"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "A departed member's exchange access was not fully ended"
+          description: "A member left the organisation and the backend could not end all of their exchange access: a revocation, a consent removal or the Keycloak logout failed (REQ-XCH-008). The step is not retried. Check the backend log for 'Exchange departure step', then end the member's sessions and consents in the Keycloak admin console and disconnect their clients."
+
       - alert: OnBehalfOfWithoutAuthenticatedCaller
         expr: >-
           sum(rate(basetool_on_behalf_of_refused_total{reason="no_authenticated_caller"}[15m])) > 0
