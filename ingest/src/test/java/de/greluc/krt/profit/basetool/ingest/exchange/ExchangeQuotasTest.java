@@ -21,28 +21,36 @@ package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+/** The daily write quota's counter in Redis (REQ-XCH-023). */
 @ExtendWith(MockitoExtension.class)
 class ExchangeQuotasTest {
 
   private static final Instant NOW = Instant.parse("2026-09-27T22:00:00Z");
   private static final String KEY = "ingest:xch:quota:versekit:m-1:2026-09-27";
+  private static final Duration UNTIL_THE_END_OF_TOMORROW = Duration.ofHours(26);
+  private static final long BYTES = KEY.length() + (long) ExchangeQuotas.VALUE_BYTES;
 
   @Mock private StringRedisTemplate template;
   @Mock private ValueOperations<String, String> values;
@@ -56,29 +64,38 @@ class ExchangeQuotasTest {
   }
 
   @Test
-  void theFirstWriteOfTheDayStartsATwoDayCounter() {
+  void theCounterIsCreatedWithItsExpiryBeforeItIsIncremented() {
     when(template.opsForValue()).thenReturn(values);
     when(values.increment(KEY)).thenReturn(1L);
 
     assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(1L);
-    verify(template).expire(KEY, ExchangeQuotas.TTL);
-    verify(budget)
-        .record(
-            "versekit",
-            "m-1",
-            KEY,
-            KEY.length() + (long) ExchangeQuotas.VALUE_BYTES,
-            ExchangeQuotas.TTL);
+
+    InOrder order = inOrder(budget, values);
+    order.verify(budget).record("versekit", "m-1", KEY, BYTES, UNTIL_THE_END_OF_TOMORROW);
+    order.verify(values).setIfAbsent(KEY, "0", UNTIL_THE_END_OF_TOMORROW);
+    order.verify(values).increment(KEY);
+    verify(template, never()).expire(anyString(), any(Duration.class));
   }
 
   @Test
-  void laterWritesOnlyCount() {
+  void laterWritesRegisterTheSameEntryUnderTheSameExpiry() {
     when(template.opsForValue()).thenReturn(values);
     when(values.increment(KEY)).thenReturn(7L);
 
     assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(7L);
-    verify(template, never()).expire(KEY, ExchangeQuotas.TTL);
-    verifyNoInteractions(budget);
+    verify(budget).record("versekit", "m-1", KEY, BYTES, UNTIL_THE_END_OF_TOMORROW);
+    verify(values).setIfAbsent(KEY, "0", UNTIL_THE_END_OF_TOMORROW);
+  }
+
+  @Test
+  void aBudgetThatCannotBeReachedCountsNothing() {
+    doThrow(new ExchangeUnavailableException("down", null))
+        .when(budget)
+        .record(anyString(), anyString(), anyString(), any(Long.class), any(Duration.class));
+
+    assertThatThrownBy(() -> quotas.countWrite("versekit", "m-1"))
+        .isInstanceOf(ExchangeUnavailableException.class);
+    verify(template, never()).opsForValue();
   }
 
   @Test

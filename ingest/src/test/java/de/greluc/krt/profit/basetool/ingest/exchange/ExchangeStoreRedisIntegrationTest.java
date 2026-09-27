@@ -233,6 +233,23 @@ class ExchangeStoreRedisIntegrationTest {
   }
 
   @Test
+  void aQuotaCounterIsBornWithItsExpiryAndCountedOnceInTheBudget() {
+    ExchangeQuotas quotas = new ExchangeQuotas(template, budget, clock);
+    String key = ExchangeQuotas.PREFIX + "a:m1:2026-09-27";
+
+    assertThat(quotas.countWrite("a", "m1")).isEqualTo(1L);
+    assertThat(quotas.countWrite("a", "m1")).isEqualTo(2L);
+
+    assertThat(observer.getExpire(key, TimeUnit.SECONDS))
+        .as("until the end of the following UTC day")
+        .isBetween(Duration.ofHours(36).toSeconds() - 5L, Duration.ofHours(36).toSeconds());
+    assertThat(total(ExchangeBudget.memberScope("a", "m1")))
+        .isEqualTo(ExchangeBudget.charge(key.length() + (long) ExchangeQuotas.VALUE_BYTES));
+    assertThat(template.opsForZSet().range(ExchangeBudget.memberScope("a", "m1"), 0, -1))
+        .hasSize(1);
+  }
+
+  @Test
   void aMissingRunningTotalIsRebuiltFromItsSet() {
     budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 3000L, Duration.ofHours(1));
     template.delete(ExchangeBudget.sum(ExchangeBudget.memberScope("a", "m1")));
@@ -298,13 +315,13 @@ class ExchangeStoreRedisIntegrationTest {
     String namespace = ExchangeIdempotency.namespace("a", "m1", "key-000001");
 
     assertThat(idempotency.find(namespace)).isEmpty();
-    String token = idempotency.lock(namespace).orElseThrow();
-    assertThat(idempotency.lock(namespace)).isEmpty();
+    String token = idempotency.claim(namespace).orElseThrow();
+    assertThat(idempotency.claim(namespace)).isEmpty();
 
     ExchangeIdempotency.Stored stored =
         new ExchangeIdempotency.Stored("fp", 200, "application/json", "{\"ok\":1}");
     idempotency.store(namespace, stored);
-    assertThat(idempotency.unlock(namespace, token)).isTrue();
+    assertThat(idempotency.releaseClaim(namespace, token)).isTrue();
 
     assertThat(idempotency.sizeOf(namespace, stored)).isPositive();
     assertThat(idempotency.find(namespace))
@@ -314,27 +331,27 @@ class ExchangeStoreRedisIntegrationTest {
               assertThat(found.status()).isEqualTo(200);
               assertThat(found.body()).isEqualTo("{\"ok\":1}");
             });
-    assertThat(idempotency.lock(namespace)).isPresent();
+    assertThat(idempotency.claim(namespace)).isPresent();
     assertThat(observer.getExpire(ExchangeIdempotency.PREFIX + namespace)).isPositive();
   }
 
   @Test
   void aLockIsReleasedOnlyByTheRequestHoldingIt() {
     String namespace = ExchangeIdempotency.namespace("a", "m1", "key-000002");
-    String first = idempotency.lock(namespace).orElseThrow();
+    String first = idempotency.claim(namespace).orElseThrow();
 
-    assertThat(idempotency.unlock(namespace, "not-the-token")).isFalse();
-    assertThat(idempotency.lock(namespace)).isEmpty();
+    assertThat(idempotency.releaseClaim(namespace, "not-the-token")).isFalse();
+    assertThat(idempotency.claim(namespace)).isEmpty();
 
-    template.delete(ExchangeIdempotency.LOCK_PREFIX + namespace);
-    String second = idempotency.lock(namespace).orElseThrow();
+    template.delete(ExchangeIdempotency.CLAIM_PREFIX + namespace);
+    String second = idempotency.claim(namespace).orElseThrow();
 
-    assertThat(idempotency.unlock(namespace, first))
+    assertThat(idempotency.releaseClaim(namespace, first))
         .as("a request that outlived its lock must not free the next holder's lock")
         .isFalse();
-    assertThat(idempotency.lock(namespace)).isEmpty();
-    assertThat(idempotency.unlock(namespace, second)).isTrue();
-    assertThat(idempotency.lock(namespace)).isPresent();
+    assertThat(idempotency.claim(namespace)).isEmpty();
+    assertThat(idempotency.releaseClaim(namespace, second)).isTrue();
+    assertThat(idempotency.claim(namespace)).isPresent();
   }
 
   @Test
@@ -402,7 +419,7 @@ class ExchangeStoreRedisIntegrationTest {
       }
       assertThat(
               observer.hasKey(
-                  ExchangeIdempotency.LOCK_PREFIX + ExchangeIdempotency.namespace("a", "m1", key)))
+                  ExchangeIdempotency.CLAIM_PREFIX + ExchangeIdempotency.namespace("a", "m1", key)))
           .isFalse();
     }
     assertThat(total(ExchangeBudget.memberScope("a", "m1")))

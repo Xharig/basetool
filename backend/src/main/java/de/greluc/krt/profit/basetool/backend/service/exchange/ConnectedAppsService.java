@@ -216,7 +216,7 @@ public class ConnectedAppsService {
 
   /**
    * Disconnects a whole client for the member: Keycloak first removes the member's consent for the
-   * client with its offline sessions and ends the online sessions only the client holds; then the
+   * client with its offline sessions and ends the client in every online session; then the
    * revocation time, read afterwards, reaches the mirror and is stored. The gateway so refuses
    * every token of an earlier connection, and a new connection works at once (REQ-XCH-008).
    *
@@ -243,22 +243,23 @@ public class ConnectedAppsService {
   }
 
   /**
-   * Removes the member's Keycloak consent for the client with its offline sessions, and ends the
-   * online sessions only the client holds.
+   * Removes the member's Keycloak consent for the client with its offline sessions, deletes the
+   * online sessions only the client holds, and ends the client inside the sessions it shares with
+   * other clients, which stay signed in.
    *
    * @param member the member
    * @param clientId the Keycloak client id
    * @throws ExternalServiceException when Keycloak could not be reached
    */
   private void endSessions(@NotNull UUID member, @NotNull String clientId) {
-    int shared;
     try {
       keycloakService.revokeConsent(member, clientId);
-      shared = keycloakService.endSessionsHeldOnlyBy(member, clientId);
+      if (keycloakService.endSessionsHeldOnlyBy(member, clientId) > 0) {
+        keycloakService.endClientInSharedSessions(member, clientId);
+      }
     } catch (RuntimeException e) {
       throw new ExternalServiceException("The client's consent or sessions could not be ended", e);
     }
-    log.debug("Left {} shared sessions of client {} to the gateway", shared, clientId);
   }
 
   /**

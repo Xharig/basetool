@@ -48,7 +48,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.springframework.data.redis.RedisSystemException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -510,8 +510,9 @@ public class ExchangeController {
       return problem(result.status(), result.code(), result.detail());
     }
     String json = objectMapper.writeValueAsString(result.body());
-    long bytes = json.getBytes(StandardCharsets.UTF_8).length;
-    if (bytes > ingestProperties.maxHandoffBytes()) {
+    long bytes = stagingService.stagedBytes(kind, json);
+    if (json.getBytes(StandardCharsets.UTF_8).length > ingestProperties.maxHandoffBytes()
+        || bytes > ingestProperties.maxHandoffBytes()) {
       return problem(
           HttpStatus.CONTENT_TOO_LARGE.value(),
           PAYLOAD_TOO_LARGE,
@@ -521,15 +522,13 @@ public class ExchangeController {
     try {
       staged =
           stageWithinBudget(
-              context,
-              stagingService.stagedBytes(kind, json),
-              () -> stagingService.stageDraft(context.member(), kind, json));
+              context, bytes, () -> stagingService.stageDraft(context.member(), kind, json));
       if (staged == null) {
         return unavailable(
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
             "The exchange's storage budget is full; try again later.");
       }
-    } catch (ExchangeUnavailableException | RedisSystemException e) {
+    } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A draft could not be staged: {}", e.getClass().getSimpleName());
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE, "The draft cannot be staged; try again later.");
@@ -579,6 +578,10 @@ public class ExchangeController {
       return schemaInvalid(violations);
     }
     List<String> unknown = schemas.unknownFields(schema, body);
+    ResponseEntity<?> unreportable = unreportable(unknown);
+    if (unreportable != null) {
+      return unreportable;
+    }
     ExchangeRelay.Result result =
         relay.forward(
             HttpMethod.POST,
@@ -615,8 +618,9 @@ public class ExchangeController {
     document.put("stagedAt", Instant.now().toString());
     document.set("changeSet", body);
     String json = objectMapper.writeValueAsString(document);
-    long bytes = json.getBytes(StandardCharsets.UTF_8).length;
-    if (bytes > storeProperties.maxMassChangeBytes()) {
+    long bytes = stagingService.stagedBytes(HandoffKind.MASS_CHANGE, json);
+    if (json.getBytes(StandardCharsets.UTF_8).length > storeProperties.maxMassChangeBytes()
+        || bytes > storeProperties.maxMassChangeBytes()) {
       return problem(
           HttpStatus.CONTENT_TOO_LARGE.value(),
           BATCH_TOO_LARGE,
@@ -627,7 +631,7 @@ public class ExchangeController {
       staged =
           stageWithinBudget(
               context,
-              stagingService.stagedBytes(HandoffKind.MASS_CHANGE, json),
+              bytes,
               () ->
                   stagingService.stageMassChange(
                       context.member(), json, storeProperties.maxMassChangeBytes()));
@@ -636,7 +640,7 @@ public class ExchangeController {
             ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
             "The exchange's storage budget is full; try again later.");
       }
-    } catch (ExchangeUnavailableException | RedisSystemException e) {
+    } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A mass change could not be staged: {}", e.getClass().getSimpleName());
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE,
@@ -809,6 +813,10 @@ public class ExchangeController {
       return schemaInvalid(violations);
     }
     List<String> unknown = schemas.unknownFields(requestSchema, body);
+    ResponseEntity<?> unreportable = unreportable(unknown);
+    if (unreportable != null) {
+      return unreportable;
+    }
     return relayed(
         relay.forward(HttpMethod.POST, BACKEND + path, body, context, acceptLanguage),
         responseSchema,
@@ -879,7 +887,30 @@ public class ExchangeController {
   }
 
   /**
-   * Answers a request body that breaks its schema.
+   * Refuses a body whose undeclared field could not be reported as a warning, because its JSON
+   * Pointer exceeds {@link ExchangeSchemas#MAX_POINTER} characters; checked before the relay, so a
+   * write the backend committed always gets an answer that matches its schema.
+   *
+   * @param unknown the request's undeclared fields
+   * @return {@code 400 SCHEMA_INVALID} naming the fields' parents, or {@code null} when every field
+   *     can be reported
+   */
+  private @Nullable ResponseEntity<?> unreportable(@NotNull List<String> unknown) {
+    List<ExchangeSchemas.Violation> violations =
+        unknown.stream()
+            .filter(pointer -> pointer.length() > ExchangeSchemas.MAX_POINTER)
+            .map(
+                pointer ->
+                    new ExchangeSchemas.Violation(
+                        ExchangeSchemas.reportable(pointer), "holds a property name too long"))
+            .distinct()
+            .toList();
+    return violations.isEmpty() ? null : schemaInvalid(violations);
+  }
+
+  /**
+   * Answers a request body that breaks its schema; every pointer is shortened to one the problem
+   * schema can carry.
    *
    * @param violations the violations
    * @return {@code 400 SCHEMA_INVALID} with {@code errors[]}
@@ -896,7 +927,10 @@ public class ExchangeController {
     problem.setProperty(
         "errors",
         violations.stream()
-            .map(v -> Map.of("pointer", v.pointer(), "message", v.message()))
+            .map(
+                v ->
+                    Map.of(
+                        "pointer", ExchangeSchemas.reportable(v.pointer()), "message", v.message()))
             .toList());
     return ResponseEntity.badRequest()
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)

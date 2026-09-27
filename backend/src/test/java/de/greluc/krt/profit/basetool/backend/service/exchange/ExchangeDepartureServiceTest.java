@@ -22,7 +22,9 @@ package de.greluc.krt.profit.basetool.backend.service.exchange;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -37,10 +39,14 @@ import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRevocation
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.service.KeycloakService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
@@ -97,6 +103,54 @@ class ExchangeDepartureServiceTest {
 
     verify(revocationMirror).revoke(eq("versekit"), eq(MEMBER), any());
     verify(keycloakService).logoutUser(MEMBER);
+    assertThat(count(ExchangeDepartureService.OUTCOME_FAILED)).isEqualTo(1);
+  }
+
+  @Test
+  void keycloakEndsTheSessionsBeforeTheRevocationsAreStamped() {
+    ExchangeClient versekit = client("versekit");
+    when(clientRepository.findAll()).thenReturn(List.of(versekit));
+    AtomicReference<Instant> loggedOut = new AtomicReference<>();
+    doAnswer(
+            invocation -> {
+              loggedOut.set(Instant.now());
+              return null;
+            })
+        .when(keycloakService)
+        .logoutUser(MEMBER);
+    InOrder order = inOrder(keycloakService, revocationMirror, revocationRepository);
+
+    service.onDeparture(departure());
+
+    order.verify(keycloakService).revokeConsent(MEMBER, "versekit");
+    order.verify(keycloakService).logoutUser(MEMBER);
+    ArgumentCaptor<Instant> stamped = ArgumentCaptor.forClass(Instant.class);
+    order.verify(revocationMirror).revoke(eq("versekit"), eq(MEMBER), stamped.capture());
+    order.verify(revocationRepository).upsert(versekit.getId(), MEMBER, stamped.getValue());
+    assertThat(stamped.getValue()).isAfterOrEqualTo(loggedOut.get());
+  }
+
+  @Test
+  void aFailedLogoutStillStampsTheRevocationsWithATimeReadAfterIt() {
+    ExchangeClient versekit = client("versekit");
+    when(clientRepository.findAll()).thenReturn(List.of(versekit));
+    AtomicReference<Instant> failedAt = new AtomicReference<>();
+    doAnswer(
+            invocation -> {
+              failedAt.set(Instant.now());
+              throw new IllegalStateException("keycloak down");
+            })
+        .when(keycloakService)
+        .logoutUser(MEMBER);
+
+    service.onDeparture(departure());
+
+    ArgumentCaptor<Instant> stamped = ArgumentCaptor.forClass(Instant.class);
+    verify(revocationMirror).revoke(eq("versekit"), eq(MEMBER), stamped.capture());
+    verify(revocationRepository).upsert(versekit.getId(), MEMBER, stamped.getValue());
+    assertThat(stamped.getValue())
+        .as("a token refreshed while Keycloak failed is not issued after the stamp")
+        .isAfterOrEqualTo(failedAt.get());
     assertThat(count(ExchangeDepartureService.OUTCOME_FAILED)).isEqualTo(1);
   }
 

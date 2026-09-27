@@ -69,3 +69,8 @@ compare-and-delete script. Decision 3's command list therefore grows by `EVAL`, 
 and `ZSCORE` for the ingest user; Redis checks every command a script issues against the same user's
 rules, so the key families stay as decided. The ACL change is rendered and loaded on the host by the
 owner, like every ACL change (ADR-0207).
+
+Decision 2's "counted exactly" overstated it: the per-entry charge for the sets' own memory is a
+fixed estimate, so the budget bounds the exchange's data within a known margin rather than
+measuring Redis's memory byte for byte. A quota counter is created with its expiry by `SET NX EX`
+before its `INCR`, so it can no longer lose its expiry (second review, L8).

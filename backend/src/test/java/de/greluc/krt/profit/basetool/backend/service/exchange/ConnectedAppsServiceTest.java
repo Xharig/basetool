@@ -106,6 +106,39 @@ class ConnectedAppsServiceTest {
   }
 
   @Test
+  void aSharedSessionLosesOnlyTheClientBeforeTheRevocationIsStamped() {
+    when(keycloakService.endSessionsHeldOnlyBy(MEMBER, CLIENT_ID)).thenReturn(1);
+    InOrder order = inOrder(keycloakService, revocationMirror);
+
+    service.disconnectClient(MEMBER, CLIENT_ID);
+
+    order.verify(keycloakService).endSessionsHeldOnlyBy(MEMBER, CLIENT_ID);
+    order.verify(keycloakService).endClientInSharedSessions(MEMBER, CLIENT_ID);
+    order.verify(revocationMirror).revoke(eq(CLIENT_ID), eq(MEMBER), any());
+    verify(keycloakService, never()).logoutUser(any());
+  }
+
+  @Test
+  void withoutASharedSessionTheExtensionIsNotCalled() {
+    service.disconnectClient(MEMBER, CLIENT_ID);
+
+    verify(keycloakService, never()).endClientInSharedSessions(any(), any());
+  }
+
+  @Test
+  void aSharedSessionKeycloakCannotEndFailsTheDisconnectBeforeAnythingIsWritten() {
+    when(keycloakService.endSessionsHeldOnlyBy(MEMBER, CLIENT_ID)).thenReturn(1);
+    doThrow(new IllegalStateException("down"))
+        .when(keycloakService)
+        .endClientInSharedSessions(MEMBER, CLIENT_ID);
+
+    assertThatThrownBy(() -> service.disconnectClient(MEMBER, CLIENT_ID))
+        .isInstanceOf(ExternalServiceException.class);
+
+    verifyNoInteractions(revocationMirror, auditService);
+  }
+
+  @Test
   void theRevocationTimeIsReadAfterTheSessionsEnded() {
     AtomicReference<Instant> ended = new AtomicReference<>();
     when(keycloakService.endSessionsHeldOnlyBy(MEMBER, CLIENT_ID))
