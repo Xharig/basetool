@@ -385,12 +385,14 @@ change of the default blueprint set — appear in it. Removals leave tombstones 
 and purged nightly. A cursor older than the tombstones answers `410 CURSOR_EXPIRED`.
 
 The sequence is `exchange_change` (ADR-0224): an `AFTER` row trigger on every synced table records
-`(member, resource, key)` with `seq` as the cursor, and the feed reads each changed key's current
-state, or a tombstone when it is gone. Who wrote it comes from the transaction variable
+`(member, resource, key)` with its writing transaction's id and a sequence number, and the feed reads
+each changed key's current state, or a tombstone when it is gone. A feed position is `(transaction id,
+seq)`, and a reader passes only transactions below the oldest one still running, so an entry committed
+late can never land behind a position a client has already passed. Who wrote it comes from the transaction variable
 `basetool.change_source`, which the backend's transaction manager sets at the start of every writing
 transaction (`web`, `app`, `client|<id>|<installation key>`, otherwise `system`). A nightly job
 (`exchange_change_retention`, 03:30 UTC) purges entries older than 90 days and records the highest
-purged `seq` as the horizon, below which a cursor has expired.
+purged position as the horizon, below which a cursor has expired.
 
 **Acceptance**
 
@@ -402,6 +404,8 @@ purged `seq` as the horizon, below which a cursor has expired.
 - [x] A default-set change emits entries for every affected member.
   *`ExchangeChangeFeedTriggerIntegrationTest`.*
 - [x] Every writing transaction is attributed to its channel. *`ChangeSourceTransactionManagerIntegrationTest`.*
+- [x] A writer that commits after a later one stays ahead of the readers' watermark.
+  *`ExchangeChangeWatermarkIntegrationTest`.*
 
 **Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
 (#2083); the feed routes follow with WP 4.1–4.4

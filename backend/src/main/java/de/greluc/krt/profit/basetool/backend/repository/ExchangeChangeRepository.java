@@ -22,6 +22,7 @@ package de.greluc.krt.profit.basetool.backend.repository;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeChange;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -32,23 +33,40 @@ import org.springframework.data.repository.query.Param;
 public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, Long> {
 
   /**
-   * Returns the highest sequence number of the entries older than a cutoff.
+   * Returns the oldest transaction id still running; every entry of a lower one is final.
    *
-   * @param cutoff the oldest change still kept
-   * @return the sequence number, {@code 0} when no entry is that old
+   * @return the watermark
    */
-  @Query("SELECT COALESCE(MAX(c.seq), 0) FROM ExchangeChange c WHERE c.changedAt < :cutoff")
-  long maxSeqBefore(@Param("cutoff") Instant cutoff);
+  @Query(
+      value = "SELECT CAST(CAST(pg_snapshot_xmin(pg_current_snapshot()) AS text) AS bigint)",
+      nativeQuery = true)
+  long watermark();
 
   /**
-   * Deletes every entry up to and including a sequence number.
+   * Returns the feed position of the last entry older than a cutoff.
    *
-   * @param seq the highest sequence number to delete
+   * @param cutoff the oldest change still kept
+   * @return the position, empty when no entry is that old
+   */
+  @Query(
+      value =
+          """
+          SELECT tx, seq FROM exchange_change WHERE changed_at < :cutoff
+          ORDER BY tx DESC, seq DESC LIMIT 1
+          """,
+      nativeQuery = true)
+  Optional<Position> lastPositionBefore(@Param("cutoff") Instant cutoff);
+
+  /**
+   * Deletes every entry up to and including a feed position.
+   *
+   * @param tx the position's transaction id
+   * @param seq the position's sequence number
    * @return the number of entries deleted
    */
   @Modifying
-  @Query(value = "DELETE FROM exchange_change WHERE seq <= :seq", nativeQuery = true)
-  int deleteThrough(@Param("seq") long seq);
+  @Query(value = "DELETE FROM exchange_change WHERE (tx, seq) <= (:tx, :seq)", nativeQuery = true)
+  int deleteThrough(@Param("tx") long tx, @Param("seq") long seq);
 
   /**
    * Lists a member's entries in sequence order.
@@ -57,4 +75,22 @@ public interface ExchangeChangeRepository extends JpaRepository<ExchangeChange, 
    * @return the entries
    */
   List<ExchangeChange> findAllByUserIdOrderBySeqAsc(UUID userId);
+
+  /** A feed position as a native query returns it. */
+  interface Position {
+
+    /**
+     * The writing transaction's id.
+     *
+     * @return the id
+     */
+    long getTx();
+
+    /**
+     * The sequence number.
+     *
+     * @return the number
+     */
+    long getSeq();
+  }
 }

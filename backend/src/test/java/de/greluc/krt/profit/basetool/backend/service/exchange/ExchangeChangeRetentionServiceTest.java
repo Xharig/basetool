@@ -80,12 +80,12 @@ class ExchangeChangeRetentionServiceTest {
 
   @Test
   void entriesPastTheRetentionGoAndTheHorizonMovesToTheLastOfThem() {
-    long before = retentionService.horizon();
-    long lastOld =
+    ExchangeFeedPosition before = retentionService.horizon();
+    ExchangeFeedPosition lastOld =
         changeRepository.findAllByUserIdOrderBySeqAsc(member).stream()
             .filter(c -> c.getEntityKey().startsWith("old-"))
-            .mapToLong(ExchangeChange::getSeq)
-            .max()
+            .map(c -> new ExchangeFeedPosition(c.getTx(), c.getSeq()))
+            .max(ExchangeFeedPosition::compareTo)
             .orElseThrow();
 
     int deleted =
@@ -96,12 +96,13 @@ class ExchangeChangeRetentionServiceTest {
         .extracting(ExchangeChange::getEntityKey)
         .containsExactly("fresh");
     assertThat(retentionService.horizon()).isGreaterThanOrEqualTo(lastOld).isGreaterThan(before);
+    assertThat(lastOld.tx()).isPositive();
   }
 
   @Test
   void aPurgeWithNothingToDeleteLeavesTheHorizonAlone() {
     retentionService.purgeOlderThan(Instant.now().minus(Duration.ofDays(90)), Instant.now());
-    long horizon = retentionService.horizon();
+    ExchangeFeedPosition horizon = retentionService.horizon();
 
     int deleted =
         retentionService.purgeOlderThan(Instant.now().minus(Duration.ofDays(90)), Instant.now());
