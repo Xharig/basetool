@@ -509,13 +509,22 @@ per-order breakdown and no low-count suppression; a client may cache it for up t
 The backend serves the location list as `GET /api/v1/exchange/catalog/locations` (any exchange
 scope), one query, a city link winning over a space-station link.
 
+The backend serves the demand as `GET /api/v1/exchange/me/org-demand` (`exchange.demand.read`): the
+open and in-progress orders a unit of the member's memberships is responsible for. A material line
+sums `max(0, required − booked)` per material, quality floor (650 for „gut", else 0) and source, as
+the Materialbedarf computes it; `rawRefs` are the materials whose refined material it is. An item
+line sums `max(0, ordered − delivered − earmarked)` per game item, and `craftableByMe` matches the
+member's blueprints the way the order's blueprint coverage does (variant family when the order counts
+variants). Lines with nothing open are left out; `bt` is the material's or game item's id.
+
 **Acceptance**
 
-- [ ] An overseer who is not a member of a unit does not see its demand.
+- [x] An overseer who is not a member of a unit does not see its demand.
+  *`ExchangeDemandServiceTest` — only the member's own units are asked.*
 - [ ] The response schema admits no name or free-text field.
 
-**Status:** the backend location list is built — WP 3.1 (#2083); the demand feed with WP 4.3
-(#2095) and WP 3.3
+**Status:** the backend location list is built — WP 3.1 (#2083); the backend's demand is built — WP
+4.3 (#2095); the gateway route follows
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 

@@ -9,6 +9,9 @@
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+- **Datenaustausch: Bedarf der eigenen Einheiten.** Das Backend liefert dem Gateway den offenen
+  Material- und Item-Bedarf der Einheiten, in denen das Mitglied ist, anonym zusammengefasst – ohne
+  Namen, Titel oder einzelne Aufträge (`/api/v1/exchange/me/org-demand`, REQ-XCH-018).
 - **Datenaustausch: Schreibjournal.** Das Backend kann Änderungen verbundener Anwendungen an
   Blueprints, Lager und Hangar mit dem Zustand davor und danach 90 Tage protokollieren – Grundlage
   für das Rückgängigmachen und die Massenänderungs-Sperre der folgenden Schreibzugriffe; das Journal
