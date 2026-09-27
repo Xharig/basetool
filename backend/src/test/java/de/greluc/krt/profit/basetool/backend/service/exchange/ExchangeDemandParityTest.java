@@ -220,6 +220,38 @@ class ExchangeDemandParityTest {
     assertThat(exchangeOpen(exchange.demand(MEMBER).materials())).isEqualTo(positive(webGaps));
   }
 
+  @Test
+  void anOverBookedOrderOffsetsAnotherOrdersGapInTheSameUnitOnBothSurfaces() {
+    Squadron iridium = squadron("IRI");
+    JobOrder covered = order(iridium, 1, JobOrderType.MATERIAL, JobOrderStatus.OPEN);
+    JobOrder lacking = order(iridium, 2, JobOrderType.MATERIAL, JobOrderStatus.OPEN);
+    requires(covered, new MaterialRequirement(agricium, QualityRequirement.NONE, 10.0));
+    requires(lacking, new MaterialRequirement(agricium, QualityRequirement.NONE, 20.0));
+    booked(covered, agricium, QualityRequirement.NONE, 25.0);
+    givenOrders(Set.of(iridium.getId()), covered, lacking);
+
+    Map<Bucket, Double> webGaps = webGaps(web.getMaterialDemandOverview());
+
+    assertThat(webGaps)
+        .containsExactlyInAnyOrderEntriesOf(Map.of(new Bucket(agricium.id(), 0), 5.0));
+    assertThat(exchangeOpen(exchange.demand(MEMBER).materials())).isEqualTo(webGaps);
+  }
+
+  @Test
+  void pieceCountedDemandIsRoundedBeforeTheSubtractionOnBothSurfaces() {
+    MaterialDto frames = pieceMaterial("Frame");
+    Squadron iridium = squadron("IRI");
+    JobOrder order = order(iridium, 1, JobOrderType.MATERIAL, JobOrderStatus.OPEN);
+    requires(order, new MaterialRequirement(frames, QualityRequirement.NONE, 2.4));
+    booked(order, frames, QualityRequirement.NONE, 1.6);
+    givenOrders(Set.of(iridium.getId()), order);
+
+    Map<Bucket, Double> webGaps = webGaps(web.getMaterialDemandOverview());
+
+    assertThat(webGaps).containsExactlyInAnyOrderEntriesOf(Map.of(new Bucket(frames.id(), 0), 0.0));
+    assertThat(exchange.demand(MEMBER).materials()).isEmpty();
+  }
+
   /**
    * Hands both services the same orders: the exchange through the member's units, the web through a
    * scope over the same units.
@@ -335,11 +367,19 @@ class ExchangeDemandParityTest {
   }
 
   private static @NotNull MaterialDto material(@NotNull String name) {
+    return material(name, "SCU");
+  }
+
+  private static @NotNull MaterialDto pieceMaterial(@NotNull String name) {
+    return material(name, "PIECE");
+  }
+
+  private static @NotNull MaterialDto material(@NotNull String name, @NotNull String unit) {
     return new MaterialDto(
         UUID.randomUUID(),
         name,
         null,
-        "SCU",
+        unit,
         null,
         null,
         null,

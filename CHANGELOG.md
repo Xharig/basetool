@@ -238,6 +238,9 @@
 
 ### Fixed
 
+- **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
+  Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
+  offenen Bedarf melden als der Materialbedarf.
 - **Datenaustausch: Schiffe von Mitgliedern mehrerer Einheiten.** Legt eine verbundene Anwendung
   für ein Mitglied mehrerer Einheiten ein Schiff an, entsteht es ohne Einheit, statt dass der ganze
   Abgleich abbricht; bei genau einer Einheit bekommt es diese.

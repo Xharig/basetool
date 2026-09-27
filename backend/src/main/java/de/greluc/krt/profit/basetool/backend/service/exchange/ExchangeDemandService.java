@@ -84,6 +84,9 @@ public class ExchangeDemandService {
   private static final List<JobOrderStatus> OPEN_STATUSES =
       List.of(JobOrderStatus.OPEN, JobOrderStatus.IN_PROGRESS);
 
+  /** The bucket of orders without a responsible org unit, as the Materialbedarf groups them. */
+  private static final UUID NO_UNIT = new UUID(0L, 0L);
+
   private final OrgUnitMembershipRepository membershipRepository;
   private final JobOrderRepository jobOrderRepository;
   private final JobOrderMaterialRequirementResolver requirementResolver;
@@ -123,25 +126,38 @@ public class ExchangeDemandService {
     JobOrderStockProjectionService.OrderLinkedStockIndex stock =
         stockProjectionService.loadOrderLinkedStockIndex(
             orders.stream().map(JobOrder::getId).toList());
-    Map<MaterialLine, Double> open = new LinkedHashMap<>();
+    Map<UnitBucket, double[]> buckets = new LinkedHashMap<>();
     Map<UUID, MaterialDto> materials = new HashMap<>();
     for (JobOrder order : orders) {
       String source = order.getType() == JobOrderType.ITEM ? ITEM_ORDER : MATERIAL_ORDER;
+      UUID unit =
+          order.getResponsibleOrgUnit() == null || order.getResponsibleOrgUnit().getId() == null
+              ? NO_UNIT
+              : order.getResponsibleOrgUnit().getId();
       for (JobOrderMaterialRequirementResolver.MaterialRequirement requirement :
           requirementResolver.requirementsOf(order)) {
         MaterialDto material = requirement.material();
         Integer floor = JobOrderStockProjectionService.qualityFloorFor(requirement.quality());
-        double outstanding =
-            Math.max(
-                0.0,
-                requirement.requiredAmount() - stock.stockFor(order.getId(), material.id(), floor));
         materials.putIfAbsent(material.id(), material);
-        open.merge(
-            new MaterialLine(material.id(), floor == null ? 0 : floor, source),
-            outstanding,
-            Double::sum);
+        double[] totals =
+            buckets.computeIfAbsent(
+                new UnitBucket(
+                    unit, new MaterialLine(material.id(), floor == null ? 0 : floor, source)),
+                key -> new double[2]);
+        totals[0] += requirement.requiredAmount();
+        totals[1] += stock.stockFor(order.getId(), material.id(), floor);
       }
     }
+    Map<MaterialLine, Double> open = new LinkedHashMap<>();
+    buckets.forEach(
+        (bucket, totals) -> {
+          MaterialDto material = materials.get(bucket.line().materialId());
+          double required = QuantityTypeRounding.roundForQuantityType(totals[0], material);
+          double booked = QuantityTypeRounding.roundForQuantityType(totals[1], material);
+          double gap =
+              Math.max(0.0, QuantityTypeRounding.roundForQuantityType(required - booked, material));
+          open.merge(bucket.line(), gap, Double::sum);
+        });
     Map<UUID, List<ExchangeItemRefDto>> raws = rawRefs(materials.keySet());
     List<ExchangeDemandMaterialDto> lines = new ArrayList<>();
     open.forEach(
@@ -286,6 +302,15 @@ public class ExchangeDemandService {
    * @param source the line's source
    */
   private record MaterialLine(@NotNull UUID materialId, int minQuality, @NotNull String source) {}
+
+  /**
+   * One material line within the org unit responsible for its orders, the bucket the Materialbedarf
+   * nets required against booked stock in.
+   *
+   * @param unit the responsible org unit, or {@link #NO_UNIT}
+   * @param line the material line
+   */
+  private record UnitBucket(@NotNull UUID unit, @NotNull MaterialLine line) {}
 
   /** The running total of one game item. */
   private static final class ItemLine {
