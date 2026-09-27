@@ -155,6 +155,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/check-ingest-audience.py
 
+      - name: sandbox-realm / Self-test the sandbox realm builder
+        if: ${{ !cancelled() }}
+        run: python3 scripts/build-sandbox-realm.py --selftest
+
+      - name: sandbox-realm / Check the committed sandbox realm against a fresh build
+        if: ${{ !cancelled() }}
+        run: python3 scripts/build-sandbox-realm.py --check
+
       - name: loki-rule-signatures / Self-test the signature matcher
         if: ${{ !cancelled() }}
         run: python3 scripts/check-loki-rule-signatures.py --selftest
