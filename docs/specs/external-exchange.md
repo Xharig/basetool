@@ -541,8 +541,15 @@ with the external client.
 **Acceptance**
 
 - [ ] First sync against a Fleetview-imported hangar creates no duplicate.
+- [x] The feed carries the member's own ships only, without purchase data, and answers a ship given
+  to another member as a tombstone. *`ExchangeShipControllerTest`.*
 
-**Status:** planned — WP 4.4 (#2086)
+The ship feed keys a ship by its id and sends its `version`, the ship type's id as `shipType.bt`,
+insurance as `LTI` or a number of months, and the location when it has one. A ship stored without
+insurance, which the web's validation does not allow, reads as zero months.
+
+**Status:** read side built in the backend (`/api/v1/exchange/me/ships`) — WP 4.4 (#2086); the link
+step, the gateway route and the writes follow
 
 ### REQ-XCH-018 — Org demand is anonymised and membership-scoped; locations are the non-hidden list
 

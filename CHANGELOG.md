@@ -20,6 +20,9 @@
   Bestand eines Mitglieds als Posten (Material oder Item, Ort, Qualität, gestohlen) über alle
   Einheiten-Pools summiert, als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/stock`,
   REQ-XCH-016).
+- **Datenaustausch: Hangar lesen.** Das Backend liefert dem Gateway die eigenen Schiffe eines
+  Mitglieds ohne Kaufdaten als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/ships`,
+  REQ-XCH-017).
 - **Datenaustausch: Vertrag öffentlich abrufbar.** Das Ingest-Gateway liefert das OpenAPI-Dokument
   und die JSON-Schemas der Exchange-API anonym unter `/exchange/v1/openapi.json` und
   `/exchange/v1/schemas/<name>.schema.json` aus (REQ-XCH-011). Die alten Extractor-Endpunkte lassen
