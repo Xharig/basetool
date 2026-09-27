@@ -276,6 +276,11 @@ and its global switch stays off until the go-live; the risks hold from then on.
 
 ## 11.8 Smaller, known, and deliberately left
 
+- **The exchange's per-minute limits and the DPoP replay cache are per gateway instance.** Production
+  runs one ingest gateway, so they hold as specified; a second instance would multiply the limits,
+  let a proof replayed to the other instance pass and reject the other's nonces. Scaling the gateway
+  out means moving them to Redis first ([`external-exchange.md`](../specs/external-exchange.md),
+  REQ-XCH-023).
 - **A fifth certificate directory** (`keycloak.<domain>`) is carried and served by nothing, left
   from before identity moved onto the app origin (ADR-0166). It is documented so the count does not
   read as a missing certificate; pruning it is a deliberate edge change, not a clean-up to do in

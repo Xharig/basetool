@@ -169,6 +169,11 @@ mass-change window of your client.
 Every attempt counts, retries and replays included. Admitted answers carry `RateLimit` and
 `RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out.
 
+The per-minute limits and the account-check limit are counted by each gateway instance on its own,
+as is the DPoP `jti` replay check; the daily write quota is shared. The Basetool runs a single
+gateway instance, so the table above is what you get; still treat the `RateLimit` headers, not the
+table, as the limit, and send a fresh DPoP proof with every request, retries included.
+
 - `429 RATE_LIMITED` and `429 QUOTA_EXCEEDED` carry `Retry-After` in seconds — for the quota, until
   the next UTC day. Wait at least that long.
 - `503 EXCHANGE_BUDGET_EXHAUSTED` and `503 SERVICE_UNAVAILABLE` carry `Retry-After` too; retry the

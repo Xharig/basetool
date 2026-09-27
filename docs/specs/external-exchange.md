@@ -961,6 +961,17 @@ SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted a
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
+**Per instance, not per deployment.** The three in-process buckets — requests per client and member,
+per client, and the ten account checks an hour — and Spring's DPoP `jti` replay cache (REQ-XCH-006)
+are held in each gateway process's memory. A second gateway instance behind the edge would therefore
+multiply every per-minute and per-hour limit by the number of instances and let a proof replayed to
+the other instance pass its `jti` check within the 30-second `iat` window; the nonce key is drawn per
+process too, so instances would also reject each other's nonces. The daily write quota, the
+idempotency keys and the byte budget live in Redis and hold across instances. **Production runs
+exactly one gateway**: one `ingest.container` Quadlet unit (`ContainerName=ingest`) and one `ingest`
+compose service (`container_name: ingest`) with no replicas, checked 2026-09-27. Scaling it out
+needs these moved to Redis first — or accepted as a new risk — and this requirement changed with it.
+
 **The byte budget** (`app.exchange.store.*`): every value the gateway stores for the exchange
 registers `<key>|<charge>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
 `…:c:<client>` and `…:all` — scored by its expiry, and each set keeps its running total beside it
