@@ -33,7 +33,7 @@ The exchange API is served by the ingest gateway at `/exchange/v1/**`
 
 | Method & path | Scope | Purpose |
 | --- | --- | --- |
-| `GET /exchange/v1` | `exchange.connect` | service document: API version, capabilities granted to this token, limits, deprecations, docs URL, minimum client version |
+| `GET /exchange/v1` | `exchange.connect` | service document: API version, capabilities granted to this token, limits, deprecations, docs URL (the documentation site, `app.exchange.docs-url`, default `https://krt-profit.github.io/basetool/`), minimum client version |
 | `GET /exchange/v1/openapi.json` | anonymous | the committed OpenAPI 3.1 document, served as a static file |
 | `GET /exchange/v1/schemas/<name>.schema.json` | anonymous | the committed JSON Schemas, served at their `$id` (REQ-XCH-011) |
 | `POST /exchange/v1/me/installation` | `exchange.connect` | label this installation (REQ-XCH-007) |
@@ -88,8 +88,18 @@ need no new consent (REQ-SEC-028).
   approved client on the member's own device, that the client's own privacy statement governs it
   there, and how to disconnect and undo; it changes with the go-live.
 
-**Status:** the list, the onboarding page and the application template are built — WP 4.6 (#2090);
-the terms link and the privacy notice change with the go-live — WP 6 (#2092)
+The third-party pages are `docs/exchange/`, English, published on GitHub Pages at
+`https://krt-profit.github.io/basetool/` by `.github/workflows/exchange-docs.yml`: on every change to
+the pages, the OpenAPI document or the schemas it checks that each relative link stays on the site
+and resolves (`check_exchange_docs_links.py`), lints the Markdown, renders the OpenAPI document into a
+static reference from the committed schemas (`prepare_exchange_reference.py`, Redocly), copies the
+document and the schemas beside it and builds the site with Jekyll; a pull request builds, only
+`main` deploys, and only the deploy job holds `pages: write` and `id-token: write`.
+
+**Status:** the list, the onboarding page, the application template and the documentation site with
+its overview, formats, errors, versioning and changelog pages are built — WP 4.6 (#2090); the
+resource pages, the sync guide, authentication with the DPoP reference, the quick start and the
+sandbox page follow; the terms link and the privacy notice change with the go-live — WP 6 (#2092)
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 
