@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.GameItem;
 import de.greluc.krt.profit.basetool.backend.model.GameItemSourceSystem;
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeItemKeyRow;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -164,4 +165,33 @@ public interface GameItemRepository extends JpaRepository<GameItem, UUID> {
    */
   @Query("SELECT e.uexItemId AS uexId, e.id AS id FROM GameItem e WHERE e.uexItemId IS NOT NULL")
   List<UexKeyRef> findUexItemRefs();
+
+  /**
+   * Projects the items matching any of the given keys, for the exchange's catalogue resolution
+   * (REQ-XCH-012); every collection must be non-empty.
+   *
+   * @param ids item ids
+   * @param classNames lower-cased class names
+   * @param guids Wiki or game-file UUIDs
+   * @param uexIds UEX item ids
+   * @param names lower-cased display names
+   * @param nameKeys lower-cased name keys
+   * @return one row per matching item
+   */
+  @Query(
+      """
+      SELECT new de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeItemKeyRow(
+      gi.id, gi.name, gi.className, gi.externalUuid, gi.p4kUuid, gi.uexItemId, gi.nameKey)
+      FROM GameItem gi
+      WHERE gi.id IN :ids OR LOWER(gi.className) IN :classNames OR gi.externalUuid IN :guids
+      OR gi.p4kUuid IN :guids OR gi.uexItemId IN :uexIds OR LOWER(gi.name) IN :names
+      OR LOWER(gi.nameKey) IN :nameKeys
+      """)
+  List<ExchangeItemKeyRow> findExchangeKeyRows(
+      @Param("ids") Collection<UUID> ids,
+      @Param("classNames") Collection<String> classNames,
+      @Param("guids") Collection<UUID> guids,
+      @Param("uexIds") Collection<Integer> uexIds,
+      @Param("names") Collection<String> names,
+      @Param("nameKeys") Collection<String> nameKeys);
 }

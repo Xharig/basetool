@@ -82,7 +82,8 @@ public class AdminNotificationRulePageController {
           "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED",
           "ACCOUNT_DELETION_REQUESTED",
           "ACCOUNT_DELETION_REQUEST_DECLINED",
-          "ACCOUNT_DELETION_REQUEST_RESOLVED");
+          "ACCOUNT_DELETION_REQUEST_RESOLVED",
+          "EXCHANGE_INSTALLATION_CONNECTED");
 
   /**
    * {@code NotificationType} codes, labelled via {@code admin.notificationRules.notificationType}.
@@ -100,7 +101,8 @@ public class AdminNotificationRulePageController {
           "MATERIAL_EXCHANGE_INTEREST_REGISTERED",
           "MATERIAL_REQUEST_FULFILLMENT_SIGNALLED",
           "ACCOUNT_DELETION_REQUESTED",
-          "ACCOUNT_DELETION_REQUEST_DECLINED");
+          "ACCOUNT_DELETION_REQUEST_DECLINED",
+          "EXCHANGE_INSTALLATION_CONNECTED");
 
   /**
    * {@code SelectorKind} codes, labelled via {@code admin.notificationRules.selector.kind}. The

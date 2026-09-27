@@ -28,6 +28,7 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -64,6 +65,18 @@ class ArchitectureTest {
         .should()
         .beAnnotatedWith(PreAuthorize.class)
         .as("every REST controller must declare @PreAuthorize at class level")
+        .check(CLASSES);
+  }
+
+  /** Every read mapping must carry its own method-level authorization annotation. */
+  @Test
+  void everyGetMappingShouldBeAuthorisationAnnotated() {
+    methods()
+        .that()
+        .areAnnotatedWith(GetMapping.class)
+        .should()
+        .beAnnotatedWith(PreAuthorize.class)
+        .as("every @GetMapping endpoint must declare its own @PreAuthorize")
         .check(CLASSES);
   }
 

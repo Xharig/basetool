@@ -36,6 +36,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -64,6 +65,23 @@ public class ConnectedAppsController {
   @ApiResponse(responseCode = "200", description = "The connected clients")
   public ResponseEntity<List<ConnectedAppDto>> list(@NotNull Authentication authentication) {
     return ResponseEntity.ok(connectedAppsService.list(member(authentication)));
+  }
+
+  /**
+   * Marks the caller's new connections seen, ending their highlight on the page.
+   *
+   * @param authentication the caller
+   * @return {@code 204}
+   */
+  @NotNull
+  @PostMapping("/seen")
+  @Operation(
+      summary = "Mark my new connections seen",
+      description = "Marks the new-connection notifications read; changes no connection.")
+  @ApiResponse(responseCode = "204", description = "Marked")
+  public ResponseEntity<Void> markSeen(@NotNull Authentication authentication) {
+    connectedAppsService.markSeen(member(authentication));
+    return ResponseEntity.noContent().build();
   }
 
   /**
