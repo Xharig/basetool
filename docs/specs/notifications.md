@@ -358,9 +358,11 @@ broken stream never affects correctness. The unread-count poll adapts to stream 
 `EventSource` is connected it backs off to a slow keepalive (≈5 min) and speeds back up (≈1 min)
 the moment the stream drops, so a healthy SSE session avoids redundant count polls. The slow
 cadence is deliberately frequent enough to remain the REQ-SEC-012 re-auth safety net — the poll
-path (not the refresh-incapable SSE relay) is what drives frontend token refresh and 401 re-login
-detection. To keep that window bounded even when a stream silently dies, the backend emits a
-periodic **named** `heartbeat` event (not an SSE comment, which browsers' `EventSource` swallow)
+path is what drives 401 re-login detection. The relay obtains its bearer once, at stream open,
+through the single-flight authorized-client manager, so a stream opened after the member was idle
+refreshes the lapsed token first instead of being refused; it never refreshes mid-stream, and when
+no token can be obtained it completes without calling the backend. To keep the slow poll window
+bounded even when a stream silently dies, the backend emits a periodic **named** `heartbeat` event (not an SSE comment, which browsers' `EventSource` swallow)
 and the client runs a liveness watchdog: if no SSE traffic (`heartbeat`/`notification`) arrives
 within ~3× the heartbeat interval, the stream is treated as **half-open** (still "connected" but
 dead, so it never fires `error`) and the poll falls back to the fast cadence without waiting for an

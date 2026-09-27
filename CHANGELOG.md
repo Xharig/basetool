@@ -4,94 +4,121 @@
 
 ### Added
 
+- **Datenaustausch: Anmeldung dokumentiert, DPoP-Referenz.** `docs/exchange/authentication.md`
+  beschreibt Geräte-Login, DPoP-Nachweise, Server-Nonce, Refresh und Trennen samt Fehlercodes;
+  `docs/exchange/dpop-reference/` ist eine MIT-lizenzierte Python-Referenz (Windows CNG, OpenSSL 3).
 - **Datenaustausch: Dokumentation für Fremd-Anwendungen online.** `docs/exchange/` erscheint mit einer
   gerenderten OpenAPI-Referenz unter <https://krt-profit.github.io/basetool/>; das Service-Dokument
   verweist dorthin. CI prüft Links und Markdown der Seiten.
+  
 - **Blueprints: Herkunft.** Jeder Blueprint merkt sich, woher er kam (von Hand, Datei-Import,
   Standard, Spiel-Log einer verbundenen Anwendung), und „Meine Blueprints“ zeigt das in der
   Detailansicht. Migration `V255`; ältere Einträge bleiben ohne Herkunft.
+  
 - **Datenaustausch: Entwürfe über das Gateway.** `POST /exchange/v1/me/drafts/blueprints` und
   `…/drafts/refinery-orders` legen Blueprints bzw. Raffinerieaufträge wie der Extractor-Upload zur
   Prüfung im Browser ab; nichts wird geschrieben, bevor das Mitglied bestätigt.
+  
 - **Blueprint-Import liest das Austauschformat.** Der Datei-Import unter „Meine Blueprints“ nimmt
   zusätzlich das `basetool.blueprints`-Format verbundener Anwendungen an; die bisherigen Formate
   bleiben.
+  
 - **Datenaustausch: Blueprints lesen.** Verbundene Anwendungen mit `exchange.blueprints.read` lesen
   über `GET /exchange/v1/me/blueprints` die Blueprints des Mitglieds als Snapshot und danach nur die
   Änderungen seit ihrem Cursor (REQ-XCH-013, REQ-XCH-015).
+  
 - **Datenaustausch: Bedarf lesen.** Verbundene Anwendungen mit `exchange.demand.read` lesen über
   `GET /exchange/v1/me/org-demand` den anonymen offenen Bedarf der Einheiten des Mitglieds
   (REQ-XCH-018).
+  
 - **Datenaustausch: Schreibrouten im Gateway.** `POST /exchange/v1/me/{blueprints,stock,ships}/changes`
   prüfen Änderungssätze (höchstens 500 Operationen, sonst `413 BATCH_TOO_LARGE`) und reichen sie an
   das Backend weiter; eine von der Massenänderungs-Sperre angehaltene Änderung wird zur Bestätigung
   im Browser zwischengespeichert und mit `confirmationUrl` beantwortet (REQ-XCH-021, REQ-XCH-023).
+  
 - **Datenaustausch: Lager und Hangar lesen.** Verbundene Anwendungen mit `exchange.stock.read` bzw.
   `exchange.hangar.read` lesen über `GET /exchange/v1/me/stock` und `GET /exchange/v1/me/ships` den
   persönlichen Bestand und die eigenen Schiffe des Mitglieds als Snapshot und danach die Änderungen
   (REQ-XCH-016, REQ-XCH-017).
+  
 - **Datenaustausch: Account-Abgleich.** Eine verbundene Anwendung kann fragen, ob ein RSI-Handle aus
   dem Spiel-Log zum angemeldeten Mitglied gehört, und vor einem Zweit-Account warnen; die Antwort ist
   nur `match`, `mismatch` oder `unknown`, der gespeicherte Handle wird nie herausgegeben
   (REQ-XCH-031).
+  
 - **Datenaustausch: Limits und idempotente Schreibzugriffe.** Das Gateway begrenzt jede Anwendung
   pro Mitglied (120/min, 500 Schreibzugriffe pro UTC-Tag) und insgesamt (1200/min) und verlangt bei
   Schreibzugriffen einen `Idempotency-Key`; eine Wiederholung liefert die gespeicherte Antwort,
   statt doppelt zu schreiben (REQ-XCH-020, REQ-XCH-023).
+  
 - **Datenaustausch: Bewerbung für Fremd-Anwendungen.** `docs/exchange/onboarding.md` und
   `docs/exchange/client-security.md` beschreiben Kriterien und Sicherheitsanforderungen, eine
   Issue-Vorlage nimmt Bewerbungen auf, und `docs/legal/approved-clients.md` ist das öffentliche
   Verzeichnis zugelassener Anwendungen (noch leer; REQ-XCH-002, REQ-XCH-027).
+  
 - **Datenaustausch: Änderungsprotokoll.** Jede Änderung an persönlichen Blueprints, am persönlichen
   Lager und an Schiffen – auch über Sammelaktionen und Standard-Blueprints – wird mit ihrer Quelle
   (Web, App, Anwendung, System) protokolliert, 90 Tage aufbewahrt und in den Datenexport
   aufgenommen; Grundlage für den Abgleich verbundener Anwendungen (Migration `V252`, ADR-0224,
   REQ-XCH-013).
+  
 - **Verbundene Anwendungen: letzte Änderungen und neue Verbindungen.** Jede Anwendung zeigt ihre zehn
   letzten Änderungen an deinen Daten (zurückgenommene markiert); eine neue Installation ist bis zum
   nächsten Aufruf als „Neu" hervorgehoben (REQ-XCH-032).
+  
 - **Verbundene Anwendungen: große Änderungen bestätigen.** Will eine Anwendung auf einmal viele
   Einträge entfernen, zeigt der Bestätigungslink, was passieren würde; erst „Bestätigen" wendet es an,
   „Verwerfen" lässt alles, wie es ist (REQ-XCH-021).
+  
 - **Verbundene Anwendungen: Änderungen zurücknehmen.** Auf der Seite setzt „Änderungen
   zurücknehmen" alles zurück, was eine Anwendung im gewählten Zeitraum (bis 90 Tage) an Blueprints,
   Lager und Hangar geändert hat; danach anders Geändertes bleibt und wird aufgelistet,
   Materialbörse-Angebote kommen nicht zurück (REQ-XCH-022).
+  
 - **Datenaustausch: Seiten aktualisieren sich live.** Schreibt eine verbundene Anwendung, laden
   Hangar, „Meine Blueprints", Lager und Materialbörse ohne Neuladen nach; Hangar und Blueprints
   haben dafür je einen persönlichen Live-Sync-Raum, den nur das Mitglied selbst abonnieren kann.
+  
 - **Datenaustausch: Schiffe schreiben.** Verbundene Anwendungen verknüpfen ihre Schiffe zuerst mit
   den vorhandenen – je Installation –, legen danach neue an, ändern und löschen mit der zuletzt
   gesehenen Version (`/api/v1/exchange/me/ships/changes`); ein Fleetview-Import wird so nicht
   verdoppelt, und eine Löschung meldet, aus wie vielen Missionseinheiten das Schiff genommen wurde
   (REQ-XCH-017, Migration V254).
+  
 - **Datenaustausch: Lager schreiben.** Verbundene Anwendungen setzen die Menge eines persönlichen
   Postens gegen die zuletzt gesehene Menge (`/api/v1/exchange/me/stock/changes`); die Differenz wird
   wie im Lager ein- oder ausgebucht, gekürzte oder entfernte Materialbörse-Angebote stehen im Audit
   (`MARKET_OFFER_REDUCED`, `MARKET_OFFER_REMOVED`), und reservierte Mengen bleiben unangetastet
   (REQ-XCH-016).
+  
 - **Datenaustausch: Blueprints schreiben.** Verbundene Anwendungen können Blueprints hinzufügen
   und entfernen (`/api/v1/exchange/me/blueprints/changes`); Standard-Blueprints bleiben, was ein
   anderes Gerät oder das Web entfernt hat, kommt nur nach Rückfrage wieder, zu große Löschungen
   warten auf die Bestätigung im Browser, und jede Änderung steht im Audit und im Schreibjournal
   (REQ-XCH-014, REQ-XCH-015, REQ-XCH-021).
+  
 - **Datenaustausch: Bedarf der eigenen Einheiten.** Das Backend liefert dem Gateway den offenen
   Material- und Item-Bedarf der Einheiten, in denen das Mitglied ist, anonym zusammengefasst – ohne
   Namen, Titel oder einzelne Aufträge (`/api/v1/exchange/me/org-demand`, REQ-XCH-018).
+  
 - **Datenaustausch: Schreibjournal.** Das Backend kann Änderungen verbundener Anwendungen an
   Blueprints, Lager und Hangar mit dem Zustand davor und danach 90 Tage protokollieren – Grundlage
   für das Rückgängigmachen und die Massenänderungs-Sperre der folgenden Schreibzugriffe; das Journal
   erscheint im Datenexport (Migration `V253`, REQ-XCH-022).
+  
 - **Datenaustausch: Blueprints lesen.** Das Backend liefert dem Gateway die Blueprints eines
   Mitglieds als Snapshot und als Änderungs-Feed mit Löschmarken samt Quelle; ein abgelaufener Cursor
   antwortet `410 CURSOR_EXPIRED` (`/api/v1/exchange/me/blueprints`, REQ-XCH-013, REQ-XCH-015).
+  
 - **Datenaustausch: persönliches Lager lesen.** Das Backend liefert dem Gateway den persönlichen
   Bestand eines Mitglieds als Posten (Material oder Item, Ort, Qualität, gestohlen) über alle
   Einheiten-Pools summiert, als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/stock`,
   REQ-XCH-016).
+  
 - **Datenaustausch: Hangar lesen.** Das Backend liefert dem Gateway die eigenen Schiffe eines
   Mitglieds ohne Kaufdaten als Snapshot und als Änderungs-Feed (`/api/v1/exchange/me/ships`,
   REQ-XCH-017).
+  
 - **Datenaustausch: Vertrag öffentlich abrufbar.** Das Ingest-Gateway liefert das OpenAPI-Dokument
   und die JSON-Schemas der Exchange-API anonym unter `/exchange/v1/openapi.json` und
   `/exchange/v1/schemas/<name>.schema.json` aus (REQ-XCH-011). Die alten Extractor-Endpunkte lassen
@@ -107,6 +134,7 @@
   Sperren, der Schalter und zusätzliche Berechtigungen fragen vorher nach. Je Anwendung stehen die
   verbundenen Mitglieder und die letzte Aktivität, die Fehlerrate verlinkt nach Grafana
   (`APP_GRAFANA_OPERATIONS_DASHBOARD_URL`, REQ-XCH-003).
+  
 - **Verbundene Anwendungen: Trennen einer Installation oder einer ganzen Anwendung.** Mitglieder
   sehen unter *Persönlich → Verbundene Anwendungen* ihre verbundenen Anwendungen mit Berechtigungen
   und Installationen und trennen eine Installation oder die ganze Anwendung; gesperrte Schlüssel und
@@ -161,14 +189,17 @@
   Client `basetool-sc-extractor` dieselbe Offline-Sitzung wie bei verbundenen Anwendungen (30 Tage
   ohne Nutzung, 90 Tage insgesamt), weil der Extractor ab 2.10.0 `offline_access` anfordert. Bisher
   galten nur die Realm-Werte.
+  
 - **Datenaustausch: Lager-Änderungen wie im Web.** Ein Umbuchen auf „gestohlen“ oder zurück markiert
   die Zeilen wie im Lager (Teilmengen werden abgespalten) statt aus- und neu einzubuchen; Stück-Einbuchungen
   werden mit der vorhandenen Zeile zusammengeführt. Als Verschiebung zählt ein Abbau nur noch, wenn
   Zugänge desselben Materials ihn vollständig decken.
+  
 - **Monitoring: ein Audit-Bereich alarmiert erst nach 30 statt 14 Tagen Stille; Hangar und Blueprints
   sind wie Materialbörse und Rollen ausgenommen.** Auf Produktion gab es beim Hangar eine echte Pause
   von gut 15 Tagen; beide Bereiche werden über die 30-/60-Tage-Tabellen im Betriebs-Dashboard
   beobachtet (`AuditDomainSilenceAnomaly`, REQ-OBS-011).
+  
 - **Keycloak: Vorlage für freigegebene Drittanwendungen (Exchange-API).** Der Realm-Provisioner legt
   die zehn `exchange.*`-Scopes und jede Anwendung aus `scripts/keycloak/external-clients.json` nach einer
   Vorlage an (Gerätelogin, Einwilligung, DPoP, 30/90 Tage Offline-Sitzung); das Login-Theme bekommt eine
@@ -207,9 +238,15 @@
 
 ### Fixed
 
+- **Benachrichtigungen kommen nach einer Pause wieder sofort an.** Der Live-Stream der
+  Benachrichtigungen (`/notifications/stream`) holt sein Zugriffstoken jetzt über den
+  Single-Flight-Manager und erneuert es beim Öffnen, statt nach fünf Minuten Leerlauf ein abgelaufenes
+  mitzuschicken und bis zur nächsten Seitenanfrage stumm zu bleiben (REQ-NOTIF-010, REQ-SEC-012).
+  
 - **Live-Aktualisierung im Einsatz fiel nach längerer Pause aus.** Verband sich ein Einsatz-Tab neu,
   nachdem das Zugangs-Token abgelaufen war, lehnte der Server den Raum ab, und der Tab bekam keine
   Änderungen anderer mehr. Der `/ws/sync`-Handshake erneuert das Token jetzt vorher (REQ-FE-015).
+  
 - **Audit-Log der Materialbörse: Kürzungen und Entfernungen durch Lagerbewegungen fehlten.** Wenn
   eine Ausbuchung, Übertragung, Umbuchung, Übergabe, Produktion, das Leeren des Lagers oder das
   Löschen eines Kontos ein Angebot kürzte oder mitlöschte, stand das bisher nicht im Audit; jetzt

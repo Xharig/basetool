@@ -6,6 +6,8 @@ credentials.
 
 ## Sign-in
 
+How each step works is on the [authentication](authentication.md) page.
+
 - Use the OAuth 2.0 device authorization grant (RFC 8628) against the pinned production issuer
   `https://profit-base.online/auth/realms/iri`, with your registered public client id and no client
   secret.

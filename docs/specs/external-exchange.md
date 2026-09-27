@@ -1,5 +1,6 @@
-> **Doc type:** Living spec — requirements accepted by the owner, implementation pending (epic
-> [#2078](https://github.com/krt-profit/basetool/issues/2078)). Last reviewed: 2026-09-26.
+> **Doc type:** Living spec — requirements accepted by the owner, built except where a status line
+> says otherwise (epic [#2078](https://github.com/krt-profit/basetool/issues/2078)). Last reviewed:
+> 2026-09-27.
 > **Owner area:** XCH · **Related ADRs:** [ADR-0216](../adr/0216-the-exchange-api-is-a-separate-contract-on-the-ingest-gateway.md),
 > [ADR-0217](../adr/0217-third-party-clients-are-public-device-grant-clients-in-a-db-registry.md),
 > [ADR-0218](../adr/0218-exchange-sync-semantics.md),
@@ -18,11 +19,10 @@ on the ingest gateway, never through the backend API. This spec states what must
 above say why. The work is tracked in epic #2078; each requirement names the work package (WP) and
 sub-issue that implements it.
 
-> [!note] Status of every requirement below: **planned**
-> Nothing of this spec is built yet. Each requirement carries its work package; its status line
-> changes to *implemented* in the PR that lands it, together with its **Enforced by** test.
-> Requirements of other specs that this one changes carry a *planned amendment* callout in their
-> own spec until the change ships.
+> [!note] Status
+> Each requirement carries its work package and a status line that says what is built. What is left
+> is the local sandbox (WP 2.3, #2099), the clients (#2088, #2089, #2097) and the gated go-live
+> (#2092). *Corrected 2026-09-27: this note still said nothing was built.*
 
 ## Requirements
 
@@ -54,17 +54,17 @@ is ever on the `api.*` allowlist (ADR-0135), and nothing of the exchange lives u
 
 **Acceptance**
 
-- [ ] `IngestEndpointSurfaceTest` pins the exchange routes and methods; a test checks every route
-  against `BotProtectionFilter`'s method, prefix and suffix lists. *The second half is in
-  (`ExchangeRouteBotCompatibilityTest`, every route of the committed OpenAPI document and every schema
-  URL); the surface test pins the two anonymous document routes so far and grows with each route.*
+- [x] `IngestEndpointSurfaceTest` pins the exchange routes and methods; a test checks every route
+  against `BotProtectionFilter`'s method, prefix and suffix lists (`ExchangeRouteBotCompatibilityTest`,
+  every route of the committed OpenAPI document and every schema URL).
 - [x] A test proves the gateway identity cannot reach `/api/v1/connected-apps/**`, and a browser
   session cannot reach `/api/v1/exchange/**` (`ConnectedAppsControllerTest`: the gateway and the app
   are refused; `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the
   gateway without an acting member).
-- [ ] The `api.*` allowlist test fails if an exchange or connected-apps path is added.
+- [x] The `api.*` allowlist test fails if an exchange or connected-apps path is added
+  (`ExternalContractTest.theExchangeStaysOffTheApiVhost`).
 
-**Status:** planned — WP 3.2 (#2082), WP 3.1 (#2083)
+**Status:** built — WP 3.2 (#2082), WP 3.1 (#2083)
 
 ### REQ-XCH-002 — A client is approved publicly, for capabilities, case by case
 
@@ -97,9 +97,10 @@ document and the schemas beside it and builds the site with Jekyll; a pull reque
 `main` deploys, and only the deploy job holds `pages: write` and `id-token: write`.
 
 **Status:** the list, the onboarding page, the application template and the documentation site with
-its overview, formats, errors, versioning and changelog pages are built — WP 4.6 (#2090); the
-resource pages, the sync guide, authentication with the DPoP reference, the quick start and the
-sandbox page follow; the terms link and the privacy notice change with the go-live — WP 6 (#2092)
+its overview, formats, errors, versioning, changelog and authentication pages, and the MIT-licensed
+DPoP reference `docs/exchange/dpop-reference/` (stdlib Python, CNG and OpenSSL 3 through `ctypes`,
+its tests run by `exchange-docs.yml`), are built — WP 4.6 (#2090); the resource pages, the sync
+guide, the quick start and the sandbox page follow; the terms link and the privacy notice change with the go-live — WP 6 (#2092)
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 
@@ -326,7 +327,8 @@ itself (`installation_revoked`). The member's controls are `/api/v1/connected-ap
   The gateway refuses the member through the per-client revocations those steps write
   (`ExchangeGateTest`); the end-to-end run follows with the sandbox (WP 2.3).*
 
-**Status:** planned — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
+**Status:** built — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087); the end-to-end run
+follows with the sandbox (WP 2.3, #2099)
 
 ### REQ-XCH-009 — The acting member holds a reduced authentication and sees own data only
 
@@ -510,9 +512,8 @@ pages listen on, so they refresh without a reload: `hangar:{member}` after a shi
 `blueprints:{member}` after a blueprint write, `inventory` after a stock write and `materialboard`
 when that write lowered or removed an offer (REQ-FE-015). A rolled-back write raises none.
 
-**Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
-(#2083); the backend's blueprint feed (`/api/v1/exchange/me/blueprints`) is built, the gateway route
-and the stock and ship feeds follow with WP 4.1–4.4
+**Status:** built for blueprints, stock and ships, in the backend and the gateway — WP 3.3 (#2083),
+WP 4.1–4.4
 
 ### REQ-XCH-014 — A client never re-adds what the member removed elsewhere
 
@@ -529,7 +530,7 @@ A tombstone is live while the key's latest change-log entry — its removal — 
 retention; the same installation may re-add what it removed itself. *`ExchangeBlueprintWriteControllerTest`
 also covers a removal in the web.*
 
-**Status:** built for blueprints — WP 4.1 (#2084); stock and ships follow with their writes
+**Status:** built for blueprints, stock and ships — WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086)
 
 ### REQ-XCH-015 — Blueprints sync as a set
 
@@ -574,7 +575,10 @@ client.
 
 **Acceptance**
 
-- [ ] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
+- [x] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
+  *`ExchangeStockWriteControllerTest`: the lot's row locks serialise the two, and the second finds
+  the quantity changed. An optimistic-lock failure a write meets anyway reaches the client as
+  `409 VERSION_CONFLICT`, not as a relay failure.*
 - [x] A book-out below an offered amount lowers the offer and records the audit event.
   *`ExchangeStockWriteControllerTest`.*
 - [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
@@ -621,7 +625,9 @@ lowers or removes is audited by that book-out (`MARKET_OFFER_REDUCED`, `MARKET_O
 data is never sent. Detaching a ship from a mission by removal is reported in
 `detachedFromMissions` and audited (`MISSION_UNIT_UPDATED`). Writes are audited in the Hangar domain
 with the external client. A ship's `name` is optional and up to 255 characters, as in the web: an
-unnamed ship is sent without it, and an upsert may leave it out (owner decision 2026-09-27).
+unnamed ship is sent without it, and an upsert may leave it out (owner decision 2026-09-27). An
+`upsert` sets the ship as sent: a `name` or `location` it leaves out is cleared, and only an absent
+`fitted` keeps its value.
 
 **Acceptance**
 
@@ -863,7 +869,8 @@ reports the total's use; `ExchangeBudgetHigh` fires above 80 %.
   real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
   free their bytes. Sessions live under keys the ingest user cannot reach at all.*
 
-**Status:** planned — WP 3.2 (#2082), WP 2.1 (#2092)
+**Status:** built — WP 3.2 (#2082); the production Redis size and ACL follow with the go-live,
+WP 2.1 (#2092)
 
 ### REQ-XCH-024 — A minimum client version can be enforced
 
@@ -957,9 +964,9 @@ Keycloak realm with a test client and seeded data on a developer's machine. The 
 
 After each committed exchange write the backend publishes live-sync frames on the topics and
 sections the web pages and the app listen on (Lager, Blueprints, Hangar, and the Materialbörse when
-offers changed).
+offers changed) — `ExchangeLiveSync`, see REQ-XCH-013.
 
-**Status:** planned — WP 3.3 (#2083)
+**Status:** built — WP 3.3 (#2083)
 
 ### REQ-XCH-031 — The account check answers match, mismatch or unknown — never the handle
 

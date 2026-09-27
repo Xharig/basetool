@@ -10,7 +10,7 @@ client is approved publicly and case by case, and every member decides which cli
 | | |
 | --- | --- |
 | Base URL | `https://ingest.profit-base.online/exchange/v1` |
-| Sign-in | OAuth 2.0 device authorization grant against `https://profit-base.online/auth/realms/iri`, public client, no secret |
+| Sign-in | OAuth 2.0 device authorization grant against `https://profit-base.online/auth/realms/iri`, public client, no secret — [authentication](authentication.md) |
 | Proof of possession | DPoP (RFC 9449, ES256) on every token request and every call |
 | Formats | JSON Schema 2020-12, served at `https://ingest.profit-base.online/exchange/v1/schemas/<name>.schema.json` |
 | Reference | [OpenAPI reference](reference/) · [OpenAPI document](reference/exchange-v1.openapi.json) · [schemas](schemas/) |
@@ -35,6 +35,8 @@ the registry grants it to the client.
 
 ## Pages
 
+- [Authentication](authentication.md) — the device login, DPoP proofs, the server nonce,
+  refreshing, disconnecting, and the [DPoP reference implementation](dpop-reference/README.md).
 - [Formats](formats.md) — item references, quantities, qualities, places, provenance, the offline
   file envelope.
 - [Errors](errors.md) — every `code`, its status and what a client does about it.

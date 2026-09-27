@@ -37,6 +37,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotNull;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -59,8 +60,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -109,7 +111,7 @@ public class NotificationPageController {
   private final BackendApiClient backendApiClient;
   private final MessageSource messageSource;
   private final WebClient sseWebClient;
-  private final OAuth2AuthorizedClientRepository authorizedClientRepository;
+  private final OAuth2AuthorizedClientManager authorizedClientManager;
   private final MeterRegistry meterRegistry;
 
   /** Live browser-to-backend SSE relays open on this instance (relay-connections gauge source). */
@@ -193,19 +195,37 @@ public class NotificationPageController {
   /**
    * Relays the backend notification SSE stream to the browser (REQ-NOTIF-010).
    *
-   * <p>The bearer token is read once, without refresh, and sent as a plain {@code Authorization}
-   * header (REQ-SEC-012). Without a usable token, or on a backend error, the stream fails soft.
+   * <p>The bearer token is obtained once, at open, through the single-flight authorized-client
+   * manager, so an expired one is refreshed first (REQ-SEC-012), and sent as a plain {@code
+   * Authorization} header. Without a usable token, or on a backend error, the stream fails soft.
    *
-   * @param request the current servlet request, used to read the session-stored authorized client
+   * @param request the current servlet request, handed to the manager to load and store the
+   *     session's authorized client
+   * @param response the current servlet response, handed to the manager alongside the request
    * @param authentication the authenticated principal owning the session
    * @return the SSE emitter writing to the browser
    */
   @org.jetbrains.annotations.NotNull
   @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter stream(HttpServletRequest request, Authentication authentication) {
+  public SseEmitter stream(
+      HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
     SseEmitter emitter = newEmitter();
-    OAuth2AuthorizedClient authorizedClient =
-        authorizedClientRepository.loadAuthorizedClient(REGISTRATION_ID, authentication, request);
+    OAuth2AuthorizedClient authorizedClient;
+    try {
+      authorizedClient =
+          authorizedClientManager.authorize(
+              OAuth2AuthorizeRequest.withClientRegistrationId(REGISTRATION_ID)
+                  .principal(authentication)
+                  .attribute(HttpServletRequest.class.getName(), request)
+                  .attribute(HttpServletResponse.class.getName(), response)
+                  .build());
+    } catch (RuntimeException e) {
+      log.debug(
+          "Notification stream could not obtain an access token ({}); completing",
+          e.getClass().getSimpleName());
+      emitter.complete();
+      return emitter;
+    }
     if (authorizedClient == null || authorizedClient.getAccessToken() == null) {
       emitter.complete();
       return emitter;
