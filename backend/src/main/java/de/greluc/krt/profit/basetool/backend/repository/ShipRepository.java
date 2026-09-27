@@ -23,13 +23,16 @@ import de.greluc.krt.profit.basetool.backend.model.Location;
 import de.greluc.krt.profit.basetool.backend.model.Ship;
 import de.greluc.krt.profit.basetool.backend.model.ShipType;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeShipRow;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -70,6 +73,25 @@ public interface ShipRepository extends JpaRepository<Ship, UUID> {
   @Query(EXCHANGE_SHIPS + " AND s.id IN :ids")
   List<ExchangeShipRow> findExchangeShipsByIds(
       @Param("member") UUID member, @Param("ids") Collection<UUID> ids);
+
+  /**
+   * Locks one ship for an exchange write.
+   *
+   * @param id the ship's id
+   * @return the ship, locked for this transaction, if it exists
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT s FROM Ship s WHERE s.id = :id")
+  Optional<Ship> lockById(@Param("id") UUID id);
+
+  /**
+   * Counts a member's ships.
+   *
+   * @param owner the member
+   * @return the number of ships the member owns
+   */
+  @Query("SELECT COUNT(s) FROM Ship s WHERE s.owner.id = :owner")
+  long countOwnedBy(@Param("owner") UUID owner);
 
   /**
    * Flips the {@code fitted} flag back to {@code false} on every ship; used by the fleet-import

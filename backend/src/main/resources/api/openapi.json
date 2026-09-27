@@ -11408,6 +11408,96 @@
         "tags" : [ "Exchange — ships" ]
       }
     },
+    "/api/v1/exchange/me/ships/changes" : {
+      "post" : {
+        "description" : "Gateway-only. 409 MASS_CHANGE_CONFIRMATION_REQUIRED writes nothing.",
+        "operationId" : "shipChanges",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExchangeShipChangeSet"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExchangeChangeResultDto"
+                }
+              }
+            },
+            "description" : "The result"
+          },
+          "400" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "401" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "summary" : "Exchange: change my ships",
+        "tags" : [ "Exchange — ships" ]
+      }
+    },
     "/api/v1/exchange/me/stock" : {
       "get" : {
         "description" : "Gateway-only. Without a cursor a snapshot, with one the changes since it.",
@@ -60525,6 +60615,10 @@
             "type" : "integer",
             "format" : "int32"
           },
+          "detachedFromMissions" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "dryRun" : {
             "type" : "boolean"
           },
@@ -61011,9 +61105,29 @@
         },
         "required" : [ "enabled", "version" ]
       },
+      "ExchangeShipChangeSet" : {
+        "type" : "object",
+        "properties" : {
+          "dryRun" : {
+            "type" : "boolean"
+          },
+          "ops" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Op"
+            },
+            "maxItems" : 500,
+            "minItems" : 1
+          }
+        },
+        "required" : [ "ops" ]
+      },
       "ExchangeShipDto" : {
         "type" : "object",
         "properties" : {
+          "externalId" : {
+            "type" : "string"
+          },
           "fitted" : {
             "type" : "boolean"
           },

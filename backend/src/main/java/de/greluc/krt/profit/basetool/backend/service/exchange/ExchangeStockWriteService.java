@@ -189,7 +189,8 @@ public class ExchangeStockWriteService {
         plan.size() - applied - unchanged,
         results,
         offers.reduced,
-        offers.removed);
+        offers.removed,
+        null);
   }
 
   /**
