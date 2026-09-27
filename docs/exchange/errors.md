@@ -71,3 +71,23 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 A change result or resolve result may carry `warnings[]` with a JSON Pointer and a code. v1 defines
 `UNKNOWN_FIELD` (the server ignored a field it does not know) and `LOC_KEY_UNRESOLVED` (no single
 catalogue entry carries that name key; the name was tried instead).
+
+## The problem document
+
+| Field | Sent | Meaning |
+| --- | --- | --- |
+| `status` | always | The HTTP status. |
+| `code` | always | The code from the tables above. Decide by it. |
+| `title` | always | A short English title, usually the status's reason phrase. |
+| `detail` | always | The fixed English sentence for the code; a hint at most. |
+| `correlationId` | always | The request's id, the same value as the `X-Correlation-Id` response header. |
+| `instance` | from the routes, not from the gateway's filters | The request path. |
+| `errors` | with `SCHEMA_INVALID` from the gateway | Up to 50 `{pointer, message}`; the message names the violated keyword, never a value you sent. |
+| `confirmationUrl` | with `MASS_CHANGE_CONFIRMATION_REQUIRED` | Where the member confirms the held batch ([sync guide](sync-guide.md#the-mass-change-guard)). |
+| `type` | never | Absent, which RFC 9457 reads as `about:blank`. |
+| `retryAfterSeconds` | never | Reserved; the delay is in the `Retry-After` header. |
+
+Every answer, a success included, carries `X-Correlation-Id`. Put it into a problem report or a log
+line, so the Basetool's maintainers can find the request; it identifies nothing but the request. A
+client may send its own `X-Correlation-Id` of 1 to 128 characters of `A–Z`, `a–z`, `0–9`, `.`, `_`
+and `-`; the gateway keeps it, and replaces any other value with a random UUID.

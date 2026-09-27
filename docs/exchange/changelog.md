@@ -23,6 +23,10 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   clients; a proof over the cap is refused like a replayed one, `401 DPOP_INVALID` with
   `invalid_dpop_proof` ([authentication](authentication.md#live-proofs-per-member)). The cap existed
   before; only the page is new.
+- **Documented: the problem fields.** The [error registry](errors.md#the-problem-document) lists
+  which fields a problem carries and when, and the `X-Correlation-Id` header. `retryAfterSeconds` is
+  reserved and not sent. `problem.schema.json` allows a `correlationId` of up to 128 characters
+  instead of 64, because the gateway echoes a client's own id of that length.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and

@@ -1185,6 +1185,16 @@ value at any time, so the gateway replaces the detail rather than trusting every
 message. `ExchangeRelayTest` feeds each passed-through and translated code a detail with a name,
 another member's id, SQL and a class name and checks none of it arrives.
 
+**The fields** (`Problems.of`, `problem.schema.json`, listed in `docs/exchange/errors.md`): `status`,
+`code`, `title` and `detail` always; `correlationId` always, equal to the `X-Correlation-Id` response
+header, which `CorrelationIdFilter` takes from the request when it is 1–128 characters of
+`[A-Za-z0-9._-]` and mints as a UUID otherwise; `instance` (the path) on the answers the routes
+build, not on the filters'; `errors` with the gateway's `SCHEMA_INVALID`; `confirmationUrl` with
+`MASS_CHANGE_CONFIRMATION_REQUIRED`. `type` and `retryAfterSeconds` are never sent — the schema
+reserves the latter, and `Retry-After` is the header. The schema allowed a `correlationId` of at most
+64 characters while the gateway echoes one of up to 128; the schema was widened to 128 on
+2026-09-27 (widening is compatible within v1, REQ-XCH-026).
+
 **Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error
 statuses), `ExchangeRelayTest` (no backend detail reaches a client) · **Status:** registry published
 — WP 0.2 (#2080); the gateway's refusal metrics carry the codes as `reason` labels
