@@ -27,8 +27,10 @@ import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeSettings;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeSettingsRepository;
 import de.greluc.krt.profit.basetool.backend.support.SubjectAuthentication;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -45,12 +47,18 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 class ExchangeGateTest {
 
+  private static final java.util.UUID MEMBER =
+      java.util.UUID.fromString("5f1d2c3b-0000-0000-0000-0000000000a1");
+  private static final String KEY = "a".repeat(43);
+
   private final ExchangeClientRepository clientRepository = mock(ExchangeClientRepository.class);
   private final ExchangeSettingsRepository settingsRepository =
       mock(ExchangeSettingsRepository.class);
+  private final ExchangeInstallationRepository installationRepository =
+      mock(ExchangeInstallationRepository.class);
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
   private final ExchangeGate gate =
-      new ExchangeGate(clientRepository, settingsRepository, meterRegistry);
+      new ExchangeGate(clientRepository, settingsRepository, installationRepository, meterRegistry);
 
   private ExchangeClient client;
   private ExchangeSettings settings;
@@ -121,6 +129,17 @@ class ExchangeGateTest {
     assertThat(refused(ExchangeGate.REASON_CLIENT_SUSPENDED)).isEqualTo(1);
   }
 
+  @Test
+  void refusesARevokedInstallation() {
+    ExchangeInstallation revoked = new ExchangeInstallation();
+    revoked.setRevokedAt(java.time.Instant.parse("2026-09-27T10:00:00Z"));
+    when(installationRepository.findByKey("versekit", MEMBER, KEY))
+        .thenReturn(Optional.of(revoked));
+
+    assertThat(gate.allowsAny(acting("versekit", "exchange.connect"))).isFalse();
+    assertThat(refused(ExchangeGate.REASON_INSTALLATION_REVOKED)).isEqualTo(1);
+  }
+
   /**
    * Builds an acting member's exchange authentication.
    *
@@ -180,7 +199,12 @@ class ExchangeGateTest {
 
     @Override
     public @NotNull String subject() {
-      return "5f1d2c3b-0000-0000-0000-0000000000a1";
+      return MEMBER.toString();
+    }
+
+    @Override
+    public @Nullable String exchangeInstallationKey() {
+      return externalClient == null ? null : KEY;
     }
 
     @Override

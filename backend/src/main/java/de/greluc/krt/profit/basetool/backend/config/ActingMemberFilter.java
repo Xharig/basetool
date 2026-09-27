@@ -106,10 +106,14 @@ public class ActingMemberFilter extends OncePerRequestFilter {
   private static final List<PathPattern> EXCHANGE_PATHS =
       List.of(
           PATH_PARSER.parse("/api/v1/exchange/catalog/locations"),
-          PATH_PARSER.parse("/api/v1/exchange/catalog/resolve"));
+          PATH_PARSER.parse("/api/v1/exchange/catalog/resolve"),
+          PATH_PARSER.parse("/api/v1/exchange/me/installation"));
 
   /** The shape of a registry client id, identical to the database check. */
   private static final Pattern EXCHANGE_CLIENT_ID = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
+
+  /** The shape of a DPoP key thumbprint: base64url SHA-256 without padding. */
+  private static final Pattern KEY_THUMBPRINT = Pattern.compile("^[A-Za-z0-9_-]{43}$");
 
   /** App-wide correlation-id response header, matching the neighbouring person-gates. */
   static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
@@ -137,7 +141,9 @@ public class ActingMemberFilter extends OncePerRequestFilter {
     String exchangeClient = request.getHeader(ActingMemberHeader.EXCHANGE_CLIENT_HEADER);
     String exchangeCapabilities =
         request.getHeader(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER);
-    boolean exchangeHeaders = exchangeClient != null || exchangeCapabilities != null;
+    String installationKey = request.getHeader(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER);
+    boolean exchangeHeaders =
+        exchangeClient != null || exchangeCapabilities != null || installationKey != null;
     if (isAbsent(onBehalfOf)) {
       if (exchangeHeaders) {
         refuse(
@@ -195,6 +201,15 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID);
       return;
     }
+    if (exchangePath
+        && (installationKey == null || !KEY_THUMBPRINT.matcher(installationKey).matches())) {
+      refuse(
+          request,
+          response,
+          "exchange request without a valid installation key",
+          MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID);
+      return;
+    }
 
     UUID member;
     try {
@@ -225,7 +240,10 @@ public class ActingMemberFilter extends OncePerRequestFilter {
       SecurityContext acting = SecurityContextHolder.createEmptyContext();
       acting.setAuthentication(
           new ActingMemberAuthentication(
-              member, authorities, exchangePath ? exchangeClient : null));
+              member,
+              authorities,
+              exchangePath ? exchangeClient : null,
+              exchangePath ? installationKey : null));
       SecurityContextHolder.setContext(acting);
       filterChain.doFilter(request, response);
     } finally {
@@ -337,6 +355,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
 
     private final UUID member;
     private final @Nullable String externalClient;
+    private final @Nullable String installationKey;
 
     /**
      * Creates the authentication.
@@ -344,13 +363,24 @@ public class ActingMemberFilter extends OncePerRequestFilter {
      * @param member the acting member's subject
      * @param authorities the authorities assembled for that member
      * @param externalClient the external client of an exchange request, or {@code null}
+     * @param installationKey the installation's key thumbprint of an exchange request, or {@code
+     *     null}
      */
     ActingMemberAuthentication(
-        UUID member, Collection<GrantedAuthority> authorities, @Nullable String externalClient) {
+        UUID member,
+        Collection<GrantedAuthority> authorities,
+        @Nullable String externalClient,
+        @Nullable String installationKey) {
       super(authorities);
       this.member = member;
       this.externalClient = externalClient;
+      this.installationKey = installationKey;
       setAuthenticated(true);
+    }
+
+    @Override
+    public @Nullable String exchangeInstallationKey() {
+      return installationKey;
     }
 
     @Override
