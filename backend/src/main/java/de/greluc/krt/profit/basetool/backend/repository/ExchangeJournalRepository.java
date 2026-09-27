@@ -117,4 +117,92 @@ public interface ExchangeJournalRepository extends JpaRepository<ExchangeJournal
   Optional<ExchangeJournalEntry>
       findFirstByUserIdAndClientIdAndResourceAndEntityKeyAndRecordedAtAfterOrderByRecordedAtAsc(
           UUID userId, String clientId, ExchangeResource resource, String entityKey, Instant since);
+
+  /** The scope filter the bulk undo queries share; a {@code null} parameter matches everything. */
+  String BULK_SCOPE =
+      """
+      FROM exchange_journal
+      WHERE client_id = :clientId AND undone_at IS NULL AND recorded_at >= :since
+        AND (CAST(:installationKey AS VARCHAR) IS NULL OR installation_key = :installationKey)
+        AND (CAST(:resource AS VARCHAR) IS NULL OR resource = :resource)
+      """;
+
+  /**
+   * Lists the members with writes of a client in a bulk undo's scope that are not undone.
+   *
+   * @param clientId the client
+   * @param since the start of the span
+   * @param installationKey the one installation, or {@code null} for all
+   * @param resource the one resource's name, or {@code null} for all
+   * @return the members, ordered by id
+   */
+  @Query(value = "SELECT DISTINCT user_id " + BULK_SCOPE + " ORDER BY user_id", nativeQuery = true)
+  List<UUID> findUndoableMembers(
+      @Param("clientId") String clientId,
+      @Param("since") Instant since,
+      @Param("installationKey") String installationKey,
+      @Param("resource") String resource);
+
+  /**
+   * Counts a client's writes in a bulk undo's scope that are not undone.
+   *
+   * @param clientId the client
+   * @param since the start of the span
+   * @param installationKey the one installation, or {@code null} for all
+   * @param resource the one resource's name, or {@code null} for all
+   * @return how many there are
+   */
+  @Query(value = "SELECT COUNT(*) " + BULK_SCOPE, nativeQuery = true)
+  long countUndoable(
+      @Param("clientId") String clientId,
+      @Param("since") Instant since,
+      @Param("installationKey") String installationKey,
+      @Param("resource") String resource);
+
+  /**
+   * Counts a client's writes that are not undone since a point in time per member and installation,
+   * for choosing one installation to undo.
+   *
+   * @param clientId the client
+   * @param since the start of the span
+   * @return one row per member and installation
+   */
+  @Query(
+      value =
+          """
+          SELECT user_id AS userId, installation_key AS installationKey, COUNT(*) AS entries
+          FROM exchange_journal
+          WHERE client_id = :clientId AND undone_at IS NULL AND recorded_at >= :since
+          GROUP BY user_id, installation_key
+          ORDER BY COUNT(*) DESC, user_id, installation_key
+          LIMIT 500
+          """,
+      nativeQuery = true)
+  List<InstallationWrites> countUndoableByInstallation(
+      @Param("clientId") String clientId, @Param("since") Instant since);
+
+  /** One member's installation and how many of its writes are not undone. */
+  interface InstallationWrites {
+
+    /**
+     * Returns the member.
+     *
+     * @return the member's id
+     */
+    UUID getUserId();
+
+    /**
+     * Returns the installation's key thumbprint.
+     *
+     * @return the thumbprint
+     */
+    String getInstallationKey();
+
+    /**
+     * Returns how many writes are not undone.
+     *
+     * @return the count
+     */
+    long getEntries();
+  }
 }

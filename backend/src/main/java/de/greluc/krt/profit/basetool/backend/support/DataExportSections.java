@@ -190,6 +190,17 @@ public final class DataExportSections {
               FROM exchange_journal WHERE user_id = :userId ORDER BY recorded_at
               """),
           new Section(
+              "exchangeBulkUndoSkips",
+              ART_15,
+              "Recorded when an admin's undo of an external client's writes for every member left"
+                  + " one of the member's entries alone or could not process the member; kept 90"
+                  + " days.",
+              """
+              SELECT s.run_id, r.client_id, s.resource, s.reason, r.started_at
+              FROM exchange_bulk_undo_skip s JOIN exchange_bulk_undo_run r ON r.id = s.run_id
+              WHERE s.user_id = :userId ORDER BY r.started_at
+              """),
+          new Section(
               "exchangeShipLinks",
               ART_15,
               "Recorded when an installation of an external client links its own id for a ship to"

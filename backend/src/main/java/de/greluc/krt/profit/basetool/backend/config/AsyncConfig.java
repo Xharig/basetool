@@ -69,6 +69,12 @@ public class AsyncConfig {
   public static final String MAIL_EXECUTOR = "mailExecutor";
 
   /**
+   * Bean name of the executor for admins' bulk undo runs (REQ-XCH-034), referenced from
+   * {@code @Async("exchangeBulkUndoExecutor")}.
+   */
+  public static final String EXCHANGE_BULK_UNDO_EXECUTOR = "exchangeBulkUndoExecutor";
+
+  /**
    * Bounded executor for the UEX sync dispatched by {@link
    * de.greluc.krt.profit.basetool.backend.service.UexScheduler}.
    *
@@ -139,6 +145,21 @@ public class AsyncConfig {
   @Bean(name = MAIL_EXECUTOR)
   public Executor mailExecutor() {
     return buildExecutor(2, 4, 200, "mail-async-", 20);
+  }
+
+  /**
+   * Single-thread executor for admins' bulk undo runs, so runs never overlap and their load on the
+   * database stays one member's transaction at a time.
+   *
+   * <p>Queues up to 10 runs and waits up to 60 s on shutdown; a run still going at exit is marked
+   * {@code FAILED} on the next startup. Propagates the starting request's MDC.
+   *
+   * @return configured bulk undo executor
+   */
+  @NotNull
+  @Bean(name = EXCHANGE_BULK_UNDO_EXECUTOR)
+  public Executor exchangeBulkUndoExecutor() {
+    return buildExecutor(1, 1, 10, "exchange-bulk-undo-", 60);
   }
 
   /**

@@ -106,5 +106,11 @@ public enum NotificationEventType {
    * A registered exchange client was seen with a new installation of a member for the first time
    * (REQ-XCH-032). The default rule notifies that member via the {@code EVENT_RECIPIENT} selector.
    */
-  EXCHANGE_INSTALLATION_CONNECTED
+  EXCHANGE_INSTALLATION_CONNECTED,
+
+  /**
+   * An admin's bulk undo restored entries of a member that an exchange client had written
+   * (REQ-XCH-034). The default rule notifies that member via the {@code EVENT_RECIPIENT} selector.
+   */
+  EXCHANGE_BULK_UNDO_APPLIED
 }

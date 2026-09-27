@@ -109,5 +109,11 @@ public enum NotificationType {
    * A new installation of an exchange client connected to the member's account (REQ-XCH-032),
    * rendered with the registry's {@code client} name only, never the client-supplied label.
    */
-  EXCHANGE_INSTALLATION_CONNECTED
+  EXCHANGE_INSTALLATION_CONNECTED,
+
+  /**
+   * An admin undid an exchange client's changes to the member's data (REQ-XCH-034), rendered with
+   * the registry's {@code client} name and the restored {@code count} only.
+   */
+  EXCHANGE_BULK_UNDO_APPLIED
 }

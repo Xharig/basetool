@@ -157,7 +157,9 @@ public class UserAccountMergeService {
           "terms_acceptance.user_id",
           "exchange_client_revocation.user_id",
           "exchange_change.user_id",
-          "exchange_journal.user_id");
+          "exchange_journal.user_id",
+          "exchange_bulk_undo_run.requested_by",
+          "exchange_bulk_undo_skip.user_id");
 
   /**
    * The moved tables as {@code table.column}, the form the schema catalogue reports.

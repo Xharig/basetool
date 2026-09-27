@@ -33,6 +33,7 @@ import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -82,6 +83,25 @@ public class AuthHelperService {
   @Nullable
   public Authentication rawAuthentication() {
     return SecurityContextHolder.getContext().getAuthentication();
+  }
+
+  /**
+   * Runs work on the current thread under an authentication captured from a request, restoring the
+   * thread's previous context afterwards; for background work an admin started (REQ-XCH-034).
+   *
+   * @param authentication the authentication to act under
+   * @param work the work
+   */
+  public void runAs(@NotNull Authentication authentication, @NotNull Runnable work) {
+    SecurityContext previous = SecurityContextHolder.getContext();
+    SecurityContext acting = SecurityContextHolder.createEmptyContext();
+    acting.setAuthentication(authentication);
+    SecurityContextHolder.setContext(acting);
+    try {
+      work.run();
+    } finally {
+      SecurityContextHolder.setContext(previous);
+    }
   }
 
   /** {@code true} if the current request carries an authenticated, non-anonymous principal. */
