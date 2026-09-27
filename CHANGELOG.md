@@ -4,10 +4,12 @@
 
 ### Added
 
+- **Mein Lager: Einheit eines persönlichen Eintrags ändern.** Pro Eintrag und für eine Auswahl
+  lässt sich die Einheit eigener persönlicher Einträge nachträglich wechseln — auf eine eigene
+  Mitgliedschaft oder „Keine Einheit"; der Dialog sagt, wer den Eintrag dann sieht (REQ-INV-052).
 - **Profil: optionales RSI-Handle.** Mitglieder können ihr RSI-Handle im Profil hinterlegen; es ist
   nur für sie selbst und Admins sichtbar, eindeutig über alle Konten und dient später verbundenen
   Anwendungen zur Prüfung, ob ein Spiel-Log zum Konto gehört (REQ-SEC-072, Migration `V246`).
-  
 - **Audit-Log: neuer Bereich „Blueprints".** Hinzufügen, Bearbeiten, Entfernen, Import, globale
   Freigabe, Standard-Blueprints und deren Vergabe — auch aus der App und durch Admins — landen im
   Audit-Log; Notizen werden nie mitgeschrieben (REQ-INV-051).
@@ -64,6 +66,10 @@
   einem Lauf der Ansible-Rolle (`--tags deploy,scripts`).
 
 ### Fixed
+
+- **Lager: die Org-Einheiten-Auswahl in „Mein Lager“ ist nicht mehr leer.** Beim Sammel-Umbuchen
+  und beim Ändern der Org-Einheit fragte die Seite die eigenen Mitgliedschaften mit dem Benutzernamen
+  statt der Nutzer-ID ab und bot deshalb nur „Keine Einheit“ an; beide Dialoge nutzen jetzt die ID.
 
 - **Keycloak-Provisioner: ein frischer Realm ist nach dem ersten Lauf in Form.** Keycloak 26 übergeht
   beim Anlegen eines Clients `backchannel.logout.session.required`; der Provisioner setzt das Attribut

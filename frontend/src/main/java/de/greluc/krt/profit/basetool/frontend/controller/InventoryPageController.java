@@ -29,6 +29,7 @@ import de.greluc.krt.profit.basetool.frontend.model.form.InventoryForm;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import de.greluc.krt.profit.basetool.frontend.service.CachedCatalog;
 import de.greluc.krt.profit.basetool.frontend.service.ParallelPageLoader;
+import de.greluc.krt.profit.basetool.frontend.support.CurrentUser;
 import de.greluc.krt.profit.basetool.frontend.support.PickerSearch;
 import de.greluc.krt.profit.basetool.frontend.support.Roles;
 import java.util.ArrayList;
@@ -45,9 +46,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -198,6 +202,19 @@ public class InventoryPageController {
 
   /** Resolves ADMIN/OFFICER onto LOGISTICIAN so the gate is asked, not enumerated. */
   private final org.springframework.security.access.hierarchicalroles.RoleHierarchy roleHierarchy;
+
+  /**
+   * Exposes the caller's {@code app_user.id} to the Lager pages as {@code currentMemberId}, the id
+   * their membership lookups and the rebooking's default target need.
+   *
+   * @param principal the OIDC principal, or {@code null} when anonymous
+   * @return the caller's user id as text, or {@code null}
+   */
+  @Nullable
+  @ModelAttribute("currentMemberId")
+  public String currentMemberId(@Nullable @AuthenticationPrincipal OidcUser principal) {
+    return CurrentUser.userIdText(principal);
+  }
 
   /**
    * Renders the squadron-wide aggregated inventory view ({@code /inventory}); {@code view=items}
