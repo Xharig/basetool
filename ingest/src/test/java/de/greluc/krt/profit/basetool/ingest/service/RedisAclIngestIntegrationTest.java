@@ -26,6 +26,7 @@ import de.greluc.krt.profit.basetool.ingest.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.ingest.support.TestProperties;
 import de.greluc.krt.profit.basetool.testsupport.containers.TestImages;
 import de.greluc.krt.profit.basetool.testsupport.redis.RedisAclTemplate;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -116,6 +117,27 @@ class RedisAclIngestIntegrationTest {
     assertThat(template.opsForValue().increment("ingest:xch:quota:versekit:m-1:2026-09-27"))
         .isEqualTo(1L);
     assertThatThrownBy(() -> template.opsForValue().increment("exchange:registry"))
+        .as("the registry mirror stays read-only")
+        .isInstanceOf(DataAccessException.class);
+  }
+
+  @Test
+  void theBudgetAndTheIdempotencyLockRunUnderTheIngestUser() {
+    StringRedisTemplate template = template(ingest);
+    String budget = "ingest:xch:budget:m:versekit:m-1";
+
+    assertThat(template.opsForZSet().add(budget, "ingest:xch:idem:k|512", 1_000.0)).isTrue();
+    assertThat(template.opsForZSet().add(budget, "ingest:xch:idem:j|256", 2_000.0)).isTrue();
+    assertThat(template.opsForZSet().removeRangeByScore(budget, 0, 1_500.0)).isEqualTo(1L);
+    assertThat(template.opsForZSet().rangeByScore(budget, 0, Double.MAX_VALUE))
+        .containsExactly("ingest:xch:idem:j|256");
+    assertThat(template.opsForZSet().range(budget, 0, -1)).containsExactly("ingest:xch:idem:j|256");
+    assertThat(
+            template
+                .opsForValue()
+                .setIfAbsent("ingest:xch:idem-lock:versekit:m-1:h", "1", Duration.ofMinutes(2)))
+        .isTrue();
+    assertThatThrownBy(() -> template.opsForZSet().add("exchange:registry", "x", 1.0))
         .as("the registry mirror stays read-only")
         .isInstanceOf(DataAccessException.class);
   }
