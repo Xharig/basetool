@@ -36,12 +36,11 @@ Beyond roles there are three mechanisms that are easy to miss:
   shape (ADR-0139 amendment 1). Production completed the rollout on 2026-09-25: each service on
   its own leaf since v1.12.0, every anchor the CA alone since step 4 the same evening.
 
-- **Approved external clients act with less than the member** *(planned, epic #2078)* — a client
-  reaches only `/exchange/v1/**` on the ingest gateway, with consent per capability and DPoP-bound
-  tokens; behind the relay (`ActingMemberFilter`, an explicit list of exchange routes, gated by
-  `@exchangeGate`) the member holds a reduced exchange authentication, never their stored
-  roles, and every write is journaled, undoable and bounded by a mass-change guard
-  ([`external-exchange.md`](../specs/external-exchange.md), ADR-0216 … ADR-0218).
+- **Approved external clients act with less than the member** — a client reaches only
+  `/exchange/v1/**` on the ingest gateway, with consent per capability and DPoP-bound tokens;
+  behind the relay (`ActingMemberFilter`, an explicit list of exchange routes, gated by
+  `@exchangeGate`) the member holds a reduced exchange authentication, never their stored roles,
+  and every write is journaled, undoable and bounded by a mass-change guard (§8.13).
 
 Authority: [`security-and-access.md`](../specs/security-and-access.md) (`REQ-SEC-*`),
 [`ROLES_AND_PERMISSIONS.md`](../../ROLES_AND_PERMISSIONS.md), `ArchitectureTest`.
@@ -249,3 +248,28 @@ shared test helpers in `test-support` reach no runtime classpath. And a test run
 production runs where that is cheap to arrange: the Redis integration tests start the production
 image by digest (`TestImages.REDIS`, guarded against the compose file and the Quadlet unit), and
 the backend's Testcontainers PostgreSQL is one container per test JVM (`TC_DAEMON=true`).
+
+## 8.13 The external client exchange
+
+Three rules hold for every exchange route, and each new resource or capability inherits them:
+
+- **One write path.** An exchange write goes through the web's own service path — the Blueprints
+  add and delete, the Lager's book-in, book-out and marking, the Hangar's create, update and
+  delete — so validation, the audit event (naming the client), Materialbörse offer effects and live
+  sync follow as for a web edit. It is never a second write logic. Each written entry is journaled
+  in the same transaction, the guard is asked first, and the change feed's triggers catch every
+  path, bulk ones included (§8.3; REQ-XCH-013, -021, -022, ADR-0218, ADR-0224).
+- **Reduced authentication, own data only.** On `/api/v1/exchange/**` the acting member holds
+  `ROLE_EXCHANGE_MEMBER` and the relayed capabilities, never their roles, contextual grants or an
+  admin pin, and reads and writes only their own rows. The `X-Exchange-*` headers count only from
+  the gateway's identity. The member's controls (`/api/v1/connected-apps/**`) answer only the
+  member's browser session, so a client can never confirm, undo or revoke (REQ-XCH-001, -009, -010;
+  ArchUnit rules in `ArchitectureTest`).
+- **Tolerant reader, additive v1.** Within `/exchange/v1` a change only adds: unknown fields are
+  ignored and reported as `UNKNOWN_FIELD` warnings, unknown enum values read as `UNKNOWN`, schemas
+  stay open, a published `$id` never changes, and identifiers and cursors are opaque. A breaking
+  change is `v2`, served beside `v1` for at least twelve months. The contract test fails a schema
+  that shrank since the last release (REQ-XCH-026, ADR-0219).
+
+Authority: [`external-exchange.md`](../specs/external-exchange.md) (`REQ-XCH-*`), ADR-0216 …
+ADR-0221, ADR-0224; the third-party view is published from `docs/exchange/`.
