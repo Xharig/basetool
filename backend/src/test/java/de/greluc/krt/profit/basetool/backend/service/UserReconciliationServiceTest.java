@@ -40,6 +40,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import de.greluc.krt.profit.basetool.backend.event.DiscordRegistrationPendingEvent;
+import de.greluc.krt.profit.basetool.backend.event.MemberDepartedEvent;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ApprovalStatus;
 import de.greluc.krt.profit.basetool.backend.model.Role;
@@ -1264,5 +1265,85 @@ class UserReconciliationServiceTest {
     r.setCode(code);
     r.setName(name);
     return r;
+  }
+
+  @Nested
+  class DepartureTests {
+
+    @Test
+    void anActiveMemberDisabledInKeycloakDeparts() {
+      User existing = newUser(USER_ID, "alice");
+      existing.setEnabledInKeycloak(true);
+      existing.setRoles(new HashSet<>(Set.of(role(2L, "KRT Member"))));
+      when(userRepository.findById(USER_ID)).thenReturn(Optional.of(existing));
+
+      userReconciliationService.syncUser(
+          new KeycloakUserDto(USER_ID, "alice", "alice@example.com", false, Set.of(), null));
+
+      verify(eventPublisher)
+          .publishEvent(new MemberDepartedEvent(USER_ID, MemberDepartedEvent.REASON_DISABLED));
+    }
+
+    @Test
+    void anActiveMemberLosingEveryRoleDeparts() {
+      User existing = newUser(USER_ID, "alice");
+      existing.setEnabledInKeycloak(true);
+      existing.setRoles(new HashSet<>(Set.of(role(2L, "KRT Member"))));
+      when(userRepository.findById(USER_ID)).thenReturn(Optional.of(existing));
+
+      userReconciliationService.syncUser(
+          new KeycloakUserDto(USER_ID, "alice", "alice@example.com", true, Set.of(), null));
+
+      verify(eventPublisher)
+          .publishEvent(new MemberDepartedEvent(USER_ID, MemberDepartedEvent.REASON_ROLE_LOST));
+    }
+
+    @Test
+    void anAccountThatWasNeverActiveDoesNotDepart() {
+      User existing = newUser(USER_ID, "alice");
+      existing.setEnabledInKeycloak(true);
+      when(userRepository.findById(USER_ID)).thenReturn(Optional.of(existing));
+
+      userReconciliationService.syncUser(
+          new KeycloakUserDto(USER_ID, "alice", "alice@example.com", false, Set.of(), null));
+
+      verify(eventPublisher, never()).publishEvent(any(MemberDepartedEvent.class));
+    }
+
+    @Test
+    void aMemberLoggingInWithoutAnyRoleDeparts() {
+      User existing = newUser(USER_ID, "alice");
+      existing.setVersion(1L);
+      existing.setRoles(new HashSet<>(Set.of(role(2L, "KRT Member"))));
+      when(userRepository.findById(USER_ID)).thenReturn(Optional.of(existing));
+      when(roleRepository.findAllWithPermissions())
+          .thenReturn(java.util.List.of(role(2L, "KRT Member")));
+
+      userReconciliationService.syncUser(
+          newJwt(
+              USER_ID.toString(),
+              Map.of(
+                  "preferred_username",
+                  "alice",
+                  "azp",
+                  "basetool-frontend",
+                  "realm_access",
+                  Map.of("roles", List.of()))));
+
+      verify(eventPublisher)
+          .publishEvent(new MemberDepartedEvent(USER_ID, MemberDepartedEvent.REASON_ROLE_LOST));
+    }
+
+    @Test
+    void everyAccountNoLongerInKeycloakDeparts() {
+      UUID gone = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-000000000001");
+      List<UUID> present = List.of(USER_ID);
+      when(userRepository.findIdsMissingFrom(present)).thenReturn(List.of(gone));
+
+      userReconciliationService.markMissingUsers(present);
+
+      verify(eventPublisher)
+          .publishEvent(new MemberDepartedEvent(gone, MemberDepartedEvent.REASON_REMOVED));
+    }
   }
 }
