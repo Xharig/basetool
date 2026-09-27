@@ -899,12 +899,20 @@ The backend answers the relayed call at `POST /api/v1/exchange/me/account-check`
 `400` otherwise, without echoing it) and counts every answer in
 `basetool_exchange_account_checks_total{outcome}`.
 
+The gateway checks the body against `account-check-request.schema.json` — a value that is no RSI
+handle is `400 SCHEMA_INVALID` naming only the pointer, never the value — relays it to the backend's
+`POST /api/v1/exchange/me/account-check`, and passes on only an answer that matches
+`account-check-response.schema.json`. The route is no write: it needs no `Idempotency-Key` and does
+not count against the daily quota, but it has its own limit of ten per hour per client and member
+(REQ-XCH-023).
+
 - [x] Match, mismatch and unknown, the match case-insensitive; the stored handle is in no answer and
   neither handle in a log line. *`ExchangeAccountCheckControllerTest`.*
-- [ ] The gateway relays the route inside its own ten-per-hour limit.
+- [x] The gateway relays the route inside its own hourly limit; a value that is no handle is neither
+  relayed, echoed nor logged. *`ExchangeControllerTest`, `ExchangeLimitFilterTest`.*
 - [ ] End to end on the sandbox (WP 2.3, #2099).
 
-**Status:** backend built — WP 3.4 (#2106); the gateway relay follows
+**Status:** backend and gateway relay built — WP 3.4 (#2106); the sandbox run follows with WP 2.3
 
 ### REQ-XCH-032 — „Verbundene Anwendungen" shows and controls every connection
 

@@ -24,9 +24,11 @@ import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.CLIENT;
 import static de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport.STOCK;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -55,6 +57,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.json.JsonMapper;
 
 /** The exchange's limits end to end through the gates (REQ-XCH-023). */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -82,6 +85,7 @@ class ExchangeLimitFilterTest {
   @MockitoBean private ExchangeQuotas quotas;
   @MockitoBean private ExchangeIdempotency idempotency;
   @MockitoBean private ExchangeBudget budget;
+  @MockitoBean private ExchangeRelay relay;
 
   private MockMvc mockMvc;
   private ECKey key;
@@ -164,10 +168,18 @@ class ExchangeLimitFilterTest {
 
   @Test
   void theAccountCheckHasItsOwnHourlyLimit() throws Exception {
-    call(HttpMethod.POST, ACCOUNT_CHECK).andExpect(status().isOk());
-    call(HttpMethod.POST, ACCOUNT_CHECK)
+    when(relay.forward(any(), anyString(), any(), any(), any()))
+        .thenReturn(
+            new ExchangeRelay.Result(
+                200, JsonMapper.builder().build().readTree("{\"result\":\"match\"}"), null, null));
+    String body = "{\"handle\":\"Cutter_Pilot\"}";
+
+    ExchangeTestSupport.call(mockMvc, key, TOKEN, HttpMethod.POST, ACCOUNT_CHECK, body, null)
+        .andExpect(status().isOk());
+    ExchangeTestSupport.call(mockMvc, key, TOKEN, HttpMethod.POST, ACCOUNT_CHECK, body, null)
         .andExpect(status().isTooManyRequests())
         .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
+    verify(relay, times(1)).forward(any(), anyString(), any(), any(), any());
   }
 
   @Test

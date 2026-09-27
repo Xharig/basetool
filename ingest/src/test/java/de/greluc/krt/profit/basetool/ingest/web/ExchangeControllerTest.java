@@ -28,9 +28,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.nimbusds.jose.jwk.ECKey;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRelay;
@@ -45,11 +49,13 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -320,6 +326,83 @@ class ExchangeControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.label").value("Gaming PC"))
         .andExpect(jsonPath("$.warnings").doesNotExist());
+  }
+
+  @Test
+  void theAccountCheckIsRelayedAndAnswersOnlyTheResult() throws Exception {
+    when(relay.forward(
+            eq(HttpMethod.POST), eq("/api/v1/exchange/me/account-check"), any(), any(), any()))
+        .thenReturn(ok("{\"result\":\"mismatch\"}"));
+
+    ExchangeTestSupport.call(
+            mockMvc,
+            key,
+            TOKEN,
+            HttpMethod.POST,
+            "/exchange/v1/me/account-check",
+            "{\"handle\":\"Alt_Account\"}",
+            "VerseKit/2.1.0")
+        .andExpect(status().isOk())
+        .andExpect(content().json("{\"result\":\"mismatch\"}", JsonCompareMode.STRICT));
+
+    ArgumentCaptor<JsonNode> relayed = ArgumentCaptor.forClass(JsonNode.class);
+    verify(relay)
+        .forward(
+            eq(HttpMethod.POST),
+            eq("/api/v1/exchange/me/account-check"),
+            relayed.capture(),
+            any(),
+            any());
+    assertThat(relayed.getValue().get("handle").asString()).isEqualTo("Alt_Account");
+  }
+
+  @Test
+  void aValueThatIsNoHandleIsRefusedWithoutEchoOrLogAndNeverRelayed() throws Exception {
+    Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    root.addAppender(appender);
+    String body;
+    try {
+      body =
+          ExchangeTestSupport.call(
+                  mockMvc,
+                  key,
+                  TOKEN,
+                  HttpMethod.POST,
+                  "/exchange/v1/me/account-check",
+                  "{\"handle\":\"guess who;\"}",
+                  "VerseKit/2.1.0")
+              .andExpect(status().isBadRequest())
+              .andExpect(jsonPath("$.code").value("SCHEMA_INVALID"))
+              .andExpect(jsonPath("$.errors[0].pointer").value("/handle"))
+              .andReturn()
+              .getResponse()
+              .getContentAsString();
+    } finally {
+      root.detachAppender(appender);
+    }
+
+    assertThat(body).doesNotContain("guess who");
+    assertThat(appender.list).noneMatch(e -> e.getFormattedMessage().contains("guess who"));
+    verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void anAccountCheckAnswerOutsideTheContractIsARelayFailure() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any()))
+        .thenReturn(ok("{\"result\":\"maybe\"}"));
+
+    ExchangeTestSupport.call(
+            mockMvc,
+            key,
+            TOKEN,
+            HttpMethod.POST,
+            "/exchange/v1/me/account-check",
+            "{\"handle\":\"Cutter_Pilot\"}",
+            "VerseKit/2.1.0")
+        .andExpect(status().isBadGateway())
+        .andExpect(jsonPath("$.code").value("BACKEND_RELAY_FAILED"));
   }
 
   /**
