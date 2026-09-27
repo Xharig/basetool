@@ -3,7 +3,7 @@
 StartLimitIntervalSec=0
 
 [Container]
-Image=docker.io/grafana/grafana-oss:13.0.2@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2
+Image=docker.io/grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
 ContainerName=grafana
 LogDriver=journald
 ReadOnly=true
