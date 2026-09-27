@@ -112,6 +112,11 @@ non-admins see the union of their memberships unless they pin one.
   caller's direct memberships). Inventory items linked via `job_order_id` surface
   cross-OrgUnit inside the order UI but NEVER leak into a foreign Lager-View
   (`findGlobalByFilters` is gated, `findByJobOrderIdOrdered` is not).
+- **Membership-only, anonymised:** the exchange's org-demand feed (`GET /exchange/v1/me/org-demand`,
+  REQ-XCH-018, ADR-0220) sums the open and in-progress `JobOrder`s whose responsible unit is one of
+  the member's **direct memberships** — never a unit the member merely oversees through the
+  REQ-ORG-015 cascade or reaches as an admin, and without the SK-public escape above. It names no
+  requester, assignee, order or free text (`ExchangeDemandService`).
 
 > **Amended by epic #692 (REQ-ORG-016):** `owning_org_unit_id` (and `responsible_org_unit_id`) may now
 > reference a `BEREICH` or `ORGANISATIONSLEITUNG` org_unit. Such rows participate in **these same** scope
@@ -120,9 +125,6 @@ non-admins see the union of their memberships unless they pin one.
 > (strict silo).
 
 ### REQ-ORG-004 — Create-time OrgUnit stamping
-
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Since WP 1.2 a member may re-stamp their own personal Lager row onto one of their direct memberships or onto **no** unit (REQ-INV-052); re-stamping gives or takes access for that unit's editors, and the dialog says so. Exchange book-ins will use the no-unit case (REQ-XCH-016).
 
 Stamp the OrgUnit via the central picker resolvers on `OwnerScopeService` — never read
 `user.getSquadron()` directly. Two variants share the §5.5.1 picker matrix (1 + no output →
@@ -150,6 +152,15 @@ Job Order uses its own resolvers: `responsible_org_unit_id` is required and must
 — the guest fallback onto a configured intake SK went with the anonymous create (ADR-0149);
 `requesting_org_unit_id` accepts any OrgUnit and is freely editable.
 
+**Personal Lager rows can be re-stamped by their owner** (REQ-INV-052): a member may move their own
+personal row onto one of their direct memberships or onto **no** unit after the booking.
+Re-stamping gives or takes access for that unit's editors, and the dialog says so.
+
+**The exchange stamps on its own paths** (REQ-XCH-016/-017). A stock book-in through the exchange
+creates a personal row with **no** unit, outside the picker resolvers — REQ-INV-052 is how it gets
+one. A ship created through the exchange runs the Hangar's own create and so
+`resolveOrgUnitForPickerOutputNullable` with no picker output.
+
 > **Amended by epic #692 (REQ-ORG-016):** stamping **validation** widens to `(direct memberships ∪
 > oversight descendants)` so a Bereichsleitung/OL can create on behalf of a subordinate Staffel/SK and
 > own their own Bereich/OL data; the **auto-stamp** default and the `>1 → force a choice` rule stay keyed
@@ -158,7 +169,8 @@ Job Order uses its own resolvers: `responsible_org_unit_id` is required and must
 > **Amended by REQ-ORG-018:** the create-time stamp is no longer the final word for `Mission` — its
 > `owning_org_unit_id` is **reassignable after creation** via the dedicated reassignment endpoint
 > (a separate resolver, `resolveReassignTargetOrgUnit`, with no auto-stamp / home-Staffel fallback).
-> Every other aggregate's owning OrgUnit remains create-time-only.
+> Every other aggregate's owning OrgUnit remains create-time-only, except the owner's re-stamp of a
+> personal Lager row above (REQ-INV-052).
 
 ### REQ-ORG-005 — Admin area & promotion carve-outs
 

@@ -1324,8 +1324,12 @@ minted when absent) · **Code:** `RedisSessionConfig#sessionRepositoryCustomizer
 
 ### REQ-SEC-027 — Approved client software is a contractual obligation, not only a gate
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> At the go-live (WP 6, #2092) the clause `terms.list_4_1_5` in all three backend bundles changes once: it links the versioned `docs/legal/approved-clients.md` and no longer says third-party software is unsupported for approved clients (REQ-XCH-002).
+> [!note] Planned — the terms change at the go-live (epic #2078, WP 6, #2092)
+> Built: the versioned list `docs/legal/approved-clients.md` exists (WP 4.6, #2090, REQ-XCH-002),
+> still without a client. Still to come: at the go-live the clause `terms.list_4_1_5` in all three
+> backend bundles changes once — it links that list and no longer says the operator does not
+> support third-party software for an approved client. Until then the clause below is in force
+> unchanged.
 
 (REQ-SEC-026 — linking a pending Discord registration onto an existing account — is carried by
 [`discord-integration.md`](discord-integration.md); this requirement continues the series at the
@@ -1378,8 +1382,11 @@ cannot exist in one locale only) · **Text:** `terms.list_4_1_5` in the **backen
 
 ### REQ-SEC-028 — Terms-of-Use consent is recorded, versioned and enforced
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> That one clause change moves the terms hash (`generateTermsVersion` over the German bundle's `terms.*` keys) once and re-prompts every member, and pauses every extractor until the member has accepted. The approved-client list sits outside those keys, so later list changes need no consent.
+> [!note] Planned — the consent round at the go-live (epic #2078, WP 6, #2092)
+> The clause change of REQ-SEC-027 moves the terms hash (`generateTermsVersion` over the German
+> bundle's `terms.*` keys) once, re-prompts every member and pauses every extractor until the member
+> has accepted. The approved-client list sits outside those keys, so later list changes need no
+> consent (REQ-XCH-002).
 
 Using the platform requires **recorded consent** to the Terms-of-Use wording currently in force.
 Before this, the terms took effect merely on access (section intro) and section 12 treated
@@ -1591,13 +1598,12 @@ ADR-0047), `support.TermsGateHandoff` (the leaf that does the same for the front
 
 ### REQ-SEC-029 — A path-scoped filter matches the DECODED path, never the raw request URI
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Unchanged in substance; it also governs the new exchange route list (REQ-XCH-001).
-
 Any servlet filter whose scope is a path — "apply to `/api/**`", "skip unless `/v1/**`", "cap these
 configured paths" — MUST decide that on the **decoded** path, by matching a parsed `PathPattern`
 against `PathContainer.parsePath(...)`. It MUST NOT use `HttpServletRequest#getRequestURI()` in a
-`startsWith` / `equals` / `List#contains` test.
+`startsWith` / `equals` / `List#contains` test. The exchange's route lists are held to it as well
+(REQ-XCH-001): the backend's `ActingMemberFilter` list of `/api/v1/exchange/**` routes and the
+gateway's `ExchangeRoutes` table are parsed `PathPattern`s matched against a parsed path.
 
 `getRequestURI()` is the **raw, still percent-encoded** URI per the servlet spec, while Spring MVC
 routes on the **decoded** path. The two therefore disagree, and the disagreement is exploitable in
@@ -2191,9 +2197,6 @@ converges the same list in both directions), `UserReconciliationService#syncUser
 
 ### REQ-SEC-036 — A client's role claim is authoritative only if its scope is complete
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The per-client narrowing extends to the acting member on exchange paths: an exchange role, the capability authorities and the memberships the demand feed needs, never the stored roles (REQ-XCH-009, ADR-0217). Ships with WP 3.1 (#2083).
-
 `UserReconciliationService#syncUser(Jwt)` mirrors a member's realm roles into `app_user` on **every**
 authentication, and it does so by **replacement**: `user.setRoles(mapRoles(realm_access.roles))`.
 That is correct only while every client's token carries the member's whole role list. It stopped
@@ -2242,6 +2245,15 @@ partial-scope client is used, and `basetool_api_client_requests_total{client_id=
 already carries it (REQ-OBS-018); the guard itself is a pure function of static configuration, so a
 counter would restate the config rather than observe anything. The non-persisted claim is logged at
 DEBUG with the account's UUID and the two set sizes — never the username (REQ-OBS-004).
+
+**The narrowing extends to the exchange.** On `/api/v1/exchange/**` the acting member a connected
+application works for holds `ROLE_EXCHANGE_MEMBER` and one `XCH_CAPABILITY:<scope>` per relayed
+capability, never their stored roles, permissions or contextual grants; a member the approval or
+role gate refuses keeps only that gate's marker (`DatabaseActingMemberAuthorities`, REQ-XCH-009,
+ADR-0217). Nothing on that path writes the stored role set. *Corrected 2026-09-27: the planned
+amendment also listed "the memberships the demand feed needs" among these authorities. No
+membership authority is minted; the demand feed reads the member's memberships itself
+(REQ-XCH-018).*
 
 **Acceptance**
 
@@ -2920,9 +2932,10 @@ would not repair an identity, it would falsify history.
 | Stock, hangar, refinery orders, personal inventory and blueprints                                   | The audit trail, in both its forms                                                                                    |
 | Org-unit memberships, org-chart positions, the Grand-Admiral office                                 | Who granted, requested, decided, initiated, executed, paid out                                                        |
 | Missions owned, party-lead and unit responsibility, manager and participant rows, order assignments | The account's own approval history, and who decided it                                                                |
-| Exchange offers, requests and interest                                                              | `user_roles` — re-derived from the token and the roster sync, not owned (REQ-SEC-013, REQ-SEC-036)                    |
+| Materialbörse offers, requests and interest                                                         | `user_roles` — re-derived from the token and the roster sync, not owned (REQ-SEC-013, REQ-SEC-036)                    |
 | Bank grants, view grants, approval limits, the holder row                                           | `terms_acceptance` — consent is recorded per account; the member is asked once more rather than having one back-dated |
-| Notifications, rule selectors, promotion evaluations                                                |                                                                                                                       |
+| Notifications, rule selectors, promotion evaluations                                                | The exchange's client revocations, change sequence and write journal (REQ-XCH-008, REQ-XCH-013, REQ-XCH-022)          |
+| Connected-application installations and their ship links (REQ-XCH-007, REQ-XCH-017)                 |                                                                                                                       |
 
 **The classification is exhaustive by construction.** `UserAccountMergeCoverageTest` reads every
 foreign key into `app_user` out of the live schema, adds the two deliberately FK-less audit target
@@ -2930,7 +2943,7 @@ columns, and fails the build unless each appears in exactly one of the two lists
 listed column still exists. A new user-referencing column cannot be forgotten here; it can only be
 classified, by someone who had to decide which side it belongs on.
 
-**Conflicts are deduplicated where they are duplicates and refused where they are not.** Thirteen
+**Conflicts are deduplicated where they are duplicates and refused where they are not.** Fifteen
 moved tables carry a unique constraint over the user column, so one member may legitimately hold a
 row on both accounts (two sign-ups for one Einsatz, the same blueprint owned twice). The source's
 row is dropped where the target already has an equivalent — safe precisely because the two accounts
@@ -3945,11 +3958,6 @@ one event type.
 
 ### REQ-SEC-058 — Art. 15 / Art. 20 data export
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The export gains the exchange's member-linked tables. **In since WP 3.1:** the installations with their labels (`connectedApps`, the label scrubbed like other free text) and the client revocations (`connectedAppRevocations`); the deny list is the revoked installations. **In since WP 3.3's first slice:** the change sequence (`exchangeChanges`: resource, key, channel and client of every change to the member's synced data, kept 90 days, ADR-0224). **In since WP 3.3's second slice:** the write journal (`exchangeJournal`: client, resource, key, action and the entry before and after each client write, kept 90 days; the states scrubbed like other free text, since a note or a ship name can name somebody). **In since WP 4.4:** the installations' ship links (`exchangeShipLinks`: client, the installation's id for the ship, the ship and when it was linked).
->
-> *The optional RSI handle is in since WP 1.4 (REQ-SEC-072, 2026-09-26): the account section lists it, and as a name spelling it is scrubbed from other members' free text. The „gestohlen“ marker of Lager rows is in since WP 1.3 (REQ-INV-053): the Lager section lists it.*
-
 Every member MUST be able to export their own data from the application, and an admin MUST be able
 to export another account's for a request from somebody who cannot sign in.
 
@@ -3996,6 +4004,18 @@ worse than a short document that says exactly what exists and points at the mach
 > from rows it reduces to counts, because a `COUNT(*)` variant per section would double the
 > statement registry, put the PDF's counts on a different query and moment from the JSON's, and
 > hand the two export coverage gates statements they do not check.
+
+**What the sections cover beyond the core tables.** The account section lists the optional RSI
+handle, and as a name spelling it is scrubbed from other members' free text (REQ-SEC-072); the
+Lager section lists each row's „gestohlen" marker (REQ-INV-053). The external client exchange
+contributes five sections: the installations with their labels (`connectedApps`, the label scrubbed
+like other free text; a revoked installation is the deny-list entry for its key), the client
+revocations (`connectedAppRevocations`), the change sequence (`exchangeChanges`: resource, key,
+channel and client of every change to the member's synced data, kept 90 days, ADR-0224), the write
+journal (`exchangeJournal`: client, resource, key, action and the entry before and after each
+client write, kept 90 days; the states scrubbed like other free text, since a note or a ship name
+can name somebody) and the ship links (`exchangeShipLinks`: client, the installation's id for the
+ship, the ship and when it was linked) — REQ-XCH-007, -008, -013, -017, -022.
 
 **Every section is marked with its legal basis**, so the portable subset is identifiable without
 re-deriving it:
@@ -4289,11 +4309,6 @@ legitimate while an admin is mid-task and the roster sync is nightly.
 
 ### REQ-SEC-060 — Admin Personensuche across every free-text surface
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> The person search's coverage guard must serve every new member-linked table. Ships with WP 3.1–3.3.
->
-> *The RSI handle is searchable since WP 1.4 (REQ-SEC-072). Corrected 2026-09-26: this callout said it would deliberately not be; the owner decided to treat it as a name spelling, so that a rectification or an erasure reaches it like any other name.*
-
 An admin MUST be able to find **every** place a given name appears, case-insensitively, across every
 free-text surface of the application.
 
@@ -4332,6 +4347,14 @@ any sense that matters and would bury the real hits.
 > quietly false the first time somebody added a notes field, and the person whose data it is would
 > have no way to know. The test also asserts that every registered column and id column still
 > exists, so a rename fails here rather than during a real request.
+
+The registry covers the newer member-linked data too. The optional RSI handle is searched as a name
+spelling (`app_user.rsi_handle`, REQ-SEC-072), so a rectification or an erasure reaches it like any
+other name. The exchange's free text is searched under „Verbundene Anwendungen": the installation
+labels (`exchange_installation.label`) and the write journal's before and after states
+(`exchange_journal.before_state` / `after_state`, where a note or a ship name can name somebody);
+its other text columns — registry fields, change-sequence keys and channels, journal keys — are
+exempted as holding no name.
 
 **Bounded by construction**, because a multi-table `ILIKE` sweep with no ceiling is a
 denial-of-service waiting for a one-character term: at least 3 characters, 25 hits per column, 300
@@ -4394,16 +4417,13 @@ aggregates.
 
 ### REQ-SEC-061 — Self-service deletion is a request an admin decides
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Erasure covers the exchange's member-linked tables. Ships with WP 3.1–3.3.
->
-> *The RSI handle is covered since WP 1.4 (REQ-SEC-072): it goes with the account row.*
-
 A member MUST be able to ask, in the application, for their account to be erased (Art. 17 GDPR).
 The request lands in an admin queue; it is **never** carried out by the member's own click.
 
 **Why a request and not a self-delete.** The deletion removes the Keycloak account, purges the
-member's warehouse stock, hangar, personal inventory, blueprints, notifications and grades, and
+member's warehouse stock, hangar, personal inventory, blueprints, notifications and grades — and,
+with the account row, the optional RSI handle (REQ-SEC-072) and the exchange's connections,
+revocations, change sequence, write journal and ship links, whose foreign keys cascade — and
 reassigns their missions and refinery orders to an admin (REQ-DATA-008). None of that is
 reversible. A control on one's own profile page that did all of it on one click would be the most
 destructive button in the application, placed where a mis-click is cheapest.
@@ -4503,11 +4523,6 @@ from a statute rather than from operational taste.
 
 ### REQ-SEC-062 — A granted Art. 17 request anonymises the surviving handle snapshots
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Anonymisation covers the exchange's member-linked tables. Ships with WP 3.1–3.3.
->
-> *The RSI handle is covered since WP 1.4 (REQ-SEC-072): as a name spelling, its occurrences in the handle snapshots are anonymised like the username's.*
-
 When an admin grants the member's wish, the member's handle MUST be replaced by a sentinel in
 **every** place a handle snapshot survives an account deletion. Rows are **not** removed and no fact
 about what happened is altered — only the name goes.
@@ -4548,6 +4563,10 @@ so each text-matched update runs once per stored spelling — username, display 
 nickname and, since 2026-09-26, the RSI handle (REQ-SEC-072). A handover typed with the member's
 nickname is as likely as one typed with their display name, and the search registry already treats
 all four as places a person is named.
+
+**The exchange keeps no handle snapshot.** Its member-linked tables go with the account
+(REQ-DATA-008), so nothing there survives to anonymise: `HandleErasureCoverage` classifies the
+installation labels and the write journal's before and after states as removed with the account.
 
 > [!important] The set was widened after review, and it is gate-enforced now
 > Corrected 2026-09-16 (and again 2026-09-17, when the three payload columns named below were taken
@@ -4715,8 +4734,9 @@ template is the reference) · **Code:** `keycloak-theme/krt-theme/login/login.ft
 
 ### REQ-SEC-068 — Each service reaches Redis as its own least-privilege ACL user
 
-> [!note] Planned amendment — external client exchange (epic #2078, [`external-exchange.md`](external-exchange.md))
-> Two key families join the ACL (ADR-0221). **In since WP 3.1:** the backend reads and writes `exchange:*` (`GET`, `SET`) and ingest reads it (`%R~exchange:*`, `GET`) — the table below. ingest's `INCR` on `ingest:*` for the daily write quotas and `ZADD`, `ZRANGE`/`ZRANGEBYSCORE` and `ZREMRANGEBYSCORE` for the byte budget, with `SET … NX` for the idempotency locks (WP 3.2, #2082). **Still to come:**, and the revocation and deny-list keys under `exchange:*` (WP 3.1). The mirror never sits under `ingest:*`. Rendering the new ACL on production is a gated write before the first exchange release (WP 2.1, #2092).
+> [!note] Planned — rendering the exchange lines on production (epic #2078, WP 2.1, #2092)
+> The template below carries the exchange's key families (ADR-0221). Re-rendering and loading it on
+> production is a gated write that must precede the first exchange release.
 
 Redis holds the frontend's sessions — OAuth2 access **and refresh** tokens included — the live-sync
 and notification fan-out, and the ingest handoff. Backend, frontend and ingest used to reach it as
@@ -4737,6 +4757,13 @@ its service does:
 | `admin` | all | all | all — the operator's, never in an application's environment |
 | `default` | — | — | switched **off** at the end of the rollout |
 
+- **The exchange's two key families** (ADR-0221, REQ-XCH-003/-008/-020/-023). The backend writes
+  and reads the registry mirror and the revocation and deny-list keys under `exchange:*`
+  (`exchange:registry`, `exchange:revoked:*`, `exchange:deny:*`) with `GET` and `SET`; ingest may
+  only read them (`%R~exchange:*`), so the mirror never sits under `ingest:*`. ingest keeps its own
+  exchange state under `ingest:*`: `INCR` for the daily write quotas, `ZADD`, `ZRANGE` /
+  `ZRANGEBYSCORE` and `ZREMRANGEBYSCORE` for the byte budget, and `SET … NX` for the idempotency
+  locks.
 - **The rules are code.** `scripts/redis-users.acl.tmpl` is the single source; `render-redis-acl.py`
   renders it on the host with SHA-256 hashes (never a clear-text password) and refuses a partial
   render or a file without exactly one `default` line. The Testcontainers suites and the E2E stack

@@ -19,10 +19,13 @@ on the ingest gateway, never through the backend API. This spec states what must
 above say why. The work is tracked in epic #2078; each requirement names the work package (WP) and
 sub-issue that implements it.
 
-> [!note] Status
-> Each requirement carries its work package and a status line that says what is built. What is left
-> is the local sandbox (WP 2.3, #2099), the clients (#2088, #2089, #2097) and the gated go-live
-> (#2092). *Corrected 2026-09-27: this note still said nothing was built.*
+> [!note] Each requirement's own status line is authoritative
+> Each requirement carries its work package; its status line says what is built and what remains,
+> and moves in the PR that lands the change, together with its **Enforced by** test. What remains
+> is chiefly the sandbox (WP 2.3, #2099), the clients' migrations (WP 5.1, #2088; WP 5.2, #2089), the app (#2097) and
+> the go-live (WP 6, #2092). Requirements of other specs that this one changes state it in their
+> own text; a callout there marks only what is still planned. *Corrected 2026-09-27: this note said
+> nothing was built yet, long after most of the requirements had landed.*
 
 ## Requirements
 
@@ -191,9 +194,9 @@ switch is on, the client is in the registry and `ACTIVE`, and the scope was both
 `XCH_CAPABILITY:<scope>` authority) and granted to the client. Every refusal is counted as
 `basetool_exchange_gate_refused_total{reason}`.
 
-**Status:** the scopes (WP 2.2, #2081) and the registry's per-client grants (`ExchangeCapability`,
-WP 3.1) and the backend's `ExchangeGate` (WP 3.1, #2083) are in; the gateway check follows with
-WP 3.2 (#2082)
+**Status:** built — the scopes (WP 2.2, #2081), the registry's per-client grants
+(`ExchangeCapability`, WP 3.1) and the backend's `ExchangeGate` (WP 3.1, #2083), and the gateway
+check (`ExchangeGateFilter`, WP 3.2, #2082)
 
 ### REQ-XCH-005 — Every third-party client is a public, consent-gated device-grant client
 
@@ -332,11 +335,11 @@ follows with the sandbox (WP 2.3, #2099)
 
 ### REQ-XCH-009 — The acting member holds a reduced authentication and sees own data only
 
-On `/api/v1/exchange/**` the acting member holds an exchange role, the relayed capability
-authorities and the memberships the demand feed needs — never their stored roles, permissions or
-contextual grants. Exchange reads and writes touch only the member's own blueprints, own personal
-Lager rows and own ships; they never use the admin all-scope or an admin pin. The membership,
-pending-approval and terms gates apply unchanged. No exchange response carries personal data of
+On `/api/v1/exchange/**` the acting member holds an exchange role and the relayed capability
+authorities — never their stored roles, permissions or contextual grants. Exchange reads and
+writes touch only the member's own blueprints, own personal Lager rows and own ships; they never
+use the admin all-scope or an admin pin. The membership, pending-approval and terms gates apply
+unchanged. No exchange response carries personal data of
 anyone.
 
 **How it is built** (WP 3.1). `ActingMemberFilter` keeps an explicit list of exchange routes
@@ -344,7 +347,9 @@ next to the two ingest routes. On an exchange route the member gets
 `ActingMemberAuthorities.exchangeAuthoritiesFor`: `ROLE_EXCHANGE_MEMBER` plus one
 `XCH_CAPABILITY:<scope>` per relayed known scope, and nothing else; a member the approval or role
 gate refuses keeps exactly that gate's marker, so the gates refuse as they do for the web. The
-membership authorities the demand feed needs arrive with the demand feed (WP 3.3).
+demand feed reads the member's memberships itself (`ExchangeDemandService`, REQ-XCH-018).
+*Corrected 2026-09-27: this requirement said the acting member would also hold the memberships the
+demand feed needs, arriving with it; the feed was built without any membership authority.*
 
 **Acceptance**
 
@@ -356,7 +361,8 @@ membership authorities the demand feed needs arrive with the demand feed (WP 3.3
   exchange controllers call exchange services only; exchange DTOs stay in the exchange layer
   (`ArchitectureTest`).
 
-**Status:** relay and reduced authentication built — WP 3.1 (#2083); the data routes with WP 3.3
+**Status:** relay and reduced authentication built — WP 3.1 (#2083); the data routes built with
+WP 3.3 and WP 4.1–4.4
 
 ### REQ-XCH-010 — The relay names the external client, and only the gateway may
 
@@ -512,8 +518,9 @@ pages listen on, so they refresh without a reload: `hangar:{member}` after a shi
 `blueprints:{member}` after a blueprint write, `inventory` after a stock write and `materialboard`
 when that write lowered or removed an offer (REQ-FE-015). A rolled-back write raises none.
 
-**Status:** built for blueprints, stock and ships, in the backend and the gateway — WP 3.3 (#2083),
-WP 4.1–4.4
+**Status:** sequence, attribution and retention built for blueprints, stock and ships — WP 3.3
+(#2083); the blueprint, stock and ship feeds and their gateway routes built — WP 4.1 (#2084), WP 4.2
+(#2085), WP 4.4 (#2086)
 
 ### REQ-XCH-014 — A client never re-adds what the member removed elsewhere
 
@@ -849,8 +856,7 @@ a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, e
 `Retry-After` (the quota's until the next UTC day); a quota that cannot be counted is `503
 SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted answer carries
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
-bucket. The in-process buckets live per gateway instance and are bounded (least recently used out);
-the Redis byte budget follows with the idempotency cache.
+bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
 **The byte budget** (`app.exchange.store.*`): every value the gateway stores for the exchange
 registers `<key>|<bytes>` in three sorted sets — `ingest:xch:budget:m:<client>:<member>`,
@@ -891,8 +897,8 @@ each with its HTTP status and the client action it requires. Codes are never reu
 the gateway-side codes are the `reason` labels of the exchange metrics.
 
 **Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error
-statuses) · **Status:** registry published — WP 0.2 (#2080); the metric labels follow with the
-gateway, WP 3.2 (#2082)
+statuses) · **Status:** registry published — WP 0.2 (#2080); the gateway's refusal metrics carry
+the codes as `reason` labels (`ExchangeRefusals`) — WP 3.2 (#2082)
 
 ### REQ-XCH-026 — The contract grows additively under `/exchange/v1`
 
@@ -966,7 +972,8 @@ After each committed exchange write the backend publishes live-sync frames on th
 sections the web pages and the app listen on (Lager, Blueprints, Hangar, and the Materialbörse when
 offers changed) — `ExchangeLiveSync`, see REQ-XCH-013.
 
-**Status:** built — WP 3.3 (#2083)
+**Status:** built for the web pages — `ExchangeLiveSync`, the frames of REQ-XCH-013 — WP 3.3
+(#2083), WP 4.1 (#2084), WP 4.2 (#2085), WP 4.4 (#2086)
 
 ### REQ-XCH-031 — The account check answers match, mismatch or unknown — never the handle
 
