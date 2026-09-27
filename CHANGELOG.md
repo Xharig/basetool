@@ -207,6 +207,10 @@
 
 ### Fixed
 
+- **Benachrichtigungen kommen nach einer Pause wieder sofort an.** Der Live-Stream der
+  Benachrichtigungen (`/notifications/stream`) holt sein Zugriffstoken jetzt über den
+  Single-Flight-Manager und erneuert es beim Öffnen, statt nach fünf Minuten Leerlauf ein abgelaufenes
+  mitzuschicken und bis zur nächsten Seitenanfrage stumm zu bleiben (REQ-NOTIF-010, REQ-SEC-012).
 - **Audit-Log der Materialbörse: Kürzungen und Entfernungen durch Lagerbewegungen fehlten.** Wenn
   eine Ausbuchung, Übertragung, Umbuchung, Übergabe, Produktion, das Leeren des Lagers oder das
   Löschen eines Kontos ein Angebot kürzte oder mitlöschte, stand das bisher nicht im Audit; jetzt
