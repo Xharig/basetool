@@ -103,5 +103,11 @@ public enum NotificationType {
    * An admin refused a member's erasure request (REQ-SEC-061). The default rule notifies the
    * requesting member; rendered without parameters, the reason is shown on the profile page.
    */
-  ACCOUNT_DELETION_REQUEST_DECLINED
+  ACCOUNT_DELETION_REQUEST_DECLINED,
+
+  /**
+   * A new installation of an exchange client connected to the member's account (REQ-XCH-032),
+   * rendered with the registry's {@code client} name only, never the client-supplied label.
+   */
+  EXCHANGE_INSTALLATION_CONNECTED
 }

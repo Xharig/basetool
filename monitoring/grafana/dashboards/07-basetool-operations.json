@@ -3639,7 +3639,7 @@
         "y": 232
       },
       "type": "timeseries",
-      "title": "Exchange disconnects/day by kind",
+      "title": "Exchange disconnects, departures and account checks/day",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3671,6 +3671,72 @@
           "expr": "sum by (kind) (increase(basetool_exchange_disconnects_total[1d]))",
           "refId": "A",
           "legendFormat": "{{kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (outcome) (increase(basetool_exchange_departures_total[1d]))",
+          "refId": "B",
+          "legendFormat": "departure {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (outcome) (increase(basetool_exchange_account_checks_total[1d]))",
+          "refId": "C",
+          "legendFormat": "account check {{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 240
+      },
+      "type": "timeseries",
+      "title": "Exchange catalogue resolutions/hour by kind and status",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (kind, status) (increase(basetool_exchange_resolve_refs_total[1h]))",
+          "refId": "A",
+          "legendFormat": "{{kind}} {{status}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

@@ -29,6 +29,7 @@ import java.util.UUID;
  * @param label the client's label for it, or {@code null}
  * @param firstSeenAt when it was first seen
  * @param lastSeenAt when it was last seen
+ * @param unseen whether the member has not yet seen the notification announcing it
  */
 public record ConnectedInstallationDto(
-    UUID id, String label, Instant firstSeenAt, Instant lastSeenAt) {}
+    UUID id, String label, Instant firstSeenAt, Instant lastSeenAt, boolean unseen) {}
