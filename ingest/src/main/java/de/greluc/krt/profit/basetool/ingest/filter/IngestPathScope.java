@@ -26,28 +26,53 @@ import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 
 /**
- * Decides whether a request targets the ingest endpoints ({@code /v1/**}), shared by every
- * ingest-scoped filter.
+ * Decides which gateway surface a request targets, shared by every scoped filter: the legacy
+ * extractor endpoints ({@code /v1/**}) and the exchange ({@code /exchange/**}) together form the
+ * protected surface; only the legacy one carries the extractor client gate (REQ-XCH-001).
  *
  * <p>Matches the decoded path, as the dispatcher does, so a percent-encoded path cannot bypass the
- * filters while still reaching the ingest controller.
+ * filters while still reaching a controller.
  */
 final class IngestPathScope {
 
-  /** The parsed {@code /v1/**} pattern of the ingest surface. */
-  private static final PathPattern INGEST_PATHS = PathPatternParser.defaultInstance.parse("/v1/**");
+  /** The parsed {@code /v1/**} pattern of the legacy extractor surface. */
+  private static final PathPattern LEGACY_PATHS = PathPatternParser.defaultInstance.parse("/v1/**");
+
+  /** The parsed {@code /exchange/**} pattern of the exchange surface. */
+  private static final PathPattern EXCHANGE_PATHS =
+      PathPatternParser.defaultInstance.parse("/exchange/**");
 
   /** Not instantiable: this is a single shared predicate, not a collaborator. */
   private IngestPathScope() {}
 
   /**
-   * Whether the request targets an ingest endpoint, decided on the decoded path without
-   * context-path stripping.
+   * Whether the request targets the protected surface — the per-IP limit, the payload cap and the
+   * access log apply.
    *
    * @param request the current request
-   * @return {@code true} when the decoded path is under {@code /v1}
+   * @return {@code true} when the path is under {@code /v1} or {@code /exchange}
    */
-  static boolean isIngestRequest(@NotNull HttpServletRequest request) {
-    return INGEST_PATHS.matches(PathContainer.parsePath(request.getRequestURI()));
+  static boolean isProtectedRequest(@NotNull HttpServletRequest request) {
+    return isLegacyRequest(request) || isExchangeRequest(request);
+  }
+
+  /**
+   * Whether the request targets a legacy extractor endpoint — the extractor client gate applies.
+   *
+   * @param request the current request
+   * @return {@code true} when the path is under {@code /v1}
+   */
+  static boolean isLegacyRequest(@NotNull HttpServletRequest request) {
+    return LEGACY_PATHS.matches(PathContainer.parsePath(request.getRequestURI()));
+  }
+
+  /**
+   * Whether the request targets the exchange surface.
+   *
+   * @param request the current request
+   * @return {@code true} when the path is under {@code /exchange}
+   */
+  static boolean isExchangeRequest(@NotNull HttpServletRequest request) {
+    return EXCHANGE_PATHS.matches(PathContainer.parsePath(request.getRequestURI()));
   }
 }

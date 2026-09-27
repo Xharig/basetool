@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${#locale.language}" lang="de">
+<head th:replace="~{fragments/head :: head(titleContent=~{::title}, additionalLinks=~{::extraLinks})}">
+    <title th:text="#{connectedApps.title} + ' - ' + ${appTitle}">Verbundene Anwendungen - Profit Basetool</title>
+    <th:block th:fragment="extraLinks">
+        <link rel="stylesheet" th:href="@{/css/pages/connected-apps.css}">
+    </th:block>
+</head>
+<body>
+<th:block th:replace="~{fragments/sidebar :: sidebar}" />
+
+<header>
+    <nav>
+        <button id="hamburger" class="hamburger-btn" type="button" th:aria-label="#{a11y.nav.menu}">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <a th:href="@{/}" class="brand">
+            <img th:src="@{/logos/basetool-logo.svg}" alt="" height="50">
+            <span class="logo-text" th:text="${appTitle}">Profit Basetool</span>
+        </a>
+    </nav>
+</header>
+
+<main>
+    <span id="ca-i18n" hidden
+          th:attr="data-disconnected=#{connectedApps.success.disconnected},data-error=#{notification.error.title},data-confirm-ok=#{connectedApps.confirm.ok},data-confirm-cancel=#{general.cancel},data-confirm-client-title=#{connectedApps.confirmClient.title},data-confirm-client-body=#{connectedApps.confirmClient.body},data-confirm-installation-title=#{connectedApps.confirmInstallation.title},data-confirm-installation-body=#{connectedApps.confirmInstallation.body}"></span>
+
+    <div class="greeting hud-box">
+        <h1 th:text="#{connectedApps.title}">Verbundene Anwendungen</h1>
+        <p th:text="#{connectedApps.subtitle}">Anwendungen, die du mit deinem Konto verbunden hast.</p>
+    </div>
+
+    <div id="ca-host">
+        <th:block th:fragment="apps">
+            <div class="hud-box mt-2" th:if="${error}">
+                <p class="text-danger" th:text="#{${error}}">Fehler beim Laden.</p>
+            </div>
+
+            <div class="hud-box mt-2" th:if="${error == null and #lists.isEmpty(apps)}" id="ca-empty">
+                <p th:text="#{connectedApps.empty}">Du hast noch keine Anwendung verbunden.</p>
+            </div>
+
+            <section class="hud-box mt-2 ca-app" th:each="app : ${apps}" th:attr="data-client-id=${app.clientId}">
+                <div class="ca-app-head">
+                    <h2 th:text="${app.displayName}">VerseKit</h2>
+                    <button type="button" class="btn btn-quiet-danger" data-ca-disconnect-client
+                            th:text="#{connectedApps.disconnectClient}">Anwendung trennen</button>
+                </div>
+                <h3 th:text="#{connectedApps.capabilities}">Darf</h3>
+                <ul class="ca-capabilities">
+                    <li th:each="cap : ${app.capabilities}"
+                        th:text="${#messages.msgOrNull('exchange.capability.' + cap) ?: cap}">Lagerbest&auml;nde lesen</li>
+                </ul>
+                <h3 th:text="#{connectedApps.installations}">Installationen</h3>
+                <div class="table-responsive">
+                    <table class="ca-installations">
+                        <thead>
+                        <tr>
+                            <th th:text="#{connectedApps.column.installation}">Installation</th>
+                            <th th:text="#{connectedApps.column.firstSeen}">Zuerst gesehen</th>
+                            <th th:text="#{connectedApps.column.lastSeen}">Zuletzt gesehen</th>
+                            <th th:text="#{connectedApps.column.actions}">Aktion</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="inst : ${app.installations}" th:attr="data-installation-id=${inst.id}">
+                            <td th:text="${inst.label != null} ? #{connectedApps.installation.named(${app.displayName}, ${inst.label})} : #{connectedApps.installation.unnamed(${app.displayName})}">VerseKit &ndash; &bdquo;Gaming-PC&ldquo;</td>
+                            <td th:text="${inst.firstSeenAt != null} ? #{connectedApps.utc(${#temporals.format(inst.firstSeenAt, 'dd.MM.yyyy HH:mm', 'UTC')})} : '–'">27.09.2026 08:00 UTC</td>
+                            <td th:text="${inst.lastSeenAt != null} ? #{connectedApps.utc(${#temporals.format(inst.lastSeenAt, 'dd.MM.yyyy HH:mm', 'UTC')})} : '–'">27.09.2026 09:00 UTC</td>
+                            <td>
+                                <button type="button" class="btn btn-quiet-danger" data-ca-disconnect-installation
+                                        th:text="#{connectedApps.disconnectInstallation}">Trennen</button>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(app.installations)}">
+                            <td colspan="4" th:text="#{connectedApps.installations.empty}">Keine aktive Installation.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </th:block>
+    </div>
+
+    <div class="hud-box mt-2">
+        <h2 th:text="#{connectedApps.about.title}">So funktioniert es</h2>
+        <p th:text="#{connectedApps.about.connect}">Verbinden startest du in der Anwendung selbst.</p>
+        <p th:text="#{connectedApps.about.disconnect}">Trennen wirkt sofort.</p>
+    </div>
+</main>
+
+<script th:src="@{/js/connected-apps.js}" defer th:attr="nonce=${cspNonce}"></script>
+</body>
+</html>
