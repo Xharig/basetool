@@ -142,6 +142,27 @@ jobs:
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             --tag basetool-sandbox-keycloak:local .
 
+      - name: guard / The Keycloak image refuses a non-dev start
+        run: |
+          set -uo pipefail
+          for command in "start" "start --optimized" "build"; do
+            read -r -a args <<< "$command"
+            status=0
+            output="$(timeout 60 docker run --rm basetool-sandbox-keycloak:local "${args[@]}" 2>&1)" \
+              || status=$?
+            if [ "$status" -ne 64 ]; then
+              echo "::error::basetool-sandbox-keycloak did not refuse '${command}' (exit ${status})" >&2
+              printf '%s\n' "$output" | tail -40 >&2
+              exit 1
+            fi
+            if ! printf '%s\n' "$output" | grep -q "only runs as 'start-dev'"; then
+              echo "::error::basetool-sandbox-keycloak stopped on '${command}', but not because of the sandbox guard" >&2
+              printf '%s\n' "$output" | tail -40 >&2
+              exit 1
+            fi
+          done
+          echo "basetool-sandbox-keycloak refuses every command but start-dev"
+
       - name: secrets / Scan the image for secrets
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:

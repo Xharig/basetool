@@ -28,3 +28,6 @@ FROM quay.io/keycloak/keycloak:26.7@sha256:82a77884f3af238beab1e7afd63b5f530e1b5
 COPY --from=spi /app/keycloak-spi.jar /opt/keycloak/providers/keycloak-spi.jar
 COPY keycloak-theme/krt-theme/ /opt/keycloak/themes/krt-theme/
 COPY docker/sandbox/keycloak/realm-iri.json /opt/keycloak/data/import/realm-iri.json
+COPY --chmod=755 docker/sandbox/keycloak/entrypoint.sh /opt/keycloak/bin/sandbox-entrypoint.sh
+ENTRYPOINT ["/opt/keycloak/bin/sandbox-entrypoint.sh"]
+CMD ["start-dev", "--import-realm", "--cache=local"]
