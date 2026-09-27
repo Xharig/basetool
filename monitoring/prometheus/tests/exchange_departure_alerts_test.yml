@@ -1,0 +1,32 @@
+rule_files:
+  - ../alerts/business.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - one departure could not be completed
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_departures_total{job="basetool-backend", instance="backend:11261", outcome="failed"}'
+        values: "0x5 1x30"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ExchangeDepartureIncomplete
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "A departed member's exchange access was not fully ended"
+              description: "A member left the organisation and the backend could not end all of their exchange access: a revocation, a consent removal or the Keycloak logout failed (REQ-XCH-008). The step is not retried. Check the backend log for 'Exchange departure step', then end the member's sessions and consents in the Keycloak admin console and disconnect their clients."
+
+  - name: silent - completed departures
+    interval: 1m
+    input_series:
+      - series: 'basetool_exchange_departures_total{job="basetool-backend", instance="backend:11261", outcome="done"}'
+        values: "0+1x30"
+      - series: 'basetool_exchange_departures_total{job="basetool-backend", instance="backend:11261", outcome="failed"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeDepartureIncomplete
+        exp_alerts: []
