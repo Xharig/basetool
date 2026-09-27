@@ -245,6 +245,12 @@ the provisioner creates it — never the Admin Console.
 5. **Record it**: the client in this document's *Configured state*, the realm reference on its next
    regeneration ([`docs/keycloak/README.md`](keycloak/README.md)), and the vault.
 
+**The SC Extractor** is no template client — it keeps its own `ClientSpec` — but from its migration
+release (2.10.0) it requests `offline_access` like one, and the provisioner pins the same offline
+session on its client: `client.offline.session.idle.timeout` 30 days and
+`client.offline.session.max.lifespan` 90 days (owner decision 2026-09-27). Until then those limits
+came only from the realm (90 days max) and Keycloak's own 30-day idle default.
+
 **Revoking** a client is the registry's suspend switch (#2087); disabling the Keycloak client also
 stops new tokens being issued. Removing it from the list does **not** delete it — the provisioner
 never deletes and reports it as *only on this realm* from then on.
