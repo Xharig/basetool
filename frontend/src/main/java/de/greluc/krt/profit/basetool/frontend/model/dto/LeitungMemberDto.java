@@ -30,10 +30,12 @@ import java.util.UUID;
  *     via the {@code leitung.rank.*} message keys.
  * @param kommandoGroupId the bound Kommandogruppe id for an in-Kommando rank, or {@code null}.
  * @param version the membership row's optimistic-lock version, echoed on a squadron-rank write.
+ * @param self whether this row is the caller's own seat, rendered read-only for a non-admin.
  */
 public record LeitungMemberDto(
     UUID userId,
     String userDisplayName,
     @BackendEnumAsString String role,
     UUID kommandoGroupId,
-    long version) {}
+    long version,
+    boolean self) {}

@@ -46,8 +46,9 @@ import org.springframework.transaction.annotation.Transactional;
  * or revoke a rank on an org unit (REQ-ROLE-004).
  *
  * <p>Granting a rank requires a strictly higher rank, decided only from the caller's own
- * memberships; the parent Bereich of a Staffel or SK is always read from its persisted edge. Admin
- * access is decided at the endpoint, never here.
+ * memberships; the parent Bereich of a Staffel or SK is always read from its persisted edge. A
+ * delegated write never targets the caller's own seat ({@link #targetsAnotherUser}). Admin access
+ * is decided at the endpoint, never here.
  */
 @Service
 @RequiredArgsConstructor
@@ -207,6 +208,23 @@ public class OrgRoleManagementSecurityService {
       return false;
     }
     return callerIsBereichsleiterOfParent(specialCommandId);
+  }
+
+  /**
+   * Whether the target of a delegated rank write is someone other than the caller: nobody but an
+   * admin sets, changes or clears their own rank on any rung.
+   *
+   * @param userId the member whose rank is being written; {@code null} denies
+   * @param authentication the current authentication; anonymous or {@code null} denies
+   * @return {@code true} iff the caller is authenticated, identifiable and not the target
+   */
+  public boolean targetsAnotherUser(
+      @Nullable UUID userId, @Nullable Authentication authentication) {
+    if (denyUnauthenticated(authentication) || userId == null) {
+      return false;
+    }
+    UUID callerId = authHelperService.currentUserId().orElse(null);
+    return callerId != null && !callerId.equals(userId);
   }
 
   /**

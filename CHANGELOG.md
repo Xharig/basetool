@@ -252,6 +252,10 @@
 
 ### Fixed
 
+- **Leitung: eigener Rang korrekt angezeigt, Sichtbarkeit nach Leitung.** Ein Staffelleiter sah sich
+  in seiner Staffel als „Mitglied“; Ränge, die man nicht vergeben darf, erscheinen jetzt als
+  Markierung statt als Auswahl. Die Seite zeigt die geleiteten Einheiten und alles darunter (OL:
+  alles), und den eigenen Rang setzt, ändert oder entfernt nur noch ein Admin (REQ-ROLE-004).
 - **Datenaustausch: Bedarf wie im Materialbedarf gerechnet.** Der Bedarf-Feed verrechnet überbuchten
   Bestand innerhalb einer Einheit und rundet Stückware wie die Web-Seite; vorher konnte er mehr
   offenen Bedarf melden als der Materialbedarf.
