@@ -34,6 +34,8 @@ jobs:
     env:
       BACKEND_IMAGE: ghcr.io/krt-profit/basetool-backend:e2e-local
       FRONTEND_IMAGE: ghcr.io/krt-profit/basetool-frontend:e2e-local
+      INGEST_IMAGE: ghcr.io/krt-profit/basetool-ingest:e2e-local
+      KEYCLOAK_IMAGE: ghcr.io/krt-profit/basetool-sandbox-keycloak:e2e-local
 
     steps:
       - name: Checkout
@@ -41,13 +43,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build the backend and frontend images
+      - name: Build the application and sandbox Keycloak images
         run: |
           set -euo pipefail
           build() {
-            local module="$1" tag="$2" attempt
+            local dockerfile="$1" tag="$2" attempt
+            shift 2
             for attempt in 1 2; do
-              if docker build --file docker/app/Dockerfile --build-arg "MODULE=${module}" --tag "$tag" .; then
+              if docker build --file "$dockerfile" "$@" --tag "$tag" .; then
                 return 0
               fi
               echo "::warning::building ${tag} failed (attempt ${attempt}/2)"
@@ -55,14 +58,26 @@ jobs:
             done
             return 1
           }
-          build backend "$BACKEND_IMAGE"
-          build frontend "$FRONTEND_IMAGE"
+          (
+            build docker/app/Dockerfile "$INGEST_IMAGE" --build-arg MODULE=ingest
+            build docker/sandbox/keycloak/Dockerfile "$KEYCLOAK_IMAGE"
+          ) > side-builds.log 2>&1 &
+          side=$!
+          status=0
+          build docker/app/Dockerfile "$BACKEND_IMAGE" --build-arg MODULE=backend || status=1
+          build docker/app/Dockerfile "$FRONTEND_IMAGE" --build-arg MODULE=frontend || status=1
+          wait "$side" || status=1
+          echo "::group::ingest and sandbox Keycloak build log"
+          cat side-builds.log
+          echo "::endgroup::"
+          [ "$status" -eq 0 ]
           docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}' | grep ':e2e-local '
 
       - name: Save the images
         run: |
           set -euo pipefail
-          docker save "$BACKEND_IMAGE" "$FRONTEND_IMAGE" | zstd -T0 -3 -q -o e2e-images.tar.zst
+          docker save "$BACKEND_IMAGE" "$FRONTEND_IMAGE" "$INGEST_IMAGE" "$KEYCLOAK_IMAGE" \
+            | zstd -T0 -3 -q -o e2e-images.tar.zst
           ls -l e2e-images.tar.zst
 
       - name: Upload the images

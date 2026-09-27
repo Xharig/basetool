@@ -32,17 +32,21 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies that the E2E workflow's image tags, the {@code image:} template in {@code
- * docker-compose.build.yml} and {@code E2eStackExtension}'s {@code IMAGE_TAG} name the same
- * prebuilt images, reading the files as text.
+ * Verifies that the E2E workflow's image tags, the {@code image:} templates in {@code
+ * docker-compose.build.yml} and {@code docker-compose.e2e.yml}, and {@code E2eStackExtension}'s
+ * {@code IMAGE_TAG} and {@code BUILT_IMAGES} name the same prebuilt images, reading the files as
+ * text.
  */
 class E2ePrebuiltImageParityTest {
 
   /** The E2E workflow, relative to the {@code frontend} module the test runs in. */
   private static final Path WORKFLOW = Path.of("..", ".github", "workflows", "e2e.yml");
 
-  /** The compose override that names the built images. */
+  /** The compose override that names the built application images. */
   private static final Path BUILD_OVERRIDE = Path.of("..", "docker-compose.build.yml");
+
+  /** The compose override that names the built sandbox Keycloak image. */
+  private static final Path E2E_OVERRIDE = Path.of("..", "docker-compose.e2e.yml");
 
   /** The extension that sets the tag and checks the store for the images. */
   private static final Path STACK_EXTENSION =
@@ -52,36 +56,61 @@ class E2ePrebuiltImageParityTest {
   private static final Pattern IMAGE_TAG_CONSTANT =
       Pattern.compile("String\\s+IMAGE_TAG\\s*=\\s*\"([^\"]+)\"");
 
-  /** A {@code BACKEND_IMAGE:} / {@code FRONTEND_IMAGE:} env entry in the workflow. */
-  private static final Pattern WORKFLOW_IMAGE =
-      Pattern.compile("(?m)^\\s+(BACKEND|FRONTEND)_IMAGE:\\s*(\\S+)\\s*$");
+  /** One {@code "ghcr.io/...:" + IMAGE_TAG} entry of the extension's {@code BUILT_IMAGES}. */
+  private static final Pattern EXTENSION_IMAGE =
+      Pattern.compile("\"(ghcr\\.io/[^\"]+:)\"\\s*\\+\\s*IMAGE_TAG");
 
-  /** An {@code image:} line of a built service in the compose override. */
-  private static final Pattern COMPOSE_IMAGE =
-      Pattern.compile("(?m)^\\s+image:\\s*(\\S*basetool-(backend|frontend):\\S+)\\s*$");
+  /** A {@code <NAME>_IMAGE:} env entry of the workflow's {@code build-stack} job. */
+  private static final Pattern WORKFLOW_IMAGE =
+      Pattern.compile("(?m)^\\s+(BACKEND|FRONTEND|INGEST|KEYCLOAK)_IMAGE:\\s*(\\S+)\\s*$");
+
+  /** An {@code image:} line of a built application service in the build override. */
+  private static final Pattern BUILD_IMAGE =
+      Pattern.compile("(?m)^\\s+image:\\s*(\\S*basetool-(backend|frontend|ingest):\\S+)\\s*$");
+
+  /** The {@code image:} line of the built sandbox Keycloak in the E2E override. */
+  private static final Pattern KEYCLOAK_IMAGE =
+      Pattern.compile("(?m)^\\s+image:\\s*(\\S*basetool-sandbox-keycloak:\\S+)\\s*$");
 
   /**
-   * The workflow builds exactly the images the compose override names once the extension's tag is
+   * The workflow builds exactly the images the compose overrides name once the extension's tag is
    * substituted -- so {@code up --no-build} finds what {@code build-stack} built.
    *
-   * @throws IOException if one of the three files cannot be read
+   * @throws IOException if one of the files cannot be read
    */
   @Test
   void theWorkflowBuildsTheImagesComposeBootsUnderTheExtensionsTag() throws IOException {
     String tag = extensionImageTag();
-    List<String> built = workflowImages();
     List<String> expected = composeImages(tag);
 
     assertThat(expected)
-        .as("docker-compose.build.yml names a backend and a frontend image")
-        .hasSize(2);
-    assertThat(built)
+        .as("the compose overrides name a backend, frontend, ingest and sandbox Keycloak image")
+        .hasSize(4);
+    assertThat(workflowImages())
         .as(
             "e2e.yml's build-stack job must build the images compose looks for with"
                 + " IRI_BASETOOL_VERSION=%s; a drift makes every matrix cell try to pull :%s from"
                 + " GHCR",
             tag, tag)
         .containsExactlyInAnyOrderElementsOf(expected);
+  }
+
+  /**
+   * The extension checks the local store for exactly the images compose boots in prebuilt mode.
+   *
+   * @throws IOException if one of the files cannot be read
+   */
+  @Test
+  void theExtensionChecksForTheImagesComposeBoots() throws IOException {
+    String tag = extensionImageTag();
+    Matcher m = EXTENSION_IMAGE.matcher(Files.readString(STACK_EXTENSION, StandardCharsets.UTF_8));
+    List<String> checked = new ArrayList<>();
+    while (m.find()) {
+      checked.add(m.group(1) + tag);
+    }
+    assertThat(checked)
+        .as("E2eStackExtension.BUILT_IMAGES must name the images compose boots")
+        .containsExactlyInAnyOrderElementsOf(composeImages(tag));
   }
 
   /**
@@ -110,9 +139,9 @@ class E2ePrebuiltImageParityTest {
   }
 
   /**
-   * Reads the two image names the workflow's {@code build-stack} job builds.
+   * Reads the image names the workflow's {@code build-stack} job builds.
    *
-   * @return the {@code BACKEND_IMAGE} and {@code FRONTEND_IMAGE} values, in file order
+   * @return the {@code *_IMAGE} values, in file order
    * @throws IOException if the workflow cannot be read
    */
   private static List<String> workflowImages() throws IOException {
@@ -130,12 +159,29 @@ class E2ePrebuiltImageParityTest {
    * {@code tag}. Distinct values only -- the prod and dev twins share one template.
    *
    * @param tag the tag the extension sets
-   * @return the rendered backend and frontend image names
-   * @throws IOException if the compose override cannot be read
+   * @return the rendered application and sandbox Keycloak image names
+   * @throws IOException if a compose override cannot be read
    */
   private static List<String> composeImages(String tag) throws IOException {
-    Matcher m = COMPOSE_IMAGE.matcher(Files.readString(BUILD_OVERRIDE, StandardCharsets.UTF_8));
     List<String> images = new ArrayList<>();
+    collect(BUILD_IMAGE, BUILD_OVERRIDE, tag, images);
+    collect(KEYCLOAK_IMAGE, E2E_OVERRIDE, tag, images);
+    return images;
+  }
+
+  /**
+   * Adds every distinct rendered {@code image:} template of one compose file that {@code pattern}
+   * matches.
+   *
+   * @param pattern the {@code image:} line pattern, the template in group 1
+   * @param file the compose file
+   * @param tag the tag the extension sets
+   * @param images the list to add to
+   * @throws IOException if the file cannot be read
+   */
+  private static void collect(Pattern pattern, Path file, String tag, List<String> images)
+      throws IOException {
+    Matcher m = pattern.matcher(Files.readString(file, StandardCharsets.UTF_8));
     while (m.find()) {
       String rendered =
           m.group(1)
@@ -145,6 +191,5 @@ class E2ePrebuiltImageParityTest {
         images.add(rendered);
       }
     }
-    return images;
   }
 }
