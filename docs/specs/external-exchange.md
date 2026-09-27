@@ -1239,7 +1239,7 @@ WP 0.2 (#2080)
 ### REQ-XCH-027 — Approved clients meet the client security requirements
 
 A client stores tokens only in the platform's secret store (Windows Credential Manager / DPAPI;
-Linux Secret Service, with a `0600` file fallback and a visible hint), keeps the DPoP private key
+Linux Secret Service, with a `0600` file fallback in a `0700` directory and a visible hint), keeps the DPoP private key
 non-exportable where the platform allows, never writes a token into logs, backups, diagnostics or a
 problem-report channel, pins the production issuer and allows another only through a developer
 environment variable, shows the device login's `user_code` with the bare `verification_uri` and
@@ -1247,7 +1247,12 @@ never opens, shows or sends `verification_uri_complete` (owner decision 2026-09-
 2 of #2092, M1), and sends a descriptive `User-Agent`. It also syncs as the sync guide
 requires: each resource an opt-in, pull before push, an add-only first sync, removals only from a
 diff, no re-add of what the member removed elsewhere without asking, ships linked before created,
-and the account check before a new game account's first sync. The checklist is
+and the account check before a new game account's first sync. Three more are approval criteria
+(owner decision 2026-09-27, from the review of the VerseKit requirements, #2089): the baseline, the
+ship links and the cursors are kept per installation and idempotency keys are random; the member
+is shown `detachedFromMissions`, `offersReduced` and `offersRemoved` when a sync reports them; and
+every ship `upsert` sends the ship's current `name` and `location`, since an omitted one is cleared.
+A sandbox demonstration is recommended, not a criterion. The checklist is
 `docs/exchange/client-security.md`; the application template asks for each point.
 
 **Status:** the checklist `docs/exchange/client-security.md` is written — WP 4.6 (#2090); the

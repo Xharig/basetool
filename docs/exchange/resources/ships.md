@@ -63,7 +63,8 @@ Send an `Idempotency-Key` and a change set of 1 to 500 ops, `dryRun` optional:
 | `remove` | `shipId`, `version` | Deletes the ship. |
 
 An `upsert` writes `shipType`, `name`, `insurance` and `location` as sent: leaving out `name` or
-`location` clears it. Only an absent `fitted` keeps the ship's value, and a new ship without it is
+`location` clears it, so send the ship's current values — the server's, or the member's change to
+them — with every `upsert`. Only an absent `fitted` keeps the ship's value, and a new ship without it is
 not fitted. `shipType` resolves as a `SHIP_TYPE` reference, `location` as in
 [the catalogue](catalog.md#warehouse-locations--get-exchangev1cataloglocations).
 

@@ -29,8 +29,8 @@ How each step works is on the [authentication](authentication.md) page.
 
 - Keep the refresh token and the DPoP private key only in the platform's secret store: Windows
   Credential Manager or DPAPI, with the key non-exportable in CNG where available; on Linux the
-  Secret Service, or — only where it is unavailable — a file readable by the user alone (`0600`)
-  with a visible hint that it is used.
+  Secret Service, or — only where it is unavailable — a file readable by the user alone (`0600`),
+  in a directory only the user can open (`0700`), with a visible hint that it is used.
 - Never write a token or a key into a log, a backup, a diagnostics bundle, a problem report or any
   channel that leaves the device. Redact `Authorization` and `DPoP` headers and anything shaped like
   a JWT from everything you collect.
@@ -62,6 +62,14 @@ against:
   pulling, never by resending blindly.
 - Before the first sync of a newly detected game account, run the account check and warn the member
   on `mismatch`.
+- The baseline, the ship links and the feed cursors are kept per installation, keyed by its
+  `installationId`, and never shared with another installation — not through a shared data folder
+  either ([several installations](sync-guide.md#several-installations)).
+- Every `Idempotency-Key` is random, such as a UUID, and used for one logical write only.
+- When a change result reports `detachedFromMissions`, `offersReduced` or `offersRemoved` above 0,
+  the member is shown what happened ([ships](resources/ships.md), [stock](resources/stock.md)).
+- Every ship `upsert` sends the ship's current `name` and `location` — the server's, or the member's
+  change to them — because an `upsert` clears an omitted one ([ships](resources/ships.md)).
 
 ## Response and supply chain
 

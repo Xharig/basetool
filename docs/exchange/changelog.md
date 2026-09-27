@@ -5,6 +5,12 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-27
 
+- **More approval criteria.** An application is now also checked for: a Linux fallback key
+  file in a `0700` directory; baseline, ship links and cursors kept per installation and random
+  idempotency keys; showing `detachedFromMissions`, `offersReduced` and `offersRemoved` to the
+  member; and every ship `upsert` sending the current `name` and `location`
+  ([client security](client-security.md)). A sandbox run before applying is recommended, not
+  required.
 - **Corrected: `Retry-After` per code.** The pages said every Redis failure answers
   `Retry-After: 60`. The gateway sends 30 with `EXCHANGE_DISABLED`, `REGISTRY_UNAVAILABLE` and a
   `SERVICE_UNAVAILABLE` whose daily write quota cannot be counted; 60 with
