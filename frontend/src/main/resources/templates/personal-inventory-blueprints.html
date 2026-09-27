@@ -94,7 +94,7 @@
         </label>
     </div>
 
-    <div id="krt-bp-list">
+    <div id="krt-bp-list" th:data-live-sync-topic="${blueprintsLiveSyncTopic}">
     <th:block th:fragment="blueprintList">
         <span id="krt-bp-total-meta" hidden
               th:attr="data-total=${blueprints.size()},

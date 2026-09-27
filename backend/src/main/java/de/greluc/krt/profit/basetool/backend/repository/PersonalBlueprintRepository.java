@@ -52,6 +52,26 @@ public interface PersonalBlueprintRepository extends JpaRepository<PersonalBluep
   Page<PersonalBlueprint> findAllByOwnerUserId(UUID ownerUserId, Pageable pageable);
 
   /**
+   * Returns the first page of a member's blueprints in id order, for the exchange snapshot.
+   *
+   * @param ownerUserId the member
+   * @param pageable the page size
+   * @return the blueprints
+   */
+  List<PersonalBlueprint> findAllByOwnerUserIdOrderByIdAsc(UUID ownerUserId, Pageable pageable);
+
+  /**
+   * Returns a member's blueprints after an id, in id order, for the exchange snapshot.
+   *
+   * @param ownerUserId the member
+   * @param afterId the last id already delivered
+   * @param pageable the page size
+   * @return the blueprints
+   */
+  List<PersonalBlueprint> findAllByOwnerUserIdAndIdGreaterThanOrderByIdAsc(
+      UUID ownerUserId, UUID afterId, Pageable pageable);
+
+  /**
    * Page of the blueprints owned by one user whose product name contains the given fragment
    * (case-insensitive) — backs the owned-list filter box.
    *
@@ -92,6 +112,14 @@ public interface PersonalBlueprintRepository extends JpaRepository<PersonalBluep
    * @return {@code true} if the owner already owns the product
    */
   boolean existsByOwnerUserIdAndProductKey(UUID ownerUserId, String productKey);
+
+  /**
+   * Counts a member's blueprints.
+   *
+   * @param ownerUserId the member
+   * @return the number of blueprints the member owns
+   */
+  long countByOwnerUserId(UUID ownerUserId);
 
   /**
    * Owner-scoped bulk product lookup, used to compute the "already owned" flag for a page of search

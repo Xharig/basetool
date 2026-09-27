@@ -54,7 +54,6 @@ import de.greluc.krt.profit.basetool.backend.model.dto.JobOrderItemProductionCre
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderRepository;
 import de.greluc.krt.profit.basetool.backend.repository.LocationRepository;
-import de.greluc.krt.profit.basetool.backend.repository.MaterialExchangeOfferRepository;
 import de.greluc.krt.profit.basetool.backend.repository.UserRepository;
 import de.greluc.krt.profit.basetool.backend.support.InventoryAllocations;
 import java.util.List;
@@ -84,7 +83,7 @@ class JobOrderItemProductionServiceTest {
 
   @Mock private JobOrderRepository jobOrderRepository;
   @Mock private InventoryItemRepository inventoryItemRepository;
-  @Mock private MaterialExchangeOfferRepository materialExchangeOfferRepository;
+  @Mock private MaterialExchangeOfferRatchet offerRatchet;
   @Mock private JobOrderItemService jobOrderItemService;
   @Mock private AuditService auditService;
   @Mock private UserService userService;
@@ -336,7 +335,9 @@ class JobOrderItemProductionServiceTest {
     assertThat(line.getManufacturedAmount()).isEqualTo(1);
     verify(inventoryItemRepository).delete(inventoryItem);
     verify(inventoryItemRepository, never()).save(inventoryItem);
-    verify(materialExchangeOfferRepository, never()).clampOfferedAmountToStock(any(), anyDouble());
+    verify(offerRatchet)
+        .beforeDelete(List.of(inventoryId), MaterialExchangeOfferRatchet.Reason.PRODUCTION);
+    verify(offerRatchet, never()).lower(any(), anyDouble(), any());
     verify(auditService, times(1))
         .record(eq(AuditEventType.INVENTORY_CONSUMED_BY_PRODUCTION), any(), any(), any(), any());
     verify(auditService, times(1))

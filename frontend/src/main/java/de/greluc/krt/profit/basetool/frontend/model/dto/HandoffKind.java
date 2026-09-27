@@ -28,5 +28,11 @@ public enum HandoffKind {
   REFINERY,
 
   /** A personal-blueprint import preview; pre-fills the blueprint import preview. */
-  BLUEPRINT
+  BLUEPRINT,
+
+  /**
+   * A change set the mass-change guard held back; opens its confirmation on the connected-apps
+   * page.
+   */
+  MASS_CHANGE
 }

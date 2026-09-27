@@ -40,6 +40,7 @@
         deleteAllModal = $('krt-bp-delete-all-modal');
         deleteAllForm = $('krt-bp-delete-all-form');
         deleteAllBtn = $('krt-bp-delete-all-open');
+        wireLiveSync();
 
         if (searchInput) {
             searchInput.addEventListener('input', onSearchInput);
@@ -295,6 +296,40 @@
         });
     }
 
+    const BLUEPRINT_SECTIONS = { list: { container: '#krt-bp-list', fragmentValue: 'list' } };
+
+    function blueprintTopic() {
+        const list = document.getElementById('krt-bp-list');
+        return list ? list.dataset.liveSyncTopic || '' : '';
+    }
+
+    function afterListWrite() {
+        reswapList();
+        const topic = blueprintTopic();
+        if (topic && window.krtLiveSync && typeof window.krtLiveSync.sendChanged === 'function') {
+            window.krtLiveSync.sendChanged(topic, Object.keys(BLUEPRINT_SECTIONS));
+        }
+    }
+
+    function wireLiveSync() {
+        const topic = blueprintTopic();
+        if (
+            !topic ||
+            !window.krtLiveSync ||
+            typeof window.krtLiveSync.createReceiver !== 'function'
+        ) {
+            return;
+        }
+        window.krtLiveSync.createReceiver({
+            topic,
+            sections: BLUEPRINT_SECTIONS,
+            coalesceMs: 1500,
+            refresh() {
+                reswapList();
+            },
+        });
+    }
+
     function recountAndSync() {
         const rows = document.querySelectorAll('#krt-bp-master-rows .master-row');
         let withNote = 0;
@@ -357,7 +392,7 @@
                     }
                     staged.clear();
                     renderStaging();
-                    reswapList();
+                    afterListWrite();
                 },
             })
             .then(function () {
@@ -530,7 +565,7 @@
                 conflict: conflictObj(),
                 onSuccess() {
                     closeDelete();
-                    reswapList();
+                    afterListWrite();
                 },
             })
             .then(function () {
@@ -566,7 +601,7 @@
                         window.showFrontendSuccessToast(String(tpl).replace('{0}', count));
                     }
                     closeDeleteAll();
-                    reswapList();
+                    afterListWrite();
                 },
             })
             .then(function () {

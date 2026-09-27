@@ -26,13 +26,16 @@ import de.greluc.krt.profit.basetool.backend.model.AuditEventType;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeJournalEntry;
 import de.greluc.krt.profit.basetool.backend.model.NotificationType;
+import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedAppActivityDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedAppDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ConnectedInstallationDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeRevocationRow;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRevocationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeJournalRepository;
 import de.greluc.krt.profit.basetool.backend.repository.NotificationRepository;
 import de.greluc.krt.profit.basetool.backend.service.AuditService;
 import de.greluc.krt.profit.basetool.backend.service.KeycloakService;
@@ -81,6 +84,9 @@ public class ConnectedAppsService {
   /** Reads and clears the new-connection notifications that mark an installation unseen. */
   private final NotificationRepository notificationRepository;
 
+  private final ExchangeJournalRepository journalRepository;
+  private final ExchangeEntryLabels entryLabels;
+
   private final Clock clock = Clock.systemUTC();
 
   /** Registers the disconnect counter for both kinds at zero. */
@@ -121,6 +127,16 @@ public class ConnectedAppsService {
         Set.copyOf(
             notificationRepository.findUnreadEntityIds(
                 member, NotificationType.EXCHANGE_INSTALLATION_CONNECTED));
+    Map<String, List<ExchangeJournalEntry>> writes = new LinkedHashMap<>();
+    List<ExchangeJournalEntry> allWrites = new ArrayList<>();
+    for (String clientId : byClient.keySet()) {
+      List<ExchangeJournalEntry> latest =
+          journalRepository.findTop10ByUserIdAndClientIdOrderByRecordedAtDescIdDesc(
+              member, clientId);
+      writes.put(clientId, latest);
+      allWrites.addAll(latest);
+    }
+    Map<UUID, String> labels = entryLabels.label(allWrites);
     List<ConnectedAppDto> apps = new ArrayList<>();
     for (List<ExchangeInstallation> installations : byClient.values()) {
       ExchangeClient client = installations.getFirst().getClient();
@@ -138,6 +154,16 @@ public class ConnectedAppsService {
                               i.getFirstSeenAt(),
                               i.getLastSeenAt(),
                               unseen.contains(i.getId())))
+                  .toList(),
+              writes.get(client.getClientId()).stream()
+                  .map(
+                      w ->
+                          new ConnectedAppActivityDto(
+                              w.getRecordedAt(),
+                              w.getResource().name(),
+                              w.getAction().name(),
+                              labels.get(w.getId()),
+                              w.getUndoneAt() != null))
                   .toList()));
     }
     apps.sort((a, b) -> a.clientId().compareTo(b.clientId()));

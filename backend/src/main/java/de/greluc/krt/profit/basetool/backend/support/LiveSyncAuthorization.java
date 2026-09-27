@@ -54,5 +54,8 @@ public enum LiveSyncAuthorization {
    * read: the app carries the member-facing surface only (REQ-APP-BANK-007), so the room follows
    * the same path rather than the wider one.
    */
-  BANK_ACCOUNT
+  BANK_ACCOUNT,
+
+  /** The room's id is the caller's own user id — a member's personal page. */
+  SELF
 }
