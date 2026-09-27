@@ -317,7 +317,8 @@ class ExchangeResolveControllerTest {
         .with(gateway())
         .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
         .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit-resolve")
-        .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.blueprints.read");
+        .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.blueprints.read")
+        .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "k".repeat(43));
   }
 
   /**
