@@ -80,12 +80,16 @@ need no new consent (REQ-SEC-028).
 
 - [ ] `docs/legal/approved-clients.md` exists, is linked from the terms clause (REQ-SEC-027) and
   lists client id, product, maintainer contact, capabilities and the approval issue and PR.
-- [ ] `docs/exchange/onboarding.md` states the criteria, the issue template and the fix deadline.
+  *The list exists with these columns and no client yet; the terms clause links it at the go-live
+  (WP 6). It records the approved capabilities, not the registry's runtime state.*
+- [x] `docs/exchange/onboarding.md` states the criteria, the issue template and the fix deadline.
+  *The template is `.github/ISSUE_TEMPLATE/exchange-client-application.yml`.*
 - [ ] The privacy notice (the frontend's `privacy.*` keys, DE and EN) states which data flows to an
   approved client on the member's own device, that the client's own privacy statement governs it
   there, and how to disconnect and undo; it changes with the go-live.
 
-**Status:** planned — WP 4.6 (#2090), WP 6 (#2092)
+**Status:** the list, the onboarding page and the application template are built — WP 4.6 (#2090);
+the terms link and the privacy notice change with the go-live — WP 6 (#2092)
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 
@@ -157,7 +161,9 @@ only by property.
 **Acceptance**
 
 - [ ] Gate tests for a scope missing from the token, a scope not granted in the registry, and a
-  wrong audience with the audience property blank.
+  wrong audience with the audience property blank. *The audience half is in: the gateway requires
+  `aud` ∋ `basetool-ingest` on exchange routes in code and refuses anything else `401
+  UNAUTHENTICATED` (`ExchangeDpopGateTest`); the scope gates follow with the registry read.*
 - [x] ArchUnit: every exchange controller method carries the exchange gate
   (`ArchitectureTest.everyExchangeControllerMethodCarriesTheExchangeGate`).
 
@@ -207,11 +213,22 @@ A request to an exchange route without a valid DPoP proof bound to the token's `
 (`401 DPOP_REQUIRED` / `401 DPOP_INVALID`). The legacy `/v1/*` routes keep today's behaviour
 (`REQ-INGEST-012`) until they end (REQ-XCH-033).
 
+Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and a
+replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
+proof without a current one is answered `401 DPOP_INVALID` with `WWW-Authenticate: DPoP …,
+error="use_dpop_nonce"` and a fresh `DPoP-Nonce`, and the client retries once with it. Every exchange
+response carries the current nonce. A nonce is stateless — a five-minute window and its HMAC under a
+key drawn at startup — and holds for its window and the next; a restart invalidates them all, which
+costs a client one retry. A bearer-scheme request, or a token without `cnf.jkt`, is `401
+DPOP_REQUIRED` with the DPoP challenge.
+
 **Acceptance**
 
-- [ ] Tests for a bearer token, a proof for another key, a replayed proof and a missing nonce.
+- [x] Tests for a bearer token, an unbound token, a proof for another key, a replayed proof and a
+  missing nonce, and that the retry with the nonce passes (`ExchangeDpopGateTest`,
+  `ExchangeDpopNoncesTest`).
 
-**Status:** planned — WP 3.2 (#2082)
+**Enforced by:** `ExchangeDpopGateTest` · **Status:** built — WP 3.2 (#2082)
 
 ### REQ-XCH-007 — Installations are identified by their DPoP key and labelled by the client
 
@@ -725,7 +742,8 @@ problem-report channel, pins the production issuer and allows another only throu
 environment variable, and sends a descriptive `User-Agent`. The checklist is
 `docs/exchange/client-security.md`.
 
-**Status:** planned — WP 4.6 (#2090), WP 5.1 (#2088), WP 5.2 (#2089)
+**Status:** the checklist `docs/exchange/client-security.md` is written — WP 4.6 (#2090); the
+clients' implementations with WP 5.1 (#2088), WP 5.2 (#2089)
 
 ### REQ-XCH-028 — The exchange is observable per client
 
