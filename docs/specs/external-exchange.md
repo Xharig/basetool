@@ -363,17 +363,40 @@ committed and validated — WP 0.2 (#2080); served by the gateway with WP 3.2 (#
 compared case-insensitively with `blueprint.scwiki_key`, which is not unique; `scGuid` is matched
 against blueprint records and output items, and duplicates resolve `ambiguous`. Names resolve
 through `BlueprintImportService.resolve()` — REQ-INV-006, REQ-INV-019, REQ-INV-021, REQ-INV-050 —
-never through a second logic. `locKey` resolves once the catalogue carries name keys and until then
-falls through to the name with a warning. Places resolve against the Lager's `location` table; a
+never through a second logic. `locKey` is compared case-insensitively with the catalogue's
+`name_key` — the `global.ini` name key without its `@`, which the P4K import stores for items,
+materials and ship types (migration `V250`; `LOC_` placeholders are not stored), and which a
+blueprint takes from its output item; a `locKey` that resolves to no single entry falls through to
+the name with a warning. Places resolve against the Lager's `location` table; a
 place without a row is `LOCATION_UNKNOWN`.
+
+A reference takes the first of its fields, in the order `bt`, `scRecord`, `scGuid`, `uexId`,
+`locKey`, `name`, that resolves to exactly one entry; if none does, the first that resolved to
+several is the answer, so an ambiguous `scRecord` still yields to a name that resolves. `ambiguous`
+lists at most ten candidates as `{bt, name}`; fuzzy suggestions are always `ambiguous`, even when
+there is only one, because they are never taken without the member. `LOC_KEY_UNRESOLVED` points at
+`/refs/<i>/locKey` of every reference that carries a `locKey` and whose keys, `locKey` included, did
+not resolve; a response carries at most 50 warnings. Per catalogue:
+
+| `kind` | `bt` | `scRecord` | `scGuid` | `uexId` | `locKey` | `name` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `BLUEPRINT` | the product key (normalized output name) | `blueprint.scwiki_key` | the blueprint's Wiki or game-file UUID, or its output item's | the output item's UEX id | the output item's `name_key` | the web import's chain: exact, alias, pack-tag strip, fuzzy |
+| `ITEM` | the item id | `class_name` | Wiki or game-file UUID | UEX item id | `name_key` | exact, case-insensitive; duplicates `ambiguous` |
+| `MATERIAL` | the material id | `scwiki_key` | Wiki or game-file UUID | UEX commodity id | `name_key` | exact, canonical (`MaterialNameCanonicalizer`), external alias, fuzzy — visible materials only |
+| `SHIP_TYPE` | the ship type id | `class_name` | Wiki UUID | UEX vehicle id | `name_key` | the hangar import's `ShipTypeMatcher` |
+
+The backend answers on `POST /api/v1/exchange/catalog/resolve` for any exchange capability; the
+gateway reports unknown request fields as `UNKNOWN_FIELD` warnings (WP 3.2).
 
 **Acceptance**
 
-- [ ] The anonymised corpus fixture
+- [x] The anonymised corpus fixture
   (`backend/src/test/resources/fixtures/blueprint-corpus/game-log-corpus-v1.json`) resolves the same
-  through the exchange and through the web import.
+  through the exchange and through the web import (`ExchangeResolveCorpusTest`).
 
-**Status:** planned — WP 3.3 (#2083)
+**Enforced by:** `ExchangeResolveCorpusTest`, `ExchangeResolveServiceTest`,
+`ExchangeResolveControllerTest` · **Status:** backend built — WP 3.1 (#2083); served by the gateway
+with WP 3.2 (#2082)
 
 ### REQ-XCH-013 — Each resource has a snapshot and a database-sequenced change feed
 

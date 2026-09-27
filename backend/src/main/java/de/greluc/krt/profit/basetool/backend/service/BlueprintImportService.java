@@ -167,6 +167,34 @@ public class BlueprintImportService {
   }
 
   /**
+   * Resolves bare product names through the import's own matching chain — exact, alias, pack-tag
+   * strip, fuzzy suggestions — without an owner (REQ-XCH-012).
+   *
+   * @param names the raw product names
+   * @return one resolution per name, in the order given
+   */
+  @NotNull
+  public List<NameResolution> resolveNames(@NotNull List<String> names) {
+    if (names.isEmpty()) {
+      return List.of();
+    }
+    Map<String, ResolvedProduct> productByKey = productIndex();
+    List<ResolvedProduct> allProducts = new ArrayList<>(productByKey.values());
+    List<NameResolution> resolutions = new ArrayList<>(names.size());
+    for (String name : names) {
+      Resolution resolution =
+          resolve(
+              new BlueprintExportParser.ParsedEntry(name, null, null),
+              productByKey,
+              allProducts,
+              Map.of());
+      resolutions.add(
+          new NameResolution(resolution.status, resolution.product, resolution.suggestions));
+    }
+    return resolutions;
+  }
+
+  /**
    * Applies the per-name resolutions: creates missing owned-blueprint rows and learns an alias for
    * every manual pick. Idempotent for a resubmitted preview.
    *
@@ -532,5 +560,17 @@ public class BlueprintImportService {
       @NotNull BlueprintImportStatus status,
       @Nullable ResolvedProduct product,
       @Nullable Instant suggestedAcquiredAt,
+      @NotNull List<BlueprintImportSuggestionDto> suggestions) {}
+
+  /**
+   * How one bare name resolved.
+   *
+   * @param status {@code MATCHED}, {@code MATCHED_BY_ALIAS}, {@code SUGGESTED} or {@code UNMATCHED}
+   * @param product the resolved product, or {@code null} unless matched
+   * @param suggestions fuzzy candidates, highest first (empty unless {@code status} is SUGGESTED)
+   */
+  public record NameResolution(
+      @NotNull BlueprintImportStatus status,
+      @Nullable ResolvedProduct product,
       @NotNull List<BlueprintImportSuggestionDto> suggestions) {}
 }
