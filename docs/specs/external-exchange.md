@@ -449,8 +449,8 @@ Blueprints domain with the external client.
 - [ ] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
   in the feed of another installation.
 
-**Status:** the gateway's read route (`GET /exchange/v1/me/blueprints`) is built — WP 4.1 (#2084);
-the writes follow
+**Status:** the gateway's read route (`GET /exchange/v1/me/blueprints`) and write route
+(`POST …/changes`) are built — WP 4.1 (#2084); the backend's writes follow
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -468,8 +468,8 @@ client.
 - [ ] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
 - [ ] A book-out below an offered amount lowers the offer and records the audit event.
 
-**Status:** the gateway's read route (`GET /exchange/v1/me/stock`) is built — WP 4.2 (#2085); the
-writes follow
+**Status:** the gateway's read route (`GET /exchange/v1/me/stock`) and write route (`POST …/changes`)
+are built — WP 4.2 (#2085); the backend's writes follow
 
 ### REQ-XCH-017 — Ships sync with a link step before the first create
 
@@ -484,8 +484,8 @@ unnamed ship is sent without it, and an upsert may leave it out (owner decision 
 
 - [ ] First sync against a Fleetview-imported hangar creates no duplicate.
 
-**Status:** the gateway's read route (`GET /exchange/v1/me/ships`) is built — WP 4.4 (#2086); the
-link step and the writes follow
+**Status:** the gateway's read route (`GET /exchange/v1/me/ships`) and write route (`POST …/changes`)
+are built — WP 4.4 (#2086); the backend's link step and writes follow
 
 ### REQ-XCH-018 — Org demand is anonymised and membership-scoped; locations are the non-hidden list
 
@@ -556,7 +556,14 @@ within one batch is not a removal. Only the member's browser session can confirm
 
 - [ ] One test per counting rule, including repeated 89 % cuts and a move.
 
-**Status:** planned — WP 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087)
+When the backend answers `MASS_CHANGE_CONFIRMATION_REQUIRED`, the gateway stages the change set with
+its client, installation and resource in the handoff staging (`HandoffKind.MASS_CHANGE`, one slot
+per member apart from the extractor drafts, at most `app.exchange.store.max-mass-change-bytes`,
+512 KiB, counted against the exchange's Redis budget) and answers `409` with a `confirmationUrl` to
+`/connected-apps/confirm?handoff=<id>`. A change set too large to hold is `413 BATCH_TOO_LARGE`.
+
+**Status:** the gateway's staging is built — WP 3.2 (#2082); the backend's counting, the confirmation
+page and the apply follow — WP 3.3 (#2083), WP 4.5 (#2087)
 
 ### REQ-XCH-022 — Every exchange write is journaled and can be undone
 

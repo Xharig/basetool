@@ -180,6 +180,34 @@ class HandoffStagingServiceTest {
         .isEqualTo(2L);
   }
 
+  /** A staged mass change has a slot of its own: a newer one replaces it, drafts stay. */
+  @Test
+  void shouldKeepOneMassChangePerSubjectWithoutEvictingDrafts() {
+    HandoffStagingService service = service(TestProperties.ingest("max-handoffs-per-subject", "1"));
+    String draft = service.stage("user-mass", HandoffKind.BLUEPRINT, "{\"total\":1}");
+    HandoffStagingService.Staged first =
+        service.stageMassChange("user-mass", "{\"resource\":\"stock\"}", 4096);
+    HandoffStagingService.Staged second =
+        service.stageMassChange("user-mass", "{\"resource\":\"ships\"}", 4096);
+
+    assertThat(consume("user-mass", first.handoffId())).isEmpty();
+    Optional<StagedHandoff> kept = consume("user-mass", second.handoffId());
+    assertThat(kept).isPresent();
+    assertThat(kept.get().kind()).isEqualTo(HandoffKind.MASS_CHANGE);
+    assertThat(second.key()).isEqualTo(FRONTEND_KEY_PREFIX + "user-mass:" + second.handoffId());
+    assertThat(second.bytes()).isPositive();
+    assertThat(consume("user-mass", draft)).isPresent();
+  }
+
+  /** A staged mass change above its own cap is refused. */
+  @Test
+  void shouldRefuseAMassChangeAboveItsCap() {
+    String oversized = "{\"pad\":\"" + "x".repeat(4096) + "\"}";
+
+    assertThatThrownBy(() -> service.stageMassChange("user-big", oversized, 1024))
+        .isInstanceOf(de.greluc.krt.profit.basetool.ingest.web.BadRequestException.class);
+  }
+
   /** A draft above the staging budget is refused rather than parked in the shared Redis. */
   @Test
   void shouldRefuseADraftAboveTheStagingBudget() {

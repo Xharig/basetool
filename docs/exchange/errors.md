@@ -31,7 +31,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `ACTING_MEMBER_REFUSED` | 403 | backend | The relay refused the member (unknown, disabled or deleted). | Stop and tell the member. |
 | `NOT_PERMITTED` | 403 | backend | The member may not do this. | Stop; do not retry. |
 | `SCHEMA_INVALID` | 400 | gateway | The body or a query parameter does not match the v1 contract; `errors[]` points at the fields, a parameter as `/<name>`. | Fix the request. |
-| `BATCH_TOO_LARGE` | 413 | gateway | A change set holds more than 500 ops. | Split the batch. |
+| `BATCH_TOO_LARGE` | 413 | gateway | A change set holds more than 500 ops, or is too large to hold for the member's confirmation. | Split the batch. |
 | `PAYLOAD_TOO_LARGE` | 413 | gateway | The body exceeds the size cap. | Split or shrink the request. |
 | `IDEMPOTENCY_KEY_MISSING` | 400 | gateway | A write carries no `Idempotency-Key`. | Send a fresh key per logical write. |
 | `IDEMPOTENCY_KEY_REUSED` | 422 | gateway | The key was used with a different body. | Use a fresh key. |

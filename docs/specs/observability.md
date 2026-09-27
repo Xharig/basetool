@@ -1623,6 +1623,9 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `client_version_unsupported`, `rate_limited`, `quota_exceeded`, `service_unavailable`,
   `idempotency_key_missing`, `idempotency_key_reused`, `idempotency_in_progress`,
   `exchange_budget_exhausted` — registered at zero (REQ-XCH-028).
+  `basetool_ingest_exchange_mass_changes_staged_total{client_id}` counts change sets the
+  mass-change guard held back and the gateway staged for the member's confirmation (REQ-XCH-021;
+  panel 74 of the operations dashboard).
   `basetool_ingest_exchange_idempotent_replays_total` counts writes answered from the idempotency
   cache; `basetool_ingest_exchange_budget_used_ratio` is the total byte budget's use at the last
   measurement, and `ExchangeBudgetHigh` (warning, 10 m) fires above 0.8 (REQ-XCH-020, REQ-XCH-023). A nonce challenge counts as

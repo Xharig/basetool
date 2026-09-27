@@ -3893,6 +3893,55 @@
           }
         }
       ]
+    },
+    {
+      "id": 74,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 264
+      },
+      "type": "timeseries",
+      "title": "Exchange mass changes held for confirmation/day per client",
+      "description": "Change sets the backend's mass-change guard held back and the gateway staged for the member's confirmation in the browser (REQ-XCH-021), by registry client. A client that keeps tripping the guard is removing more than members expect.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (client_id) (increase(basetool_ingest_exchange_mass_changes_staged_total{client_id!=\"none\"}[1d]))",
+          "refId": "A",
+          "legendFormat": "{{client_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
     }
   ]
 }
