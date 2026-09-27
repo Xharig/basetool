@@ -120,6 +120,10 @@ jobs:
             probe GET "$p" 401
           done
 
+          probe GET /api/v1/inventory/my-inventory/grouped 401
+          probe GET /api/v1/inventory/my-inventory/stack/entries 401
+          probe GET /api/v1/inventory/my-inventory/entry-ids 401
+
           probe GET /api/v1/ship-types 401
           probe GET /api/v1/materials/search 401
           probe GET /api/v1/locations/search 401

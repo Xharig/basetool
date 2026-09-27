@@ -142,6 +142,11 @@
   Websites (u. a. UEX, Erkul, SCMDB, FleetYards, KRT OpSec) mit Logo und kurzer Beschreibung, nach
   Themen gruppiert; erreichbar über die neue Navigationsgruppe „Ressourcen".
 
+- **App: „Mein Lager" ist über den API-vhost erreichbar.** Die drei Lesepfade
+  `GET /api/v1/inventory/my-inventory/{grouped,stack/entries,entry-ids}` stehen auf der Allowlist
+  und im eingefrorenen App-Vertrag (REQ-API-009), damit die Android-App den eigenen Bestand zeigen
+  kann (#2097).
+
 ### Changed
 
 - **Datenaustausch: Lager-Änderungen wie im Web.** Ein Umbuchen auf „gestohlen“ oder zurück markiert

@@ -422,7 +422,8 @@ class ExternalContractTest {
                       "location",
                       "personal",
                       "entryCount"))
-              .addressedBy(Set.of("materialIds:array")),
+              .addressedBy(
+                  Set.of("materialIds:array", "stolenOnly:boolean", "nonStolenOnly:boolean")),
           new ContractOperation(
                   "/api/v1/orders",
                   "get",
@@ -921,9 +922,76 @@ class ExternalContractTest {
                       "locationId:string",
                       "userId:string",
                       "quality:integer",
+                      "stolen:boolean",
                       "owningOrgUnitId:string",
                       "page:integer",
                       "size:integer")),
+          new ContractOperation(
+                  "/api/v1/inventory/my-inventory/grouped",
+                  "get",
+                  Set.of(
+                      "material",
+                      "gameItem",
+                      "totalAmount",
+                      "averageQuality",
+                      "maxQuality",
+                      "stacks",
+                      "user",
+                      "location",
+                      "quality",
+                      "personal",
+                      "stolen",
+                      "owningSquadron",
+                      "entryCount"))
+              .addressedBy(
+                  Set.of(
+                      "locationIds:array",
+                      "personalOnly:boolean",
+                      "nonPersonalOnly:boolean",
+                      "stolenOnly:boolean",
+                      "nonStolenOnly:boolean",
+                      "catalog:string")),
+          new ContractOperation(
+                  "/api/v1/inventory/my-inventory/stack/entries",
+                  "get",
+                  Set.of(
+                      "content",
+                      "page",
+                      "totalElements",
+                      "totalPages",
+                      "id",
+                      "material",
+                      "gameItem",
+                      "location",
+                      "amount",
+                      "quality",
+                      "personal",
+                      "stolen",
+                      "owningSquadron",
+                      "canEdit",
+                      "note",
+                      "version"))
+              .addressedBy(
+                  Set.of(
+                      "materialId:string",
+                      "gameItemId:string",
+                      "locationId:string",
+                      "quality:integer",
+                      "personal:boolean",
+                      "stolen:boolean",
+                      "owningOrgUnitId:string",
+                      "catalog:string",
+                      "page:integer",
+                      "size:integer")),
+          new ContractOperation("/api/v1/inventory/my-inventory/entry-ids", "get", Set.of())
+              .addressedBy(
+                  Set.of(
+                      "locationIds:array",
+                      "personalOnly:boolean",
+                      "nonPersonalOnly:boolean",
+                      "stolenOnly:boolean",
+                      "nonStolenOnly:boolean",
+                      "catalog:string")),
           new ContractOperation(
               "/api/v1/inventory",
               "post",

@@ -22,6 +22,7 @@ package de.greluc.krt.profit.basetool.backend.controller.exchange;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,6 +52,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.test.context.ActiveProfiles;
@@ -104,7 +106,10 @@ class ExchangeStockControllerTest {
     registered.setDisplayName("VerseKit");
     registered.setStatus(ExchangeClientStatus.ACTIVE);
     registered.setCapabilities(
-        EnumSet.of(ExchangeCapability.CONNECT, ExchangeCapability.STOCK_READ));
+        EnumSet.of(
+            ExchangeCapability.CONNECT,
+            ExchangeCapability.STOCK_READ,
+            ExchangeCapability.STOCK_WRITE));
     clientRepository.saveAndFlush(registered);
     ExchangeSettings settings =
         settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
@@ -232,6 +237,47 @@ class ExchangeStockControllerTest {
   }
 
   @Test
+  void withTheMarkingSwitchedOffAStolenLotIsRefusedAndNothingIsMarked() throws Exception {
+    UUID titanium = material("RAW", "SCU", null);
+    UUID place = location("Stolen off " + UUID.randomUUID());
+    UUID row = stock(member, titanium, null, place, 500, 10, true, false, null);
+    String name =
+        jdbc.queryForObject("SELECT name FROM location WHERE id = ?", String.class, place);
+
+    read(relayedWith(
+            post(PATH + "/changes")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"ops":[
+                      {"op":"set-quantity","material":{"bt":"%1$s"},
+                       "location":{"name":"%2$s"},"quality":500,"stolen":false,
+                       "quantity":{"amount":6,"unit":"SCU"},
+                       "expectedQuantity":{"amount":10,"unit":"SCU"}},
+                      {"op":"set-quantity","material":{"bt":"%1$s"},
+                       "location":{"name":"%2$s"},"quality":500,"stolen":true,
+                       "quantity":{"amount":4,"unit":"SCU"},
+                       "expectedQuantity":{"amount":0,"unit":"SCU"}}]}
+                    """
+                        .formatted(titanium, name)),
+            "exchange.stock.write"))
+        .andExpect(jsonPath("$.applied").value(1))
+        .andExpect(jsonPath("$.results[0].index").value(1))
+        .andExpect(jsonPath("$.results[0].reason").value("STOLEN_MARKING_DISABLED"));
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM inventory_item WHERE user_id = ? AND stolen",
+                Integer.class,
+                member))
+        .isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT amount FROM inventory_item WHERE id = ?", Double.class, row))
+        .isEqualTo(6.0);
+  }
+
+  @Test
   void withoutTheReadCapabilityTheFeedIsRefused() throws Exception {
     read(relayedWith(get(PATH), "exchange.connect")).andExpect(status().isForbidden());
   }
@@ -286,8 +332,8 @@ class ExchangeStockControllerTest {
     jdbc.update(
         """
         INSERT INTO inventory_item (id, user_id, material_id, game_item_id, location_id, quality,
-                                    amount, personal, stolen, owning_org_unit_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    amount, personal, stolen, owning_org_unit_id, version)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
         """,
         id,
         owner,
