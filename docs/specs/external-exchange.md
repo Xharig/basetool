@@ -95,8 +95,9 @@ The third-party pages are `docs/exchange/`, English, published on GitHub Pages a
 `https://krt-profit.github.io/basetool/` by `.github/workflows/exchange-docs.yml`: on every change to
 the pages, the OpenAPI document or the schemas it checks that each relative link stays on the site
 and resolves (`check_exchange_docs_links.py`), lints the Markdown, renders the OpenAPI document into a
-static reference from the committed schemas (`prepare_exchange_reference.py`, Redocly), copies the
-document and the schemas beside it and builds the site with Jekyll; a pull request builds, only
+static reference from the committed schemas (`prepare_exchange_reference.py` and the Redoc bundle of
+a pinned `redoc` release, checked against its npm integrity), copies the document and the schemas
+beside it and builds the site with Jekyll, whose edit links point at `docs/exchange/` on `main`; a pull request builds, only
 `main` deploys, and only the deploy job holds `pages: write` and `id-token: write`.
 
 **Status:** the list, the onboarding page, the application template and the documentation site with
