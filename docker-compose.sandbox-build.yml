@@ -22,8 +22,6 @@ services:
     build:
       context: .
       dockerfile: docker/sandbox/app.Dockerfile
-      args:
-        BASE: sandbox-base
       additional_contexts:
         sandbox-base: service:backend-base
       labels:
@@ -45,8 +43,6 @@ services:
     build:
       context: .
       dockerfile: docker/sandbox/app.Dockerfile
-      args:
-        BASE: sandbox-base
       additional_contexts:
         sandbox-base: service:frontend-base
       labels:
@@ -68,8 +64,6 @@ services:
     build:
       context: .
       dockerfile: docker/sandbox/app.Dockerfile
-      args:
-        BASE: sandbox-base
       additional_contexts:
         sandbox-base: service:ingest-base
       labels:
