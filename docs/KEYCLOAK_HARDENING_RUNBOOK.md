@@ -836,10 +836,13 @@ like an expired token**. If Grafana logins break right after this step, this ste
 > `400 not_allowed` („Offline tokens not allowed for the user or client"). The owner put
 > `offline_access` back into `default-roles-iri` by hand the same day, and
 > `scripts/provision-keycloak-realm.py` converges to that and never removes it (ADR-0202 amendment
-> 5). An offline token goes only to a client that offers the scope and requests it; of the realm's
-> clients those are the extractor and the approved third-party clients, with offline sessions of 30
-> days idle and 90 days in total (`basetool-frontend` and `grafana` offer it but do not request it,
-> `basetool-android` is not offered it). The text below is the step as it was applied.
+> 5). An offline token goes only to a client that offers the scope and requests it. The
+> provisioner offers it only to the exchange clients — the extractor and the approved third-party
+> clients, with offline sessions of 30 days idle and 90 days in total — and withholds it from
+> `basetool-frontend`, `backend-service`, `basetool-ingest-gateway` and `grafana` as from
+> `basetool-android`, and from the realm's default client scopes (owner decisions the same day; on production with the owner's apply,
+> [`INGEST_KEYCLOAK_SETUP.md`](INGEST_KEYCLOAK_SETUP.md#withholding-offline_access-from-the-first-party-clients)).
+> The text below is the step as it was applied.
 
 Every account can currently mint an offline token, which outlives every session policy in the realm.
 The composite holds `offline_access`, `uma_authorization`, `KRT Member` and two `account` client
