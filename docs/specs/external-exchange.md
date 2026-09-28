@@ -308,6 +308,10 @@ accepted. The provisioner applies this on production only **after** the legacy s
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
   (owner decision 2026-09-27). Both clients' online sessions are pinned at 30/90 days as well, and
   section 13 fails without the pin (owner decision 2026-09-28).
+- [x] Neither `basetool-sc-extractor` nor a third-party client keeps a client-level protocol mapper:
+  the provisioner plans and applies the removal of any it finds, so the verify pass cannot pass with
+  a hand-added `basetool-backend` audience mapper in place (owner decision 2026-09-28, G5-L4 of
+  #2092, ADR-0202 amendment 4; self-test section 17).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
   *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
   only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of

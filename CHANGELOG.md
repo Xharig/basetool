@@ -299,6 +299,12 @@
   ohne Nutzung, 90 Tage insgesamt), weil der Extractor ab 2.10.0 `offline_access` anfordert. Bisher
   galten nur die Realm-Werte.
 
+- **Keycloak-Provisioner: keine fremden Mapper am SC Extractor und an Drittanwendungen.** Ein
+  Protocol-Mapper direkt an `basetool-sc-extractor` oder an einem Client aus
+  `external-clients.json` wird jetzt als geplante Änderung gelistet und beim `--apply` entfernt,
+  statt nur gemeldet. Ein von Hand ergänzter Audience-Mapper kann so kein Token für die Backend-API
+  mehr liefern; an allen anderen Clients bleibt es beim Melden.
+
 - **Datenaustausch: Lager-Änderungen wie im Web.** Ein Umbuchen auf „gestohlen“ oder zurück markiert
   die Zeilen wie im Lager (Teilmengen werden abgespalten) statt aus- und neu einzubuchen;
   Stück-Einbuchungen werden mit der vorhandenen Zeile zusammengeführt. Als Verschiebung zählt ein
