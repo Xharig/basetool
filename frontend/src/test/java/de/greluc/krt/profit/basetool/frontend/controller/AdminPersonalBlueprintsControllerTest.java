@@ -20,7 +20,8 @@
 package de.greluc.krt.profit.basetool.frontend.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -34,8 +35,10 @@ import de.greluc.krt.profit.basetool.frontend.model.dto.PersonalBlueprintBatchCr
 import de.greluc.krt.profit.basetool.frontend.model.dto.PersonalBlueprintBatchResultDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.PersonalBlueprintBulkDeleteResultDto;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
+import de.greluc.krt.profit.basetool.frontend.service.BackendServiceException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import okhttp3.mockwebserver.MockResponse;
@@ -49,7 +52,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
 /**
@@ -176,11 +178,33 @@ class AdminPersonalBlueprintsControllerTest {
             "application/json",
             "{\"blueprints\":[]}".getBytes(StandardCharsets.UTF_8));
 
-    BlueprintImportPreviewDto preview = controller.previewImport(TARGET, file);
+    BlueprintImportPreviewDto preview =
+        (BlueprintImportPreviewDto) controller.previewImport(TARGET, file).getBody();
 
+    assertNotNull(preview);
     assertEquals(0, preview.total());
     RecordedRequest req = server.takeRequest(1, TimeUnit.SECONDS);
     assertEquals("/api/v1/admin/personal-blueprints/" + TARGET + "/import/preview", req.getPath());
+  }
+
+  @Test
+  void previewImport_onABackendRefusal_relaysItsLocalisedDetail() {
+    server.enqueue(
+        new MockResponse()
+            .setResponseCode(400)
+            .setHeader("Content-Type", "application/problem+json")
+            .setBody(
+                "{\"status\":400,\"code\":\"BAD_REQUEST\","
+                    + "\"detail\":\"Die Datei ist kein lesbares JSON.\"}"));
+    MultipartFile file =
+        new MockMultipartFile(
+            "file", "broken.json", "application/json", "x".getBytes(StandardCharsets.UTF_8));
+
+    ResponseEntity<Object> refused = controller.previewImport(TARGET, file);
+
+    assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+    assertEquals(
+        "Die Datei ist kein lesbares JSON.", ((Map<?, ?>) refused.getBody()).get("detail"));
   }
 
   @Test
@@ -191,21 +215,41 @@ class AdminPersonalBlueprintsControllerTest {
             eq(BlueprintImportResultDto.class)))
         .thenReturn(new BlueprintImportResultDto(1, 1, 0, 0, 0));
 
-    BlueprintImportResultDto result = controller.applyImport(TARGET, List.of());
+    BlueprintImportResultDto result =
+        (BlueprintImportResultDto) controller.applyImport(TARGET, List.of()).getBody();
 
+    assertNotNull(result);
     assertEquals(1, result.added());
     assertEquals(1, result.aliasesLearned());
   }
 
   @Test
-  void applyImport_onBackendError_wrapsAs500() {
+  void applyImport_onABackendRefusal_relaysItsLocalisedDetail() {
+    when(backendApiClient.post(any(), any(), eq(BlueprintImportResultDto.class)))
+        .thenThrow(
+            new BackendServiceException(
+                "Backend returned 400",
+                null,
+                400,
+                "BAD_REQUEST",
+                null,
+                List.of(),
+                "Die Auswahl ist ungueltig."));
+
+    ResponseEntity<Object> refused = controller.applyImport(TARGET, List.of());
+
+    assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+    assertEquals("Die Auswahl ist ungueltig.", ((Map<?, ?>) refused.getBody()).get("detail"));
+  }
+
+  @Test
+  void applyImport_onAnUnexpectedError_answersAnEmpty500() {
     when(backendApiClient.post(any(), any(), eq(BlueprintImportResultDto.class)))
         .thenThrow(new RuntimeException("boom"));
 
-    ResponseStatusException ex =
-        assertThrows(
-            ResponseStatusException.class, () -> controller.applyImport(TARGET, List.of()));
+    ResponseEntity<Object> failed = controller.applyImport(TARGET, List.of());
 
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatusCode());
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, failed.getStatusCode());
+    assertNull(failed.getBody());
   }
 }

@@ -106,7 +106,19 @@ localised message `error.personalBlueprint.formatVersionUnsupported`, and a malf
 broken envelope (owner decision 2026-09-28, REQ-XCH-019). *Until 2026-09-28 the field was ignored
 and any `<major>.<minor>` read as 1.0.*
 Every upload is at most 8 MiB: the frontend proxy (`PersonalBlueprintImportProxyController`) and
-`BlueprintExportParser` refuse a larger file before reading it. In every document form only
+`BlueprintExportParser` refuse a larger file before reading it.
+
+**Every refusal tells the member why, in their language** (owner decision 2026-09-28). Each
+refusal of the preview carries a localised `detail` from `error.personalBlueprint.*` (backend:
+empty, too large, not JSON, no blueprint list, too many entries, a broken envelope, another
+`formatVersion` major) or `personalInventory.blueprints.import.error.*` (the frontend proxy's own
+empty and too-large checks). Both proxies — the member's `/personal-inventory/blueprints/import/*`
+and the admin's `/admin/personal-blueprints/{sub}/import/*` — relay a backend refusal of the
+preview and of the apply as `application/problem+json` with its status, `code`, `detail` and
+`correlationId` (`BackendErrorResponses`), and the page's `krtFetch` call shows that `detail` in
+its error toast, the generic „Import fehlgeschlagen." only when there is none. *Until 2026-09-28
+the page showed the generic toast for every refusal and the proxies answered a backend refusal
+with the frontend's generic status text.* In every document form only
 the top-level `blueprints` array is consumed; every other envelope field is tolerated and ignored
 (`@JsonIgnoreProperties(ignoreUnknown = true)` on `BlueprintExportFileDto`). The extractor evolves
 its export contract additively within schema version 1 — the same rule ADR-0008 fixes for the
@@ -151,6 +163,10 @@ entry level (`BlueprintExportEntryDto`):
 - [ ] An scmdb.net entry with `completed == false` is dropped; `true` / absent is kept.
 - [ ] The scmdb.net `missions` array, `profile`, `url`, and `favorite` never affect the import.
 - [ ] Unknown envelope fields never fail the parse.
+- [x] A refused import reaches the page with its localised detail: the backend resolves its
+  refusals to messages, and both proxies relay them as `problem+json` or answer their own checks
+  with one (`ExchangeDraftControllerTest`, `PersonalBlueprintImportProxyControllerTest`,
+  `AdminPersonalBlueprintsControllerTest`, `RelayedBackendStatusMvcTest`).
 
 **Enforced by:** `BlueprintImportServiceTest` (`preview_acceptsBareArrayForm`,
 `preview_acceptsFullScmdbWatcherDocumentShape`, `preview_acceptsBpExtractorReceivedAtFormat`,

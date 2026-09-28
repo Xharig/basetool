@@ -79,21 +79,17 @@ public final class BlueprintExportParser {
   public static @NotNull List<ParsedEntry> parse(
       @NotNull ObjectMapper objectMapper, @NotNull MultipartFile file) {
     if (file.isEmpty()) {
-      throw new BadRequestException("The uploaded file is empty.");
+      throw new BadRequestException("error.personalBlueprint.import.empty");
     }
     if (file.getSize() > MAX_IMPORT_BYTES) {
-      throw new BadRequestException(
-          "The uploaded blueprint file is too large (limit "
-              + (MAX_IMPORT_BYTES / (1024 * 1024))
-              + " MB).");
+      throw new BadRequestException("error.personalBlueprint.import.tooLarge");
     }
     JsonNode root;
     try {
       root = objectMapper.readTree(file.getInputStream());
     } catch (IOException | JacksonException e) {
       log.warn("Blueprint import: failed to parse JSON — {}", e.getMessage());
-      throw new BadRequestException(
-          "The uploaded file could not be parsed as valid blueprint export JSON.");
+      throw new BadRequestException("error.personalBlueprint.import.unreadable");
     }
 
     List<BlueprintExportEntryDto> raw;
@@ -105,9 +101,7 @@ public final class BlueprintExportParser {
       raw = null;
     }
     if (raw == null) {
-      throw new BadRequestException(
-          "The uploaded file must contain a 'blueprints' array (SCMDB log-watcher, Basetool"
-              + " Blueprint Extractor, or scmdb.net export).");
+      throw new BadRequestException("error.personalBlueprint.import.noBlueprints");
     }
 
     LinkedHashMap<String, Instant> earliestByKey = new LinkedHashMap<>();
@@ -137,12 +131,11 @@ public final class BlueprintExportParser {
     }
 
     if (earliestByKey.size() > MAX_IMPORT_ENTRIES) {
-      throw new BadRequestException(
-          "The blueprint export carries "
-              + earliestByKey.size()
-              + " distinct entries; at most "
-              + MAX_IMPORT_ENTRIES
-              + " are accepted per import.");
+      log.info(
+          "Blueprint import: {} distinct entries refused, the cap is {}",
+          earliestByKey.size(),
+          MAX_IMPORT_ENTRIES);
+      throw new BadRequestException("error.personalBlueprint.import.tooManyEntries");
     }
 
     List<ParsedEntry> entries = new ArrayList<>(earliestByKey.size());

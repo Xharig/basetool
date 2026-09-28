@@ -24,8 +24,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Relays a backend {@link BackendServiceException} to the browser as {@code
@@ -33,6 +37,9 @@ import org.springframework.http.ResponseEntity;
  * {@code detail} and {@code correlationId}, for {@code krtFetch}.
  */
 public final class BackendErrorResponses {
+
+  /** Reads a backend problem body; only its tree is used. */
+  private static final ObjectMapper PROBLEM_READER = JsonMapper.builder().build();
 
   private BackendErrorResponses() {}
 
@@ -98,5 +105,38 @@ public final class BackendErrorResponses {
     return ResponseEntity.status(e.getStatusCode())
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)
         .body(body);
+  }
+
+  /**
+   * Relays a backend refusal a raw {@code WebClient} call raised, exactly as {@link
+   * #propagateBackendError} relays one of {@code BackendApiClient}: status, {@code code}, and the
+   * backend's localised {@code detail} when its body is a problem.
+   *
+   * @param e the backend's error response
+   * @return an {@code application/problem+json} response with the backend's status
+   */
+  @NotNull
+  public static ResponseEntity<Object> propagateBackendError(
+      @NotNull WebClientResponseException e) {
+    return propagateBackendError(BackendServiceException.fromProblem(e, PROBLEM_READER));
+  }
+
+  /**
+   * Builds a {@code problem+json} refusal the frontend itself decided on, in the shape {@link
+   * #propagateBackendError} relays a backend one, so a page reads both alike.
+   *
+   * @param status the refusal status
+   * @param code the stable problem code
+   * @param detail the localised detail the page shows
+   * @return the refusal
+   */
+  @NotNull
+  public static ResponseEntity<Object> problem(
+      @NotNull HttpStatus status, @NotNull String code, @NotNull String detail) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("status", status.value());
+    body.put("code", code);
+    body.put("detail", detail);
+    return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body);
   }
 }

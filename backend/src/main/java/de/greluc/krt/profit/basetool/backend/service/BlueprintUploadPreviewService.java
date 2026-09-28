@@ -57,6 +57,9 @@ public class BlueprintUploadPreviewService {
   static final String FORMAT_VERSION_UNSUPPORTED =
       "error.personalBlueprint.formatVersionUnsupported";
 
+  /** The message key of an envelope that breaks its shape. */
+  static final String INVALID_ENVELOPE = "error.personalBlueprint.import.invalidEnvelope";
+
   /** A format version as the envelope schema allows it. */
   private static final Pattern WELL_FORMED_VERSION = Pattern.compile("^[0-9]+\\.[0-9]+$");
 
@@ -104,10 +107,10 @@ public class BlueprintUploadPreviewService {
     try {
       envelope = objectMapper.treeToValue(root, ExchangeBlueprintDraftDto.class);
     } catch (JacksonException e) {
-      throw new BadRequestException("The file is not a valid basetool.blueprints envelope.");
+      throw new BadRequestException(INVALID_ENVELOPE);
     }
     if (envelope == null || !validator.validate(envelope).isEmpty()) {
-      throw new BadRequestException("The file is not a valid basetool.blueprints envelope.");
+      throw new BadRequestException(INVALID_ENVELOPE);
     }
     return draftService.blueprints(ownerUserId, envelope);
   }
