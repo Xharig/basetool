@@ -322,6 +322,10 @@
 
 ### Fixed
 
+- **Blueprint-Import: der Grund steht in der Fehlermeldung.** Lehnt der Import eine Datei ab (leer,
+  zu groß, kein JSON, keine Blueprint-Liste, falsche Formatversion …), zeigt die Seite – auch die
+  Admin-Ansicht – den konkreten Grund in der eigenen Sprache statt „Import fehlgeschlagen."
+  (REQ-INV-014).
 - **Datenaustausch: Zurücknehmen robuster.** Das Zurücknehmen reicht so weit zurück wie die
   eingestellte Aufbewahrung, lässt Einträge ohne Änderungsprotokoll unangetastet, stellt ein
   entferntes Schiff auch für Mitglieder mehrerer Einheiten wieder her und hängt keine Verknüpfung

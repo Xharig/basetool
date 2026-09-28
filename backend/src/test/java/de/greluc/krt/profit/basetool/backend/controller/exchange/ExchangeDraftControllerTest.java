@@ -21,6 +21,8 @@ package de.greluc.krt.profit.basetool.backend.controller.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -198,7 +200,14 @@ class ExchangeDraftControllerTest {
         .andExpect(jsonPath("$.matched").value(1));
 
     upload("{\"format\":\"basetool.blueprints\",\"items\":[{\"acquiredAt\":\"x\"}]}")
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value(containsString("basetool.blueprints")))
+        .andExpect(jsonPath("$.detail").value(not(startsWith("error."))));
+
+    upload("this is not json")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value(containsString("JSON")))
+        .andExpect(jsonPath("$.detail").value(not(startsWith("error."))));
 
     upload(
             """

@@ -27,6 +27,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -166,7 +167,10 @@ class RelayedBackendStatusMvcTest {
             "PersonalBlueprintImportProxyController#preview",
             wc ->
                 new PersonalBlueprintImportProxyController(
-                    wc, mock(BackendApiClient.class), mock(IngestHandoffService.class)),
+                    wc,
+                    mock(BackendApiClient.class),
+                    mock(IngestHandoffService.class),
+                    new StaticMessageSource()),
             multipart("/personal-inventory/blueprints/import/preview").file(upload())));
   }
 
@@ -219,6 +223,38 @@ class RelayedBackendStatusMvcTest {
   }
 
   @Test
+  void aRefusedBlueprintImportReachesThePageWithTheBackendsLocalisedDetail() throws Exception {
+    backend.enqueue(
+        new MockResponse()
+            .setResponseCode(400)
+            .setHeader("Content-Type", "application/problem+json")
+            .setBody(
+                "{\"status\":400,\"code\":\"BAD_REQUEST\","
+                    + "\"detail\":\"Die Datei hat eine Formatversion, die das Basetool nicht lesen"
+                    + " kann; nur Version 1.x wird gelesen.\"}"));
+
+    mockMvc(
+            wc ->
+                new PersonalBlueprintImportProxyController(
+                    wc,
+                    mock(BackendApiClient.class),
+                    mock(IngestHandoffService.class),
+                    new StaticMessageSource()))
+        .perform(
+            multipart("/personal-inventory/blueprints/import/preview")
+                .file(upload())
+                .header("X-Requested-With", "XMLHttpRequest"))
+        .andExpect(status().isBadRequest())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+        .andExpect(
+            jsonPath("$.detail")
+                .value(
+                    "Die Datei hat eine Formatversion, die das Basetool nicht lesen kann;"
+                        + " nur Version 1.x wird gelesen."));
+  }
+
+  @Test
   void anOversizedBlueprintExportIsRefusedWith413WithoutABackendCall() throws Exception {
     MockMultipartFile oversized =
         new MockMultipartFile(
@@ -230,7 +266,10 @@ class RelayedBackendStatusMvcTest {
     mockMvc(
             wc ->
                 new PersonalBlueprintImportProxyController(
-                    wc, mock(BackendApiClient.class), mock(IngestHandoffService.class)))
+                    wc,
+                    mock(BackendApiClient.class),
+                    mock(IngestHandoffService.class),
+                    new StaticMessageSource()))
         .perform(
             multipart("/personal-inventory/blueprints/import/preview")
                 .file(oversized)
