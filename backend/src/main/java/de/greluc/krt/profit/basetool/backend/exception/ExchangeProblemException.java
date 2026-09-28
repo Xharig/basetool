@@ -27,7 +27,8 @@ import org.springframework.http.HttpStatus;
 
 /**
  * A refusal of the exchange layer carrying a code of the exchange error registry, which the ingest
- * gateway passes on to the client unchanged (REQ-XCH-011).
+ * gateway passes on to the client unchanged (REQ-XCH-011, REQ-XCH-025); the gate's refusals carry
+ * the code and status the gateway's own gate answers for the same situation.
  *
  * <p>The status and code are per instance; the title and detail come from {@code
  * problem.<code>.title} and {@code .detail}.
@@ -40,6 +41,27 @@ public final class ExchangeProblemException extends AppException {
   /** A change set that removes more than the mass-change guard allows without confirmation. */
   public static final String MASS_CHANGE_CONFIRMATION_REQUIRED =
       "MASS_CHANGE_CONFIRMATION_REQUIRED";
+
+  /** The global exchange switch is off. */
+  public static final String EXCHANGE_DISABLED = "EXCHANGE_DISABLED";
+
+  /** The relayed client is not in the registry. */
+  public static final String CLIENT_NOT_ALLOWED = "CLIENT_NOT_ALLOWED";
+
+  /** The relayed client is suspended in the registry. */
+  public static final String CLIENT_SUSPENDED = "CLIENT_SUSPENDED";
+
+  /** The member disconnected the calling installation. */
+  public static final String INSTALLATION_REVOKED = "INSTALLATION_REVOKED";
+
+  /** The member disconnected the client at or after the relayed connection time. */
+  public static final String CLIENT_REVOKED = "CLIENT_REVOKED";
+
+  /** The needed capability was not relayed or is not granted to the client. */
+  public static final String SCOPE_MISSING = "SCOPE_MISSING";
+
+  /** The registry mirror or the revocations cannot be read, so the request fails closed. */
+  public static final String REGISTRY_UNAVAILABLE = "REGISTRY_UNAVAILABLE";
 
   private final HttpStatus status;
   private final String code;
@@ -56,6 +78,100 @@ public final class ExchangeProblemException extends AppException {
     super(message);
     this.status = status;
     this.code = code;
+  }
+
+  /**
+   * Creates the refusal with the failure behind it, kept for the log only.
+   *
+   * @param status the HTTP status
+   * @param code the exchange error code
+   * @param message the log message, never shown to the client
+   * @param cause the failure behind the refusal
+   */
+  public ExchangeProblemException(
+      @NotNull HttpStatus status,
+      @NotNull String code,
+      @NotNull String message,
+      @NotNull Throwable cause) {
+    super(message, cause);
+    this.status = status;
+    this.code = code;
+  }
+
+  /**
+   * The refusal while the global exchange switch is off.
+   *
+   * @return the {@code 503 EXCHANGE_DISABLED} refusal
+   */
+  public static @NotNull ExchangeProblemException exchangeDisabled() {
+    return new ExchangeProblemException(
+        HttpStatus.SERVICE_UNAVAILABLE, EXCHANGE_DISABLED, "The exchange is switched off.");
+  }
+
+  /**
+   * The refusal of a client the registry does not list.
+   *
+   * @return the {@code 403 CLIENT_NOT_ALLOWED} refusal
+   */
+  public static @NotNull ExchangeProblemException clientNotAllowed() {
+    return new ExchangeProblemException(
+        HttpStatus.FORBIDDEN, CLIENT_NOT_ALLOWED, "The client is not in the exchange registry.");
+  }
+
+  /**
+   * The refusal of a suspended client.
+   *
+   * @return the {@code 403 CLIENT_SUSPENDED} refusal
+   */
+  public static @NotNull ExchangeProblemException clientSuspended() {
+    return new ExchangeProblemException(
+        HttpStatus.FORBIDDEN, CLIENT_SUSPENDED, "The client is suspended.");
+  }
+
+  /**
+   * The refusal of an installation the member disconnected.
+   *
+   * @return the {@code 401 INSTALLATION_REVOKED} refusal
+   */
+  public static @NotNull ExchangeProblemException installationRevoked() {
+    return new ExchangeProblemException(
+        HttpStatus.UNAUTHORIZED, INSTALLATION_REVOKED, "The installation was disconnected.");
+  }
+
+  /**
+   * The refusal of a connection made at or before the member's disconnect of the client.
+   *
+   * @return the {@code 401 CLIENT_REVOKED} refusal
+   */
+  public static @NotNull ExchangeProblemException clientRevoked() {
+    return new ExchangeProblemException(
+        HttpStatus.UNAUTHORIZED,
+        CLIENT_REVOKED,
+        "The member disconnected the client after this connection was made.");
+  }
+
+  /**
+   * The refusal of a capability that was not relayed or is not granted.
+   *
+   * @return the {@code 403 SCOPE_MISSING} refusal
+   */
+  public static @NotNull ExchangeProblemException scopeMissing() {
+    return new ExchangeProblemException(
+        HttpStatus.FORBIDDEN, SCOPE_MISSING, "The needed capability is not relayed and granted.");
+  }
+
+  /**
+   * The refusal while the exchange state the check needs cannot be read.
+   *
+   * @param cause the failed read
+   * @return the {@code 503 REGISTRY_UNAVAILABLE} refusal
+   */
+  public static @NotNull ExchangeProblemException registryUnavailable(@NotNull Throwable cause) {
+    return new ExchangeProblemException(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        REGISTRY_UNAVAILABLE,
+        "The exchange revocations could not be read.",
+        cause);
   }
 
   /**

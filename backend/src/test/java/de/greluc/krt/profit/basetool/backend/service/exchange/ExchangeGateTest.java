@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.greluc.krt.profit.basetool.backend.exception.ExternalServiceException;
+import de.greluc.krt.profit.basetool.backend.exception.ExchangeProblemException;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
@@ -40,11 +40,13 @@ import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -96,21 +98,28 @@ class ExchangeGateTest {
   }
 
   @Test
-  void refusesACapabilityThatWasRelayedButNotGranted() {
-    assertThat(gate.allows("exchange.stock.write", acting("versekit", "exchange.stock.write")))
-        .isFalse();
-    assertThat(gate.allowsAny(acting("versekit", "exchange.stock.write"))).isFalse();
+  void refusesACapabilityThatWasRelayedButNotGrantedAsTheGatewayDoes() {
+    assertRefused(
+        () -> gate.allows("exchange.stock.write", acting("versekit", "exchange.stock.write")),
+        HttpStatus.FORBIDDEN,
+        "SCOPE_MISSING");
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", "exchange.stock.write")),
+        HttpStatus.FORBIDDEN,
+        "SCOPE_MISSING");
     assertThat(refused(ExchangeGate.REASON_SCOPE_MISSING)).isEqualTo(2);
   }
 
   @Test
-  void refusesACapabilityThatWasGrantedButNotRelayed() {
-    assertThat(gate.allows("exchange.stock.read", acting("versekit", "exchange.connect")))
-        .isFalse();
+  void refusesACapabilityThatWasGrantedButNotRelayedAsTheGatewayDoes() {
+    assertRefused(
+        () -> gate.allows("exchange.stock.read", acting("versekit", "exchange.connect")),
+        HttpStatus.FORBIDDEN,
+        "SCOPE_MISSING");
   }
 
   @Test
-  void refusesAnythingButARelayedActingMember() {
+  void refusesAnythingButARelayedActingMemberWithoutAnExchangeCode() {
     assertThat(gate.allowsAny(null)).isFalse();
     assertThat(
             gate.allowsAny(
@@ -121,33 +130,45 @@ class ExchangeGateTest {
   }
 
   @Test
-  void refusesWhileTheSwitchIsOff() {
+  void refusesWhileTheSwitchIsOffAsTheGatewayDoes() {
     settings.setEnabled(false);
 
-    assertThat(gate.allowsAny(acting("versekit", "exchange.connect"))).isFalse();
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", "exchange.connect")),
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "EXCHANGE_DISABLED");
     assertThat(refused(ExchangeGate.REASON_SWITCH_OFF)).isEqualTo(1);
   }
 
   @Test
-  void refusesAnUnknownOrSuspendedClient() {
+  void refusesAnUnknownOrSuspendedClientAsTheGatewayDoes() {
     when(clientRepository.findWithCapabilitiesByClientId("stranger")).thenReturn(Optional.empty());
-    assertThat(gate.allowsAny(acting("stranger", "exchange.connect"))).isFalse();
+    assertRefused(
+        () -> gate.allowsAny(acting("stranger", "exchange.connect")),
+        HttpStatus.FORBIDDEN,
+        "CLIENT_NOT_ALLOWED");
 
     client.setStatus(ExchangeClientStatus.SUSPENDED);
-    assertThat(gate.allowsAny(acting("versekit", "exchange.connect"))).isFalse();
+    assertRefused(
+        () -> gate.allows("exchange.stock.read", acting("versekit", "exchange.stock.read")),
+        HttpStatus.FORBIDDEN,
+        "CLIENT_SUSPENDED");
 
     assertThat(refused(ExchangeGate.REASON_CLIENT_UNKNOWN)).isEqualTo(1);
     assertThat(refused(ExchangeGate.REASON_CLIENT_SUSPENDED)).isEqualTo(1);
   }
 
   @Test
-  void refusesARevokedInstallation() {
+  void refusesARevokedInstallationAsTheGatewayDoes() {
     ExchangeInstallation revoked = new ExchangeInstallation();
     revoked.setRevokedAt(REVOKED_AT);
     when(installationRepository.findByKey("versekit", MEMBER, KEY))
         .thenReturn(Optional.of(revoked));
 
-    assertThat(gate.allowsAny(acting("versekit", "exchange.connect"))).isFalse();
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", "exchange.connect")),
+        HttpStatus.UNAUTHORIZED,
+        "INSTALLATION_REVOKED");
     assertThat(refused(ExchangeGate.REASON_INSTALLATION_REVOKED)).isEqualTo(1);
   }
 
@@ -156,8 +177,14 @@ class ExchangeGateTest {
     when(revocationMirror.revokedAt("versekit", MEMBER)).thenReturn(REVOKED_AT);
     long second = REVOKED_AT.getEpochSecond();
 
-    assertThat(gate.allowsAny(acting("versekit", second - 60, "exchange.connect"))).isFalse();
-    assertThat(gate.allowsAny(acting("versekit", second, "exchange.connect"))).isFalse();
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", second - 60, "exchange.connect")),
+        HttpStatus.UNAUTHORIZED,
+        "CLIENT_REVOKED");
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", second, "exchange.connect")),
+        HttpStatus.UNAUTHORIZED,
+        "CLIENT_REVOKED");
     assertThat(refused(ExchangeGate.REASON_CLIENT_REVOKED)).isEqualTo(2);
   }
 
@@ -176,20 +203,41 @@ class ExchangeGateTest {
 
     when(revocationMirror.revokedAt("versekit", MEMBER)).thenReturn(REVOKED_AT);
 
-    assertThat(gate.allowsAny(acting("versekit", "exchange.connect"))).isFalse();
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", "exchange.connect")),
+        HttpStatus.UNAUTHORIZED,
+        "CLIENT_REVOKED");
     assertThat(refused(ExchangeGate.REASON_CLIENT_REVOKED)).isEqualTo(1);
   }
 
   @Test
-  void anUnreadableMirrorFailsClosed() {
+  void anUnreadableMirrorFailsClosedAsTheGatewayDoes() {
     when(revocationMirror.revokedAt("versekit", MEMBER))
         .thenThrow(new RedisConnectionFailureException("down"));
 
-    assertThatThrownBy(
-            () ->
-                gate.allowsAny(acting("versekit", REVOKED_AT.getEpochSecond(), "exchange.connect")))
-        .isInstanceOf(ExternalServiceException.class);
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", REVOKED_AT.getEpochSecond(), "exchange.connect")),
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "REGISTRY_UNAVAILABLE");
     assertThat(refused(ExchangeGate.REASON_REVOCATIONS_UNREADABLE)).isEqualTo(1);
+  }
+
+  /**
+   * Asserts the gate refuses a call with an exchange problem of the given status and code.
+   *
+   * @param call the gate call
+   * @param status the expected status
+   * @param code the expected exchange code
+   */
+  private static void assertRefused(
+      @NotNull ThrowingCallable call, @NotNull HttpStatus status, @NotNull String code) {
+    assertThatThrownBy(call)
+        .isInstanceOfSatisfying(
+            ExchangeProblemException.class,
+            problem -> {
+              assertThat(problem.status()).isEqualTo(status);
+              assertThat(problem.code()).isEqualTo(code);
+            });
   }
 
   /**
