@@ -1493,8 +1493,9 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       allows 6000 requests a minute per address (`APP_RATE_LIMIT_IP_CAPACITY` /
       `APP_RATE_LIMIT_IP_REFILL_TOKENS` in `docker-compose.sandbox.yml`; production keeps 120),
       so one member's flood reaches `429 DPOP_PROOF_LIMIT`; the seed puts the Basetool's eight
-      default blueprints into the catalogue, so removing one answers `DEFAULT_NOT_REMOVABLE`
-      instead of `UNMATCHED`. The smoke test checks both (`--proof-limit` for the flood).*
+      default blueprints into the catalogue, so removing one by name answers
+      `DEFAULT_NOT_REMOVABLE` instead of `UNMATCHED` (by its feed key it already did). The smoke
+      test checks both (`--proof-limit` for the flood).*
 - [x] The sandbox Keycloak image refuses to run as anything but `start-dev`, since its realm
       carries published throwaway secrets (security review 2, L4). *Its entrypoint
       `docker/sandbox/keycloak/entrypoint.sh` passes only `start-dev …` on to `kc.sh` and ends
@@ -1513,7 +1514,7 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       a default blueprint, with `--conformance` every change-set fixture of
       `docs/exchange/examples/v1` (valid ones as dry runs accepted, invalid ones refused) and with
       `--proof-limit` a flood until `429 DPOP_PROOF_LIMIT`; then the same without the fixtures and
-      the flood as the second member.*
+      the flood as the second member, whose org demand must be withheld (`--demand withheld`).*
 - [x] The E2E stack with the sandbox Keycloak and the ingest gateway, and the exchange round trip on
       it. *`E2eStackExtension`, `docker-compose.e2e.yml`, `ExchangeRoundTripE2eTest`, the
       `build-stack` job of `e2e.yml`; `E2ePrebuiltImageParityTest`, `build-sandbox-realm.py
