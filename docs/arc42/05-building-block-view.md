@@ -49,7 +49,7 @@ base's Topology note.
 | **frontend** | Render the UI, hold session state, drive live update | Talk to PostgreSQL or the Keycloak Admin API; contain business rules |
 | **backend** | The whole domain: REST API, persistence, authorisation, scheduled work | Serve HTML; be reachable from the internet except through the `api` vhost |
 | **ingest** | Authenticate and relay approved desktop-extractor payloads; stage the returned draft in Redis for a one-time browser pickup; gate, limit and relay the exchange API for approved clients (§5.5) | Own a database or save anything itself |
-| **keycloak** | Identity, OIDC tokens, the Discord provider and guild/role gate, the KRT theme | Store domain data |
+| **keycloak** | Identity, OIDC tokens, the Discord provider and guild/role gate, the KRT theme, the device-grant consent for exchange clients and the `basetool-exchange` admin extension | Store domain data |
 | **db-backend / db-keycloak** | Two separate PostgreSQL instances | Share a cluster — a Keycloak upgrade must not be able to touch domain data |
 | **redis** | Spring Session store, the live-sync and notification pub/sub fanout, the ingest handoffs, the exchange registry mirror and the gateway's byte-bounded exchange partition (ADR-0221) — one instance on three separate networks | Be a cache of record for anything that matters |
 
@@ -94,7 +94,9 @@ that has to cross that boundary — the active-OrgUnit pin, the correlation id �
 
 - **`ingest`** — a gateway: authentication (DPoP accepted, `REQ-INGEST-012`), the approved-client
   check, rate limiting, payload size limits, a relay to the backend under the gateway's own service
-  identity, and the single-use Redis handoff. Ships its own committed `openapi.json`. Its two
+  identity, and the single-use Redis handoff; in front of the exchange API also the DPoP token
+gate, the registry gate, limits and idempotency (§5.5). Ships two committed contracts,
+`openapi.json` (legacy `/v1`) and `exchange-v1.openapi.json`. Its two
   outbound calls — the relay and its own token grant — are blocking `RestClient`s on the JDK HTTP
   client (`config.RestClientConfig`, ADR-0204); the module has no WebFlux and no Reactor Netty, so
   the worker-thread trap of §5.3 does not exist there. Specification:
@@ -122,9 +124,9 @@ that has to cross that boundary — the active-OrgUnit pin, the correlation id �
 
 ## 5.5 Level 2 — the external client exchange
 
-Three modules share it; the contract, the routes and every rule are in
-[`external-exchange.md`](../specs/external-exchange.md) (`REQ-XCH-*`), the decisions in ADR-0216 …
-ADR-0221 and ADR-0224.
+Four modules share it (ingest, backend, frontend, keycloak-spi); the contract, the routes and
+every rule are in [`external-exchange.md`](../specs/external-exchange.md) (`REQ-XCH-*`), the
+decisions in ADR-0216 … ADR-0221 and ADR-0224 … ADR-0228.
 
 | Where | Building block | Responsibility |
 | --- | --- | --- |
@@ -143,6 +145,8 @@ ADR-0221 and ADR-0224.
 | backend | `ExchangeResolveService`, `ExchangeDemandService`, `ExchangeDraftService` | Catalogue resolve through the web import's matching, the anonymised org demand, review drafts |
 | frontend | „Verbundene Anwendungen" (`/connected-apps`, `/connected-apps/confirm`) | The member's clients, installations and activity; disconnect, undo, confirm a mass change — over `/api/v1/connected-apps`, member session only |
 | frontend | Admin „Verbundene Anwendungen" (`/admin/exchange-clients`) | The registry and the global switch; a client's undo for every member with its runs |
+| keycloak-spi | `ExchangeClientSessionResourceProviderFactory` (`basetool-exchange`) | Ends one client inside a member's shared user sessions when the member disconnects it (ADR-0226, REQ-XCH-008) |
+| keycloak-spi | `DeviceConsentLoginFormsProviderFactory` (`krt-freemarker`) | Hands a device login's user code to the consent page, beside the phishing warning (ADR-0228, REQ-XCH-005) |
 
 ## 5.6 The monitoring plane
 

@@ -28,6 +28,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.greluc.krt.profit.basetool.backend.model.GameItem;
@@ -53,6 +54,7 @@ import de.greluc.krt.profit.basetool.backend.service.JobOrderMaterialRequirement
 import de.greluc.krt.profit.basetool.backend.service.JobOrderMaterialRequirementResolver.MaterialRequirement;
 import de.greluc.krt.profit.basetool.backend.service.JobOrderStockProjectionService;
 import de.greluc.krt.profit.basetool.backend.service.JobOrderStockProjectionService.OrderLinkedStockIndex;
+import de.greluc.krt.profit.basetool.backend.service.OwnerScopeService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -82,6 +84,7 @@ class ExchangeDemandServiceTest {
   @Mock private MaterialRepository materialRepository;
   @Mock private PersonalBlueprintRepository blueprintRepository;
   @Mock private BlueprintVariantFamilyResolver familyResolver;
+  @Mock private OwnerScopeService ownerScopeService;
   @InjectMocks private ExchangeDemandService service;
 
   private OrderLinkedStockIndex stock;
@@ -90,6 +93,7 @@ class ExchangeDemandServiceTest {
 
   @BeforeEach
   void setUp() {
+    lenient().when(ownerScopeService.canViewJobOrders()).thenReturn(true);
     stock = mock(OrderLinkedStockIndex.class);
     lenient().when(stockProjectionService.loadOrderLinkedStockIndex(any())).thenReturn(stock);
     lenient()
@@ -107,7 +111,35 @@ class ExchangeDemandServiceTest {
 
     assertThat(demand.materials()).isEmpty();
     assertThat(demand.items()).isEmpty();
+    assertThat(demand.reason()).isNull();
     verify(jobOrderRepository, never()).findOpenForExchangeDemand(any(), any());
+  }
+
+  @Test
+  void aMemberWhoFailsTheJobOrderGateGetsNotPermittedAndNothingIsRead() {
+    when(ownerScopeService.canViewJobOrders()).thenReturn(false);
+
+    ExchangeOrgDemandDto demand = service.demand(MEMBER);
+
+    assertThat(demand.materials()).isEmpty();
+    assertThat(demand.items()).isEmpty();
+    assertThat(demand.reason()).isEqualTo(ExchangeOrgDemandDto.Reason.NOT_PERMITTED);
+    assertThat(demand.updatedAt()).isNotNull();
+    verifyNoInteractions(
+        membershipRepository, jobOrderRepository, requirementResolver, blueprintRepository);
+  }
+
+  @Test
+  void aMemberWhoPassesTheJobOrderGateGetsTheDemandWithoutAReason() {
+    JobOrder order = order(JobOrderType.MATERIAL);
+    givenOrders(order);
+    requires(order, QualityRequirement.NONE, 8.0, 0.0);
+
+    ExchangeOrgDemandDto demand = service.demand(MEMBER);
+
+    assertThat(demand.reason()).isNull();
+    assertThat(demand.materials()).hasSize(1);
+    verify(ownerScopeService).canViewJobOrders();
   }
 
   @Test
