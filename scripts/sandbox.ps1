@@ -44,10 +44,30 @@ $compose = @('compose', '--env-file', 'docker/sandbox/sandbox.env') + $files + @
 $services = @('redis-dev', 'db-backend-dev', 'db-keycloak-dev', 'keycloak-dev', 'backend-dev', 'frontend-dev', 'ingest-dev')
 
 function Invoke-Compose {
+    <#
+    .SYNOPSIS
+    Runs docker compose with the sandbox files and fails on a non-zero exit code only.
+
+    .DESCRIPTION
+    Docker writes its progress to the error stream. Windows PowerShell 5.1 turns each such line into
+    an error record once the caller redirects that stream, which the script's 'Stop' preference would
+    make fatal, so the call runs under 'Continue' and every line is passed on as plain text.
+
+    .PARAMETER Arguments
+    The compose command and its arguments.
+    #>
     param([string[]] $Arguments)
-    & docker @compose @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "docker $($compose + $Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    $preference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $PSNativeCommandUseErrorActionPreference = $false
+    try {
+        & docker @compose @Arguments 2>&1 | ForEach-Object { "$_" }
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $preference
+    }
+    if ($exitCode -ne 0) {
+        throw "docker $($compose + $Arguments -join ' ') failed with exit code $exitCode"
     }
 }
 
