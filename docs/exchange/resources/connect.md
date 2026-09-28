@@ -28,7 +28,7 @@ No parameters. The answer is a
   "installationId": "inst-7f3c2a9e",
   "limits": {"batchMaxOps": 500, "requestsPerMinute": 60, "writesPerDay": 2000},
   "deprecations": [],
-  "docsUrl": "https://krt-profit.github.io/basetool/exchange/",
+  "docsUrl": "https://krt-profit.github.io/basetool/",
   "minClientVersion": "3.60.0"
 }
 ```
@@ -45,9 +45,11 @@ installation. The label lets the member tell installations apart on *Connected a
 it is always shown after the registered client name.
 
 The body is an [`installation`](../schemas/) with only `label`: at most 40 characters of letters,
-digits, space, `-`, `_` and `.`, not starting with a space. The server normalises it to NFC and
-checks the rule again. Never send a host or computer name. `installationId`, `firstSeenAt` and
-`lastSeenAt` are ignored on input.
+digits, space, `-`, `_` and `.`, not starting with a space — the pattern
+`^[\p{L}\p{N}._-][\p{L}\p{N} ._-]{0,39}$`. The `-` is the ASCII hyphen-minus only: an en dash
+(`VerseKit – Windows`), a colon or any other punctuation is refused, so write `VerseKit Windows` or
+`VerseKit-Windows`. The server normalises the label to NFC and checks the rule again. Never send a
+host or computer name. `installationId`, `firstSeenAt` and `lastSeenAt` are ignored on input.
 
 ```json
 {"label": "VerseKit Windows"}

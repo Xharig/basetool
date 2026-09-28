@@ -36,8 +36,9 @@ name and adds a `LOC_KEY_UNRESOLVED` warning at `/refs/<i>/locKey`.
 ## Quantity — `quantity`
 
 `{amount, unit}`. `unit` is `SCU` or `PIECE` and must match the material's own unit
-(`UNIT_MISMATCH` otherwise). The server rounds an SCU amount half-up to three decimals; a PIECE
-amount is whole.
+(`UNIT_MISMATCH` otherwise). A PIECE amount is whole. An SCU amount may carry any number of
+decimals: the server rounds it half-up to three before it stores or compares it, so `expectedQuantity`
+`12.3456` matches a stored `12.346`. Send three decimals at most to see in the feed what you sent.
 
 ## Quality — `quality`
 
@@ -80,6 +81,16 @@ An envelope carries no handle, player name, source folder or file path. `basetoo
 blueprint format: each item is `{ref, acquiredAt?, provenance?}`, at most 2000 per file. The member
 can upload such a file in the web's blueprint import, and a client can send the same document to
 `POST /exchange/v1/me/drafts/blueprints`; both end in the same review.
+
+- **Size.** The web import refuses a file larger than 8 MiB (8 388 608 bytes) before reading it; the
+  draft route takes a body of at most 2 MiB.
+- **`formatVersion`.** Write `1.0`. The Basetool does not read the field today: a file with any
+  `<major>.<minor>` the schema allows is read as this page describes.
+- **What is checked.** The draft route checks the whole envelope against its schema. The web import
+  checks only `format` and the items — at most 2000, each with a `ref` — and ignores `formatVersion`,
+  `generator`, `generatedAt`, `provenance` and `extensions`. Write files that pass the schema anyway.
+- **Provenance.** A blueprint taken over from the review is recorded with the source `import`,
+  whatever the item's `provenance` says.
 
 ## Extensions — `extensions`
 

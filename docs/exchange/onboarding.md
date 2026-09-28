@@ -17,12 +17,13 @@ is public, case by case, and for the capabilities a client actually needs.
 
 ## Criteria
 
-- Token storage, DPoP and issuer pinning as the [client security requirements](client-security.md)
-  state.
+- Token storage, DPoP, issuer pinning and the sync behaviour as the
+  [client security requirements](client-security.md) state.
 - A published privacy statement and a security contact.
 - Only the capabilities the client's features need; each further capability is a new pull request to
   the approved-clients list before an administrator grants it.
 - Code signing of releases is recommended, not required.
+- Trying the client against the [sandbox](sandbox.md) before applying is recommended, not required.
 
 ## After approval
 

@@ -197,6 +197,25 @@ Every exchange call needs the gateway's **server nonce** (RFC 9449 §8).
   today; if it answers `400` with the error `use_dpop_nonce` and a `DPoP-Nonce`, retry once the same
   way.
 
+### Live proofs per member
+
+The gateway remembers every accepted proof's `jti` to refuse a replay, and it holds at most **600**
+live proofs per member, over all of the member's clients and installations together, and 100 000 in
+all. A proof stays live from its acceptance until 30 seconds after its `iat`, and up to ten seconds
+longer until the next sweep. A proof refused for its nonce takes no room, and neither does a proof
+refused for the cap; proofs sent to Keycloak do not count.
+
+A client that keeps to the [rate limits](sync-guide.md#rate-limits-quota-and-back-off) stays far
+below the cap: 120 requests a minute hold about 60 to 80 live proofs. The cap is reached only when
+the member's clients together send far more.
+
+A proof over the cap is refused exactly like a replayed one: `401` with the code `DPOP_INVALID`,
+`WWW-Authenticate: DPoP algs="…", error="invalid_dpop_proof"`, a fresh `DPoP-Nonce` and the
+`detail` "The DPoP proof is invalid, replayed or bound to another key." Nothing in the answer tells
+the two apart. When a proof you know to be fresh — a new `jti`, the right key, method, URL and
+`ath`, a corrected clock — is refused this way, do not retry at once: pause this member's requests
+for at least 40 seconds, then continue more slowly. If it happens again, stop and tell the member.
+
 ### Calling the API
 
 ```http
@@ -273,15 +292,15 @@ a `code` from the [error registry](errors.md).
 
 | Code | HTTP | When | Client action |
 | --- | --- | --- | --- |
-| `UNAUTHENTICATED` | 401 | No token; a token that is invalid, expired, or not issued for the gateway | Refresh once, and after `invalid_grant` start a device login when the member asks. |
+| `UNAUTHENTICATED` | 401 | No token; a token that is invalid, expired, or not issued for the gateway | Refresh once and retry; after `invalid_grant` start a device login when the member asks. Do not loop when the refreshed token is refused too. |
 | `DPOP_REQUIRED` | 401 | The `Bearer` scheme, a `DPoP`-scheme request without a `DPoP` header, or a token that is not DPoP-bound | Send `Authorization: DPoP` with a proof; request the token with a DPoP proof so it is bound. |
 | `DPOP_INVALID` with `use_dpop_nonce` | 401 | The proof lacks the current server nonce | Retry once with a new proof carrying the `DPoP-Nonce` of the answer. |
-| `DPOP_INVALID` with `invalid_dpop_proof` | 401 | The proof is malformed, signed by another key than `cnf.jkt`, replayed, outside the `iat` window, for another method or URL, or has the wrong `ath` | Fix the proof; correct the clock once; do not loop. |
+| `DPOP_INVALID` with `invalid_dpop_proof` | 401 | The proof is malformed, signed by another key than `cnf.jkt`, replayed, outside the `iat` window, for another method or URL, or has the wrong `ath` — or the member holds too many [live proofs](#live-proofs-per-member) | Fix the proof; correct the clock once; do not loop. For a proof you know is fresh, pause at least 40 s. |
 | `SCOPE_MISSING` | 403 | The route's capability is not in the token, or not granted to the client | Start a device login with the scope, if the member wants the feature. |
 | `CLIENT_REVOKED` | 401 | The member disconnected the client after this connection was made | Discard the tokens; start a device login only when the member asks. |
 | `INSTALLATION_REVOKED` | 401 | The member disconnected this installation | Discard the tokens **and** the key; reconnecting needs a new key. |
 | `CLIENT_NOT_ALLOWED` | 403 | The client is not in the registry | Stop; the client is not approved. |
-| `CLIENT_SUSPENDED` | 403 | The client is suspended | Stop and tell the member. |
+| `CLIENT_SUSPENDED` | 403 | The client is suspended | Stop and tell the member; try again at the next start or when the member asks, never on a timer. |
 | `CLIENT_VERSION_UNSUPPORTED` | 403 | The `User-Agent` version is below the client's minimum | Ask the member to update. |
 | `TERMS_NOT_ACCEPTED` | 403 | The member has not accepted the current terms | Ask the member to open the Basetool and accept them. |
 | `PENDING_APPROVAL` | 403 | The member's registration awaits approval | Stop; nothing to sync yet. |

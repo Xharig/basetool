@@ -25,7 +25,8 @@ The server resolves each `ref` as [`catalog/resolve`](catalog.md) does. A resolv
 review under the product's name; any other enters under the name you sent, or its first key, among
 the unmatched rows for the member to pick by hand. A blueprint sent twice appears once, with the
 earlier `acquiredAt`. The review is the web's blueprint import — the same one the member reaches by
-uploading an offline file in this format.
+uploading an offline file in this format. An item's `provenance` is accepted but not read: every
+blueprint taken over from the review is recorded with the source `import`.
 
 ## Refinery draft — `POST /exchange/v1/me/drafts/refinery-orders`
 
@@ -48,8 +49,9 @@ Both routes answer a [`draft-result`](../schemas/):
 
 Open `frontendUrl` in the member's browser; the member signs in there if needed and reviews the
 draft. The handoff works **once** and expires after 30 minutes. Treat `handoffId`, and the URL that
-carries it, as a secret: never log or share it. A member holds at most ten live drafts, shared with
-the SC Extractor's uploads; staging an eleventh drops the oldest.
+carries it, as a secret: never log or share it. Your client holds at most ten live drafts per
+member, in slots of their own apart from the SC Extractor's uploads and other clients' drafts;
+staging an eleventh drops your client's oldest.
 
 A retry under the same `Idempotency-Key` replays the first result, whose handoff may already be
 used. To stage the draft again, send it under a new key.

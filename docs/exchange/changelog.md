@@ -5,6 +5,59 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-27
 
+- **More approval criteria.** An application is now also checked for: a Linux fallback key
+  file in a `0700` directory; baseline, ship links and cursors kept per installation and random
+  idempotency keys; showing `detachedFromMissions`, `offersReduced` and `offersRemoved` to the
+  member; and every ship `upsert` sending the current `name` and `location`
+  ([client security](client-security.md)). A sandbox run before applying is recommended, not
+  required.
+- **Corrected: `Retry-After` per code.** The pages said every Redis failure answers
+  `Retry-After: 60`. The gateway sends 30 with `EXCHANGE_DISABLED`, `REGISTRY_UNAVAILABLE` and a
+  `SERVICE_UNAVAILABLE` whose daily write quota cannot be counted; 60 with
+  `EXCHANGE_BUDGET_EXHAUSTED` and a `SERVICE_UNAVAILABLE` for a store it cannot reach; 5 when the
+  identity provider cannot be reached ([errors](errors.md)). The behaviour is unchanged.
+- **Clarified: the change result's `cursor` is reserved.** `change-result.schema.json` declares an
+  optional `cursor`, which the server has never sent. It stays in the schema, since `v1` never
+  removes a field, and is marked reserved; read the feed after a push for the new position.
+- **Corrected: `UNAUTHENTICATED` is answered by a refresh.** The error registry said to start a
+  device login again; as the authentication page says, refresh once, and start a device login only
+  after the refresh answers `invalid_grant` and the member asks.
+- **Corrected: the `docsUrl` example.** The service document's example and its fixture showed
+  `https://krt-profit.github.io/basetool/exchange/`, which does not exist. The gateway sends the
+  site root, `https://krt-profit.github.io/basetool/`.
+- **Documented: the cap on live DPoP proofs.** A member holds at most 600 live proofs over all
+  clients; a proof over the cap is refused like a replayed one, `401 DPOP_INVALID` with
+  `invalid_dpop_proof` ([authentication](authentication.md#live-proofs-per-member)). The cap existed
+  before; only the page is new.
+- **Documented: the problem fields.** The [error registry](errors.md#the-problem-document) lists
+  which fields a problem carries and when, and the `X-Correlation-Id` header. `retryAfterSeconds` is
+  reserved and not sent. `problem.schema.json` allows a `correlationId` of up to 128 characters
+  instead of 64, because the gateway echoes a client's own id of that length.
+- **Clarified: `confirmationUrl` is a secret.** Like a draft's `frontendUrl`, it carries a one-time
+  handoff id; never log or share it ([sync guide](sync-guide.md#the-mass-change-guard)). The
+  fixture now has the real shape, `/connected-apps/confirm?handoff=…`.
+- **Corrected: draft slots.** The drafts page said a member's ten live drafts are shared with the SC
+  Extractor's uploads. Each client holds ten per member in slots of its own, and staging an eleventh
+  drops only that client's oldest. A draft item's `provenance` is not read; the review records
+  `import`.
+- **Documented: offline files.** The web import takes a file of at most 8 MiB, checks only
+  `format` and the items, and does not read `formatVersion` ([formats](formats.md#offline-file--envelope)).
+- **Clarified: SCU decimals.** `quantity.schema.json` read like a limit of three decimals, which
+  nothing checks. An SCU amount may carry any number; the server rounds it half-up to three before
+  storing or comparing it ([formats](formats.md#quantity--quantity)).
+- **Clarified: sandbox `htu`.** The sandbox gateway compares `htu` with the called URL, port
+  included, so `localhost` and `127.0.0.1` both work when the proof names the address the request
+  went to ([sandbox](sandbox.md#addresses)).
+- **Clarified: which answers are replayed.** `409 IDEMPOTENCY_IN_PROGRESS`, `422
+  IDEMPOTENCY_KEY_REUSED`, `400 IDEMPOTENCY_KEY_MISSING` and `413` are never cached, and an answer
+  the server could not store is not replayed ([sync guide](sync-guide.md#idempotency-keys)).
+- **Clarified: the label's hyphen and the tombstone channels.** The installation label allows only
+  the ASCII hyphen-minus; `VerseKit – Windows` with an en dash is refused
+  ([connect](resources/connect.md#label-the-installation--post-exchangev1meinstallation)). A
+  tombstone's `removedBy.channel` is `web`, `app`, `client` or `system`
+  ([sync guide](sync-guide.md#tombstones-and-never-re-adding)).
+- **Clarified: after `CLIENT_SUSPENDED`.** A client cannot learn when a suspension ends, so it tries
+  again at its next start or when the member asks, never on a timer.
 - **One held mass change per client.** A newer held batch replaces only your client's older one for
   that member; another client's held batch no longer displaces yours.
 - **Show the bare `verification_uri`.** A client shows the `user_code` and `verification_uri` and
@@ -13,9 +66,10 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **`CLIENT_REVOKED` counts from the sign-in.** After the member disconnects a client, a token
   without `offline_access` is refused while its `auth_time` lies before the disconnect, also when it
   was refreshed afterwards; a client that requests `offline_access`, as it must, is unaffected.
-- **Store outages.** Every Redis failure on an exchange route answers `503 SERVICE_UNAVAILABLE`
-  with `Retry-After: 60`. A lost Redis connection while staging a draft answered with the extractor
-  upload's `Retry-After: 5`, and a store failure outside the staging could answer `500`.
+- **Store outages.** A store the exchange cannot reach answers `503 SERVICE_UNAVAILABLE` with
+  `Retry-After: 60` on every exchange route. A lost Redis connection while staging a draft
+  answered with the extractor upload's `Retry-After: 5`, and a store failure outside the staging
+  could answer `500`.
 - **Oversize drafts.** A draft or a held-back change set whose staged form exceeds the cap answered
   `400 BAD_REQUEST`, a code outside the registry, and the answer was replayed for its key. It now
   answers `413 PAYLOAD_TOO_LARGE` (draft) or `413 BATCH_TOO_LARGE` (change set), which is not

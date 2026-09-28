@@ -95,7 +95,10 @@ The gateway and the web frontend serve HTTPS with the committed test certificate
 [`docker/test-tls/basetool-test-ca.crt`][test-ca] **in sandbox mode only**; its names include
 `localhost`, `127.0.0.1` and `host.docker.internal`.
 
-The DPoP proof's `htu` is the URL you actually call, so use the addresses exactly as above. The
+Unlike production, the sandbox gateway compares `htu` with the URL of the request itself — scheme,
+host **and port** as you called them, so `https://localhost:11262/exchange/v1/me/blueprints` for the
+address above. `https://127.0.0.1:11262` works as well, as long as the proof names the same host and
+port the request went to; the [smoke test][smoke] uses it. Keep to the Keycloak addresses above. The
 sign-in itself works as in production: [authentication](authentication.md).
 
 ## Switching your client to the sandbox
