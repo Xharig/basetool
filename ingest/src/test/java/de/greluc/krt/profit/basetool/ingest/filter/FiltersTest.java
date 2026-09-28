@@ -49,22 +49,25 @@ class FiltersTest {
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
   private static MockHttpServletRequest ingestRequestWithBody(int bodyLength) {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders");
     request.setContent(new byte[bodyLength]);
     return request;
   }
 
   /**
-   * The same ingest request with one character of the path percent-encoded ({@code %76} = {@code
-   * v}). Spring MVC decodes this back to {@code /v1/refinery-extract} and dispatches it to the
-   * ingest controller, so every protective filter must treat it exactly like the plain spelling.
+   * The same exchange request with one character of the path percent-encoded ({@code %65} = {@code
+   * e}). Spring MVC decodes this back to {@code /exchange/v1/me/drafts/refinery-orders} and
+   * dispatches it to the exchange controller, so every protective filter must treat it exactly like
+   * the plain spelling.
    *
    * @param bodyLength the body size to attach
-   * @return a mock request whose raw URI is encoded but whose decoded path is an ingest path
+   * @return a mock request whose raw URI is encoded but whose decoded path is an exchange path
    */
   private static MockHttpServletRequest encodedIngestRequestWithBody(int bodyLength) {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/%761/refinery-extract");
-    request.setRequestURI("/%761/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/%65xchange/v1/me/drafts/refinery-orders");
+    request.setRequestURI("/%65xchange/v1/me/drafts/refinery-orders");
     request.setContent(new byte[bodyLength]);
     return request;
   }
@@ -78,7 +81,7 @@ class FiltersTest {
    */
   private static MockHttpServletRequest chunkedIngestRequest(int bodyLength) {
     MockHttpServletRequest request =
-        new MockHttpServletRequest("POST", "/v1/refinery-extract") {
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders") {
           @Override
           public long getContentLengthLong() {
             return -1;

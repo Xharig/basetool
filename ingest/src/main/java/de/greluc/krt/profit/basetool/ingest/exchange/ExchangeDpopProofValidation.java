@@ -39,8 +39,8 @@ import org.springframework.security.oauth2.jwt.JwtClaimNames;
  * binding, {@code ath}, {@code jti} replay) everywhere, plus, on exchange routes, the server nonce,
  * a {@link DpopProofLimitError} for a member at its proof cap and a {@link DpopProofStoreFullError}
  * for a full store (REQ-XCH-006). The {@code jti} replay cache is one {@link DpopProofReplayStore}
- * per path scope, partitioned by the access token's member, so neither one member nor the legacy
- * {@code /v1} routes can fill the cache the exchange relies on.
+ * per path scope, partitioned by the access token's member, so neither one member nor a request
+ * outside {@code /exchange} can fill the cache the exchange relies on.
  */
 public final class ExchangeDpopProofValidation {
 
@@ -71,7 +71,7 @@ public final class ExchangeDpopProofValidation {
         context -> {
           boolean exchange = isExchange(context);
           DpopProofReplayStore.MemberView view =
-              (exchange ? proofs.exchange() : proofs.legacy()).forMember(subjectOf(context));
+              (exchange ? proofs.exchange() : proofs.other()).forMember(subjectOf(context));
           DPoPProofReplayValidator replay = new DPoPProofReplayValidator(view);
           OAuth2TokenValidator<Jwt> defaults =
               DPoPProofJwtDecoderFactory.createDefaultJwtValidatorFactory(List.of(replay))

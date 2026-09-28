@@ -34,7 +34,6 @@ import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRelay;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRevocationReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport;
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -84,7 +83,6 @@ class ExchangeOrgDemandRouteTest {
   @Autowired private WebApplicationContext context;
 
   @MockitoBean private JwtDecoder jwtDecoder;
-  @MockitoBean private BackendImportClient backendImportClient;
   @MockitoBean private HandoffStagingService handoffStagingService;
   @MockitoBean private ExchangeRegistryReader registryReader;
   @MockitoBean private ExchangeRevocationReader revocationReader;

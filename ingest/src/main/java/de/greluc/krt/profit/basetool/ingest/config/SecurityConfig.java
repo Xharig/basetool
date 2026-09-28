@@ -32,7 +32,6 @@ import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRevocationReader;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTokenGateFilter;
-import de.greluc.krt.profit.basetool.ingest.filter.ClientIdentityFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.UserIdMdcFilter;
 import de.greluc.krt.profit.basetool.ingest.web.SecurityProblemResponseHandler;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -78,9 +77,10 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Security configuration for the ingest gateway: a stateless JWT-bearer resource server with CSRF
- * ignored for {@code /v1/**}, empty CORS and a {@code default-src 'none'} CSP (REQ-INGEST-001).
+ * ignored for {@code /exchange/**}, empty CORS and a {@code default-src 'none'} CSP
+ * (REQ-INGEST-001).
  *
- * <p>Every ingest endpoint requires only an authenticated caller.
+ * <p>Every exchange route requires an authenticated caller; the exchange filters decide the rest.
  */
 @Configuration
 @EnableWebSecurity
@@ -177,7 +177,7 @@ public class SecurityConfig {
   }
 
   /**
-   * The single {@link SecurityFilterChain}: CSRF ignored for {@code /v1/**}, empty CORS,
+   * The single {@link SecurityFilterChain}: CSRF ignored for {@code /exchange/**}, empty CORS,
    * locked-down headers, the authorization matrix, JWT resource server, the
    * identity-provider-unavailable 503 and stateless sessions.
    *
@@ -185,7 +185,6 @@ public class SecurityConfig {
    * @param objectMapper serializes the {@link IdentityProviderUnavailableFilter}'s 503 problem body
    * @param meterRegistry counts the identity-provider-unavailable 503 (REQ-OBS-011)
    * @param loggingProperties supplies the MDC key the {@link UserIdMdcFilter} writes the subject to
-   * @param clientIdentityProperties the configured client-identity gate (REQ-INGEST-011)
    * @param ingestProperties supplies the gateway's public origin, the DPoP {@code htu} comparison
    *     target
    * @return the configured filter chain
@@ -197,7 +196,6 @@ public class SecurityConfig {
       ObjectMapper objectMapper,
       MeterRegistry meterRegistry,
       LoggingProperties loggingProperties,
-      ClientIdentityProperties clientIdentityProperties,
       IngestProperties ingestProperties,
       ExchangeDpopNonces exchangeNonces,
       ExchangeRefusals exchangeRefusals,
@@ -220,7 +218,7 @@ public class SecurityConfig {
             csrf ->
                 csrf.csrfTokenRepository(csrfRepo)
                     .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                    .ignoringRequestMatchers("/v1/**", "/exchange/**"))
+                    .ignoringRequestMatchers("/exchange/**"))
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .headers(
             headers -> {
@@ -236,8 +234,6 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             auth ->
                 auth.requestMatchers("/actuator/health", "/actuator/health/**")
-                    .permitAll()
-                    .requestMatchers("/v3/api-docs/**")
                     .permitAll()
                     .requestMatchers(
                         HttpMethod.GET, "/exchange/v1/openapi.json", "/exchange/v1/schemas/*")
@@ -280,17 +276,9 @@ public class SecurityConfig {
             new UserIdMdcFilter(loggingProperties),
             org.springframework.security.web.authentication.AuthenticationFilter.class)
         .addFilterAfter(
-            new ClientIdentityFilter(
-                clientIdentityProperties,
-                meterRegistry,
-                objectMapper,
-                loggingProperties,
-                exchangeRegistryReader),
-            UserIdMdcFilter.class)
-        .addFilterAfter(
             new ExchangeTokenGateFilter(
                 exchangeNonces, exchangeRefusals, objectMapper, loggingProperties, meterRegistry),
-            ClientIdentityFilter.class)
+            UserIdMdcFilter.class)
         .addFilterAfter(
             new ExchangeGateFilter(
                 exchangeRegistryReader,

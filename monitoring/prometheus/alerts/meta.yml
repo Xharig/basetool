@@ -296,7 +296,7 @@ groups:
           stream: ingest
         annotations:
           summary: "Log stream not being tailed: ingest JSON"
-          description: "Alloy is not tailing /logs/ingest/ingest.json — no Loki ruler alert reads this stream today, so nothing else will notice; the loss is forensic, and it lands exactly when an IngestHandoffErrors / IngestBackendUnavailable page needs the gateway's own log. Check the /var/iri/ingest/log mount and that the app's JSON file appender is still writing."
+          description: "Alloy is not tailing /logs/ingest/ingest.json — no Loki ruler alert reads this stream today, so nothing else will notice; the loss is forensic, and it lands exactly when an IngestHandoffErrors or ExchangeRelayFailing page needs the gateway's own log. Check the /var/iri/ingest/log mount and that the app's JSON file appender is still writing."
 
       - alert: LogStreamSilent
         expr: absent(loki_source_file_read_lines_total{path="/hostlog/fail2ban.log"})

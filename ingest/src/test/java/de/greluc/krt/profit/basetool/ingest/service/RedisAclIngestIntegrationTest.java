@@ -51,9 +51,9 @@ import tools.jackson.databind.json.JsonMapper;
  * Runs the gateway's real handoff staging under its own ACL user, against the committed ACL
  * template with {@code default} switched off (REQ-SEC-068, ADR-0207).
  *
- * <p>The gateway writes {@code ingest:handoff:<sub>:<id>} with a TTL and keeps the per-subject
- * index list {@code ingest:handoff-index:<sub>}, evicting past the cap. That is all it may do: a
- * session key, {@code SCAN} (which would list every session id) and every channel are refused.
+ * <p>The gateway writes {@code ingest:handoff:<sub>:<id>} with a TTL and keeps an index list under
+ * {@code ingest:handoff-index:}, evicting past the cap. That is all it may do: a session key,
+ * {@code SCAN} (which would list every session id) and every channel are refused.
  */
 @Testcontainers
 class RedisAclIngestIntegrationTest {
@@ -85,19 +85,23 @@ class RedisAclIngestIntegrationTest {
   void stagingAndTheCapEvictionRunUnderTheIngestUser() {
     HandoffStagingService service =
         new HandoffStagingService(
-            template(ingest),
-            JsonMapper.builder().build(),
-            TestProperties.ingest("max-handoffs-per-subject", "1"));
+            template(ingest), JsonMapper.builder().build(), TestProperties.ingest());
 
-    String first = service.stage("sub-acl", HandoffKind.REFINERY, "{\"goodsMatched\":1}");
-    String second = service.stage("sub-acl", HandoffKind.REFINERY, "{\"goodsMatched\":2}");
+    String first =
+        service
+            .stageDraft("versekit", "sub-acl", HandoffKind.REFINERY, "{\"goodsMatched\":1}", 1)
+            .handoffId();
+    String second =
+        service
+            .stageDraft("versekit", "sub-acl", HandoffKind.REFINERY, "{\"goodsMatched\":2}", 1)
+            .handoffId();
 
     StringRedisTemplate observer = template(admin);
     assertThat(observer.hasKey("ingest:handoff:sub-acl:" + second)).isTrue();
     assertThat(observer.hasKey("ingest:handoff:sub-acl:" + first))
         .as("the cap evicted the first handoff: LPOP + DEL ran under the ingest user")
         .isFalse();
-    assertThat(observer.getExpire("ingest:handoff-index:sub-acl")).isPositive();
+    assertThat(observer.getExpire("ingest:handoff-index:drafts:versekit:sub-acl")).isPositive();
   }
 
   @Test

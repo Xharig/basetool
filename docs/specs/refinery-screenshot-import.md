@@ -378,6 +378,10 @@ backend matching (REQ-REFINERY-004), the issue model (REQ-REFINERY-009), and cru
 saved exclusively through `POST /api/v1/refinery-orders` after the user reviews it. Direct
 ingest must never persist a refinery order without that human review-and-save step.
 
+*Amended 2026-09-28 (#2092 step 9):* the transport is the exchange's refinery draft route
+(`POST /exchange/v1/me/drafts/refinery-orders`, REQ-XCH-019) since SC Extractor 2.10.0; the
+gateway's own `/v1/refinery-extract` is removed. The rule above is unchanged.
+
 ### REQ-REFINERY-021 — SC Extractor release link in the create page's import bar
 
 > **Renumbered 2026-09-22:** this requirement was `REQ-REFINERY-019` until 2026-09-22; that id also named the server-side pagination of the refinery-order list in [`refinery-orders-overview.md`](refinery-orders-overview.md), which keeps it.

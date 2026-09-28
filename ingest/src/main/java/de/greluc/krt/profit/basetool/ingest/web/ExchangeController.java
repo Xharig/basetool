@@ -34,7 +34,6 @@ import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
@@ -73,11 +72,10 @@ import tools.jackson.databind.node.ObjectNode;
  * The authenticated exchange routes built so far (REQ-XCH-001). Each request has passed both
  * exchange gates; a body is checked against its v1 schema before the relay, undeclared fields are
  * reported as {@code UNKNOWN_FIELD} warnings where the answer carries warnings, and the backend's
- * answer is checked against its schema before it reaches the client. Kept out of the extractor's
- * API document; the committed exchange document describes these routes.
+ * answer is checked against its schema before it reaches the client. The committed exchange
+ * document describes these routes.
  */
 @Slf4j
-@Hidden
 @RestController
 @RequestMapping("/exchange/v1")
 @RequiredArgsConstructor
@@ -501,7 +499,7 @@ public class ExchangeController {
 
   /**
    * Checks a draft, relays it to the backend's preview, stages the answer for the member's review
-   * as the extractor's upload does, and answers where the member opens it.
+   * and answers where the member opens it.
    *
    * @param resource the draft's path segment
    * @param schema the draft's schema
@@ -566,6 +564,7 @@ public class ExchangeController {
       }
     } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A draft could not be staged: {}", e.getClass().getSimpleName());
+      countStagingFailure();
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE,
           "The draft cannot be staged; try again later.",
@@ -686,6 +685,7 @@ public class ExchangeController {
       }
     } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A mass change could not be staged: {}", e.getClass().getSimpleName());
+      countStagingFailure();
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE,
           "The confirmation cannot be prepared; try again later.",
@@ -765,6 +765,20 @@ public class ExchangeController {
         ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
         BUDGET_EXHAUSTED_DETAIL,
         budget.retryAfterSeconds(context.clientId(), context.member(), bytes));
+  }
+
+  /**
+   * Counts a draft or change set that could not be staged on {@code
+   * basetool_ingest_handoff_errors_total{reason="staging_unavailable"}}, the series {@code
+   * IngestStagingUnavailable} reads.
+   */
+  private void countStagingFailure() {
+    meterRegistry
+        .counter(
+            MetricNames.INGEST_HANDOFF_ERRORS,
+            MetricNames.TAG_REASON,
+            MetricNames.REASON_STAGING_UNAVAILABLE)
+        .increment();
   }
 
   /**

@@ -702,10 +702,10 @@ public final class MetricNames {
   public static final String ON_BEHALF_OF_MALFORMED = "malformed_subject";
 
   /**
-   * {@link #ON_BEHALF_OF_REFUSED} reason: the header arrived at an ingest endpoint with no
+   * {@link #ON_BEHALF_OF_REFUSED} reason: the header arrived at an exchange endpoint with no
    * authenticated caller behind it.
    *
-   * <p>Usually a probe or an expired token; a sustained rate alongside failing uploads points at a
+   * <p>Usually a probe or an expired token; a sustained rate alongside failing relays points at a
    * changed filter ordering (ADR-0129).
    */
   public static final String ON_BEHALF_OF_NO_CALLER = "no_authenticated_caller";

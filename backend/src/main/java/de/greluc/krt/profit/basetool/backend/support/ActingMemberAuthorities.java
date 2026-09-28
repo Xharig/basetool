@@ -26,8 +26,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.GrantedAuthority;
 
 /**
- * Supplies the authorities to act with on behalf of a member, and refuses a member who is not live
- * (ADR-0129).
+ * Supplies the reduced authorities the gateway acts with on behalf of a member on the exchange
+ * layer, and refuses a member who is not live (ADR-0129, REQ-XCH-009).
  *
  * <p>Declared in this dependency-free package so {@code config} and {@code service} both depend on
  * it instead of on each other (ADR-0047).
@@ -35,23 +35,13 @@ import org.springframework.security.core.GrantedAuthority;
 public interface ActingMemberAuthorities {
 
   /**
-   * Assembles the authorities of the member a gateway request is acting for.
-   *
-   * <p>Implementations fail closed: a subject with no local account is refused rather than created,
-   * and a member the last roster sync no longer found in the identity provider is refused.
-   *
-   * @param member the subject named in the on-behalf-of header
-   * @return the member's authorities, assembled from the database
-   * @throws AccessDeniedException when the member is unknown here or no longer live
-   */
-  @NotNull
-  Collection<GrantedAuthority> authoritiesFor(@NotNull UUID member);
-
-  /**
    * Assembles the reduced authorities an acting member holds on the exchange layer: {@code
    * ROLE_EXCHANGE_MEMBER} and one capability authority per relayed scope, never the member's stored
    * roles, permissions or contextual grants (REQ-XCH-009). A member refused by the approval or role
    * gate keeps exactly the marker that makes those gates refuse.
+   *
+   * <p>Implementations fail closed: a subject with no local account is refused rather than created,
+   * and a member the last roster sync no longer found in the identity provider is refused.
    *
    * @param member the subject named in the on-behalf-of header
    * @param capabilityScopes the relayed OAuth scopes, already restricted to known capabilities

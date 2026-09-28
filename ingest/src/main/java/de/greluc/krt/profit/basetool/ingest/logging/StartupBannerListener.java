@@ -36,7 +36,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Logs a startup banner with the gateway's effective configuration: profiles, backend and frontend
- * URLs, handoff lifetime, issuer, throttles, client gates (REQ-INGEST-011) and logging settings.
+ * URLs, handoff lifetime, issuer, throttles, the audience gate (REQ-INGEST-011) and logging
+ * settings.
  *
  * <p>No secret is printed; the Redis endpoint is sanitised by {@link #sanitiseRedisEndpoint(String,
  * String)} (REQ-OBS-004).
@@ -52,8 +53,8 @@ public class StartupBannerListener {
   private final RateLimitProperties rateLimitProperties;
 
   /**
-   * Supplies the client-gate posture line — booleans and list sizes only, never a configured client
-   * id, scope, tool or audience (REQ-OBS-004).
+   * Supplies the audience-gate posture line — a boolean and a count only, never a configured
+   * audience (REQ-OBS-004).
    */
   private final IngestGatePostureMetric gatePostureMetric;
 
@@ -82,13 +83,11 @@ public class StartupBannerListener {
     log.info(" Redis staging       : {}", sanitiseRedisEndpoint(redisHost, redisPort));
     log.info(" Keycloak issuer     : {}", keycloakIssuerUri);
     log.info(
-        " Rate limits         : {} (subject {}/{}, ip {}/{})",
+        " Rate limits         : {} (ip {}/{})",
         rateLimitProperties.enabled(),
-        rateLimitProperties.capacity(),
-        rateLimitProperties.refillPeriod(),
         rateLimitProperties.ipCapacity(),
         rateLimitProperties.refillPeriod());
-    log.info(" Client gates        : {}", gatePostureMetric.posture().describe());
+    log.info(" Audience gate       : {}", gatePostureMetric.posture().describe());
     log.info(" Correlation header  : {}", loggingProperties.correlationIdHeader());
     log.info(" Slow request (ms)   : {}", loggingProperties.slowRequestThresholdMs());
     log.info(" Structured logging  : {}", loggingProperties.structuredEnabled());

@@ -27,25 +27,19 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Rate-limit budgets for the ingest endpoints (prefix {@code app.rate-limit}, REQ-INGEST-005): a
- * per-subject token bucket ({@link
- * de.greluc.krt.profit.basetool.ingest.ratelimit.SubjectRateLimiter}) and a looser per-IP bucket
- * ({@link de.greluc.krt.profit.basetool.ingest.filter.RateLimitingFilter}).
+ * The per-IP rate-limit budget of the exchange routes (prefix {@code app.rate-limit},
+ * REQ-INGEST-005), enforced by {@link
+ * de.greluc.krt.profit.basetool.ingest.filter.RateLimitingFilter}.
  *
  * @param enabled master switch; {@code false} disables throttling entirely
- * @param capacity per-subject bucket size: the maximum burst of ingest calls per member
- * @param refillTokens tokens added back to the per-subject bucket every {@code refillPeriod}
- * @param refillPeriod refill cadence shared by both buckets
- * @param ipCapacity per-IP bucket size, looser than {@code capacity} because members may share an
- *     address
+ * @param refillPeriod refill cadence of the per-IP bucket
+ * @param ipCapacity per-IP bucket size, loose because members may share an address
  * @param ipRefillTokens tokens added back to the per-IP bucket every {@code refillPeriod}
  */
 @Validated
 @ConfigurationProperties(prefix = "app.rate-limit")
 public record RateLimitProperties(
     @DefaultValue("true") boolean enabled,
-    @Min(1) @DefaultValue("30") int capacity,
-    @Min(1) @DefaultValue("30") int refillTokens,
     @NotNull @DefaultValue("PT1M") Duration refillPeriod,
     @Min(1) @DefaultValue("120") int ipCapacity,
     @Min(1) @DefaultValue("120") int ipRefillTokens) {}

@@ -65,22 +65,25 @@ note has the bounds and what has broken.
 
 ## 6.5 The desktop extractor sends a refinery order
 
-1. The extractor, holding a sender-constrained (DPoP) token for the member, `POST`s JSON to
-   `ingest.profit-base.online/v1/refinery-extract` (or `/v1/blueprint-preview`).
-2. The **ingest** gateway validates the token, checks the client is an **approved** one — an
-   unapproved caller is refused `403 CLIENT_NOT_ALLOWED` — and enforces rate and payload limits.
-3. It relays to the backend over the internal network under **its own** service-account token,
-   naming the member in an on-behalf-of header; the member's bound token stops at the gateway. If the
-   backend refuses that token (`401`/`403`), the fault is the gateway's, not the member's: the
-   extractor gets a `502`, and the cached token is dropped so the next send mints a fresh one.
+1. The extractor, holding a sender-constrained (DPoP) token for the member, `POST`s the order as a
+   draft to `ingest.profit-base.online/exchange/v1/me/drafts/refinery-orders` (or
+   `…/drafts/blueprints`).
+2. The **ingest** gateway checks the token and its proof, the client registry and the draft
+   capability — an unapproved caller is refused `403 CLIENT_NOT_ALLOWED` — and enforces rate and
+   payload limits (§6.8).
+3. It relays to the backend's exchange layer over the internal network under **its own**
+   service-account token, naming the member in an on-behalf-of header; the member's bound token
+   stops at the gateway. If the backend refuses that token (`401`/`403`), the fault is the
+   gateway's, not the member's: the extractor gets `502 BACKEND_RELAY_FAILED`.
 4. The backend matches the payload and returns a **draft**. Ingest stages it in Redis for a single
-   browser pickup and answers with a handoff link the extractor opens.
+   browser pickup and answers with the review URL the extractor opens.
 5. The member reviews the pre-filled form and saves it through the **ordinary** create path — so the
-   ingest route cannot bypass a validation, a permission check or an audit event.
+   draft route cannot bypass a validation, a permission check or an audit event.
 
 The backend is never exposed to the extractor directly. That is the entire reason this module is
-its own deployable. Specification: [`desktop-ingest.md`](../specs/desktop-ingest.md). These legacy
-routes end at the exchange's go-live, when the extractor moves to §6.8 (REQ-XCH-033).
+its own deployable. Specification: [`desktop-ingest.md`](../specs/desktop-ingest.md) and
+REQ-XCH-019. *Until 2026-09-28 the extractor posted to the gateway's own `/v1/refinery-extract` and
+`/v1/blueprint-preview`, behind a client allowlist; both are removed (REQ-XCH-033).*
 
 ## 6.6 A deploy
 
@@ -180,5 +183,5 @@ notification, the page refreshes the run list while it runs, and the run ends `C
 action (REQ-XCH-034, ADR-0227).
 
 **A draft.** `drafts/blueprints` and `drafts/refinery-orders` write nothing: the backend builds the
-same preview the extractor's upload builds, the gateway stages it for a one-time browser pickup and
+same preview the web's own upload builds, the gateway stages it for a one-time browser pickup and
 answers the review URL, and the member saves through the ordinary path — as in §6.5.

@@ -38,7 +38,7 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Integration tests asserting that, with tracing enabled, a relay through the {@code
- * backendRestClient} of {@link RestClientConfig} carries a W3C {@code traceparent} header to the
+ * exchangeRestClient} of {@link RestClientConfig} carries a W3C {@code traceparent} header to the
  * backend (REQ-OBS-009); OTLP export stays off.
  */
 @SpringBootTest(
@@ -51,7 +51,7 @@ class MonitoringTracingPropagationTest {
 
   private static MockWebServer mockBackend;
 
-  @Autowired private RestClient backendRestClient;
+  @Autowired private RestClient exchangeRestClient;
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
@@ -81,7 +81,7 @@ class MonitoringTracingPropagationTest {
   void shouldPropagateTraceparentHeaderOnBackendRelayCall() throws Exception {
     mockBackend.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
 
-    backendRestClient.get().uri("/api/v1/settings").retrieve().toBodilessEntity();
+    exchangeRestClient.get().uri("/api/v1/settings").retrieve().toBodilessEntity();
     RecordedRequest recorded = mockBackend.takeRequest(10, TimeUnit.SECONDS);
 
     assertThat(recorded).isNotNull();

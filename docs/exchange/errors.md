@@ -63,7 +63,7 @@ codes, whichever side refuses it.
 | `NOT_FOUND` | 404 | gateway | The exchange has no such route or method, or the requested document, such as a schema name, does not exist. | Check the path, the method and the name. |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | gateway | A request body is not sent as `Content-Type: application/json`. Never cached for its `Idempotency-Key`. | Send the body as `application/json`. |
 | `INTERNAL_ERROR` | 500 | gateway | An unexpected failure of the gateway, the generic fallback. Never cached. | Back off and retry under the same key; report the `correlationId` if it persists. |
-| `LEGACY_ENDPOINT_GONE` | 410 | gateway | A legacy `/v1/*` extractor endpoint after the go-live. | Update the client. |
+| `LEGACY_ENDPOINT_GONE` | 410 | gateway | *Retired 2026-09-28, never reused:* answered a legacy `/v1/*` extractor endpoint after the go-live; those routes are removed, and a request there now gets the gateway's answer for an unknown path. | Update the client. |
 
 ## Per-op reasons in a change result
 

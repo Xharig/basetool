@@ -67,7 +67,8 @@ class CorrelationIdFilterTest {
 
   @Test
   void acceptsAndEchoesASafeInboundCorrelationId() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders");
     request.addHeader(HEADER, "abc-123_XY.7");
     MockHttpServletResponse response = new MockHttpServletResponse();
     MdcCapturingChain chain = new MdcCapturingChain();
@@ -80,7 +81,8 @@ class CorrelationIdFilterTest {
 
   @Test
   void seedsTheUserIdAsAnonymousBecauseSecurityHasNotRunYet() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders");
     MdcCapturingChain chain = new MdcCapturingChain();
 
     filter.doFilter(request, new MockHttpServletResponse(), chain);
@@ -93,7 +95,10 @@ class CorrelationIdFilterTest {
     MockHttpServletResponse response = new MockHttpServletResponse();
     MdcCapturingChain chain = new MdcCapturingChain();
 
-    filter.doFilter(new MockHttpServletRequest("POST", "/v1/refinery-extract"), response, chain);
+    filter.doFilter(
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders"),
+        response,
+        chain);
 
     assertThat(chain.correlationId).isNotBlank();
     assertThat(UUID.fromString(chain.correlationId)).isNotNull();
@@ -102,7 +107,8 @@ class CorrelationIdFilterTest {
 
   @Test
   void rejectsAnUnsafeInboundIdAndMintsAFreshOneInstead() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders");
     request.addHeader(HEADER, "evil\r\nInjected: 1");
     MdcCapturingChain chain = new MdcCapturingChain();
 
@@ -114,7 +120,8 @@ class CorrelationIdFilterTest {
 
   @Test
   void rejectsAnOverlongInboundIdAndMintsAFreshOneInstead() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders");
     request.addHeader(HEADER, "a".repeat(129));
     MdcCapturingChain chain = new MdcCapturingChain();
 
@@ -126,7 +133,7 @@ class CorrelationIdFilterTest {
   @Test
   void clearsBothMdcKeysAfterTheRequest() throws Exception {
     filter.doFilter(
-        new MockHttpServletRequest("POST", "/v1/refinery-extract"),
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders"),
         new MockHttpServletResponse(),
         new MockFilterChain());
 
@@ -161,7 +168,7 @@ class CorrelationIdFilterTest {
     assertThatThrownBy(
             () ->
                 filter.doFilter(
-                    new MockHttpServletRequest("POST", "/v1/refinery-extract"),
+                    new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders"),
                     new MockHttpServletResponse(),
                     exploding))
         .isInstanceOf(IllegalStateException.class);

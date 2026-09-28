@@ -35,8 +35,9 @@ import org.springframework.mock.web.MockHttpServletResponse;
 class RequestLoggingFilterTest {
 
   private static MockHttpServletRequest ingestRequest() {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
-    request.setRequestURI("/v1/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders");
+    request.setRequestURI("/exchange/v1/me/drafts/refinery-orders");
     return request;
   }
 
@@ -55,15 +56,18 @@ class RequestLoggingFilterTest {
 
     assertThat(events)
         .filteredOn(e -> e.getLevel() == Level.INFO)
-        .filteredOn(e -> e.getFormattedMessage().contains("POST /v1/refinery-extract -> 200"))
+        .filteredOn(
+            e ->
+                e.getFormattedMessage()
+                    .contains("POST /exchange/v1/me/drafts/refinery-orders -> 200"))
         .hasSize(1);
   }
 
   /** A percent-encoded spelling of an ingest path still produces an access line. */
   @Test
-  void logsTheAccessLineForAPercentEncodedIngestPath() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/%761/refinery-extract");
-    request.setRequestURI("/%761/refinery-extract");
+  void logsTheAccessLineForAPercentEncodedExchangePath() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/%65xchange/v1/me/stock");
+    request.setRequestURI("/%65xchange/v1/me/stock");
     MockHttpServletResponse response = new MockHttpServletResponse();
     response.setStatus(200);
 
@@ -76,7 +80,7 @@ class RequestLoggingFilterTest {
                     .doFilter(request, response, new MockFilterChain()));
 
     assertThat(events)
-        .filteredOn(e -> e.getFormattedMessage().contains("/%761/refinery-extract -> 200"))
+        .filteredOn(e -> e.getFormattedMessage().contains("/%65xchange/v1/me/stock -> 200"))
         .hasSize(1);
   }
 
@@ -96,7 +100,7 @@ class RequestLoggingFilterTest {
     assertThat(events).hasSize(1);
     assertThat(events.getFirst().getLevel()).isEqualTo(Level.WARN);
     assertThat(events.getFirst().getFormattedMessage())
-        .startsWith("Slow request POST /v1/refinery-extract -> 200 in ");
+        .startsWith("Slow request POST /exchange/v1/me/drafts/refinery-orders -> 200 in ");
   }
 
   @Test
@@ -127,7 +131,7 @@ class RequestLoggingFilterTest {
 
     assertThat(events).hasSize(1);
     assertThat(events.getFirst().getFormattedMessage())
-        .startsWith("POST /v1/refinery-extract -> 500 in ");
+        .startsWith("POST /exchange/v1/me/drafts/refinery-orders -> 500 in ");
   }
 
   @Test
@@ -152,8 +156,9 @@ class RequestLoggingFilterTest {
   void truncatesAnOverlongRequestUriInTheAccessLine() throws Exception {
     MockHttpServletResponse response = new MockHttpServletResponse();
     response.setStatus(401);
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
-    request.setRequestURI("/v1/" + "a".repeat(8000));
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders");
+    request.setRequestURI("/exchange/" + "a".repeat(8000));
 
     List<ILoggingEvent> events =
         LogCapture.capture(

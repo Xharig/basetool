@@ -37,15 +37,14 @@ the throwaway `frontend/src/e2e/resources/realm-export.e2e.json` test artifact �
 >   provisioner template and the backend's client registry —
 >   [*Onboarding a new approved client*](#onboarding-a-new-approved-client) below. It never goes on
 >   the allowlist.
-> - **A legacy `/v1` client** (today only the SC extractor, until the exchange go-live switches those
->   routes off, `REQ-XCH-033`) needs **both** of the following — neither alone grants access:
+> - **The SC Extractor** is an exchange client too since release 2.10.0: its first-party client
+>   `basetool-sc-extractor` is provisioned by the provisioner (steps 1–3 below explain its values)
+>   and approved in the registry like any other.
 >
->   1. a dedicated Keycloak client for it (steps 1–3 below), and
->   2. its client id in `IRI_INGEST_ALLOWED_CLIENT_IDS` on the gateway.
->
-> For the legacy routes, removing the allowlist entry revokes a client immediately (existing access tokens expire within the
-> access-token lifespan, ~5 min) without needing a Keycloak change or a release. Do not add a client
-> id here on anyone's request but the owner's.
+> *Amended 2026-09-28 (#2092 step 9):* the legacy `/v1` routes and their client allowlist
+> (`IRI_INGEST_ALLOWED_CLIENT_IDS`, `IRI_INGEST_CLIENT_AUDIT_ONLY`, `IRI_INGEST_REQUIRED_SCOPE`,
+> `IRI_INGEST_ALLOWED_TOOLS`) are removed. Suspending a client in the registry is now the immediate
+> revocation ([`external-exchange.md`](specs/external-exchange.md), REQ-XCH-008).
 
 ## Configured state
 
@@ -55,7 +54,7 @@ row by row against production's configuration snapshot of **2026-09-22**
 
 |         Object          |                                                                                              State                                                                                               |
 |-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `basetool-sc-extractor` | public, no secret, device grant on, direct access grants off, service accounts off, `fullScopeAllowed: false`; default scopes include `extractor-ingest` **and** `extractor-ingest-only`. Carried the unused standard flow with `http://127.0.0.1/*` + `http://localhost/*` in the 2026-09-22 snapshot — **retired by owner decision 2026-09-22** (step 1); whether a later production apply already removed it is **to be confirmed at the go-live dry run** (`EXCHANGE_GO_LIVE_RUNBOOK.md`, S10). From the go-live apply (S15) the client is exchange-only (H1): consent, DPoP-bound tokens, both ingest scopes withheld |
+| `basetool-sc-extractor` | public, no secret, device grant on, direct access grants off, service accounts off, `fullScopeAllowed: false`; default scopes include `extractor-ingest` **and** `extractor-ingest-only`. Carried the unused standard flow with `http://127.0.0.1/*` + `http://localhost/*` in the 2026-09-22 snapshot — **retired by owner decision 2026-09-22** (step 1); whether a later production apply already removed it is **to be confirmed at the go-live dry run** (`EXCHANGE_GO_LIVE_RUNBOOK.md`, S10). Since the go-live apply (S15, 2026-09-28) the client is exchange-only (H1): consent, DPoP-bound tokens, both ingest scopes withheld |
 | `basetool-ingest-gateway` | confidential, service account only (standard flow and direct access grants off), empty redirect/origin lists — the gateway's own identity for the hop to the backend (step 9); still carries both ingest scopes, inherited from the realm defaults at creation (hardening step 9b leaves that to its own audience needs) |
 | `basetool-frontend`     | carries `extractor-ingest` (so its relayed token has `aud=basetool-backend`), **not** `extractor-ingest-only`                                                                                    |
 | `basetool-android`      | carries **both** ingest scopes as defaults, inherited from the realm defaults when it was provisioned — so an app token has `aud=basetool-ingest` and `extractor-ingest-only` in `scope`, and only the gateway's `azp` allowlist (step 7c) keeps it out of ingest. **Retired by owner decision 2026-09-22** (`REQ-INGEST-011`): the app requests neither scope and never calls ingest; whether a later production apply already removed them is **to be confirmed at the go-live dry run** (`EXCHANGE_GO_LIVE_RUNBOOK.md`, S10). Its own `aud=basetool-backend` mapper stays and is what the backend checks |
@@ -69,18 +68,13 @@ this repository cannot see them:
 |             Variable             |               Service               |                                                               State                                                                |
 |----------------------------------|-------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `IRI_BACKEND_EXPECTED_AUDIENCES` | backend                             | `basetool-backend` — enforcing since #1247 (2026-08-28); **required** since 2026-09-22 — blank refuses the prod start (APPSEC-08) |
-| `IRI_INGEST_ALLOWED_CLIENT_IDS`  | ingest                              | `basetool-sc-extractor` (read-only check 2026-09-27); **required** under `prod` while the legacy endpoints answer — blank refuses the start (`LegacyClientGateGuard`) |
-| `IRI_INGEST_CLIENT_AUDIT_ONLY`   | ingest                              | `false` since 2026-08-30 — the `azp` allowlist enforces; **must stay `false`** under `prod` while the legacy endpoints answer — `true` refuses the start (`LegacyClientGateGuard`) |
-| `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED` | ingest                         | not set — the default `true` keeps `/v1/*` answering; set `false` only at the exchange go-live (REQ-XCH-033, WP 6), after which both routes answer `410 LEGACY_ENDPOINT_GONE` |
+| `IRI_INGEST_ALLOWED_CLIENT_IDS`, `IRI_INGEST_CLIENT_AUDIT_ONLY`, `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED`, `IRI_INGEST_REQUIRED_SCOPE`, `IRI_INGEST_ALLOWED_TOOLS` | ingest | **no longer read** since the `/v1` routes were removed (#2092 step 9, 2026-09-28): the compose file and `env.d/ingest.env.tmpl` stop passing them, so lines left in the host `.env` are harmless. Last values: the allowlist `basetool-sc-extractor`, audit-only `false` since 2026-08-30, the legacy switch `false` since the go-live (S14), the scope and tool checks never set |
 | `IRI_INGEST_EXPECTED_AUDIENCES`  | ingest                              | `basetool-ingest` since **2026-09-22 21:37 UTC** (host `.env` set, `env.d` re-rendered, `ingest.service` restarted; the container's environment read back as `APP_SECURITY_JWT_EXPECTED_AUDIENCES=basetool-ingest`, container healthy). **Corrected 2026-09-23:** this row said it was read on 2026-08-28 as the backend's value and was open |
-| `IRI_INGEST_REQUIRED_SCOPE`, `IRI_INGEST_ALLOWED_TOOLS` | ingest       | not present in the environment read on 2026-08-28, so inert — **open** (7b, 7c)                                                    |
 | `IRI_INGEST_SERVICE_ACCOUNT_*`, `IRI_INGEST_PUBLIC_BASE_URL`, `IRI_INGEST_GATEWAY_CLIENT_IDS` | ingest / backend | set — the extractor's sends go through this path since v2.7.2, and it refuses by name when a value is missing (step 9); `IRI_INGEST_PUBLIC_BASE_URL` is also **required** since security review 2 — blank refuses the ingest `prod` start (REQ-INGEST-012) |
 
-The **open** row is the remaining work of the client-identity gate: read the host's values (a
-read, needing no approval under the production-host rule), then set them in the order 7b → 7c.
-The audience that 7a says to set last went in first, on 2026-09-22: it refuses with `401` rather
-than `403` and is not softened by `AUDIT_ONLY`, so a send that fails with `401` after a realm
-change points here before anywhere else.
+The client-identity gate those rows configured is gone with the `/v1` routes, so nothing is open
+here any more. The audience check stays: it refuses with `401` rather than `403`, so an exchange
+call that fails with `401` after a realm change points here before anywhere else.
 
 ### Applying an `.env` change on the production host
 
@@ -295,8 +289,8 @@ explicit yes to that command.
 
 Only for client software the owner has explicitly approved. A third-party client talks to the
 **exchange API** (`/exchange/v1/**`, [`external-exchange.md`](specs/external-exchange.md)) and
-nothing else; it never gets an ingest scope, and the legacy `/v1/*` routes end at the exchange's
-go-live (`REQ-XCH-033`). Every such client follows one template (`REQ-XCH-005`,
+nothing else; it never gets an ingest scope, and the legacy `/v1/*` routes are removed since
+2026-09-28 (`REQ-XCH-033`). Every such client follows one template (`REQ-XCH-005`,
 [ADR-0217](adr/0217-third-party-clients-are-public-device-grant-clients-in-a-db-registry.md)), and
 the provisioner creates it — never the Admin Console.
 
@@ -346,9 +340,10 @@ Since security finding H1 (owner decision 2026-09-27) the provisioner also gives
 client the template's protections: **consent required**, `dpop.bound.access.tokens` on, only
 `basic` as a default scope, only its five exchange scopes and `offline_access` as optional scopes,
 and every other scope withheld — **both ingest scopes included**, so no extractor token carries
-`aud=basetool-backend` any more. Apply it on production only **after** the legacy switch-off
-(`IRI_INGEST_LEGACY_ENDPOINTS_ENABLED=false`): released extractors up to 2.9.1 still need
-`extractor-ingest-only` for `/v1/*` until then.
+`aud=basetool-backend` any more. It was applied on production only **after** the legacy switch-off
+(`IRI_INGEST_LEGACY_ENDPOINTS_ENABLED=false`, S14), because released extractors up to 2.9.1 still
+needed `extractor-ingest-only` for `/v1/*`; the go-live did it at S15 (2026-09-28), and the `/v1`
+routes are removed since.
 
 **Revoking** a client is the registry's suspend switch (#2087); disabling the Keycloak client also
 stops new tokens being issued. Removing it from the list does **not** delete it — the provisioner
@@ -603,6 +598,12 @@ stop-gap, add the audience that population does carry to the comma list.
 
 ## Step 7 — Client-identity gate (REQ-INGEST-011)
 
+> **Superseded 2026-09-28 (#2092 step 9), except the audience.** The client-identity gate that 7b
+> and 7c configure guarded only the removed `/v1` routes, and the gateway no longer reads its
+> variables. What still holds is 7a's scope topology and the gateway audience
+> `IRI_INGEST_EXPECTED_AUDIENCES=basetool-ingest`, which the `exchange.*` scopes stamp as well. The
+> rest is kept as the record.
+
 Everything below is **inert until configured**, and each check is fail-closed once enabled. Do it in
 this order; the audit-only pass is what keeps it from locking out the real extractor.
 
@@ -695,8 +696,8 @@ IRI_INGEST_EXPECTED_AUDIENCES=basetool-ingest
 > **Reading the result without the host** (2026-09-22): the gauge
 > `basetool_ingest_gate_enforcing{gate="audience"}` is `1` once this variable holds a value and `0`
 > while it is empty; `IngestAudienceGateOff` fires while it is `0`, and the gateway's startup log
-> prints the whole posture on its `Client gates` line (booleans and counts only). The same gauge
-> reports `azp` / `scope` / `tool`, which read `0` while `AUDIT_ONLY` is on.
+> prints it on its `Audience gate` line (a boolean and a count only). Until 2026-09-28 the same
+> gauge also reported `azp` / `scope` / `tool` for the removed client-identity gate.
 >
 > ### ⚠️ `AUDIT_ONLY` does NOT cover this variable — set it LAST
 >
@@ -951,11 +952,16 @@ Nothing changes for it. The gateway keeps accepting plain unbound bearers alongs
 pre-2.7 client keeps working and there is no flag day. **A 2.7.0–2.7.1 client stays broken** — that
 is the defect being fixed, and those installs must update.
 
+*Amended 2026-09-28 (#2092 step 9):* every extractor before 2.10.0 is locked out now. The `/v1`
+routes it sent to are removed, and its token lost `aud=basetool-ingest` with the go-live's
+provisioner run; a send answers `401`, or `404` with a token the decoder still accepts. Those
+installs must update.
+
 ## Rollback
 
 - **Step 9:** unset the five values from 9b, re-render `env.d` and restart. The backend stops honouring the
-  on-behalf-of header and the gateway stops trying to obtain its own token — ingest writes then fail
-  with a named configuration error rather than misbehaving. The Keycloak client can be left in
+  on-behalf-of header and the gateway stops trying to obtain its own token — exchange relays then
+  fail with a named configuration error rather than misbehaving. The Keycloak client can be left in
   place; it issues tokens nobody consumes. Note this does **not** restore sends for a 2.7.x
   extractor, which was already broken before this change.
 - **Step 6:** ~~unset `IRI_BACKEND_EXPECTED_AUDIENCES`, re-render and restart the backend — the
@@ -977,9 +983,11 @@ is the defect being fixed, and those installs must update.
   accounts **off**, web origins **empty**.
 - [ ] Device grant only: standard flow off and no redirect URIs (decided 2026-09-22; production
   until the provisioner is applied there: still on, see step 1).
-- [ ] `extractor-ingest-only` is on the extractor (and any later approved ingest client) only —
-  never on `basetool-frontend` or another browser client, and not on `basetool-android` (decided
-  2026-09-22, same caveat). The gateway carries it too, inherited at its creation.
+- [ ] `extractor-ingest-only` is on no browser client — never on `basetool-frontend`, not on
+  `basetool-android` (decided 2026-09-22), and since the go-live (S15) not on
+  `basetool-sc-extractor` either. The gateway carries it, inherited at its creation; since the `/v1`
+  routes were removed (2026-09-28) no client's token needs it, because the exchange scopes stamp
+  `aud=basetool-ingest` themselves.
 - [ ] `aud=basetool-backend` verified on **both** the extractor token and the frontend token
   **before** the validator is enabled.
 - [ ] Refresh-token rotation + reuse-detection **off** realm-wide (`"revokeRefreshToken": false`) —

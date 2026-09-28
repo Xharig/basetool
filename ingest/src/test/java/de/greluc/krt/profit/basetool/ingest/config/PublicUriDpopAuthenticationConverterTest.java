@@ -36,8 +36,9 @@ class PublicUriDpopAuthenticationConverterTest {
   private static final String TOKEN = "access-token-value";
 
   private MockHttpServletRequest dpopRequest() {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/blueprint-preview");
-    request.setRequestURI("/v1/blueprint-preview");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/blueprints");
+    request.setRequestURI("/exchange/v1/me/drafts/blueprints");
     request.setScheme("http");
     request.setServerName("ingest");
     request.setServerPort(11262);
@@ -58,7 +59,7 @@ class PublicUriDpopAuthenticationConverterTest {
     DPoPAuthenticationToken token = (DPoPAuthenticationToken) authentication;
     assertThat(token.getResourceUri())
         .as("the proxy-derived :11262 must not survive into the htu comparison")
-        .isEqualTo("https://ingest.profit-base.online/v1/blueprint-preview");
+        .isEqualTo("https://ingest.profit-base.online/exchange/v1/me/drafts/blueprints");
     assertThat(token.getAccessToken()).isEqualTo(TOKEN);
     assertThat(token.getDPoPProof()).isEqualTo(PROOF);
     assertThat(token.getMethod()).isEqualTo("POST");
@@ -73,7 +74,7 @@ class PublicUriDpopAuthenticationConverterTest {
     DPoPAuthenticationToken token = (DPoPAuthenticationToken) converter.convert(dpopRequest());
 
     assertThat(token.getResourceUri())
-        .isEqualTo("https://ingest.profit-base.online/v1/blueprint-preview");
+        .isEqualTo("https://ingest.profit-base.online/exchange/v1/me/drafts/blueprints");
   }
 
   /** With no origin configured, the converter behaves exactly like the stock one. */
@@ -83,7 +84,8 @@ class PublicUriDpopAuthenticationConverterTest {
 
     DPoPAuthenticationToken token = (DPoPAuthenticationToken) converter.convert(dpopRequest());
 
-    assertThat(token.getResourceUri()).isEqualTo("http://ingest:11262/v1/blueprint-preview");
+    assertThat(token.getResourceUri())
+        .isEqualTo("http://ingest:11262/exchange/v1/me/drafts/blueprints");
   }
 
   /** A request that is not DPoP is none of this converter's business. */
@@ -91,7 +93,8 @@ class PublicUriDpopAuthenticationConverterTest {
   void leavesANonDpopRequestAlone() {
     PublicUriDpopAuthenticationConverter converter =
         new PublicUriDpopAuthenticationConverter("https://ingest.profit-base.online");
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/blueprint-preview");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/blueprints");
     request.addHeader("Authorization", "Bearer " + TOKEN);
 
     assertThat(converter.convert(request)).isNull();

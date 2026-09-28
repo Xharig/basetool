@@ -25,12 +25,12 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * Spring Boot entry point for the {@code ingest} gateway, the internet-reachable endpoint the
- * desktop extractor pushes its JSON to (ADR-0018).
+ * Spring Boot entry point for the {@code ingest} gateway, the internet-reachable host of the
+ * exchange API for approved client software (ADR-0216).
  *
- * <p>It validates the caller's JWT, calls the backend import endpoints under its own service
- * account on behalf of the caller (ADR-0129), stages the draft in Redis for one-time browser pickup
- * and returns a handoff id. It owns no database and serves no HTML.
+ * <p>It validates the caller's DPoP-bound JWT, calls the backend's exchange layer under its own
+ * service account on behalf of the member (ADR-0129) and stages drafts in Redis for one-time
+ * browser pickup. It owns no database and serves no HTML.
  */
 @SpringBootApplication(
     exclude = {

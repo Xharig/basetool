@@ -27,13 +27,13 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * The gateway's two DPoP {@code jti} replay caches, one for the exchange routes and one for every
- * other route, so a flood on one surface never refuses proofs on the other (REQ-XCH-006).
+ * other path, so a flood outside the exchange never refuses the exchange's proofs (REQ-XCH-006).
  *
  * @param exchange the cache of the {@code /exchange/} routes
- * @param legacy the cache of the legacy {@code /v1} routes and anything else
+ * @param other the cache of every other path
  */
 public record DpopProofReplayStores(
-    @NotNull DpopProofReplayStore exchange, @NotNull DpopProofReplayStore legacy) {
+    @NotNull DpopProofReplayStore exchange, @NotNull DpopProofReplayStore other) {
 
   /**
    * Creates both caches with the configured caps.
@@ -53,7 +53,7 @@ public record DpopProofReplayStores(
             meterRegistry,
             clock),
         new DpopProofReplayStore(
-            MetricNames.PATH_SCOPE_LEGACY,
+            MetricNames.PATH_SCOPE_OTHER,
             limits.dpopProofsPerMember(),
             limits.dpopProofsTotal(),
             meterRegistry,

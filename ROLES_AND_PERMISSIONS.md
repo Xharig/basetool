@@ -206,13 +206,17 @@ just joined.
 > by-id lookup finds it. The exemption is keyed on the name Keycloak reports for that id matching
 > `service-account-<configured clientId>` exactly: usernames are unique per realm, so that name is
 > occupied by the real service account and cannot be held by a hand-made row. It grants the gateway exactly one thing —
-> permission to name a member in `X-Ingest-On-Behalf-Of`, whose *own* authorities then apply for
-> that request. A named authority rather than an empty set on purpose, so a misconfiguration reads
-> as "authenticated as a machine" rather than as "not authenticated".
+> permission to name a member in `X-Ingest-On-Behalf-Of` on an exchange route (below). A named
+> authority rather than an empty set on purpose, so a misconfiguration reads as "authenticated as a
+> machine" rather than as "not authenticated".
 >
-> On the **exchange** routes (`/api/v1/exchange/**`, REQ-XCH-009) the named member does **not** get
-> their own authorities: they hold only `ROLE_EXCHANGE_MEMBER` and the capabilities the gateway
-> relayed, and every route is gated by `@exchangeGate` against the client registry. An `ADMIN`
+> The named member does **not** get their own authorities: on the exchange routes
+> (`/api/v1/exchange/**`, REQ-XCH-009), the only ones that accept the header, they hold only
+> `ROLE_EXCHANGE_MEMBER` and the capabilities the gateway relayed, and every route is gated by
+> `@exchangeGate` against the client registry. *(Until 2026-09-28 the gateway could also name a
+> member on the two import endpoints the SC Extractor's `/v1` routes relayed to, where the member's
+> own authorities applied; those routes are removed and the import endpoints refuse the header,
+> REQ-SEC-029.)* An `ADMIN`
 > therefore has no admin authority there. A browser or app session reaches none of these routes,
 > and one that sends `X-Exchange-Client` / `X-Exchange-Capabilities` is refused.
 
