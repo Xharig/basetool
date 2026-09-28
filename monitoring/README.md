@@ -134,6 +134,16 @@ deliberately not pins opts out with an `image-pin-gate: ignore-file` marker in i
   that filters its metrics and its gateway log panel; the operations dashboard keeps its
   cross-client exchange panels.
 
+> **Client attribution of relayed exchange calls (operator note).** `basetool_api_client_requests_total`
+> counts a call the ingest gateway relays for an exchange client under that client's registered id
+> (`client_id="versekit"`), not under the gateway's own id; a relayed id the registry does not hold
+> counts as `other` and raises `ApiUnknownClient`. The gateway's own series therefore keeps only
+> the legacy extractor relays, and a new series per client appears on the operations dashboard's
+> per-client panel once a client goes live — expected, not an incident. The audit trail follows the
+> same rule (REQ-AUDIT-005, REQ-XCH-010): exchange writes name the client in the viewer's client
+> filter, the extractor's relays keep recording `none` („Ohne Client (System)"), and rows written
+> before keep what they recorded — nothing is backfilled.
+
 ### How a config change reaches the running process
 
 The config bundle is mirrored to `/var/iri/code` on every release. What happens next depends on the
@@ -244,6 +254,7 @@ section above.
 | **ExchangeRelayHeaderForged** | `X-Exchange-Client` / `X-Exchange-Capabilities` keep arriving from something other than the gateway acting for a member on an exchange path — somebody is trying to borrow an external client's attribution or capabilities (REQ-XCH-010). The correlationId in the backend log names the request. |
 | **ExchangeGateRefusing** | The backend's `ExchangeGate` has refused exchange requests the gateway let through for 15 minutes (`reason` label). Gateway and backend disagree about the registry or a client revocation — check `ExchangeMirrorWriteFailed` and the gateway's registry cache; `revocations_unreadable` means the backend could not read the Redis revocation mirror and answered `502`. |
 | **ExchangeDepartureIncomplete** | A departed member's exchange access could not be fully ended — a revocation, a consent removal or the Keycloak logout failed, and the step is not retried. End the member's sessions and consents in Keycloak by hand (REQ-XCH-008). |
+| **ExchangeBulkUndoFailed** | An admin's bulk undo under *Administration → Verbundene Anwendungen* ended `FAILED`: the members it processed are undone, the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed — it only touches what is not undone yet (REQ-XCH-034, ADR-0227). |
 | **ExchangeRemoveSpike** | One registered client (`client_id`) removed more than 100 blueprints, stock lots or ships across its members in an hour — the per-member guard does not catch a faulty release spread over many members. Suspend the client, then let the members undo (vault runbook *Suspending an exchange client*, REQ-XCH-028). |
 | **ExchangeGuardStorm** | The mass-change guard held back more than 10 change sets of one client in an hour; members get many confirmation links. Check the client's writes and consider suspending it (REQ-XCH-021). |
 | **ExchangeInstallationSurge** | More than 20 new installations of one client in an hour — a release day, or a device-code phishing wave / leaked client. Check the notifications and the admin page (REQ-XCH-007). |

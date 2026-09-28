@@ -156,8 +156,8 @@
 
 - **Audit: Änderungen über eine zugelassene Anwendung nennen diese Anwendung.** Der Client-Filter im
   Audit-Log bietet die registrierten Anwendungen unter ihrem Produktnamen an (REQ-XCH-010). Auch die
-  Metrik `basetool_api_client_requests_total` zählt Gateway-Aufrufe jetzt unter der Client-ID der
-  Anwendung statt unter `none`; ältere Audit-Zeilen bleiben „Ohne Client (System)“.
+  Metrik `basetool_api_client_requests_total` zählt weitergereichte Aufrufe unter der Client-ID der
+  Anwendung statt unter der des Gateways; ältere Audit-Zeilen bleiben „Ohne Client (System)“.
 
 - **Lager: Markierung „gestohlen“.** Bestand kann als gestohlen eingebucht oder nachträglich — auch
   teilweise — markiert werden; gestohlene und reguläre Ware bilden getrennte Stapel, jede Umbuchung
