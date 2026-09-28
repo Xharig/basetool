@@ -201,8 +201,9 @@ if verb == "get":
         out(data["scopes"])
     if path == "roles":
         out(data["roles"])
-    if path == "default-default-client-scopes":
-        out([{"id": s, "name": scope_by_id(s)["name"]} for s in data["realm_default_scopes"]])
+    if path in ("default-default-client-scopes", "default-optional-client-scopes"):
+        key = "realm_default_scopes" if "default-default" in path else "realm_optional_scopes"
+        out([{"id": s, "name": scope_by_id(s)["name"]} for s in data[key]])
     if path == "client-policies/profiles":
         out(data["profiles"])
     if path == "client-policies/policies":
@@ -354,6 +355,13 @@ if verb == "update":
     fail(f"stub: unexpected update {path}")
 
 if verb == "delete":
+    if parts[0] in ("default-default-client-scopes", "default-optional-client-scopes") and len(parts) == 2:
+        key = "realm_default_scopes" if parts[0].startswith("default-default") else "realm_optional_scopes"
+        if parts[1] not in data[key]:
+            fail(f"stub: scope {parts[1]} is not a realm {key}")
+        data[key] = [s for s in data[key] if s != parts[1]]
+        save()
+        sys.exit(0)
     if parts[0] in ("clients", "client-scopes") and parts[2:4] == ["protocol-mappers", "models"]:
         key = "client_mappers" if parts[0] == "clients" else "scope_mappers"
         before = data[key].get(parts[1], [])
@@ -915,6 +923,8 @@ if "composite" in os.environ["SEED"]:
     d["role_composites"]["r-default"].append("r-offline")
 if "mapping" in os.environ["SEED"]:
     d["scope_role_mappings"]["s-offline_access"] = [{"id": "r-offline", "name": "offline_access"}]
+if "no-realm-default" in os.environ["SEED"]:
+    d["realm_optional_scopes"].remove("s-offline_access")
 p.write_text(json.dumps(d), encoding="utf-8")
 '
 }
@@ -950,13 +960,100 @@ assert_not_contains "$output" "$MAPPING_LINE" "and the existing scope mapping is
 rm -rf "$state"
 state="$(mktemp -d)"
 make_stub "$state" empty
-seed_offline "$state" composite+mapping
+seed_offline "$state" composite+mapping+no-realm-default
 output="$(run_provisioner "$state")"
-assert_eq "$(section_first_line "$output")" "  in shape" "a realm with both is in shape"
+assert_eq "$(section_first_line "$output")" "  in shape" "a realm with both and offline_access no realm default is in shape"
 assert_not_contains "$output" "offline_access' (every member" "no composite line is planned"
 run_provisioner "$state" --apply >/dev/null
 assert_eq "$(grep -cE '^create (roles/[^/]+/composites|client-scopes/[^/]+/scope-mappings/realm)$' "${state}/calls.log" || true)" \
   "0" "and the apply sends neither write"
+rm -rf "$state"
+
+echo "19. only the exchange clients are offered offline_access; the first-party clients lose it"
+WITHHELD_LINE="- optional scope 'offline_access' withheld (offline sessions are for the exchange clients only, ADR-0202 amendment 5)"
+NO_OFFLINE_CLIENTS="basetool-frontend backend-service basetool-ingest-gateway grafana"
+state="$(mktemp -d)"
+make_stub "$state" empty
+run_provisioner "$state" --apply --grafana-origin https://grafana.testing.example >/dev/null
+assert_eq "$(cat "${state}/rc")" "0" "a fresh realm is built and verifies clean"
+for cid in $NO_OFFLINE_CLIENTS; do
+  assert_eq "$(query "$state" "'offline_access' in scope_names('optional', '${cid}') + scope_names('default', '${cid}')")" \
+    "False" "a new ${cid} is not offered offline_access"
+done
+for cid in basetool-sc-extractor versekit; do
+  assert_eq "$(query "$state" "'offline_access' in scope_names('optional', '${cid}')")" \
+    "True" "${cid} keeps offline_access as an optional scope"
+done
+STUB_STATE="$state" CLIENTS="$NO_OFFLINE_CLIENTS" "$PYTHON" -c '
+import json, os, pathlib
+p = pathlib.Path(os.environ["STUB_STATE"]) / "state.json"
+d = json.loads(p.read_text(encoding="utf-8"))
+for cid in os.environ["CLIENTS"].split():
+    uuid = next(c["id"] for c in d["clients"] if c["clientId"] == cid)
+    d["client_optional_scopes"][uuid].append("s-offline_access")
+p.write_text(json.dumps(d), encoding="utf-8")
+'
+before="$(cat "${state}/state.json")"
+output="$(run_provisioner "$state" --grafana-origin https://grafana.testing.example)"
+assert_eq "$(cat "${state}/rc")" "2" "a realm in production's shape plans changes"
+assert_eq "$(printf '%s\n' "$output" | grep -cxF "  ${WITHHELD_LINE}" || true)" "4" \
+  "the dry run withholds offline_access from each of the four first-party clients"
+assert_eq "$(printf '%s\n' "$output" | sed '/^\[only on this realm/,$d' | grep -cE '^  [-+~=] ' || true)" "4" \
+  "and plans nothing else"
+assert_eq "$(cat "${state}/state.json")" "$before" "the dry run writes nothing"
+output="$(run_provisioner "$state" --apply --grafana-origin https://grafana.testing.example)"
+assert_eq "$(cat "${state}/rc")" "0" "the apply succeeds and verifies clean"
+for cid in $NO_OFFLINE_CLIENTS; do
+  assert_eq "$(query "$state" "'offline_access' in scope_names('optional', '${cid}')")" \
+    "False" "${cid} no longer offers offline_access"
+done
+assert_eq "$(query "$state" "'offline_access' in scope_names('optional', 'basetool-sc-extractor')")" \
+  "True" "the extractor still does"
+assert_eq "$(query "$state" "'r-offline' in d['role_composites']['r-default']")" "True" \
+  "the default role keeps offline_access"
+output="$(run_provisioner "$state" --apply --grafana-origin https://grafana.testing.example)"
+assert_contains "$output" "No changes" "a second apply is empty"
+assert_eq "$(writes_in "$state")" "0" "and sends no write"
+rm -rf "$state"
+
+echo "20. offline_access is no realm default client scope, so a client created by hand does not inherit it"
+REALM_OPTIONAL_LINE="- realm optional client scope 'offline_access' removed (a client created by hand no longer inherits it; the exchange clients name it themselves)"
+REALM_DEFAULT_LINE="- realm default client scope 'offline_access' removed (a client created by hand no longer inherits it; the exchange clients name it themselves)"
+state="$(mktemp -d)"
+make_stub "$state" empty
+before="$(cat "${state}/state.json")"
+output="$(run_provisioner "$state")"
+assert_contains "$output" "  ${REALM_OPTIONAL_LINE}" "the dry run removes offline_access from the realm's optional client scopes"
+assert_eq "$(cat "${state}/state.json")" "$before" "the dry run writes nothing"
+output="$(run_provisioner "$state" --apply)"
+assert_eq "$(cat "${state}/rc")" "0" "the apply succeeds and verifies clean"
+assert_eq "$(query "$state" "'s-offline_access' in d['realm_default_scopes'] + d['realm_optional_scopes']")" \
+  "False" "offline_access is no realm default client scope any more"
+assert_eq "$(query "$state" "sorted(s['name'] for s in d['scopes'] if s['id'] in d['realm_optional_scopes'])")" \
+  "['address', 'microprofile-jwt', 'organization', 'phone']" "the other realm optional scopes stay"
+for cid in basetool-sc-extractor versekit; do
+  assert_eq "$(query "$state" "'offline_access' in scope_names('optional', '${cid}')")" \
+    "True" "${cid} still carries offline_access explicitly"
+done
+output="$(run_provisioner "$state")"
+assert_eq "$(cat "${state}/rc")" "0" "a dry run afterwards finds the realm in shape"
+assert_eq "$(section_first_line "$output")" "  in shape" "and the offline_access section in shape"
+rm -rf "$state"
+state="$(mktemp -d)"
+make_stub "$state" empty
+STUB_STATE="$state" "$PYTHON" -c '
+import json, os, pathlib
+p = pathlib.Path(os.environ["STUB_STATE"]) / "state.json"
+d = json.loads(p.read_text(encoding="utf-8"))
+d["realm_optional_scopes"].remove("s-offline_access")
+d["realm_default_scopes"].append("s-offline_access")
+p.write_text(json.dumps(d), encoding="utf-8")
+'
+output="$(run_provisioner "$state")"
+assert_contains "$output" "  ${REALM_DEFAULT_LINE}" "as a realm DEFAULT client scope it is planned away too"
+run_provisioner "$state" --apply >/dev/null
+assert_eq "$(cat "${state}/rc")" "0" "and the apply verifies clean"
+assert_eq "$(query "$state" "'s-offline_access' in d['realm_default_scopes']")" "False" "it is gone from the realm defaults"
 rm -rf "$state"
 
 echo

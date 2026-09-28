@@ -261,7 +261,7 @@ def build_realm(provisioner: ModuleType, base: dict, builtin_scopes: list[dict],
         raise SystemExit(f"FATAL: provisioner scopes shadow built-in scopes: {sorted(clash)}")
     realm["clientScopes"] = copy.deepcopy(builtin_scopes) + own
     realm["defaultDefaultClientScopes"] = list(provisioner._STANDARD_DEFAULT)
-    realm["defaultOptionalClientScopes"] = list(provisioner._STANDARD_OPTIONAL)
+    realm["defaultOptionalClientScopes"] = list(provisioner._OPTIONAL_WITHOUT_OFFLINE)
     offline = provisioner.OFFLINE_ACCESS
     realm["scopeMappings"] = [{"clientScope": offline, "roles": [offline]}]
     default_role = next(r for r in realm["roles"]["realm"] if r["name"] == f"default-roles-{REALM}")
@@ -367,6 +367,9 @@ def problems(realm: dict, provisioner: ModuleType, target: Target) -> list[str]:
                for m in realm.get("scopeMappings", [])):
         found.append(f"the {offline} client scope maps no {offline} role, so a client without "
                      f"full scope gets no offline token")
+    for key in ("defaultDefaultClientScopes", "defaultOptionalClientScopes"):
+        if offline in realm.get(key, []):
+            found.append(f"{key} lists {offline}, so every client inherits it")
     for key, value in provisioner.REALM_SETTINGS.items():
         if realm.get(key) != value:
             found.append(f"realm setting {key} differs from the provisioner")
@@ -459,6 +462,11 @@ def selftest() -> int:
         broken = copy.deepcopy(realm)
         broken["scopeMappings"] = []
         expect(f"{prefix} an offline_access scope without its role mapping is caught",
+               caught(broken))
+
+        broken = copy.deepcopy(realm)
+        broken["defaultOptionalClientScopes"].append(provisioner.OFFLINE_ACCESS)
+        expect(f"{prefix} offline_access as a realm default client scope is caught",
                caught(broken))
 
     sandbox = build_realm(provisioner, base, builtin, SANDBOX)

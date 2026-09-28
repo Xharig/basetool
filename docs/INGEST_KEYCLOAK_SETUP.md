@@ -123,7 +123,8 @@ What to know before running it:
   production scope lists, and `basetool-sc-extractor` and every third-party client carry no
   client-level protocol mapper: one found there is a planned `- … mapper '…' removed` change, never
   a line under *only on this realm*, so an apply that verifies clean has removed it (ADR-0202
-  amendment 4).
+  amendment 4). `offline_access` is withheld from `basetool-frontend`, `backend-service`,
+  `basetool-ingest-gateway` and `grafana` too (ADR-0202 amendment 5, below).
 - **The frontend's client type is left alone unless you name it** (ADR-0202 amendment 2):
   `--frontend-client confidential` switches `basetool-frontend` to confidential and sets Keycloak's
   secret from `$KEYCLOAK_FRONTEND_CLIENT_SECRET` in the same update (refused without it);
@@ -166,6 +167,12 @@ What to know before running it:
   either. Without the composite, the extractor's and every third-party client's device login is
   refused `400 not_allowed`: they have `fullScopeAllowed` off and request `offline_access`.
   Production has both since the owner's hand fix of 2026-09-28, so its section reads *in shape*.
+  **Only the exchange clients are offered the scope** (owner decision, the same day): the extractor
+  and every third-party client keep `offline_access` as an optional scope; `basetool-frontend`,
+  `backend-service`, `basetool-ingest-gateway` and `grafana` (only when `--grafana-origin` manages
+  it) have it withheld wherever found, as `basetool-android` always had, and it leaves the realm's
+  default client scopes — see
+  [*Withholding `offline_access` from the first-party clients*](#withholding-offline_access-from-the-first-party-clients).
 - **It does not do** the rest of the realm-wide hardening (Require SSL, events, OTP —
   [`KEYCLOAK_HARDENING_RUNBOOK.md`](KEYCLOAK_HARDENING_RUNBOOK.md); its step 10 is reversed by the
   bullet above), the Discord identity provider
@@ -232,6 +239,57 @@ DPoP policy alone is the safe partial rollback for the Android client.
 > host, and once the second dry run is empty and the apply is verified, remove it together with the
 > kcadm session file and the temporary `basetool-provisioner` client — as done on production on
 > 2026-09-23/25. A later rollback starts from a fresh `kc get`.
+
+### Withholding `offline_access` from the first-party clients
+
+**Production step, not applied yet** (owner decision 2026-09-28, ADR-0202 amendment 5,
+`REQ-OPS-033`). Every member holds `offline_access` through `default-roles-iri` since the hand fix
+of 2026-09-28, so any client that offers the scope could be issued an offline token for a member.
+A provisioner with this change withholds the scope from every first-party client except the
+extractor, and takes it off the realm's default client scopes so a client created by hand does not
+inherit it. It is a production write: the dry run needs the session, the apply needs the owner's
+explicit yes to that command.
+
+- **Session and dry run:** the sequence above, steps 1–4, with the empty client list the go-live
+  used (`--external-clients /root/kc-realm/keycloak/none.json`, content `[]`) until the owner
+  approves a third-party client. Pass `--grafana-origin https://<Grafana's public origin>` only if
+  that dry run then plans nothing else for `grafana`; without the flag `grafana` is left alone and
+  keeps the scope.
+- **Expected dry run:** exit `2`, and exactly these planned lines — the first under the
+  `offline_access for every member` section, the others one under each client's section, the last
+  only with `--grafana-origin`:
+
+  ```text
+  [3/N] offline_access for every member — default role and client scope
+    - realm optional client scope 'offline_access' removed (a client created by hand no longer inherits it; the exchange clients name it themselves)
+  [n/N] client 'basetool-frontend' — confidential, authorization code + client secret + PKCE S256 (the web login)
+    - optional scope 'offline_access' withheld (offline sessions are for the exchange clients only, ADR-0202 amendment 5)
+  [n/N] client 'backend-service' — confidential, service account (the backend's Admin API identity)
+    - optional scope 'offline_access' withheld (offline sessions are for the exchange clients only, ADR-0202 amendment 5)
+  [n/N] client 'basetool-ingest-gateway' — confidential, service account (the gateway's own identity, ADR-0129)
+    - optional scope 'offline_access' withheld (offline sessions are for the exchange clients only, ADR-0202 amendment 5)
+  [n/N] client 'grafana' — confidential, authorization code (Grafana's OAuth login)
+    - optional scope 'offline_access' withheld (offline sessions are for the exchange clients only, ADR-0202 amendment 5)
+  ```
+
+  The first line says `realm default client scope` instead if production holds it as a realm
+  default rather than an optional one (the reference shows it optional). Every other section reads
+  *in shape*, and `[manual]` lists the service accounts' roles as „could not be read" (the identity's limit, above).
+  Anything else: stop and ask.
+- **Apply:** step 5 with the same flags. Expected: `Applied, except the service-account roles
+  above.`, exit `3`; the second dry run `The realm is in the production shape. Nothing to do.`, exit
+  `3`. No `STILL PLANNED` line.
+- **Effect:** none a member notices. The frontend requests `openid, profile, email, roles`, Grafana
+  `openid email profile`, and the two service accounts use client credentials, so no running
+  session holds or asks for the scope. The realm-default change affects only clients created
+  afterwards; an existing client keeps its own scope list.
+- **Rollback**, per client: give the scope back as optional —
+  `CID=$(kc get clients -r iri -q clientId=<client> --fields id --format csv --noquotes)`, the
+  `offline_access` id from `kc get client-scopes -r iri --fields id,name`, then
+  `echo '{}' | kc update clients/$CID/optional-client-scopes/<scope id> -r iri -n -f -` — and
+  expect the next provisioner run to plan the removal again. The realm default comes back with
+  `echo '{}' | kc update default-optional-client-scopes/<scope id> -r iri -n -f -` (Admin Console:
+  *Client scopes → offline_access → Assigned type → Optional*), again until the next run.
 
 ## Onboarding a new approved client
 

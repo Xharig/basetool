@@ -996,7 +996,6 @@
       "optionalClientScopes": [
         "address",
         "microprofile-jwt",
-        "offline_access",
         "organization",
         "phone"
       ],
@@ -1040,7 +1039,6 @@
       "optionalClientScopes": [
         "address",
         "microprofile-jwt",
-        "offline_access",
         "organization",
         "phone"
       ],
@@ -1118,7 +1116,6 @@
   "defaultOptionalClientScopes": [
     "address",
     "microprofile-jwt",
-    "offline_access",
     "organization",
     "phone"
   ],

@@ -1077,7 +1077,10 @@ In German, in the forum (vault *Announcing a release*), in three posts:
     by a client that offers `offline_access` and requests it — the extractor and approved
     third-party clients (30/90-day offline sessions); `basetool-frontend` requests
     `openid, profile, email, roles`, `grafana` `openid email profile`, and `basetool-android` is not
-    offered the scope and omits it.
+    offered the scope and omits it. *Narrowed 2026-09-28 (owner decision):* the provisioner now
+    withholds the scope from `basetool-frontend`, `backend-service`, `basetool-ingest-gateway` and
+    `grafana` as well; production follows with a separate owner-approved apply
+    ([`INGEST_KEYCLOAK_SETUP.md`](INGEST_KEYCLOAK_SETUP.md#withholding-offline_access-from-the-first-party-clients)).
 13. **S15's expected `exit=0` was wrong** — *corrected 2026-09-28.* With `basetool-provisioner`
     (`manage-clients` + `manage-realm`, no `manage-users`) the provisioner cannot read the service
     accounts' roles, so the apply and the dry run after it end with `[manual]` „service-account roles
