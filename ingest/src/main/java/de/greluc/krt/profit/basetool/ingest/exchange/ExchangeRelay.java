@@ -392,6 +392,10 @@ public class ExchangeRelay {
   /**
    * Turns the backend's raw answer into a result.
    *
+   * <p>A {@code 401} or {@code 403} without a code the client may see refuses the gateway's own
+   * identity (ADR-0129), so the cached service-account token is dropped and the next relay mints a
+   * fresh one; a refusal with such a code concerns the member or the client and keeps it.
+   *
    * @param raw the answer
    * @param backendPath the backend path, for the log
    * @param client the admitted request's registry client id, the counter's {@code client_id}
@@ -423,6 +427,14 @@ public class ExchangeRelay {
         backendPath,
         raw.status(),
         node != null);
+    if (raw.status() == HttpStatus.UNAUTHORIZED.value()
+        || raw.status() == HttpStatus.FORBIDDEN.value()) {
+      log.warn(
+          "The backend refused the gateway's own identity with {}; dropping the cached"
+              + " service-account token",
+          raw.status());
+      tokenProvider.invalidate();
+    }
     count(OUTCOME_FAILED, client);
     return Result.failed();
   }

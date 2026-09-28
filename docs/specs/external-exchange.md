@@ -1498,7 +1498,9 @@ passes each of them only with the status the gateway's gate answers it with
 (`ExchangeRelay.GATE_STATUSES`, a `503` included), with the gateway gate's `detail` and, for the
 two `503`s, its `Retry-After: 30`, and the service document answers such a refusal instead of
 a document. Any other status for such a code, and any other `5xx`, stays `502
-BACKEND_RELAY_FAILED`. So a request the gateway admitted from its five-second registry cache and
+BACKEND_RELAY_FAILED`. A `401` or `403` without a passed-through code refuses the gateway's own
+service-account token (ADR-0129): it is answered `502 BACKEND_RELAY_FAILED` too, and the relay
+drops the cached token so the next call mints a fresh one (owner decision 2026-09-28). So a request the gateway admitted from its five-second registry cache and
 the backend refused reads exactly as the gateway's own refusal (security of REQ-XCH-003/-008). The security review of
 2026-09-27 audited what the backend puts there on the passed-through codes. The gate filters
 (`TERMS_NOT_ACCEPTED`, `PENDING_APPROVAL`, `NO_ROLE`, `ACTING_MEMBER_REFUSED`), `ACCESS_DENIED`,

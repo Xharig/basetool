@@ -159,8 +159,10 @@ internet-unreachable — the gateway reaches it over the internal network only.
   and a failed grant backs off for 5 s before Keycloak is asked again (`outcome="backoff"` on
   `basetool_ingest_service_account_token_total`). *Amended 2026-09-28:* the `/v1` error handler that
   also dropped the cached token on such an answer (`reason="backend_auth"`, ING-SEC-02) went with
-  the routes; the exchange relay never did, and `ServiceAccountTokenProvider#invalidate` has no
-  caller now.
+  the routes. By owner decision of the same day `ExchangeRelay` does the same: a `401` or `403`
+  without a code the client may see (REQ-XCH-025) refuses the gateway's own token, so it is
+  dropped and the next relay mints a fresh one; a refusal carrying such a code (`TERMS_NOT_ACCEPTED`,
+  `NOT_PERMITTED`, `INSTALLATION_REVOKED`, …) concerns the member or the client and keeps it.
 - [x] The servlet filters run in five distinct slots, outermost first: `CorrelationIdFilter` (+10),
   `BotProtectionFilter` (+12), `RequestLoggingFilter` (+15), `RateLimitingFilter` (+20),
   `PayloadSizeLimitFilter` (+30) — all ahead of Spring Security. Bot and access log used to tie at
@@ -204,7 +206,8 @@ exactly the exchange routes, nothing under `/v1`), `RemovedExtractorRoutesTest` 
 routes answer like any unknown path and stage nothing), `FilterOrderTest` (the registered filter
 order), `ServiceAccountTokenProviderTest` (atomic cache under concurrency, `invalidate()`, failure
 backoff), `ExchangeRelayTest` (the backend is called as the gateway, naming the member; a relay
-failure is `502 BACKEND_RELAY_FAILED`), `RestClientConfigTest` (the TLS trust matrix against a real
+failure is `502 BACKEND_RELAY_FAILED`; an uncoded `401`/`403` drops the cached token, a coded one
+keeps it), `RestClientConfigTest` (the TLS trust matrix against a real
 HTTPS server with a misnamed certificate, the token-grant timeout, the body cap, HTTP/1.1),
 `RelayIdleConnectionBoundTest` (the client's idle bound against Tomcat's keep-alive, read off the
 classpath) · **Code:** `ExchangeController`, `ExchangeRelay`, `RestClientConfig`,

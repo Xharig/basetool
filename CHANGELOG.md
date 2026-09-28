@@ -12,6 +12,11 @@
 
 ### Fixed
 
+- **Datenaustausch: das Gateway holt nach einer Abweisung seines eigenen Tokens ein neues.** Lehnt
+  das Backend das Dienstkonto-Token des Ingest-Gateways ab (`401`/`403` ohne Austausch-Code),
+  verwirft das Gateway es, sodass die nächste Anfrage ein frisches holt, statt bis zum Ablauf
+  weiter zu scheitern.
+
 - **Aufträge: „Items bearbeiten" speichert wieder ohne Umweg.** Die bearbeitende Einheit war im
   Bearbeiten-Formular nicht vorausgewählt; weil das Feld Pflicht ist, verwarf der Browser das Speichern
   ohne sichtbare Meldung, und z. B. ein entferntes Item blieb im Auftrag. Beide Einheiten sind jetzt
