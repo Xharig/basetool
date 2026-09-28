@@ -19,24 +19,21 @@
 
 package de.greluc.krt.profit.basetool.ingest.config;
 
-import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
-import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Top-level OpenAPI document for the ingest gateway, declaring the {@code bearer-jwt} security
- * scheme as the default requirement.
+ * Top-level OpenAPI document SpringDoc generates for the ingest gateway; it lists no operation,
+ * because the gateway's only API is the exchange, whose contract is a committed document of its own
+ * (ADR-0216).
  */
 @Configuration
 public class OpenApiConfig {
 
   /**
-   * Returns the {@link OpenAPI} root document SpringDoc merges the scanned {@code /v1} operations
-   * into when generating {@code openapi.json}.
+   * Returns the {@link OpenAPI} root document SpringDoc writes to {@code openapi.json}.
    *
    * @return the {@link OpenAPI} root document for the ingest gateway
    */
@@ -49,32 +46,9 @@ public class OpenApiConfig {
                 .title("KRT Basetool Ingest Gateway API")
                 .version("1.0")
                 .description(
-                    "Forward-only ingest gateway for the KRT Basetool. It validates the caller's"
-                        + " Keycloak JWT, relays the payload to the backend's import endpoints"
-                        + " under its OWN service-account identity while naming the member it"
-                        + " acts for in an on-behalf-of header (ADR-0129 - the caller's token"
-                        + " stops here, because a sender-constrained token cannot survive a"
-                        + " second hop), stages the returned draft in Redis for a single-use"
-                        + " browser pickup, and returns the handoff the desktop extractor opens."
-                        + " Nothing is interpreted or persisted here.\n\n"
-                        + "## Restricted interface — approved clients only\n\n"
-                        + "This document is published so that the official basetool SC extractor"
-                        + " can be developed against a stable contract. It is NOT an open"
-                        + " integration API. **Only client software explicitly approved by the"
-                        + " basetool developer (@greluc) may use this interface.** Approval means"
-                        + " a dedicated Keycloak client registration AND an entry on the gateway's"
-                        + " client allowlist; unapproved callers are rejected with"
-                        + " `403 CLIENT_NOT_ALLOWED`, are unsupported, and may break without"
-                        + " notice. Building or distributing an unapproved client is not"
-                        + " permitted — if you want to integrate, ask first."))
-        .addSecurityItem(new SecurityRequirement().addList("bearer-jwt"))
-        .components(
-            new Components()
-                .addSecuritySchemes(
-                    "bearer-jwt",
-                    new SecurityScheme()
-                        .type(SecurityScheme.Type.HTTP)
-                        .scheme("bearer")
-                        .bearerFormat("JWT")));
+                    "The ingest gateway of the KRT Basetool publishes no operation in this"
+                        + " document. Its only API is the exchange for approved client software;"
+                        + " its contract is served at /exchange/v1/openapi.json and documented at"
+                        + " https://krt-profit.github.io/basetool/."));
   }
 }

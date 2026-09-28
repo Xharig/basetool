@@ -25,8 +25,8 @@ public final class ActingMemberHeader {
   /**
    * Names the member the ingest gateway is acting for.
    *
-   * <p>Must equal {@code BackendImportClient.ON_BEHALF_OF_HEADER} in the ingest module, which
-   * {@code OnBehalfOfHeaderParityTest} verifies.
+   * <p>Must equal {@code ExchangeRelay.ON_BEHALF_OF_HEADER} in the ingest module, which {@code
+   * OnBehalfOfHeaderParityTest} verifies.
    */
   public static final String ON_BEHALF_OF_HEADER = "X-Ingest-On-Behalf-Of";
 

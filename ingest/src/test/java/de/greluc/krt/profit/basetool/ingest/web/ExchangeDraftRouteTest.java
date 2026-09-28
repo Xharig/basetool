@@ -45,7 +45,6 @@ import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeTestSupport;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeUnavailableException;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.model.dto.HandoffKind;
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.file.Files;
@@ -91,7 +90,6 @@ class ExchangeDraftRouteTest {
   @Autowired private MeterRegistry meterRegistry;
 
   @MockitoBean private JwtDecoder jwtDecoder;
-  @MockitoBean private BackendImportClient backendImportClient;
   @MockitoBean private HandoffStagingService stagingService;
   @MockitoBean private ExchangeRegistryReader registryReader;
   @MockitoBean private ExchangeRevocationReader revocationReader;

@@ -35,7 +35,6 @@ import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
@@ -304,28 +303,6 @@ class ExchangeRelayTest {
 
     assertThat(result.code()).isEqualTo("BACKEND_RELAY_FAILED");
     assertThat(count("failed")).isEqualTo(1.0d);
-  }
-
-  @Test
-  void anOpenExtractorBreakerDoesNotStopTheExchangeRelay() {
-    CircuitBreakerRegistry breakers = CircuitBreakerRegistry.ofDefaults();
-    breakers.circuitBreaker("backend").transitionToForcedOpenState();
-    RestClient.Builder builder = RestClient.builder().baseUrl("https://backend");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    server
-        .expect(requestTo("https://backend/api/v1/exchange/catalog/locations"))
-        .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
-    ServiceAccountTokenProvider tokens = mock(ServiceAccountTokenProvider.class);
-    when(tokens.currentToken()).thenReturn("gateway-token");
-
-    ExchangeRelay.Result result =
-        relay(builder.build(), tokens, breakers, bulkheads)
-            .forward(HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
-
-    server.verify();
-    assertThat(result.isOk()).isTrue();
-    assertThat(breakers.circuitBreaker(ExchangeRelay.BREAKER).getState())
-        .isEqualTo(CircuitBreaker.State.CLOSED);
   }
 
   @Test

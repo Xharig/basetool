@@ -73,8 +73,8 @@ import tools.jackson.databind.node.ObjectNode;
  * The authenticated exchange routes built so far (REQ-XCH-001). Each request has passed both
  * exchange gates; a body is checked against its v1 schema before the relay, undeclared fields are
  * reported as {@code UNKNOWN_FIELD} warnings where the answer carries warnings, and the backend's
- * answer is checked against its schema before it reaches the client. Kept out of the extractor's
- * API document; the committed exchange document describes these routes.
+ * answer is checked against its schema before it reaches the client. Kept out of the gateway's
+ * generated API document; the committed exchange document describes these routes.
  */
 @Slf4j
 @Hidden
@@ -501,7 +501,7 @@ public class ExchangeController {
 
   /**
    * Checks a draft, relays it to the backend's preview, stages the answer for the member's review
-   * as the extractor's upload does, and answers where the member opens it.
+   * and answers where the member opens it.
    *
    * @param resource the draft's path segment
    * @param schema the draft's schema

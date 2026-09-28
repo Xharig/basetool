@@ -21,7 +21,6 @@ package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.ServiceAccountTokenProvider;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
@@ -36,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -63,12 +63,25 @@ import tools.jackson.databind.ObjectMapper;
  * becomes {@code 502 BACKEND_RELAY_FAILED}.
  *
  * <p>The relay has its own backend client, circuit breaker ({@value #BREAKER}) and, for large
- * change sets, bulkhead ({@value #LARGE_CHANGE_SETS}), none of them shared with the extractor's
- * {@link BackendImportClient} (REQ-XCH-023).
+ * change sets, bulkhead ({@value #LARGE_CHANGE_SETS}) (REQ-XCH-023).
  */
 @Slf4j
 @Service
 public class ExchangeRelay {
+
+  /**
+   * The header naming the member the gateway acts for (ADR-0129).
+   *
+   * <p>The backend honours it only from the gateway's service account and declares the same
+   * literal, kept in step by a parity test.
+   */
+  public static final String ON_BEHALF_OF_HEADER = "X-Ingest-On-Behalf-Of";
+
+  /** The longest {@code Accept-Language} the relay passes on; a longer one is dropped. */
+  private static final int MAX_ACCEPT_LANGUAGE_LENGTH = 100;
+
+  /** The characters a relayed {@code Accept-Language} may hold; excludes CR and LF. */
+  private static final Pattern ACCEPT_LANGUAGE_PATTERN = Pattern.compile("[A-Za-z0-9*,;=. _-]+");
 
   /** The header naming the relayed client. */
   public static final String CLIENT_HEADER = "X-Exchange-Client";
@@ -323,7 +336,7 @@ public class ExchangeRelay {
       @Nullable String acceptLanguage) {
     String token = tokenProvider.currentToken();
     String correlationId = MDC.get(loggingProperties.correlationIdMdcKey());
-    String language = BackendImportClient.sanitizedAcceptLanguage(acceptLanguage);
+    String language = sanitizedAcceptLanguage(acceptLanguage);
     return circuitBreaker.executeSupplier(
         () -> {
           RestClient.RequestBodySpec request =
@@ -333,7 +346,7 @@ public class ExchangeRelay {
                   .headers(
                       headers -> {
                         headers.setBearerAuth(token);
-                        headers.set(BackendImportClient.ON_BEHALF_OF_HEADER, context.member());
+                        headers.set(ON_BEHALF_OF_HEADER, context.member());
                         headers.set(CLIENT_HEADER, context.clientId());
                         headers.set(
                             CAPABILITIES_HEADER,
@@ -358,6 +371,22 @@ public class ExchangeRelay {
           return request.exchange(
               (req, res) -> new Raw(res.getStatusCode().value(), read(res.getBody())));
         });
+  }
+
+  /**
+   * Checks a client-supplied {@code Accept-Language} against the RFC 5646 characters and a length
+   * bound, dropping it rather than repairing it.
+   *
+   * @param acceptLanguage the inbound value, or {@code null}
+   * @return the value when it is well-formed and short enough, otherwise {@code null}
+   */
+  public static @Nullable String sanitizedAcceptLanguage(@Nullable String acceptLanguage) {
+    if (acceptLanguage == null
+        || acceptLanguage.isBlank()
+        || acceptLanguage.length() > MAX_ACCEPT_LANGUAGE_LENGTH) {
+      return null;
+    }
+    return ACCEPT_LANGUAGE_PATTERN.matcher(acceptLanguage).matches() ? acceptLanguage : null;
   }
 
   /**

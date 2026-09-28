@@ -31,7 +31,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.nimbusds.jose.jwk.ECKey;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -69,7 +68,6 @@ class ExchangeDpopGateTest {
   @Autowired private MeterRegistry meterRegistry;
 
   @MockitoBean private JwtDecoder jwtDecoder;
-  @MockitoBean private BackendImportClient backendImportClient;
   @MockitoBean private HandoffStagingService handoffStagingService;
   @MockitoBean private ExchangeRegistryReader registryReader;
   @MockitoBean private ExchangeRevocationReader revocationReader;
@@ -253,7 +251,7 @@ class ExchangeDpopGateTest {
             ExchangeDpopProofValidation.isExchange(
                 DPoPProofContext.withDPoPProof("x")
                     .method("POST")
-                    .targetUri("https://ingest.example/v1/refinery-extract")
+                    .targetUri("https://ingest.example/unrouted")
                     .build()))
         .isFalse();
     assertThat(

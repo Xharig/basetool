@@ -22,7 +22,6 @@ package de.greluc.krt.profit.basetool.ingest.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRoutes;
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import de.greluc.krt.profit.basetool.testsupport.web.Call;
 import de.greluc.krt.profit.basetool.testsupport.web.EndpointEnumeration;
@@ -38,19 +37,17 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
- * Pins the gateway's routed surface to exactly its two ingest endpoints (REQ-INGEST-001), since the
- * protective filters scope themselves to {@code /v1/**} via {@link IngestPathScope}. Uses {@link
- * EndpointEnumeration}; only springdoc's {@code /v3/api-docs} tree and Boot's {@code /error} are
- * tolerated besides.
+ * Pins the gateway's routed surface to exactly the exchange routes (REQ-INGEST-001, REQ-XCH-001),
+ * since the protective filters scope themselves to {@code /exchange/**} via {@link
+ * IngestPathScope}. Uses {@link EndpointEnumeration}; only springdoc's {@code /v3/api-docs} tree
+ * and Boot's {@code /error} are tolerated besides.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class IngestEndpointSurfaceTest {
 
-  /** The complete routed ingest surface (REQ-INGEST-001). */
+  /** The complete routed gateway surface (REQ-INGEST-001). */
   private static final Set<Call> INGEST_SURFACE =
       Set.of(
-          new Call(HttpMethod.POST, "/v1/refinery-extract"),
-          new Call(HttpMethod.POST, "/v1/blueprint-preview"),
           new Call(HttpMethod.GET, "/exchange/v1/openapi.json"),
           new Call(HttpMethod.GET, "/exchange/v1/schemas/x"),
           new Call(HttpMethod.GET, "/exchange/v1"),
@@ -86,7 +83,6 @@ class IngestEndpointSurfaceTest {
   @Autowired private WebApplicationContext context;
 
   @MockitoBean private JwtDecoder jwtDecoder;
-  @MockitoBean private BackendImportClient backendImportClient;
   @MockitoBean private HandoffStagingService handoffStagingService;
 
   @Test
@@ -100,7 +96,7 @@ class IngestEndpointSurfaceTest {
 
     assertThat(routed)
         .as(
-            "every endpoint outside /v1 and /exchange is served WITHOUT the payload cap, rate"
+            "every endpoint outside /exchange is served WITHOUT the payload cap, rate"
                 + " limit and access log — add it there or extend IngestPathScope first")
         .containsExactlyInAnyOrderElementsOf(INGEST_SURFACE);
   }
@@ -112,7 +108,7 @@ class IngestEndpointSurfaceTest {
           new MockHttpServletRequest(call.method().name(), call.path());
       request.setRequestURI(call.path());
 
-      assertThat(IngestPathScope.isProtectedRequest(request))
+      assertThat(IngestPathScope.isExchangeRequest(request))
           .as("%s must be covered by the protective filters", call)
           .isTrue();
     }
@@ -133,9 +129,15 @@ class IngestEndpointSurfaceTest {
   }
 
   @Test
+  void theRemovedExtractorRoutesAreNotRouted() {
+    assertThat(EndpointEnumeration.mappings(context))
+        .noneMatch(call -> EndpointEnumeration.isUnder(call.path(), "/v1"));
+  }
+
+  @Test
   void theEnumerationIsNotVacuous() {
     assertThat(EndpointEnumeration.patterns(context, HttpMethod.POST))
-        .contains("/v1/refinery-extract", "/v1/blueprint-preview");
+        .contains("/exchange/v1/me/drafts/refinery-orders", "/exchange/v1/me/drafts/blueprints");
     assertThat(EndpointEnumeration.patterns(context, HttpMethod.GET))
         .contains("/exchange/v1/openapi.json", "/exchange/v1/schemas/{name}");
   }

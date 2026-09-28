@@ -49,11 +49,10 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
- * Builds the gateway's three outbound {@link RestClient}s on the JDK {@link HttpClient}: the
- * extractor's backend relay, the exchange relay and the Keycloak client-credentials client
- * (ADR-0204).
+ * Builds the gateway's two outbound {@link RestClient}s on the JDK {@link HttpClient}: the exchange
+ * relay and the Keycloak client-credentials client (ADR-0204).
  *
- * <p>In {@code dev}/{@code test} all certificates are trusted. Elsewhere the backend relay trusts
+ * <p>In {@code dev}/{@code test} all certificates are trusted. Elsewhere the exchange relay trusts
  * only the {@code backend-trust} bundle (hostname checked per {@code
  * app.ingest.verify-backend-hostname}, REQ-SEC-070) or else the JVM defaults; the Keycloak client
  * trusts the JVM defaults plus {@code keycloak-trust} and always checks the hostname.
@@ -64,12 +63,6 @@ public class RestClientConfig {
 
   /** Upper bound on establishing a TCP (and TLS) connection, for both clients. */
   static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-
-  /**
-   * Timeout on the backend relay once connected, covering the request until response headers and
-   * the body read.
-   */
-  static final Duration BACKEND_READ_TIMEOUT = Duration.ofSeconds(15);
 
   /**
    * Timeout on the exchange relay once connected: about three times the p99 of a 500-op stock
@@ -99,27 +92,10 @@ public class RestClientConfig {
   private final BackendCallLoggingInterceptor backendCallLoggingInterceptor;
 
   /**
-   * The backend-facing client: a 5&nbsp;s connect timeout, a 15&nbsp;s read timeout, profile-gated
-   * TLS trust, the outbound call log, and a response body capped at the configured max payload size
-   * so a hostile or buggy backend response cannot exhaust heap.
-   *
-   * @return a {@link RestClient} bound to the configured backend base URL
-   */
-  @Bean
-  public RestClient backendRestClient() {
-    return RestClient.builder()
-        .baseUrl(ingestProperties.backendBaseUrl())
-        .requestFactory(requestFactory(backendSslContext(), BACKEND_READ_TIMEOUT))
-        .observationRegistry(observationRegistry)
-        .requestInterceptor(backendCallLoggingInterceptor)
-        .requestInterceptor(new ResponseSizeLimitInterceptor(ingestProperties.maxPayloadBytes()))
-        .build();
-  }
-
-  /**
-   * The exchange relay's own backend client: the backend client's trust, logging and body cap on a
-   * separate JDK client, so its connections and its 30&nbsp;s read timeout ({@link
-   * #EXCHANGE_READ_TIMEOUT}) are the exchange's alone.
+   * The exchange relay's backend client: a 5&nbsp;s connect timeout, a 30&nbsp;s read timeout
+   * ({@link #EXCHANGE_READ_TIMEOUT}), profile-gated TLS trust, the outbound call log, and a
+   * response body capped at the configured max payload size so a hostile or buggy backend response
+   * cannot exhaust heap.
    *
    * @return a {@link RestClient} bound to the configured backend base URL
    */

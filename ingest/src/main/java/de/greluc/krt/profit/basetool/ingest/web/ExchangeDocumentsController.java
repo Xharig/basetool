@@ -35,8 +35,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Serves the exchange contract anonymously: the OpenAPI document and the JSON Schemas at their
- * permanent {@code $id} (REQ-XCH-001, REQ-XCH-011). Kept out of the extractor's own API document;
- * the exchange's authoritative document is the one served here.
+ * permanent {@code $id} (REQ-XCH-001, REQ-XCH-011). Kept out of the gateway's generated API
+ * document; the exchange's authoritative document is the one served here.
  */
 @Hidden
 @RestController

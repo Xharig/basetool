@@ -46,8 +46,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Regenerates the committed ingest OpenAPI document ({@code src/main/resources/api/openapi.json})
- * from the live SpringDoc output and asserts its essential parts: security scheme, endpoints and
- * scanned controllers.
+ * from the live SpringDoc output and asserts its essential parts: the title, the pointer to the
+ * exchange's own document, and that no operation is published here.
  */
 @SpringBootTest
 @Slf4j
@@ -75,13 +75,11 @@ class OpenApiGeneratorTest {
 
     assertThat(document.path("info").path("title").asString())
         .isEqualTo("KRT Basetool Ingest Gateway API");
-    assertThat(document.path("components").path("securitySchemes").has("bearer-jwt")).isTrue();
+    assertThat(document.path("info").path("description").asString())
+        .contains("/exchange/v1/openapi.json");
     assertThat(document.path("paths").propertyNames())
-        .containsExactlyInAnyOrder("/v1/refinery-extract", "/v1/blueprint-preview");
-    assertThat(document.path("paths").path("/v1/refinery-extract").has("post")).isTrue();
-    assertThat(document.path("paths").path("/v1/blueprint-preview").has("post")).isTrue();
-    assertThat(document.path("components").path("schemas").has("RefineryExtractDto")).isTrue();
-    assertThat(document.path("components").path("schemas").has("IngestResponseDto")).isTrue();
+        .as("the exchange routes are documented in their own committed document")
+        .isEmpty();
 
     Path path = Paths.get("src/main/resources/api/openapi.json");
     if (path.getParent() != null) {

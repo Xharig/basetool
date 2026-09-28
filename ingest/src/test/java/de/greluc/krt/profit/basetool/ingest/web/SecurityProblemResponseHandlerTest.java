@@ -51,7 +51,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** Unit tests for the filter-level 401/403 problem responses and their logging. */
 class SecurityProblemResponseHandlerTest {
 
-  private static final String URI = "/v1/refinery-extract";
+  private static final String URI = "/unrouted";
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
@@ -180,7 +180,7 @@ class SecurityProblemResponseHandlerTest {
     assertThat(events).hasSize(1);
     assertThat(events.getFirst().getLevel()).isEqualTo(Level.DEBUG);
     assertThat(events.getFirst().getFormattedMessage())
-        .contains("POST /v1/refinery-extract")
+        .contains("POST /unrouted")
         .contains("InvalidBearerTokenException")
         .doesNotContain("eyJ");
   }

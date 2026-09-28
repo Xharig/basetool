@@ -21,7 +21,6 @@ package de.greluc.krt.profit.basetool.ingest.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import jakarta.servlet.Filter;
 import java.util.ArrayList;
@@ -52,7 +51,6 @@ class FilterOrderTest {
           CorrelationIdFilter.class,
           BotProtectionFilter.class,
           RequestLoggingFilter.class,
-          LegacyEndpointGoneFilter.class,
           RateLimitingFilter.class,
           PayloadSizeLimitFilter.class);
 
@@ -62,7 +60,6 @@ class FilterOrderTest {
   @Autowired private ApplicationContext context;
 
   @MockitoBean private JwtDecoder jwtDecoder;
-  @MockitoBean private BackendImportClient backendImportClient;
   @MockitoBean private HandoffStagingService handoffStagingService;
 
   @Test

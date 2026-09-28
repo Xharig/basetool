@@ -25,7 +25,10 @@ public final class MetricNames {
   /** Counter {@code basetool_ingest_handoff_total} — successful handoffs, tag {@code kind}. */
   public static final String INGEST_HANDOFF = "basetool.ingest.handoff";
 
-  /** Counter {@code basetool_ingest_handoff_errors_total} — failed relays, tag {@code reason}. */
+  /**
+   * Counter {@code basetool_ingest_handoff_errors_total} — an unreachable handoff staging or an
+   * unexpected failure, tag {@code reason}.
+   */
   public static final String INGEST_HANDOFF_ERRORS = "basetool.ingest.handoff.errors";
 
   /**
@@ -36,15 +39,15 @@ public final class MetricNames {
   public static final String INGEST_PAYLOAD_REJECTED = "basetool.ingest.payload.rejected";
 
   /**
-   * Counter {@code basetool_ratelimit_rejections_total} — tag {@code bucket} ({@code ip}/{@code
-   * subject}). Shares its name with the backend rate-limit counter; the {@code application} common
-   * tag distinguishes the module.
+   * Counter {@code basetool_ratelimit_rejections_total} — tag {@code bucket} ({@link #BUCKET_IP}).
+   * Shares its name with the backend rate-limit counter; the {@code application} common tag
+   * distinguishes the module.
    */
   public static final String RATELIMIT_REJECTIONS = "basetool.ratelimit.rejections";
 
   /**
-   * Counter {@code basetool_ratelimit_requests_total} with tag {@code bucket} ({@link #BUCKET_IP} /
-   * {@link #BUCKET_SUBJECT}), bumped on every bucket evaluation, consumed or rejected.
+   * Counter {@code basetool_ratelimit_requests_total} with tag {@code bucket} ({@link #BUCKET_IP}),
+   * bumped on every bucket evaluation, consumed or rejected.
    */
   public static final String RATELIMIT_REQUESTS = "basetool.ratelimit.requests";
 
@@ -60,28 +63,13 @@ public final class MetricNames {
   /** Rate-limit bucket value for the pre-auth per-IP servlet filter. */
   public static final String BUCKET_IP = "ip";
 
-  /** Rate-limit bucket value for the per-subject limiter. */
-  public static final String BUCKET_SUBJECT = "subject";
-
-  /** Failure reason: the backend rejected the forwarded payload (4xx relayed / 5xx). */
-  public static final String REASON_BACKEND_REJECT = "backend_reject";
-
-  /** Failure reason: the backend was unreachable or the circuit was open. */
-  public static final String REASON_BACKEND_UNAVAILABLE = "backend_unavailable";
-
-  /**
-   * Failure reason: the backend answered {@code 401}/{@code 403} to the gateway's own
-   * service-account identity (ADR-0129).
-   */
-  public static final String REASON_BACKEND_AUTH = "backend_auth";
-
   /**
    * Failure reason: the Redis handoff staging was unreachable, so the draft could not be parked
    * (REQ-INGEST-003); answered with a retryable 503.
    */
   public static final String REASON_STAGING_UNAVAILABLE = "staging_unavailable";
 
-  /** Failure reason: any other unexpected relay failure. */
+  /** Failure reason: any other unexpected failure. */
   public static final String REASON_INTERNAL = "internal";
 
   /**
@@ -137,31 +125,6 @@ public final class MetricNames {
    * request; rejecting it at the edge is what keeps that failure out of the error dispatch.
    */
   public static final String BOT_RULE_QUERY_STRING = "query_string";
-
-  /**
-   * Counter {@code basetool_ingest_client_total} with tag {@code client_id}, bumped per accepted
-   * ingest call (REQ-INGEST-011). The tag is the matched allowlist entry or {@link
-   * #CLIENT_ID_OTHER}, never the raw {@code azp}.
-   */
-  public static final String INGEST_CLIENT = "basetool.ingest.client";
-
-  /**
-   * Counter {@code basetool_ingest_client_rejected_total} with tag {@code reason}, bumped whenever
-   * the client-identity gate refuses a caller or would refuse it under audit-only (REQ-INGEST-011).
-   */
-  public static final String INGEST_CLIENT_REJECTED = "basetool.ingest.client.rejected";
-
-  /**
-   * Counter {@code basetool_ingest_legacy_gone_total}, bumped for every legacy {@code /v1} request
-   * refused with {@code 410 LEGACY_ENDPOINT_GONE} after the switch-off (REQ-XCH-033).
-   */
-  public static final String INGEST_LEGACY_GONE = "basetool.ingest.legacy.gone";
-
-  /**
-   * Gauge {@code basetool_ingest_legacy_endpoints_enabled}: {@code 1} while the legacy {@code /v1}
-   * endpoints answer, {@code 0} once they are switched off (REQ-XCH-033).
-   */
-  public static final String INGEST_LEGACY_ENABLED = "basetool.ingest.legacy.endpoints.enabled";
 
   /**
    * Counter {@code basetool_ingest_exchange_refused_total{reason,client_id}}: every exchange
@@ -247,12 +210,9 @@ public final class MetricNames {
 
   /**
    * Tag key on {@link #INGEST_AUTH_FAILURES}: the surface the request targeted — {@link
-   * #PATH_SCOPE_LEGACY}, {@link #PATH_SCOPE_EXCHANGE} or {@link #PATH_SCOPE_OTHER}.
+   * #PATH_SCOPE_EXCHANGE} or {@link #PATH_SCOPE_OTHER}.
    */
   public static final String TAG_PATH_SCOPE = "path_scope";
-
-  /** {@link #TAG_PATH_SCOPE} value: the legacy extractor endpoints under {@code /v1}. */
-  public static final String PATH_SCOPE_LEGACY = "legacy";
 
   /** {@link #TAG_PATH_SCOPE} value: the exchange under {@code /exchange}. */
   public static final String PATH_SCOPE_EXCHANGE = "exchange";
@@ -261,51 +221,13 @@ public final class MetricNames {
   public static final String PATH_SCOPE_OTHER = "other";
 
   /**
-   * Tag key: the calling client's Keycloak client id, bounded by the configured allowlist or, on
-   * the exchange counters, by the registry.
+   * Tag key: the calling client's Keycloak client id on the exchange counters, bounded by the
+   * registry.
    */
   public static final String TAG_CLIENT_ID = "client_id";
 
   /** Tag: the outcome of an operation; bounded per meter (REQ-OBS-011). */
   public static final String TAG_OUTCOME = "outcome";
-
-  /**
-   * {@code client_id} tag value for a caller whose {@code azp} is absent or not on the allowlist.
-   */
-  public static final String CLIENT_ID_OTHER = "other";
-
-  /** Client-identity reject reason: the token's {@code azp} is not on the configured allowlist. */
-  public static final String REASON_UNKNOWN_CLIENT = "unknown_client";
-
-  /**
-   * Client-identity reject reason: the token carries no {@code azp} claim at all while the
-   * allowlist is configured. Separated from {@link #REASON_UNKNOWN_CLIENT} because it points at a
-   * Keycloak mapper/realm change rather than at a foreign caller — same rejection, entirely
-   * different fix.
-   */
-  public static final String REASON_MISSING_AZP = "missing_azp";
-
-  /** Client-identity reject reason: the token lacks the configured ingest scope. */
-  public static final String REASON_MISSING_SCOPE = "missing_scope";
-
-  /**
-   * Client-identity reject reason: the payload's {@code tool} provenance is not on the configured
-   * allowlist. Distinct from the token-level reasons because it is the only one a caller can forge,
-   * so a spike here alongside a clean {@code azp} reads as "someone is hand-building payloads with
-   * a real extractor token" rather than as an infrastructure fault.
-   */
-  public static final String REASON_BAD_PROVENANCE = "bad_provenance";
-
-  /**
-   * Client-identity reject reason: an authenticated principal that is not a JWT reached the gate.
-   */
-  public static final String REASON_NON_JWT_PRINCIPAL = "non_jwt_principal";
-
-  /**
-   * Client-identity reject reason: a client of the exchange registry the allowlist does not name
-   * called a legacy route (REQ-XCH-033).
-   */
-  public static final String REASON_EXCHANGE_CLIENT = "exchange_client";
 
   /**
    * Counter {@code basetool_ingest_auth_failures_total} with tag {@code reason}: the RFC 6750 error
@@ -372,24 +294,16 @@ public final class MetricNames {
   /** {@link #INGEST_SERVICE_ACCOUNT_TOKEN} outcome: the cached token was still good. */
   public static final String SA_TOKEN_CACHED = "cached";
 
-  /**
-   * {@link #INGEST_SERVICE_ACCOUNT_TOKEN} outcome: the grant failed; the ingest write is refused.
-   */
+  /** {@link #INGEST_SERVICE_ACCOUNT_TOKEN} outcome: the grant failed; the relay is refused. */
   public static final String SA_TOKEN_FAILED = "failed";
 
   /**
    * {@link #INGEST_SERVICE_ACCOUNT_TOKEN} outcome: refused without calling Keycloak because a grant
    * failed within the last few seconds (the provider's failure backoff). Kept apart from {@link
    * #SA_TOKEN_FAILED} so that series still counts real grant attempts against Keycloak, while this
-   * one shows how many uploads the backoff turned away.
+   * one shows how many relays the backoff turned away.
    */
   public static final String SA_TOKEN_BACKOFF = "backoff";
-
-  /**
-   * Error code: the user is authenticated but the calling client software is not approved for
-   * ingest, answered with 403 (REQ-INGEST-011). Distinct from {@link #CODE_ACCESS_DENIED}.
-   */
-  public static final String CODE_CLIENT_NOT_ALLOWED = "CLIENT_NOT_ALLOWED";
 
   /**
    * Gauge {@code basetool_tracing_enabled}: {@code 1} while this module emits spans, {@code 0}
@@ -398,13 +312,13 @@ public final class MetricNames {
   public static final String TRACING_ENABLED = "basetool.tracing.enabled";
 
   /**
-   * Gauge {@code basetool_ingest_gate_enforcing} with tag {@link #TAG_GATE} ({@code azp} / {@code
-   * scope} / {@code tool} / {@code audience}): {@code 1} while that gate refuses callers, {@code 0}
-   * otherwise (REQ-INGEST-011). Published by {@link IngestGatePostureMetric}.
+   * Gauge {@code basetool_ingest_gate_enforcing} with tag {@link #TAG_GATE} ({@code audience}):
+   * {@code 1} while the audience check refuses tokens, {@code 0} otherwise (REQ-INGEST-011).
+   * Published by {@link IngestGatePostureMetric}.
    */
   public static final String INGEST_GATE_ENFORCING = "basetool.ingest.gate.enforcing";
 
-  /** Tag key: which ingest client gate {@link #INGEST_GATE_ENFORCING} describes. */
+  /** Tag key: which ingest gate {@link #INGEST_GATE_ENFORCING} describes. */
   public static final String TAG_GATE = "gate";
 
   private MetricNames() {}

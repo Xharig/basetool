@@ -86,7 +86,7 @@ class UserIdMdcFilterTest {
     }
     MdcCapturingChain chain = new MdcCapturingChain();
     filter.doFilter(
-        new MockHttpServletRequest("POST", "/v1/refinery-extract"),
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders"),
         new MockHttpServletResponse(),
         chain);
     return chain.userId;
@@ -127,7 +127,7 @@ class UserIdMdcFilterTest {
     MdcCapturingChain chain = new MdcCapturingChain();
 
     filter.doFilter(
-        new MockHttpServletRequest("POST", "/v1/refinery-extract"),
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders"),
         new MockHttpServletResponse(),
         chain);
 

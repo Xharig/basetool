@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Pins the on-behalf-of header name shared by the ingest gateway and the backend (ADR-0129), by
- * reading the gateway's source. A mismatch would silently attribute every ingest upload to the
+ * reading the gateway's source. A mismatch would silently attribute every exchange write to the
  * gateway's service account.
  */
 class OnBehalfOfHeaderParityTest {
@@ -47,18 +47,18 @@ class OnBehalfOfHeaderParityTest {
     Path gatewaySource =
         findRepoRoot()
             .resolve(
-                "ingest/src/main/java/de/greluc/krt/profit/basetool/ingest/service/"
-                    + "BackendImportClient.java");
+                "ingest/src/main/java/de/greluc/krt/profit/basetool/ingest/exchange/"
+                    + "ExchangeRelay.java");
     assertThat(gatewaySource).as("the gateway's relay client must exist").exists();
 
     String source = Files.readString(gatewaySource, StandardCharsets.UTF_8);
     Matcher matcher = GATEWAY_DECLARATION.matcher(source);
     assertThat(matcher.find())
-        .as("BackendImportClient must still declare ON_BEHALF_OF_HEADER")
+        .as("ExchangeRelay must still declare ON_BEHALF_OF_HEADER")
         .isTrue();
 
     assertThat(matcher.group(1))
-        .as("a rename on one side alone attributes every ingest write to the service account")
+        .as("a rename on one side alone attributes every exchange write to the service account")
         .isEqualTo(ActingMemberHeader.ON_BEHALF_OF_HEADER);
   }
 

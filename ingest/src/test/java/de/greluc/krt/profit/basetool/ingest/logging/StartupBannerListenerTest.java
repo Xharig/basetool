@@ -23,7 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import de.greluc.krt.profit.basetool.ingest.config.ClientIdentityProperties;
 import de.greluc.krt.profit.basetool.ingest.config.IngestProperties;
 import de.greluc.krt.profit.basetool.ingest.metrics.IngestGatePostureMetric;
 import de.greluc.krt.profit.basetool.ingest.support.LogCapture;
@@ -56,15 +55,10 @@ class StartupBannerListenerTest {
   }
 
   private static List<ILoggingEvent> emitBanner(String redisHost) {
-    return emitBanner(
-        redisHost,
-        new ClientIdentityProperties(
-            List.of("secret-client-id"), "secret-scope", List.of("secret-tool"), false),
-        List.of("secret-audience"));
+    return emitBanner(redisHost, List.of("secret-audience"));
   }
 
-  private static List<ILoggingEvent> emitBanner(
-      String redisHost, ClientIdentityProperties clientIdentity, List<String> audiences) {
+  private static List<ILoggingEvent> emitBanner(String redisHost, List<String> audiences) {
     MockEnvironment environment = new MockEnvironment();
     environment.setActiveProfiles("prod");
     StartupBannerListener listener =
@@ -73,7 +67,7 @@ class StartupBannerListenerTest {
             ingestProperties(),
             TestLoggingProperties.defaults(),
             TestProperties.rateLimit(),
-            new IngestGatePostureMetric(new SimpleMeterRegistry(), clientIdentity, audiences));
+            new IngestGatePostureMetric(new SimpleMeterRegistry(), audiences));
     ReflectionTestUtils.setField(listener, "applicationName", "ingest");
     ReflectionTestUtils.setField(
         listener, "keycloakIssuerUri", "https://keycloak.profit-base.online/realms/iri");
@@ -99,12 +93,12 @@ class StartupBannerListenerTest {
         .contains("https://keycloak.profit-base.online/realms/iri")
         .contains("X-Correlation-Id")
         .contains("2000")
-        .contains("subject 30/PT1M, ip 120/PT1M");
+        .contains("ip 120/PT1M");
   }
 
   /**
-   * The client-gate posture line reports which gates refuse and how many values each holds — and
-   * never a configured client id, scope, tool or audience (REQ-OBS-004, ING-SEC-03).
+   * The audience-gate line reports whether the gate refuses and how many audiences it holds — and
+   * never a configured audience (REQ-OBS-004, ING-SEC-03).
    */
   @Test
   void reportsTheGatePostureWithoutAnyConfiguredValue() {
@@ -112,29 +106,20 @@ class StartupBannerListenerTest {
         String.join(
             "\n", emitBanner("redis").stream().map(ILoggingEvent::getFormattedMessage).toList());
 
-    assertThat(banner)
-        .contains("azp=on(1) scope=on tool=on(1) audience=on(1) auditOnly=false")
-        .doesNotContain("secret-client-id")
-        .doesNotContain("secret-scope")
-        .doesNotContain("secret-tool")
-        .doesNotContain("secret-audience");
+    assertThat(banner).contains("audience=on(1)").doesNotContain("secret-audience");
   }
 
-  /** Audit-only switches the three client-identity gates off in the posture, not the audience. */
+  /** Without an audience the line reports the gate off. */
   @Test
-  void reportsAuditOnlyGatesAsNotEnforcing() {
+  void reportsAMissingAudienceAsNotEnforcing() {
     String banner =
         String.join(
             "\n",
-            emitBanner(
-                    "redis",
-                    new ClientIdentityProperties(List.of("c"), "s", List.of("t"), true),
-                    List.of())
-                .stream()
+            emitBanner("redis", List.of()).stream()
                 .map(ILoggingEvent::getFormattedMessage)
                 .toList());
 
-    assertThat(banner).contains("azp=off(1) scope=off tool=off(1) audience=off(0) auditOnly=true");
+    assertThat(banner).contains("audience=off(0)");
   }
 
   @Test

@@ -244,8 +244,8 @@ class BotProtectionFilterTest {
       })
   void doFilterInternal_shouldReturn405_whenDisallowedHttpMethodUsed(String method)
       throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest(method, "/v1/refinery-extract");
-    request.setRequestURI("/v1/refinery-extract");
+    MockHttpServletRequest request = new MockHttpServletRequest(method, "/unrouted");
+    request.setRequestURI("/unrouted");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     filter.doFilterInternal(request, response, filterChain);
@@ -259,8 +259,8 @@ class BotProtectionFilterTest {
   @ParameterizedTest
   @ValueSource(
       strings = {
-        "/v1/refinery-extract",
-        "/v1/blueprint-preview",
+        "/exchange/v1/me/drafts/refinery-orders",
+        "/exchange/v1/me/drafts/blueprints",
         "/actuator/health",
         "/actuator/health/readiness",
         "/actuator/health/liveness",
@@ -288,8 +288,9 @@ class BotProtectionFilterTest {
   @ValueSource(strings = {"GET", "POST", "HEAD", "OPTIONS"})
   void doFilterInternal_shouldPassThrough_whenAllowedHttpMethodUsed(String method)
       throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest(method, "/v1/refinery-extract");
-    request.setRequestURI("/v1/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest(method, "/exchange/v1/me/drafts/refinery-orders");
+    request.setRequestURI("/exchange/v1/me/drafts/refinery-orders");
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     filter.doFilterInternal(request, response, filterChain);
@@ -310,8 +311,8 @@ class BotProtectionFilterTest {
 
   @Test
   void isBotPath_shouldReturnFalse_forLegitimateGatewayPaths() {
-    assertFalse(filter.isBotPath("/v1/refinery-extract"));
-    assertFalse(filter.isBotPath("/v1/blueprint-preview"));
+    assertFalse(filter.isBotPath("/exchange/v1/me/drafts/refinery-orders"));
+    assertFalse(filter.isBotPath("/exchange/v1/me/drafts/blueprints"));
     assertFalse(filter.isBotPath("/v3/api-docs"));
     assertFalse(filter.isBotPath("/v3/api-docs/swagger-config"));
   }
@@ -362,7 +363,7 @@ class BotProtectionFilterTest {
 
   @Test
   void isBotFileExtension_shouldReturnFalse_forGatewaySurface() {
-    assertFalse(filter.isBotFileExtension("/v1/refinery-extract"));
+    assertFalse(filter.isBotFileExtension("/exchange/v1/me/drafts/refinery-orders"));
     assertFalse(filter.isBotFileExtension("/actuator/prometheus"));
     assertFalse(filter.isBotFileExtension("/v3/api-docs"));
   }

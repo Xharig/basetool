@@ -30,6 +30,7 @@ import de.greluc.krt.profit.basetool.ingest.model.dto.StagedHandoff;
 import de.greluc.krt.profit.basetool.ingest.support.LogCapture;
 import de.greluc.krt.profit.basetool.ingest.support.TestProperties;
 import de.greluc.krt.profit.basetool.testsupport.containers.TestImages;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +63,9 @@ class HandoffStagingServiceTest {
    */
   private static final String FRONTEND_KEY_PREFIX = "ingest:handoff:";
 
+  /** The registry client the drafts of most tests come from. */
+  private static final String CLIENT = "sc-extractor";
+
   private final ObjectMapper objectMapper = JsonMapper.builder().build();
   private StringRedisTemplate redisTemplate;
   private HandoffStagingService service;
@@ -88,6 +92,18 @@ class HandoffStagingServiceTest {
   }
 
   /**
+   * Stages a draft of {@link #CLIENT} with a cap of ten.
+   *
+   * @param sub the member
+   * @param kind the draft's kind
+   * @param json the draft
+   * @return the handoff id
+   */
+  private String draft(String sub, HandoffKind kind, String json) {
+    return service.stageDraft(CLIENT, sub, kind, json, 10).handoffId();
+  }
+
+  /**
    * Consumes a staged handoff the way the frontend does: an atomic {@code GETDEL} on {@code
    * ingest:handoff:<sub>:<id>}.
    *
@@ -105,7 +121,7 @@ class HandoffStagingServiceTest {
 
   @Test
   void shouldStageAndConsumeOnce() {
-    String handoffId = service.stage("user-1", HandoffKind.REFINERY, "{\"goodsMatched\":2}");
+    String handoffId = draft("user-1", HandoffKind.REFINERY, "{\"goodsMatched\":2}");
 
     Optional<StagedHandoff> first = consume("user-1", handoffId);
     Optional<StagedHandoff> second = consume("user-1", handoffId);
@@ -122,7 +138,7 @@ class HandoffStagingServiceTest {
         LogCapture.capture(
             HandoffStagingService.class,
             Level.INFO,
-            () -> service.stage("user-1", HandoffKind.REFINERY, "{\"goodsMatched\":2}"));
+            () -> draft("user-1", HandoffKind.REFINERY, "{\"goodsMatched\":2}"));
 
     assertThat(events).hasSize(1);
     String line = events.getFirst().getFormattedMessage();
@@ -132,7 +148,7 @@ class HandoffStagingServiceTest {
 
   @Test
   void shouldNotConsumeUnderADifferentSubject() {
-    String handoffId = service.stage("owner", HandoffKind.BLUEPRINT, "{\"total\":1}");
+    String handoffId = draft("owner", HandoffKind.BLUEPRINT, "{\"total\":1}");
 
     assertThat(consume("intruder", handoffId)).isEmpty();
     assertThat(consume("owner", handoffId)).isPresent();
@@ -144,24 +160,25 @@ class HandoffStagingServiceTest {
   }
 
   /**
-   * Staging beyond the per-subject cap evicts the oldest handoffs, bounding the memory used in the
-   * shared, non-evicting Redis instance.
+   * Staging beyond the cap evicts the oldest drafts, bounding the memory used in the shared,
+   * non-evicting Redis instance.
    */
   @Test
-  void shouldEvictTheOldestHandoffsBeyondThePerSubjectCap() {
-    HandoffStagingService service = service(TestProperties.ingest("max-handoffs-per-subject", "3"));
+  void shouldEvictTheOldestDraftsBeyondTheCap() {
+    List<String> ids = new ArrayList<>();
+    for (int i = 1; i <= 4; i++) {
+      ids.add(
+          service
+              .stageDraft(CLIENT, "user-cap", HandoffKind.REFINERY, "{\"n\":" + i + "}", 3)
+              .handoffId());
+    }
 
-    String first = service.stage("user-cap", HandoffKind.REFINERY, "{\"n\":1}");
-    String second = service.stage("user-cap", HandoffKind.REFINERY, "{\"n\":2}");
-    String third = service.stage("user-cap", HandoffKind.REFINERY, "{\"n\":3}");
-    String fourth = service.stage("user-cap", HandoffKind.REFINERY, "{\"n\":4}");
-
-    assertThat(consume("user-cap", first))
+    assertThat(consume("user-cap", ids.get(0)))
         .describedAs("the oldest entry is evicted once the cap is exceeded")
         .isEmpty();
-    assertThat(consume("user-cap", second)).isPresent();
-    assertThat(consume("user-cap", third)).isPresent();
-    assertThat(consume("user-cap", fourth)).isPresent();
+    assertThat(consume("user-cap", ids.get(1))).isPresent();
+    assertThat(consume("user-cap", ids.get(2))).isPresent();
+    assertThat(consume("user-cap", ids.get(3))).isPresent();
   }
 
   /**
@@ -170,13 +187,15 @@ class HandoffStagingServiceTest {
    * more or one fewer.
    */
   @Test
-  void shouldKeepTheSubjectIndexAtExactlyTheCap() {
-    HandoffStagingService service = service(TestProperties.ingest("max-handoffs-per-subject", "2"));
+  void shouldKeepTheIndexAtExactlyTheCap() {
     for (int i = 0; i < 5; i++) {
-      service.stage("user-index", HandoffKind.REFINERY, "{\"n\":" + i + "}");
+      service.stageDraft(CLIENT, "user-index", HandoffKind.REFINERY, "{\"n\":" + i + "}", 2);
     }
 
-    assertThat(redisTemplate.opsForList().size(HandoffStagingService.INDEX_PREFIX + "user-index"))
+    assertThat(
+            redisTemplate
+                .opsForList()
+                .size(HandoffStagingService.DRAFT_INDEX_PREFIX + CLIENT + ":user-index"))
         .isEqualTo(2L);
   }
 
@@ -186,8 +205,10 @@ class HandoffStagingServiceTest {
    */
   @Test
   void shouldKeepOneMassChangePerClientAndMemberWithoutEvictingDrafts() {
-    HandoffStagingService service = service(TestProperties.ingest("max-handoffs-per-subject", "1"));
-    String draft = service.stage("user-mass", HandoffKind.BLUEPRINT, "{\"total\":1}");
+    String draft =
+        service
+            .stageDraft("versekit", "user-mass", HandoffKind.BLUEPRINT, "{\"total\":1}", 1)
+            .handoffId();
     HandoffStagingService.Staged first =
         service.stageMassChange("versekit", "user-mass", "{\"resource\":\"stock\"}", 4096);
     HandoffStagingService.Staged second =
@@ -204,21 +225,18 @@ class HandoffStagingServiceTest {
 
   /**
    * Exchange drafts have slots of their own per client and member: a client flooding drafts evicts
-   * only its own oldest ones, never the extractor's uploads or another client's drafts.
+   * only its own oldest ones, never another client's drafts.
    */
   @Test
-  void shouldKeepExchangeDraftsApartFromTheExtractorAndFromOtherClients() {
-    HandoffStagingService service = service(TestProperties.ingest("max-handoffs-per-subject", "2"));
-    String upload = service.stage("user-x", HandoffKind.BLUEPRINT, "{\"upload\":1}");
+  void shouldKeepOneClientsDraftsApartFromOtherClients() {
     HandoffStagingService.Staged other =
-        service.stageDraft("sc-extractor", "user-x", HandoffKind.REFINERY, "{\"other\":1}", 3);
-    List<HandoffStagingService.Staged> flood = new java.util.ArrayList<>();
+        service.stageDraft(CLIENT, "user-x", HandoffKind.REFINERY, "{\"other\":1}", 3);
+    List<HandoffStagingService.Staged> flood = new ArrayList<>();
     for (int i = 0; i < 5; i++) {
       flood.add(
           service.stageDraft("versekit", "user-x", HandoffKind.BLUEPRINT, "{\"n\":" + i + "}", 3));
     }
 
-    assertThat(consume("user-x", upload)).isPresent();
     assertThat(consume("user-x", other.handoffId())).isPresent();
     assertThat(consume("user-x", flood.get(0).handoffId())).isEmpty();
     assertThat(consume("user-x", flood.get(1).handoffId())).isEmpty();
@@ -228,8 +246,6 @@ class HandoffStagingServiceTest {
                 .opsForList()
                 .size(HandoffStagingService.DRAFT_INDEX_PREFIX + "versekit:user-x"))
         .isEqualTo(3L);
-    assertThat(redisTemplate.opsForList().size(HandoffStagingService.INDEX_PREFIX + "user-x"))
-        .isEqualTo(1L);
   }
 
   /** A client's staged mass change never replaces another client's pending one. */
@@ -264,17 +280,18 @@ class HandoffStagingServiceTest {
     HandoffStagingService service = service(TestProperties.ingest("max-handoff-bytes", "1024"));
     String oversized = "{\"pad\":\"" + "x".repeat(4096) + "\"}";
 
-    assertThatThrownBy(() -> service.stage("user-big", HandoffKind.BLUEPRINT, oversized))
+    assertThatThrownBy(
+            () -> service.stageDraft(CLIENT, "user-big", HandoffKind.BLUEPRINT, oversized, 10))
         .isInstanceOf(de.greluc.krt.profit.basetool.ingest.web.BadRequestException.class);
   }
 
-  /** The cap is per subject, so one caller's flood cannot evict another caller's handoff. */
+  /** The cap is per member, so one member's flood cannot evict another member's draft. */
   @Test
   void shouldNotEvictAnotherSubjectsHandoff() {
-    HandoffStagingService service = service(TestProperties.ingest("max-handoffs-per-subject", "2"));
-    String mine = service.stage("user-a", HandoffKind.REFINERY, "{\"n\":1}");
+    String mine =
+        service.stageDraft(CLIENT, "user-a", HandoffKind.REFINERY, "{\"n\":1}", 2).handoffId();
     for (int i = 0; i < 5; i++) {
-      service.stage("user-b", HandoffKind.REFINERY, "{\"n\":" + i + "}");
+      service.stageDraft(CLIENT, "user-b", HandoffKind.REFINERY, "{\"n\":" + i + "}", 2);
     }
 
     assertThat(consume("user-a", mine)).isPresent();

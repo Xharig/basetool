@@ -46,12 +46,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Per-client-IP token-bucket rate limiter for the ingest endpoints; an exhausted bucket yields 429
+ * Per-client-IP token-bucket rate limiter for the exchange routes; an exhausted bucket yields 429
  * with {@code Retry-After} (REQ-INGEST-005).
  *
- * <p>A coarse front line with a looser budget than the per-subject {@link
- * de.greluc.krt.profit.basetool.ingest.ratelimit.SubjectRateLimiter}, since several members may
- * share one IP. The IP comes from trusted-proxy forwarded headers; the bucket map is bounded.
+ * <p>A coarse front line in front of the exchange's per-client quotas, loose because several
+ * members may share one IP. The IP comes from trusted-proxy forwarded headers; the bucket map is
+ * bounded.
  */
 @Slf4j
 @Component
@@ -126,15 +126,15 @@ public class RateLimitingFilter extends OncePerRequestFilter {
   }
 
   /**
-   * Skips paths outside {@code /v1} and {@code /exchange}, decided on the decoded path via {@link
-   * IngestPathScope}, and everything when rate limiting is disabled.
+   * Skips paths outside {@code /exchange}, decided on the decoded path via {@link IngestPathScope},
+   * and everything when rate limiting is disabled.
    *
    * @param request the current request
    * @return {@code true} to bypass the filter
    */
   @Override
   protected boolean shouldNotFilter(@NotNull HttpServletRequest request) {
-    return !properties.enabled() || !IngestPathScope.isProtectedRequest(request);
+    return !properties.enabled() || !IngestPathScope.isExchangeRequest(request);
   }
 
   /**

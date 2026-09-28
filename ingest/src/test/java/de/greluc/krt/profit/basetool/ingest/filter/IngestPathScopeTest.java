@@ -25,9 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 /**
- * Unit tests for {@link IngestPathScope}, the scope decision shared by the client-identity,
- * payload, rate-limit and access-log filters, which is made on the decoded path that Spring MVC
- * routes on.
+ * Unit tests for {@link IngestPathScope}, the scope decision shared by the payload, rate-limit and
+ * access-log filters, which is made on the decoded path that Spring MVC routes on.
  */
 class IngestPathScopeTest {
 
@@ -44,53 +43,39 @@ class IngestPathScopeTest {
   }
 
   @Test
-  void matchesAPlainIngestPath() {
-    assertThat(IngestPathScope.isProtectedRequest(request("/v1/refinery-extract"))).isTrue();
+  void matchesAPlainExchangePath() {
+    assertThat(IngestPathScope.isExchangeRequest(request("/exchange/v1/catalog/resolve"))).isTrue();
   }
 
   @Test
-  void matchesAPercentEncodedIngestPath() {
-    assertThat(IngestPathScope.isProtectedRequest(request("/%761/refinery-extract"))).isTrue();
-    assertThat(IngestPathScope.isProtectedRequest(request("/v%31/refinery-extract"))).isTrue();
+  void matchesAPercentEncodedExchangePath() {
+    assertThat(IngestPathScope.isExchangeRequest(request("/%65xchange/v1/catalog/resolve")))
+        .isTrue();
+    assertThat(IngestPathScope.isExchangeRequest(request("/exchange/v%31/catalog/resolve")))
+        .isTrue();
   }
 
   @Test
   void doesNotMatchTheUnauthenticatedOperationalEndpoints() {
-    assertThat(IngestPathScope.isProtectedRequest(request("/actuator/health"))).isFalse();
-    assertThat(IngestPathScope.isProtectedRequest(request("/v3/api-docs"))).isFalse();
+    assertThat(IngestPathScope.isExchangeRequest(request("/actuator/health"))).isFalse();
+    assertThat(IngestPathScope.isExchangeRequest(request("/v3/api-docs"))).isFalse();
   }
 
   @Test
-  void doesNotMatchAPathThatMerelyStartsWithTheScopeLiteral() {
-    assertThat(IngestPathScope.isProtectedRequest(request("/v1x/refinery-extract"))).isFalse();
-  }
-
-  @Test
-  void theExchangeIsProtectedButOutsideTheLegacyClientGate() {
-    MockHttpServletRequest exchange = request("/exchange/v1/catalog/resolve");
-
-    assertThat(IngestPathScope.isProtectedRequest(exchange)).isTrue();
-    assertThat(IngestPathScope.isExchangeRequest(exchange)).isTrue();
-    assertThat(IngestPathScope.isLegacyRequest(exchange)).isFalse();
-  }
-
-  @Test
-  void theLegacySurfaceIsProtectedAndCarriesTheClientGate() {
-    MockHttpServletRequest legacy = request("/v1/blueprint-preview");
-
-    assertThat(IngestPathScope.isLegacyRequest(legacy)).isTrue();
-    assertThat(IngestPathScope.isExchangeRequest(legacy)).isFalse();
+  void theRemovedExtractorRoutesAreOutsideTheScope() {
+    assertThat(IngestPathScope.isExchangeRequest(request("/v1/refinery-extract"))).isFalse();
+    assertThat(IngestPathScope.isExchangeRequest(request("/v1/blueprint-preview"))).isFalse();
+    assertThat(IngestPathScope.scopeLabel(request("/v1/refinery-extract"))).isEqualTo("other");
   }
 
   @Test
   void labelsEachSurfaceForTheMetrics() {
-    assertThat(IngestPathScope.scopeLabel(request("/v1/refinery-extract"))).isEqualTo("legacy");
     assertThat(IngestPathScope.scopeLabel(request("/exchange/v1"))).isEqualTo("exchange");
     assertThat(IngestPathScope.scopeLabel(request("/actuator/health"))).isEqualTo("other");
   }
 
   @Test
   void doesNotMatchAPathThatMerelyStartsWithTheExchangeLiteral() {
-    assertThat(IngestPathScope.isProtectedRequest(request("/exchangex/v1"))).isFalse();
+    assertThat(IngestPathScope.isExchangeRequest(request("/exchangex/v1"))).isFalse();
   }
 }

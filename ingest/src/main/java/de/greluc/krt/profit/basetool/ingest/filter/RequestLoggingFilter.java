@@ -34,8 +34,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Emits one INFO access-log line per {@code /v1/**} or {@code /exchange/**} request with method,
- * path, status and duration, escalated to WARN with the {@code Slow request} marker past {@link
+ * Emits one INFO access-log line per {@code /exchange/**} request with method, path, status and
+ * duration, escalated to WARN with the {@code Slow request} marker past {@link
  * LoggingProperties#slowRequestThresholdMs()} (REQ-OBS-001).
  *
  * <p>Runs just inside {@link CorrelationIdFilter} and outside the rate-limit, size-cap and security
@@ -82,10 +82,10 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
    * IngestPathScope}.
    *
    * @param request the current request
-   * @return {@code true} for any path that is under neither {@code /v1} nor {@code /exchange}
+   * @return {@code true} for any path outside {@code /exchange}
    */
   @Override
   protected boolean shouldNotFilter(@NotNull HttpServletRequest request) {
-    return !IngestPathScope.isProtectedRequest(request);
+    return !IngestPathScope.isExchangeRequest(request);
   }
 }
