@@ -2231,8 +2231,15 @@ there.
   empty. A realm in shape produces no write at all.
 - **Additive.** An object only the target realm has is reported and left alone. The exceptions are
   owner decisions, each named in the script — the Android client's realm-role scope
-  (`REQ-SEC-035`), its withheld `offline_access` (ADR-0131), and the three retirements of
-  2026-09-22 (below) — and the scope lists of a client the same run created.
+  (`REQ-SEC-035`), its withheld `offline_access` (ADR-0131), the three retirements of
+  2026-09-22 (below), and every client-level protocol mapper on `basetool-sc-extractor` and on a
+  third-party client (2026-09-28, ADR-0202 amendment 4) — and the scope lists of a client the same
+  run created.
+- **The exchange clients carry no client-level mapper.** A mapper found on `basetool-sc-extractor`
+  or on a client of `scripts/keycloak/external-clients.json` is a planned removal, not a report: the
+  dry run lists it and exits `2`, the apply deletes it, and the verify pass fails while one is left.
+  A hand-added `basetool-backend` audience mapper therefore cannot outlive an apply that verifies
+  clean (owner decision 2026-09-28, finding G5-L4 of #2092).
 - **Three production entries are retired and converge away wherever they are found** (owner
   decision 2026-09-22, ADR-0202 amendment): `basetool-sc-extractor`'s authorization-code flow and
   its two loopback wildcard redirect URIs (`REQ-INGEST-002`); both ingest scopes on
@@ -2275,6 +2282,9 @@ there.
 - [ ] `provision-keycloak-realm.test.sh` section 8: against a realm still carrying the three retired
   entries, the plan removes exactly those (plus the DPoP detach/re-attach the app's scope removal
   needs) and a second apply is empty.
+- [x] Section 17: a stray audience and claim mapper on the extractor and a role mapper on a
+  third-party client are planned as removals and removed by the apply, which verifies clean; a stray
+  mapper on `basetool-frontend` is still only reported and kept.
 - [x] Sections 13–15: the exchange scopes and the third-party template are built, an existing
   third-party client loses what the template withholds, and a malformed client list is refused
   before the realm is read; the stub keeps Keycloak's own `backchannel.logout.session.required` on

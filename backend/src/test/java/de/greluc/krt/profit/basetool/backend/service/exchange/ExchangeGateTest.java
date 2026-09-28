@@ -28,10 +28,12 @@ import de.greluc.krt.profit.basetool.backend.exception.ExchangeProblemException;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeClientRevocation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeSettings;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRevocationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeSettingsRepository;
 import de.greluc.krt.profit.basetool.backend.support.SubjectAuthentication;
@@ -57,12 +59,16 @@ class ExchangeGateTest {
       java.util.UUID.fromString("5f1d2c3b-0000-0000-0000-0000000000a1");
   private static final String KEY = "a".repeat(43);
   private static final Instant REVOKED_AT = Instant.parse("2026-09-27T10:00:00Z");
+  private static final java.util.UUID CLIENT_ID =
+      java.util.UUID.fromString("5f1d2c3b-0000-0000-0000-0000000000c1");
 
   private final ExchangeClientRepository clientRepository = mock(ExchangeClientRepository.class);
   private final ExchangeSettingsRepository settingsRepository =
       mock(ExchangeSettingsRepository.class);
   private final ExchangeInstallationRepository installationRepository =
       mock(ExchangeInstallationRepository.class);
+  private final ExchangeClientRevocationRepository clientRevocationRepository =
+      mock(ExchangeClientRevocationRepository.class);
   private final ExchangeRevocationMirror revocationMirror = mock(ExchangeRevocationMirror.class);
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
   private final ExchangeGate gate =
@@ -70,6 +76,7 @@ class ExchangeGateTest {
           clientRepository,
           settingsRepository,
           installationRepository,
+          clientRevocationRepository,
           revocationMirror,
           meterRegistry);
 
@@ -79,6 +86,7 @@ class ExchangeGateTest {
   @BeforeEach
   void setUp() {
     client = new ExchangeClient();
+    client.setId(CLIENT_ID);
     client.setClientId("versekit");
     client.setStatus(ExchangeClientStatus.ACTIVE);
     client.setCapabilities(EnumSet.of(ExchangeCapability.CONNECT, ExchangeCapability.STOCK_READ));
@@ -211,6 +219,43 @@ class ExchangeGateTest {
   }
 
   @Test
+  void refusesAStoredDisconnectTheMirrorDoesNotCarry() {
+    when(revocationMirror.revokedAt("versekit", MEMBER)).thenReturn(null);
+    storedRevocation(REVOKED_AT);
+    long second = REVOKED_AT.getEpochSecond();
+
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", second, "exchange.connect")),
+        HttpStatus.UNAUTHORIZED,
+        "CLIENT_REVOKED");
+    assertThat(gate.allowsAny(acting("versekit", second + 1, "exchange.connect"))).isTrue();
+    assertThat(refused(ExchangeGate.REASON_CLIENT_REVOKED)).isEqualTo(1);
+  }
+
+  @Test
+  void comparesWithTheLaterOfTheStoredAndTheMirroredDisconnect() {
+    Instant later = REVOKED_AT.plusSeconds(600);
+    long between = REVOKED_AT.getEpochSecond() + 1;
+    when(revocationMirror.revokedAt("versekit", MEMBER)).thenReturn(REVOKED_AT);
+    storedRevocation(later);
+
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", between, "exchange.connect")),
+        HttpStatus.UNAUTHORIZED,
+        "CLIENT_REVOKED");
+
+    when(revocationMirror.revokedAt("versekit", MEMBER)).thenReturn(later);
+    storedRevocation(REVOKED_AT);
+
+    assertRefused(
+        () -> gate.allowsAny(acting("versekit", between, "exchange.connect")),
+        HttpStatus.UNAUTHORIZED,
+        "CLIENT_REVOKED");
+    assertThat(gate.allowsAny(acting("versekit", later.getEpochSecond() + 1, "exchange.connect")))
+        .isTrue();
+  }
+
+  @Test
   void anUnreadableMirrorFailsClosedAsTheGatewayDoes() {
     when(revocationMirror.revokedAt("versekit", MEMBER))
         .thenThrow(new RedisConnectionFailureException("down"));
@@ -220,6 +265,19 @@ class ExchangeGateTest {
         HttpStatus.SERVICE_UNAVAILABLE,
         "REGISTRY_UNAVAILABLE");
     assertThat(refused(ExchangeGate.REASON_REVOCATIONS_UNREADABLE)).isEqualTo(1);
+  }
+
+  /**
+   * Stores the member's disconnect of the client in the database.
+   *
+   * @param revokedAt the stored revocation time
+   */
+  private void storedRevocation(@NotNull Instant revokedAt) {
+    when(clientRevocationRepository.findById(new ExchangeClientRevocation.Key(CLIENT_ID, MEMBER)))
+        .thenReturn(
+            Optional.of(
+                new ExchangeClientRevocation(
+                    new ExchangeClientRevocation.Key(CLIENT_ID, MEMBER), revokedAt)));
   }
 
   /**

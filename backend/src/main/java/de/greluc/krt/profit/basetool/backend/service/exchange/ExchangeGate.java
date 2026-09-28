@@ -23,10 +23,12 @@ import de.greluc.krt.profit.basetool.backend.exception.ExchangeProblemException;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
+import de.greluc.krt.profit.basetool.backend.model.ExchangeClientRevocation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeInstallation;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeSettings;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRevocationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeInstallationRepository;
 import de.greluc.krt.profit.basetool.backend.repository.ExchangeSettingsRepository;
 import de.greluc.krt.profit.basetool.backend.support.Roles;
@@ -89,6 +91,7 @@ public class ExchangeGate {
   private final ExchangeClientRepository clientRepository;
   private final ExchangeSettingsRepository settingsRepository;
   private final ExchangeInstallationRepository installationRepository;
+  private final ExchangeClientRevocationRepository clientRevocationRepository;
   private final ExchangeRevocationMirror revocationMirror;
   private final MeterRegistry meterRegistry;
 
@@ -189,7 +192,7 @@ public class ExchangeGate {
     if (installationRevoked(subject)) {
       throw refuse(REASON_INSTALLATION_REVOKED, ExchangeProblemException.installationRevoked());
     }
-    if (clientRevoked(subject)) {
+    if (clientRevoked(subject, client)) {
       throw refuse(REASON_CLIENT_REVOKED, ExchangeProblemException.clientRevoked());
     }
     Set<String> granted =
@@ -225,29 +228,55 @@ public class ExchangeGate {
 
   /**
    * Tells whether the member disconnected the client at or after the second of the relayed
-   * connection time, the time the gateway compared (REQ-XCH-008), reading the mirror the gateway
-   * reads; a request relayed without a connection time counts as connected before any disconnect.
+   * connection time, the time the gateway compared (REQ-XCH-008), taking the later of the stored
+   * revocation and the mirror the gateway reads; a request relayed without a connection time counts
+   * as connected before any disconnect.
    *
    * @param subject the acting member's authentication, relayed for an external client
+   * @param client the relayed client's registry entry
    * @return {@code true} when a disconnect covers the token
    * @throws ExchangeProblemException {@code 503 REGISTRY_UNAVAILABLE} when the mirror cannot be
    *     read, so the request fails closed
    */
-  private boolean clientRevoked(@NotNull SubjectAuthentication subject) {
-    Instant revokedAt;
+  private boolean clientRevoked(
+      @NotNull SubjectAuthentication subject, @NotNull ExchangeClient client) {
+    UUID member = UUID.fromString(subject.subject());
+    Instant mirrored;
     try {
-      revokedAt =
-          revocationMirror.revokedAt(
-              Objects.requireNonNull(subject.externalClient()), UUID.fromString(subject.subject()));
+      mirrored =
+          revocationMirror.revokedAt(Objects.requireNonNull(subject.externalClient()), member);
     } catch (RuntimeException e) {
       log.warn("The exchange revocations could not be read: {}", e.getClass().getSimpleName());
       throw refuse(REASON_REVOCATIONS_UNREADABLE, ExchangeProblemException.registryUnavailable(e));
     }
+    Instant stored =
+        clientRevocationRepository
+            .findById(new ExchangeClientRevocation.Key(client.getId(), member))
+            .map(ExchangeClientRevocation::getRevokedAt)
+            .orElse(null);
+    Instant revokedAt = later(mirrored, stored);
     if (revokedAt == null) {
       return false;
     }
     Long connectedAt = subject.exchangeConnectedAt();
     return connectedAt == null || connectedAt <= revokedAt.getEpochSecond();
+  }
+
+  /**
+   * Returns the later of two optional points in time.
+   *
+   * @param first one time, or {@code null}
+   * @param second the other time, or {@code null}
+   * @return the later one, or {@code null} when both are absent
+   */
+  private static @Nullable Instant later(@Nullable Instant first, @Nullable Instant second) {
+    if (first == null) {
+      return second;
+    }
+    if (second == null) {
+      return first;
+    }
+    return first.isAfter(second) ? first : second;
   }
 
   /**

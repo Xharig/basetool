@@ -58,3 +58,26 @@ so the theme alone cannot show it.
   stack for no gain once the order decides. Not needed.
 - **Reading the code from the page URL in JavaScript.** Present only when the member was already
   signed in; a sign-in in between loses it. Rejected.
+
+## Amendment 1 — 2026-09-28: the consent intro claims nothing the page cannot know
+
+- **Deciders:** @greluc (owner decision in chat, 2026-09-28, option C of finding G5-L1 of the final
+  security review of #2092)
+
+The consent page's intro (`krtOauthGrantIntro`) said the application does not learn the member's
+name, e-mail address or roles. It was shown for every client, and it was false for any client whose
+granted scopes or own mappers carry that data — above all `basetool-sc-extractor` before the go-live
+apply of its exchange-only shape, which still had `profile`, `email` and `roles` as default scopes.
+The template cannot tell reliably: `oauth.clientScopesRequested` holds only the scopes shown on the
+consent screen, by consent text, and neither a hidden scope such as `microprofile-jwt` (`upn`, realm
+roles as `groups`) nor a client-level mapper appears in it.
+
+**The intro now states only what the page itself shows:** „Die Anwendung erhält nur die unten
+aufgeführten Rechte." / "The application receives only the rights listed below." It is true for
+every client, so it stays unconditional. The message key is unchanged.
+
+Rejected: matching the profile, e-mail and roles consent texts in the template (misses hidden scopes
+and client mappers); having `krt-freemarker` compute a flag from the effective scopes and mappers
+(reliable, but more Keycloak-internal surface for a sentence the page does not need); keeping the
+sentence and relying on applying the extractor's shape on release day (a false statement in the
+window between the two).

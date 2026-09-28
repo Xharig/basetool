@@ -43,6 +43,7 @@ BUILTIN_SCOPES = REPO / "scripts" / "keycloak" / "builtin-client-scopes.json"
 REALM = "iri"
 THROWAWAY = "do-not-use-in-prod"
 GATEWAY_CLIENT = "basetool-ingest-gateway"
+LOAD_MEMBERS = 16
 
 LOCALES = {"internationalizationEnabled": True, "supportedLocales": ["de", "en"],
            "defaultLocale": "en"}
@@ -105,8 +106,11 @@ SANDBOX = Target(
          "roles": ["KRT Member"]},
         {"id": "5a4d0000-0000-4000-8000-000000000003", "username": "sandbox-admin",
          "roles": ["Admin", "Officer", "KRT Member"]},
+        *({"id": f"5a4d0000-0000-4000-8000-0000000002{n:02d}", "username": f"sandbox-load-{n:02d}",
+           "roles": ["KRT Member"]} for n in range(1, LOAD_MEMBERS + 1)),
     ],
-    offline_users=("sandbox-member", "sandbox-member-2", "sandbox-admin"),
+    offline_users=("sandbox-member", "sandbox-member-2", "sandbox-admin",
+                   *(f"sandbox-load-{n:02d}" for n in range(1, LOAD_MEMBERS + 1))),
     fixed_ids=True,
     password=lambda username: f"{username}-pw-{THROWAWAY}",
 )

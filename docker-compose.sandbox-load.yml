@@ -1,0 +1,28 @@
+services:
+  backend-dev:
+    environment:
+      MANAGEMENT_SERVER_PORT: "11271"
+      MANAGEMENT_SERVER_SSL_ENABLED: "true"
+      MANAGEMENT_SERVER_SSL_KEY_STORE: file:/run/secrets/keystore.p12
+      MANAGEMENT_SERVER_SSL_KEY_STORE_PASSWORD: basetool-test
+      MANAGEMENT_SERVER_SSL_KEY_STORE_TYPE: PKCS12
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --no-check-certificate -O /dev/null https://localhost:11271/actuator/health/readiness || exit 1"]
+
+  frontend-dev:
+    environment:
+      APP_BACKEND_HEALTH_URL: https://backend:11271
+
+  ingest-dev:
+    environment:
+      MANAGEMENT_SERVER_PORT: "11272"
+      MANAGEMENT_SERVER_SSL_ENABLED: "true"
+      MANAGEMENT_SERVER_SSL_KEY_STORE: file:/run/secrets/keystore.p12
+      MANAGEMENT_SERVER_SSL_KEY_STORE_PASSWORD: basetool-test
+      MANAGEMENT_SERVER_SSL_KEY_STORE_TYPE: PKCS12
+      APP_EXCHANGE_STORE_MEMBERBYTES: ${SANDBOX_LOAD_MEMBER_BYTES:-1048576}
+      APP_EXCHANGE_STORE_CLIENTBYTES: ${SANDBOX_LOAD_CLIENT_BYTES:-16777216}
+      APP_EXCHANGE_STORE_TOTALBYTES: ${SANDBOX_LOAD_TOTAL_BYTES:-67108864}
+      APP_EXCHANGE_STORE_IDEMPOTENCYTTL: ${SANDBOX_LOAD_IDEMPOTENCY_TTL:-PT24H}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --no-check-certificate -O /dev/null https://localhost:11272/actuator/health/readiness || exit 1"]
