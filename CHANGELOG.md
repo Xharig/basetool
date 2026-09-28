@@ -358,6 +358,11 @@
 
 ### Fixed
 
+- **Datenaustausch: große Bestandsänderungen werden mit der Zeit nicht mehr langsamer.** Jede
+  Position einer Änderung las bisher die ganze Änderungshistorie des Mitglieds bzw. alle Zeilen des
+  Materials am Ort; ein neuer Index (Migration `V258`) und eine indexfähige Qualitätsabfrage halten
+  beide Zugriffe kurz (REQ-XCH-016).
+
 - **Datenaustausch: keine Deadlocks mehr bei gleichzeitigen Bestandsänderungen.** Sendeten zwei
   Installationen eines Mitglieds gleichzeitig Änderungen an denselben Lots in anderer Reihenfolge,
   brach PostgreSQL eine davon mit einem Deadlock ab; das Backend sperrt die Lots jetzt in fester

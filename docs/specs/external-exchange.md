@@ -886,6 +886,12 @@ client.
   finish; neither deadlocks. *`ExchangeStockWriteConcurrencyIntegrationTest` (PostgreSQL).
   Corrected 2026-09-28 (load test, finding 1): the lots were locked in the order the ops arrived,
   and such sets deadlocked (`40P01`).*
+- [x] Each op's two lookups stay index lookups however long the member's history is: the latest
+  change-log entry of the lot key (`idx_exchange_change_user_key`, V258) and the lock of the lot's
+  rows (the stack-key index on every column, quality compared as stored). *`ExchangeStockLookupPlanIntegrationTest`
+  (PostgreSQL plans). Corrected 2026-09-28 (load test, finding 2): both filtered a member's whole
+  journal or every row of the material at the place, and a 500-op set slowed from 1.5 s to 5 s as
+  the history grew.*
 - [x] A book-out below an offered amount lowers the offer and records the audit event.
   *`ExchangeStockWriteControllerTest`.*
 - [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
