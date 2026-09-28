@@ -48,6 +48,8 @@ services:
   ingest-dev:
     profiles: ["dev", "sandbox"]
     image: ghcr.io/krt-profit/basetool-sandbox-ingest:${BASETOOL_SANDBOX_VERSION:-edge}
+    environment:
+      FRONTEND_URL: https://localhost:18081
     extra_hosts: !override []
     networks:
       net-backend-keycloak:

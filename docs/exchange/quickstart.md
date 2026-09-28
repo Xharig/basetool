@@ -15,7 +15,10 @@ scripts/sandbox.sh up
 ```
 
 On Windows run `./scripts/sandbox.ps1 up` in PowerShell. The command returns once every service is
-healthy and the seed is applied. The sandbox's addresses:
+healthy and the seed is applied; for up to about 15 s afterwards the gateway still answers
+`503 EXCHANGE_DISABLED`. The [sandbox page](sandbox.md) lists what your machine needs and, under
+[troubleshooting](sandbox.md#troubleshooting), what to do when the start or a first call fails. The
+sandbox's addresses:
 
 | | |
 | --- | --- |
@@ -26,7 +29,8 @@ healthy and the seed is applied. The sandbox's addresses:
 | Member | `sandbox-member` / `sandbox-member-pw-do-not-use-in-prod` |
 
 The gateway serves HTTPS with the committed test certificate; trust
-[`docker/test-tls/basetool-test-ca.crt`][test-ca] for the sandbox only.
+[`docker/test-tls/basetool-test-ca.crt`][test-ca] for the sandbox only — the sandbox page shows
+[how, per language](sandbox.md#trusting-the-test-ca).
 
 ## 2. Open the installation's key
 
@@ -200,6 +204,8 @@ member can undo there.
   [ships](resources/ships.md), [org demand](resources/org-demand.md), [drafts](resources/drafts.md).
 - [Conformance fixtures](examples/README.md): test your requests against them, or run
   `python3 scripts/sandbox-smoke.py --conformance`.
+- [Test scenarios](sandbox.md#test-scenarios): conflicts, tombstones, the mass-change guard,
+  disconnects, suspension and the limits, each with the answer to expect.
 - `scripts/sandbox.sh down` stops the sandbox and deletes its data.
 
 [repo]: https://github.com/krt-profit/basetool

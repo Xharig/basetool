@@ -1549,10 +1549,14 @@ not count against the daily quota, but it has its own limit of ten per hour per 
 The web page „Verbundene Anwendungen" lists the member's connected clients with their capabilities,
 installations (label, first and last seen) and recent activity, and lets the member disconnect one
 installation or a whole client, undo, and confirm a staged mass change. Every new connection or
-installation raises a notification and stays highlighted until seen. `ADMIN` manages the registry
-on an admin page with a suspend switch. The page is web-only; the app links to it.
+installation raises a notification and stays highlighted until seen. The page links the public
+list of approved clients (REQ-XCH-002, REQ-SEC-027). `ADMIN` manages the registry on an admin page
+with a suspend switch. The page is web-only; the app links to it.
 
 The page is `/connected-apps` (sidebar *Persönlich*, every member), over `/api/v1/connected-apps`.
+Its header links `docs/legal/approved-clients.md` on GitHub
+(`https://github.com/krt-profit/basetool/blob/main/docs/legal/approved-clients.md`) in a new tab,
+the address the developer site's onboarding page links as well.
 An installation is always named as `‹client name› – „‹label›"`, the client-supplied label escaped
 and never first, so a label cannot pose as the Basetool. Both disconnects ask first and re-swap the
 `connected-apps :: apps` fragment; the page is the member's own and joins no peer sync.
@@ -1571,6 +1575,10 @@ audited.
 - [x] List the clients with their capabilities and installations (label, first and last seen), and
   disconnect one installation or a whole client. *`ConnectedAppsPageControllerMvcTest`.*
 - [x] The admin registry page. *See REQ-XCH-003.*
+- [x] The page links the public list of approved clients, opening in a new tab.
+  *`ConnectedAppsPageControllerMvcTest.thePageLinksThePublicListOfApprovedApplicationsInANewTab`.*
+  *Corrected 2026-09-28: #2087 required the link, but this requirement did not name it and the
+  page shipped without it (epic #2078 plan audit).*
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
