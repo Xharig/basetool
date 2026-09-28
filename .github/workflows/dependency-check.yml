@@ -39,7 +39,7 @@ jobs:
       contents: read
       security-events: write
       issues: write
-    timeout-minutes: 115
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -67,7 +67,7 @@ jobs:
             nvd-feed-v1-${{ runner.os }}-
 
       - name: Run dependencyCheckAggregate
-        timeout-minutes: 100
+        timeout-minutes: 30
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
