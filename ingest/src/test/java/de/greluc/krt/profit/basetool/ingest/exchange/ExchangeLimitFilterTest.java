@@ -144,7 +144,9 @@ class ExchangeLimitFilterTest {
 
   @Test
   void writesCountAgainstTheDailyQuota() throws Exception {
-    when(quotas.countWrite(CLIENT, member)).thenReturn(1L).thenReturn(2L);
+    when(quotas.countWrite(CLIENT, member))
+        .thenReturn(new ExchangeQuotas.Counted("q", 1L))
+        .thenReturn(new ExchangeQuotas.Counted("q", 2L));
 
     call(HttpMethod.POST, BLUEPRINT_CHANGES).andExpect(status().isOk());
     call(HttpMethod.POST, BLUEPRINT_CHANGES)

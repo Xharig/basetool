@@ -68,7 +68,7 @@ class ExchangeQuotasTest {
     when(template.opsForValue()).thenReturn(values);
     when(values.increment(KEY)).thenReturn(1L);
 
-    assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(1L);
+    assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(new ExchangeQuotas.Counted(KEY, 1L));
 
     InOrder order = inOrder(budget, values);
     order.verify(budget).record("versekit", "m-1", KEY, BYTES, UNTIL_THE_END_OF_TOMORROW);
@@ -82,7 +82,7 @@ class ExchangeQuotasTest {
     when(template.opsForValue()).thenReturn(values);
     when(values.increment(KEY)).thenReturn(7L);
 
-    assertThat(quotas.countWrite("versekit", "m-1")).isEqualTo(7L);
+    assertThat(quotas.countWrite("versekit", "m-1").count()).isEqualTo(7L);
     verify(budget).record("versekit", "m-1", KEY, BYTES, UNTIL_THE_END_OF_TOMORROW);
     verify(values).setIfAbsent(KEY, "0", UNTIL_THE_END_OF_TOMORROW);
   }

@@ -218,6 +218,14 @@ public final class MetricNames {
       "basetool.ingest.exchange.budget.used.ratio";
 
   /**
+   * Gauge {@code basetool_ingest_exchange_client_budget_used_ratio{client_id}}: the share of one
+   * client's Redis byte budget in use when the gateway last measured it, labelled with the registry
+   * client id of an admitted request (REQ-XCH-023, REQ-OBS-011).
+   */
+  public static final String EXCHANGE_CLIENT_BUDGET_USED_RATIO =
+      "basetool.ingest.exchange.client.budget.used.ratio";
+
+  /**
    * Counter {@code basetool_ingest_dpop_replay_refused_total{path_scope,reason}}: DPoP proofs the
    * {@code jti} replay cache refused — {@link #DPOP_REPLAY_REPLAYED}, {@link
    * #DPOP_REPLAY_MEMBER_CAP} or {@link #DPOP_REPLAY_FULL} — registered at zero (REQ-XCH-006).
