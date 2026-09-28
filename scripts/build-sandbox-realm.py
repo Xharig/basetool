@@ -132,7 +132,7 @@ E2E = Target(
         },
     ],
     users=None,
-    offline_users=("test-exchange",),
+    offline_users=("test-exchange", "test-exchange-2", "test-exchange-3", "test-exchange-departed"),
     fixed_ids=False,
     password=lambda username: f"{username}-pw",
 )

@@ -2586,36 +2586,60 @@ class ExternalContractTest {
 
   /**
    * Verifies that no exchange or connected-apps path is admitted by the API vhost allow-list: the
-   * exchange layer answers only the gateway and the member controls only the browser (REQ-XCH-001).
+   * exchange layer answers only the gateway and the member controls only the browser (REQ-XCH-001,
+   * ADR-0216). Probes every such path the committed {@code openapi.json} documents, plus paths no
+   * controller serves yet, so a broad rule is caught before the endpoint it would expose exists.
    *
-   * @throws IOException if the allow-list cannot be read
+   * @throws IOException if the allow-list or the document cannot be read
    */
   @Test
   @DisplayName("no exchange or connected-apps path is admitted by the API vhost allow-list")
   void theExchangeStaysOffTheApiVhost() throws IOException {
     List<Predicate<String>> rules = allowListRules();
-    List<String> admitted =
-        List.of(
-                "/api/v1/exchange/catalog/resolve",
-                "/api/v1/exchange/catalog/locations",
-                "/api/v1/exchange/me/blueprints",
-                "/api/v1/exchange/me/stock/changes",
-                "/api/v1/exchange/me/drafts/blueprints",
-                "/api/v1/connected-apps",
-                "/api/v1/connected-apps/installations/7a0c7a0c-0000-4000-8000-0000000001a5/seen",
-                "/api/v1/connected-apps/versekit/undo",
-                "/api/v1/connected-apps/mass-changes/confirm",
-                "/api/v1/admin/exchange-clients",
-                "/api/v1/admin/exchange-settings")
-            .stream()
-            .filter(path -> rules.stream().anyMatch(rule -> rule.test(path)))
+    List<String> documented =
+        openapi().get("paths").propertyNames().stream()
+            .filter(ExternalContractTest::isExchangeOrConnectionPath)
+            .map(ExternalContractTest::probePath)
             .toList();
+    assertThat(documented)
+        .as("openapi.json documents no exchange path — has the document or its prefixes moved?")
+        .contains("/api/v1/exchange/me/blueprints", "/api/v1/connected-apps");
+
+    Set<String> probes = new TreeSet<>(documented);
+    probes.addAll(
+        List.of(
+            "/api/v1/exchange",
+            "/api/v1/exchange/",
+            "/api/v1/exchange/me/a-resource-not-built-yet",
+            "/api/v1/exchange/v2/me/blueprints",
+            "/api/v1/connected-apps/",
+            "/api/v1/connected-apps/versekit/undo",
+            "/api/v1/connected-apps/a-control-not-built-yet",
+            "/api/v1/admin/exchange-a-page-not-built-yet"));
+    List<String> admitted =
+        probes.stream().filter(path -> rules.stream().anyMatch(rule -> rule.test(path))).toList();
 
     assertThat(admitted)
         .as(
             "%s must never admit the exchange layer or the member's connection controls",
             ALLOW_LIST)
         .isEmpty();
+  }
+
+  /**
+   * Tells whether a path belongs to the exchange layer, the member's connection controls or the
+   * admin registry of connected applications.
+   *
+   * @param path a documented path
+   * @return {@code true} for {@code /api/v1/exchange/**}, {@code /api/v1/connected-apps/**} and
+   *     {@code /api/v1/admin/exchange-*}
+   */
+  private static boolean isExchangeOrConnectionPath(String path) {
+    return path.equals("/api/v1/exchange")
+        || path.startsWith("/api/v1/exchange/")
+        || path.equals("/api/v1/connected-apps")
+        || path.startsWith("/api/v1/connected-apps/")
+        || path.startsWith("/api/v1/admin/exchange-");
   }
 
   /**

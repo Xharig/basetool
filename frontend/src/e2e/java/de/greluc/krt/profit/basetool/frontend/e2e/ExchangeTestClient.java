@@ -95,6 +95,9 @@ final class ExchangeTestClient {
   /** The access token of the finished device login, {@code null} before it. */
   private String accessToken;
 
+  /** The refresh token of the latest token response, {@code null} before the device login. */
+  private String refreshToken;
+
   /**
    * Creates a client with a fresh installation key.
    *
@@ -174,9 +177,7 @@ final class ExchangeTestClient {
           keycloak.send(form(url, fields, proof("POST", url, null)), BodyHandlers.ofString());
       remember(url, answer);
       if (answer.statusCode() == 200) {
-        JsonObject token = JsonParser.parseString(answer.body()).getAsJsonObject();
-        accessToken = token.get("access_token").getAsString();
-        return token;
+        return keep(answer);
       }
       last = answer.statusCode() + " " + answer.body();
       if (!last.contains("use_dpop_nonce")) {
@@ -184,6 +185,48 @@ final class ExchangeTestClient {
       }
     }
     throw new IllegalStateException("no token within " + TOKEN_WAIT + "; last answer " + last);
+  }
+
+  /**
+   * Refreshes the tokens with the refresh token and a DPoP proof of the same key, answering one
+   * nonce challenge.
+   *
+   * @return the token response
+   * @throws Exception if Keycloak does not issue new tokens
+   */
+  JsonObject refresh() throws Exception {
+    String url = OIDC + "/token";
+    Map<String, String> fields =
+        Map.of("grant_type", "refresh_token", "refresh_token", refreshToken, "client_id", clientId);
+    String last = "";
+    for (int attempt = 0; attempt < 2; attempt++) {
+      HttpResponse<String> answer =
+          keycloak.send(form(url, fields, proof("POST", url, null)), BodyHandlers.ofString());
+      remember(url, answer);
+      if (answer.statusCode() == 200) {
+        return keep(answer);
+      }
+      last = answer.statusCode() + " " + answer.body();
+      if (!last.contains("use_dpop_nonce")) {
+        break;
+      }
+    }
+    throw new IllegalStateException("the refresh failed: " + last);
+  }
+
+  /**
+   * Keeps the access and refresh token of a successful token response.
+   *
+   * @param answer the token endpoint's 200 answer
+   * @return the parsed token response
+   */
+  private JsonObject keep(HttpResponse<String> answer) {
+    JsonObject token = JsonParser.parseString(answer.body()).getAsJsonObject();
+    accessToken = token.get("access_token").getAsString();
+    if (token.has("refresh_token")) {
+      refreshToken = token.get("refresh_token").getAsString();
+    }
+    return token;
   }
 
   /**
@@ -272,7 +315,7 @@ final class ExchangeTestClient {
   }
 
   /**
-   * Builds a {@code {"kind": ..., "refs": [ref]}} resolve request and returns the resolved ref.
+   * Resolves one reference and returns the server's ref of its single match.
    *
    * @param kind the catalogue kind, e.g. {@code BLUEPRINT}
    * @param ref the reference to resolve
@@ -280,20 +323,33 @@ final class ExchangeTestClient {
    * @throws Exception if the call fails or the reference does not resolve
    */
   JsonObject resolve(String kind, JsonObject ref) throws Exception {
-    JsonObject request = new JsonObject();
-    request.addProperty("kind", kind);
     JsonArray refs = new JsonArray();
     refs.add(ref);
-    request.add("refs", refs);
-    Answer answer = call("POST", "/exchange/v1/catalog/resolve", request);
-    JsonObject result =
-        answer.status() == 200
-            ? answer.body().getAsJsonArray("results").get(0).getAsJsonObject()
-            : new JsonObject();
+    JsonArray results = resolveAll(kind, refs);
+    JsonObject result = results.isEmpty() ? new JsonObject() : results.get(0).getAsJsonObject();
     if (!result.has("status") || !"resolved".equals(result.get("status").getAsString())) {
-      throw new IllegalStateException(kind + " " + ref + " did not resolve: " + answer);
+      throw new IllegalStateException(kind + " " + ref + " did not resolve: " + result);
     }
     return result.getAsJsonObject("ref");
+  }
+
+  /**
+   * Resolves several references of one kind in one call.
+   *
+   * @param kind the catalogue kind, e.g. {@code BLUEPRINT}
+   * @param refs the references, at most 500
+   * @return one result per reference, in order, each with its {@code status}
+   * @throws Exception if the call cannot be sent or is not answered 200
+   */
+  JsonArray resolveAll(String kind, JsonArray refs) throws Exception {
+    JsonObject request = new JsonObject();
+    request.addProperty("kind", kind);
+    request.add("refs", refs);
+    Answer answer = call("POST", "/exchange/v1/catalog/resolve", request);
+    if (answer.status() != 200) {
+      throw new IllegalStateException(kind + " resolve failed: " + answer);
+    }
+    return answer.body().getAsJsonArray("results");
   }
 
   /**
