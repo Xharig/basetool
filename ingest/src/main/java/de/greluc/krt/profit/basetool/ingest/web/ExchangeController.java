@@ -153,7 +153,8 @@ public class ExchangeController {
    *
    * @param request the admitted request
    * @param acceptLanguage the caller's language
-   * @return the document
+   * @return the document, or the refusal when the backend's exchange gate refuses the request with
+   *     a code of the registry gate
    */
   @GetMapping
   @PreAuthorize("isAuthenticated()")
@@ -171,6 +172,9 @@ public class ExchangeController {
     new TreeSet<>(context.capabilities()).forEach(capabilities::add);
     ExchangeRelay.Result installation =
         relay.forward(HttpMethod.GET, BACKEND + "/me/installation", null, context, acceptLanguage);
+    if (ExchangeRelay.isGateCode(installation.code())) {
+      return problem(installation.status(), installation.code(), installation.detail());
+    }
     if (installation.isOk() && installation.body().get("installationId") != null) {
       document.set("installationId", installation.body().get("installationId"));
     }
@@ -993,7 +997,8 @@ public class ExchangeController {
   }
 
   /**
-   * Builds a problem answer.
+   * Builds a problem answer, with the {@code Retry-After} the gateway's gate sends for a relayed
+   * gate code that carries one.
    *
    * @param status the status
    * @param code the code
@@ -1010,8 +1015,12 @@ public class ExchangeController {
             httpStatus.getReasonPhrase(),
             code == null ? ExchangeRelay.RELAY_FAILED : code,
             detail);
-    return ResponseEntity.status(httpStatus)
-        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-        .body(problem);
+    ResponseEntity.BodyBuilder answer =
+        ResponseEntity.status(httpStatus).contentType(MediaType.APPLICATION_PROBLEM_JSON);
+    String retryAfter = ExchangeRelay.retryAfterSeconds(code);
+    if (retryAfter != null) {
+      answer.header(HttpHeaders.RETRY_AFTER, retryAfter);
+    }
+    return answer.body(problem);
   }
 }

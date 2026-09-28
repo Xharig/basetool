@@ -29,6 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -210,6 +211,40 @@ class ExchangeControllerTest {
             "VerseKit/2.1.0")
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("TERMS_NOT_ACCEPTED"));
+  }
+
+  @Test
+  void aRelayedUnavailableGateCodeCarriesTheGatewayGatesRetryAfter() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any()))
+        .thenReturn(
+            new ExchangeRelay.Result(503, null, "EXCHANGE_DISABLED", "The exchange is off."));
+
+    ExchangeTestSupport.call(
+            mockMvc,
+            key,
+            TOKEN,
+            HttpMethod.GET,
+            "/exchange/v1/catalog/locations",
+            null,
+            "VerseKit/2.1.0")
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("Retry-After", "30"))
+        .andExpect(jsonPath("$.code").value("EXCHANGE_DISABLED"));
+  }
+
+  @Test
+  void theServiceDocumentAnswersTheBackendGatesRefusalAsTheGatewayGateDoes() throws Exception {
+    when(relay.forward(
+            eq(HttpMethod.GET), eq("/api/v1/exchange/me/installation"), isNull(), any(), any()))
+        .thenReturn(
+            new ExchangeRelay.Result(403, null, "CLIENT_SUSPENDED", "This client is suspended."));
+
+    ExchangeTestSupport.call(
+            mockMvc, key, TOKEN, HttpMethod.GET, "/exchange/v1", null, "VerseKit/2.1.0")
+        .andExpect(status().isForbidden())
+        .andExpect(header().doesNotExist("Retry-After"))
+        .andExpect(jsonPath("$.code").value("CLIENT_SUSPENDED"))
+        .andExpect(jsonPath("$.apiVersion").doesNotExist());
   }
 
   @Test

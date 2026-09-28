@@ -62,6 +62,31 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
   /** What a client should wait before retrying a {@code 503}. */
   static final String RETRY_AFTER_SECONDS = "30";
 
+  /** The detail of {@code 503 REGISTRY_UNAVAILABLE}. */
+  static final String REGISTRY_UNAVAILABLE_DETAIL =
+      "The exchange registry cannot be read; try again later.";
+
+  /** The detail of {@code 503 EXCHANGE_DISABLED}. */
+  static final String EXCHANGE_DISABLED_DETAIL = "The exchange is switched off.";
+
+  /** The detail of {@code 403 CLIENT_NOT_ALLOWED}. */
+  static final String CLIENT_NOT_ALLOWED_DETAIL = "This client is not approved for the exchange.";
+
+  /** The detail of {@code 403 CLIENT_SUSPENDED}. */
+  static final String CLIENT_SUSPENDED_DETAIL = "This client is suspended.";
+
+  /** The detail of {@code 401 INSTALLATION_REVOKED}. */
+  static final String INSTALLATION_REVOKED_DETAIL =
+      "This installation was disconnected; connect again with a new key.";
+
+  /** The detail of {@code 401 CLIENT_REVOKED}. */
+  static final String CLIENT_REVOKED_DETAIL =
+      "The member disconnected this client after this connection was made.";
+
+  /** The detail of {@code 403 SCOPE_MISSING}. */
+  static final String SCOPE_MISSING_DETAIL =
+      "This route needs a capability the token or the client does not hold.";
+
   /** The scope that marks a token of an offline session. */
   static final String OFFLINE_ACCESS = "offline_access";
 
@@ -117,7 +142,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           response,
           HttpStatus.SERVICE_UNAVAILABLE,
           ExchangeRefusals.REGISTRY_UNAVAILABLE,
-          "The exchange registry cannot be read; try again later.");
+          REGISTRY_UNAVAILABLE_DETAIL);
       return;
     }
     if (context == null) {
@@ -156,7 +181,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           response,
           HttpStatus.SERVICE_UNAVAILABLE,
           ExchangeRefusals.EXCHANGE_DISABLED,
-          "The exchange is switched off.");
+          EXCHANGE_DISABLED_DETAIL);
       return null;
     }
     ExchangeRegistry.Client client = clientId == null ? null : registry.clients().get(clientId);
@@ -166,7 +191,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           response,
           HttpStatus.FORBIDDEN,
           ExchangeRefusals.CLIENT_NOT_ALLOWED,
-          "This client is not approved for the exchange.");
+          CLIENT_NOT_ALLOWED_DETAIL);
       return null;
     }
     if (!client.active()) {
@@ -175,7 +200,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           response,
           HttpStatus.FORBIDDEN,
           ExchangeRefusals.CLIENT_SUSPENDED,
-          "This client is suspended.");
+          CLIENT_SUSPENDED_DETAIL);
       return null;
     }
     String thumbprint = thumbprint(jwt);
@@ -195,7 +220,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           response,
           HttpStatus.UNAUTHORIZED,
           ExchangeRefusals.INSTALLATION_REVOKED,
-          "This installation was disconnected; connect again with a new key.");
+          INSTALLATION_REVOKED_DETAIL);
       return null;
     }
     Set<String> granted = scopes(jwt);
@@ -207,7 +232,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           response,
           HttpStatus.UNAUTHORIZED,
           ExchangeRefusals.CLIENT_REVOKED,
-          "The member disconnected this client after this connection was made.");
+          CLIENT_REVOKED_DETAIL);
       return null;
     }
     granted.retainAll(client.capabilities());
@@ -217,7 +242,7 @@ public class ExchangeGateFilter extends OncePerRequestFilter {
           response,
           HttpStatus.FORBIDDEN,
           ExchangeRefusals.SCOPE_MISSING,
-          "This route needs a capability the token or the client does not hold.");
+          SCOPE_MISSING_DETAIL);
       return null;
     }
     if (!ClientVersions.meets(

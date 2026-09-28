@@ -55,8 +55,10 @@ import tools.jackson.databind.ObjectMapper;
  * and turns the backend's answer into what the exchange contract allows.
  *
  * <p>A backend refusal passes through only with a code of the exchange error registry and that
- * code's fixed detail, never the backend's own detail text (REQ-XCH-025); the backend's generic
- * codes are translated, everything else becomes {@code 502 BACKEND_RELAY_FAILED}.
+ * code's fixed detail, never the backend's own detail text (REQ-XCH-025); a code of the registry
+ * gate passes only with the status the gateway's gate answers it with, so a client sees one code
+ * and status whichever side refuses; the backend's generic codes are translated, everything else
+ * becomes {@code 502 BACKEND_RELAY_FAILED}.
  */
 @Slf4j
 @Service
@@ -97,29 +99,64 @@ public class ExchangeRelay {
           "VERSION_CONFLICT");
 
   /**
+   * The codes of the gateway's registry gate, each with the only status it may arrive with: the
+   * backend's exchange gate answers the same situation with the same code and status (REQ-XCH-025).
+   */
+  static final Map<String, Integer> GATE_STATUSES =
+      Map.of(
+          ExchangeRefusals.EXCHANGE_DISABLED,
+          HttpStatus.SERVICE_UNAVAILABLE.value(),
+          ExchangeRefusals.REGISTRY_UNAVAILABLE,
+          HttpStatus.SERVICE_UNAVAILABLE.value(),
+          ExchangeRefusals.CLIENT_NOT_ALLOWED,
+          HttpStatus.FORBIDDEN.value(),
+          ExchangeRefusals.CLIENT_SUSPENDED,
+          HttpStatus.FORBIDDEN.value(),
+          ExchangeRefusals.INSTALLATION_REVOKED,
+          HttpStatus.UNAUTHORIZED.value(),
+          ExchangeRefusals.CLIENT_REVOKED,
+          HttpStatus.UNAUTHORIZED.value(),
+          ExchangeRefusals.SCOPE_MISSING,
+          HttpStatus.FORBIDDEN.value());
+
+  /**
    * The registry codes a backend refusal may reach a client with, each with the fixed detail the
-   * client sees in place of the backend's.
+   * client sees in place of the backend's; a gate code carries the gateway gate's own detail.
    */
   static final Map<String, String> DETAILS =
-      Map.of(
-          "TERMS_NOT_ACCEPTED",
-          "The member has not accepted the current terms of use; they accept them in the Basetool.",
-          "PENDING_APPROVAL",
-          "The member's registration is still awaiting approval.",
-          "NO_ROLE",
-          "The member holds no role in the Basetool.",
-          "ACTING_MEMBER_REFUSED",
-          "The Basetool refused the member this request acts for.",
-          "NOT_PERMITTED",
-          "The member may not do this.",
-          "SCHEMA_INVALID",
-          "The Basetool refused the request's content as malformed.",
-          "VERSION_CONFLICT",
-          "The entry changed since it was read; pull, merge and retry.",
-          "CURSOR_EXPIRED",
-          "The cursor is older than the retained changes; reconcile against a full snapshot.",
-          "MASS_CHANGE_CONFIRMATION_REQUIRED",
-          "The change set removes more than the mass-change guard allows without confirmation.");
+      Map.ofEntries(
+          Map.entry(
+              "TERMS_NOT_ACCEPTED",
+              "The member has not accepted the current terms of use; they accept them in the"
+                  + " Basetool."),
+          Map.entry("PENDING_APPROVAL", "The member's registration is still awaiting approval."),
+          Map.entry("NO_ROLE", "The member holds no role in the Basetool."),
+          Map.entry(
+              "ACTING_MEMBER_REFUSED", "The Basetool refused the member this request acts for."),
+          Map.entry("NOT_PERMITTED", "The member may not do this."),
+          Map.entry("SCHEMA_INVALID", "The Basetool refused the request's content as malformed."),
+          Map.entry(
+              "VERSION_CONFLICT", "The entry changed since it was read; pull, merge and retry."),
+          Map.entry(
+              "CURSOR_EXPIRED",
+              "The cursor is older than the retained changes; reconcile against a full snapshot."),
+          Map.entry(
+              "MASS_CHANGE_CONFIRMATION_REQUIRED",
+              "The change set removes more than the mass-change guard allows without"
+                  + " confirmation."),
+          Map.entry(
+              ExchangeRefusals.EXCHANGE_DISABLED, ExchangeGateFilter.EXCHANGE_DISABLED_DETAIL),
+          Map.entry(
+              ExchangeRefusals.REGISTRY_UNAVAILABLE,
+              ExchangeGateFilter.REGISTRY_UNAVAILABLE_DETAIL),
+          Map.entry(
+              ExchangeRefusals.CLIENT_NOT_ALLOWED, ExchangeGateFilter.CLIENT_NOT_ALLOWED_DETAIL),
+          Map.entry(ExchangeRefusals.CLIENT_SUSPENDED, ExchangeGateFilter.CLIENT_SUSPENDED_DETAIL),
+          Map.entry(
+              ExchangeRefusals.INSTALLATION_REVOKED,
+              ExchangeGateFilter.INSTALLATION_REVOKED_DETAIL),
+          Map.entry(ExchangeRefusals.CLIENT_REVOKED, ExchangeGateFilter.CLIENT_REVOKED_DETAIL),
+          Map.entry(ExchangeRefusals.SCOPE_MISSING, ExchangeGateFilter.SCOPE_MISSING_DETAIL));
 
   /** Backend codes the exchange contract names and a client may see as they are. */
   static final Set<String> PASSED_THROUGH = DETAILS.keySet();
@@ -283,13 +320,16 @@ public class ExchangeRelay {
       count(OUTCOME_OK, client);
       return Result.ok(node);
     }
-    if (raw.status() >= 400 && raw.status() < 500 && node != null && node.isObject()) {
+    if (raw.status() >= 400 && raw.status() < 600 && node != null && node.isObject()) {
       JsonNode code = node.get("code");
       String backendCode = code != null && code.isString() ? code.stringValue() : null;
       String exchangeCode =
           backendCode == null ? null : TRANSLATED.getOrDefault(backendCode, backendCode);
       String detail = exchangeCode == null ? null : DETAILS.get(exchangeCode);
-      if (detail != null) {
+      Integer gateStatus = exchangeCode == null ? null : GATE_STATUSES.get(exchangeCode);
+      boolean statusFits =
+          gateStatus == null ? raw.status() < 500 : gateStatus.intValue() == raw.status();
+      if (detail != null && statusFits) {
         count(OUTCOME_REFUSED, client);
         return Result.refused(raw.status(), exchangeCode, detail);
       }
@@ -301,6 +341,31 @@ public class ExchangeRelay {
         node != null);
     count(OUTCOME_FAILED, client);
     return Result.failed();
+  }
+
+  /**
+   * Tells whether a code is one the gateway's registry gate answers, so a refusal of the backend's
+   * gate with it means the same as the gateway's own.
+   *
+   * @param code a problem code, or {@code null}
+   * @return {@code true} for a code of the registry gate
+   */
+  public static boolean isGateCode(@Nullable String code) {
+    return code != null && GATE_STATUSES.containsKey(code);
+  }
+
+  /**
+   * Returns the {@code Retry-After} a relayed refusal carries, the same the gateway's gate sends
+   * with that code.
+   *
+   * @param code a problem code, or {@code null}
+   * @return the seconds, or {@code null} when the code carries none
+   */
+  public static @Nullable String retryAfterSeconds(@Nullable String code) {
+    return ExchangeRefusals.EXCHANGE_DISABLED.equals(code)
+            || ExchangeRefusals.REGISTRY_UNAVAILABLE.equals(code)
+        ? ExchangeGateFilter.RETRY_AFTER_SECONDS
+        : null;
   }
 
   /**
