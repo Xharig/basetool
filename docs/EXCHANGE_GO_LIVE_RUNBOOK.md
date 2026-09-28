@@ -728,11 +728,20 @@ GitHub (basetool-sc-extractor), no host change — **the start of the one sittin
 decided commit `v2.10.0` and push the tag; the tag run builds the MSI, attests it and publishes a
 non-prerelease GitHub release (vault *SC Extractor Release Pipeline*).
 
-- **Precondition:** S10's dry run read and its session still open (or re-authenticate at S15 —
-  the token lives 300 s); S12 done; the announcement ready.
+- **The tag push is the publication.** The workflow has no draft stage: it builds, scans, attests
+  and publishes in one run, as `releases/latest`, with `.github/release-notes/v2.10.0.md` in front
+  of the generated notes. The version comes only from the tag.
+- **Precondition:** the extractor PRs #76 (sign-in refusal message) and #77 (release notes) are
+  merged; the tag commit is the extractor's `main` after both; S10's dry run read and its session
+  still open (or re-authenticate at S15 — the token lives 300 s); S12 done; the announcement ready.
+- **Command** (in a checkout of the extractor): `git tag -s v2.10.0 <main-commit>` and
+  `git push origin v2.10.0`.
 - **Verify:** `gh release list --repo krt-profit/basetool-sc-extractor --limit 3` shows `v2.10.0`
-  as **Latest**.
-- From here until S15 an updated extractor cannot sync — move on at once.
+  as **Latest**; the release carries the MSI.
+- From here until S15 an updated extractor cannot sync: its sign-in is refused `400 invalid_scope`
+  (the realm offers no `exchange.*` scope yet), which 2.10.0 shows as „Noch nicht möglich: Die
+  Anmeldung für diese Version ist im Basetool noch nicht freigeschaltet …". It sends nothing and
+  retries nothing on its own. Move on at once.
 
 ### S14 — Switch the legacy endpoints off
 
