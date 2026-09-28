@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v1.13.1](https://github.com/krt-profit/basetool/releases/tag/v1.13.1) - 2026-09-28
+
 ### Changed
 
 - **Keycloak: Offline-Sitzungen nur noch für die Austausch-Clients.** Der Realm-Provisioner entzieht
