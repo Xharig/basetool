@@ -40,11 +40,14 @@ import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 /**
  * Verifies that every {@code terms.*} key in the committed message bundle is reachable by the
- * numbering walk of {@link TermsDocumentService}, so no clause is silently dropped.
+ * numbering walk of {@link TermsDocumentService}, so no clause is silently dropped, and that the
+ * load-bearing clauses of sections 4 and 12 keep their shape in both languages.
  */
 class TermsDocumentStructureTest {
 
@@ -56,6 +59,32 @@ class TermsDocumentStructureTest {
 
   /** Any version; this test is about structure, not about the digest. */
   private static final String STUB_VERSION = "test-version";
+
+  /** Zero-based index of section 4, the user obligations. */
+  private static final int SECTION_OBLIGATIONS = 3;
+
+  /** Zero-based index of section 12, the changes to the terms. */
+  private static final int SECTION_AMENDMENTS = 11;
+
+  /** Number of rules section 4 states for a connected application. */
+  private static final int CONNECTED_APP_RULES = 5;
+
+  /** The public list of approved clients the approval clause names. */
+  private static final String APPROVED_CLIENTS_URL =
+      "https://github.com/krt-profit/basetool/blob/main/docs/legal/approved-clients.md";
+
+  /** The disclaimer of support for third-party software, which approving clients contradicts. */
+  private static final String[] DROPPED_DISCLAIMERS = {
+    "deren Einsatz nicht", "does not support its use"
+  };
+
+  /** The consent-by-access and consent-by-continued-use wordings that recorded consent replaced. */
+  private static final String[] CONSENT_FICTIONS = {
+    "fortgesetzte Nutzung",
+    "Continued use",
+    "Mit dem Zugriff auf die Plattform erkennt",
+    "By accessing the Platform, the user accepts"
+  };
 
   /**
    * Builds the service over the real bundle.
@@ -197,5 +226,46 @@ class TermsDocumentStructureTest {
   @DisplayName("the document carries the version in force")
   void carriesTheVersion() {
     assertThat(service().document(Locale.GERMAN).version()).isEqualTo(STUB_VERSION);
+  }
+
+  /**
+   * Section 4 links the public list of approved clients, no longer disclaims support for approved
+   * software, and states in a paragraph of its own what a connected application may do
+   * (REQ-SEC-027).
+   *
+   * @param language the language tag of the document
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"de", "en"})
+  @DisplayName("section 4 links the approved-client list and states what a connected app may do")
+  void sectionFourCarriesTheExchangeTerms(String language) {
+    TermsSectionDto section =
+        service().document(Locale.forLanguageTag(language)).sections().get(SECTION_OBLIGATIONS);
+
+    assertThat(section.clauses()).hasSize(2);
+    assertThat(section.clauses().getFirst().bullets())
+        .anySatisfy(bullet -> assertThat(bullet).contains(APPROVED_CLIENTS_URL))
+        .noneSatisfy(bullet -> assertThat(bullet).containsAnyOf(DROPPED_DISCLAIMERS));
+    assertThat(section.clauses().get(1).bullets()).hasSize(CONNECTED_APP_RULES);
+  }
+
+  /**
+   * The intro and section 12 make the terms and their amendments depend on recorded consent instead
+   * of treating access or continued use as consent (REQ-SEC-028).
+   *
+   * @param language the language tag of the document
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"de", "en"})
+  @DisplayName("neither the intro nor section 12 treats access or continued use as consent")
+  void termsNeedRecordedConsent(String language) {
+    TermsDocumentDto document = service().document(Locale.forLanguageTag(language));
+    List<String> texts = new ArrayList<>();
+    texts.add(document.intro());
+    document.sections().get(SECTION_AMENDMENTS).clauses().stream()
+        .map(TermsClauseDto::text)
+        .forEach(texts::add);
+
+    assertThat(texts).noneSatisfy(text -> assertThat(text).containsAnyOf(CONSENT_FICTIONS));
   }
 }
