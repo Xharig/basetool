@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -238,8 +239,8 @@ class ExchangeStoreRedisIntegrationTest {
     ExchangeQuotas quotas = new ExchangeQuotas(template, budget, clock);
     String key = ExchangeQuotas.PREFIX + "a:m1:2026-09-27";
 
-    assertThat(quotas.countWrite("a", "m1")).isEqualTo(1L);
-    assertThat(quotas.countWrite("a", "m1")).isEqualTo(2L);
+    assertThat(quotas.countWrite("a", "m1").count()).isEqualTo(1L);
+    assertThat(quotas.countWrite("a", "m1").count()).isEqualTo(2L);
 
     assertThat(observer.getExpire(key, TimeUnit.SECONDS))
         .as("until the end of the following UTC day")
@@ -434,6 +435,96 @@ class ExchangeStoreRedisIntegrationTest {
         .hasSize(20);
   }
 
+  @Test
+  void aRefundTakesOneWriteBackAndKeepsTheCountersExpiry() {
+    ExchangeQuotas quotas = new ExchangeQuotas(template, budget, clock);
+    String key = quotas.countWrite("a", "m1").key();
+    quotas.countWrite("a", "m1");
+    long ttl = observer.getExpire(key, TimeUnit.SECONDS);
+
+    quotas.refund(key);
+
+    assertThat(template.opsForValue().get(key)).isEqualTo("1");
+    assertThat(observer.getExpire(key, TimeUnit.SECONDS)).isBetween(ttl - 2L, ttl);
+    quotas.refund(key);
+    quotas.refund(key);
+    assertThat(template.opsForValue().get(key)).as("never below zero").isEqualTo("0");
+    quotas.refund(ExchangeQuotas.PREFIX + "a:m1:2026-01-01");
+    assertThat(observer.hasKey(ExchangeQuotas.PREFIX + "a:m1:2026-01-01"))
+        .as("a refund creates no counter")
+        .isFalse();
+  }
+
+  @Test
+  void aBudgetRefusalGivesTheQuotaCountBackAndWaitsUntilEnoughExpires() throws Exception {
+    ExchangeBudget defaults =
+        new ExchangeBudget(template, DEFAULTS, new SimpleMeterRegistry(), clock);
+    ExchangeQuotas quotas = new ExchangeQuotas(template, defaults, clock);
+    String counter = quotas.countWrite("a", "m1").key();
+    defaults.record(
+        "a", "m1", "ingest:xch:idem:a:m1:old", 1_048_576L - 20_000L, Duration.ofMinutes(10));
+    AtomicInteger writes = new AtomicInteger();
+
+    MockHttpServletResponse response =
+        send(
+            filter(new ExchangeIdempotency(template, JsonMapper.builder().build(), DEFAULTS)),
+            "budget-key-1",
+            writes,
+            counter);
+
+    assertThat(response.getStatus()).isEqualTo(503);
+    assertThat(response.getContentAsString()).contains("EXCHANGE_BUDGET_EXHAUSTED");
+    assertThat(writes).hasValue(0);
+    assertThat(template.opsForValue().get(counter))
+        .as("the refused write is not counted")
+        .isEqualTo("0");
+    assertThat(response.getHeader("Retry-After"))
+        .as("the member's budget frees when the old answer expires")
+        .isEqualTo("600");
+  }
+
+  @Test
+  void theWaitIsWhenEnoughOfTheOverflowingScopeHasExpired() {
+    budget.record("a", "m1", "ingest:xch:idem:a:m1:1", 1000L, Duration.ofMinutes(5));
+    budget.record("a", "m1", "ingest:xch:idem:a:m1:2", 1000L, Duration.ofMinutes(10));
+    budget.record("a", "m1", "ingest:xch:idem:a:m1:3", 1000L, Duration.ofMinutes(20));
+
+    assertThat(budget.reserve("a", "m1", "ingest:xch:idem:a:m1:4", 100L, Duration.ofHours(1)))
+        .isFalse();
+    assertThat(budget.retryAfterSeconds("a", "m1", 100L)).isEqualTo(300L);
+    assertThat(budget.retryAfterSeconds("a", "m1", 2000L)).isEqualTo(600L);
+    assertThat(budget.retryAfterSeconds("a", "m2", 100L))
+        .as("another member fits now")
+        .isEqualTo(1L);
+    assertThat(budget.retryAfterSeconds("a", "m1", 5000L))
+        .as("larger than the member's whole budget")
+        .isEqualTo(ExchangeBudget.MAX_RETRY_AFTER_SECONDS);
+  }
+
+  @Test
+  void eachClientsUseIsPublishedAgainstTheClientBudget() {
+    SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    ExchangeBudget measured = new ExchangeBudget(template, SMALL, meters, clock);
+
+    measured.record("a", "m1", "ingest:xch:idem:a:m1:1", 1536L, Duration.ofHours(1));
+    measured.record("b", "m1", "ingest:xch:idem:b:m1:1", 512L, Duration.ofHours(1));
+
+    assertThat(
+            meters
+                .get("basetool.ingest.exchange.client.budget.used.ratio")
+                .tag("client_id", "a")
+                .gauge()
+                .value())
+        .isEqualTo(2048.0d / SMALL.clientBytes());
+    assertThat(
+            meters
+                .get("basetool.ingest.exchange.client.budget.used.ratio")
+                .tag("client_id", "b")
+                .gauge()
+                .value())
+        .isEqualTo(1024.0d / SMALL.clientBytes());
+  }
+
   /**
    * Builds the idempotency filter over a cache, with the production default budgets.
    *
@@ -441,9 +532,12 @@ class ExchangeStoreRedisIntegrationTest {
    * @return the filter
    */
   private @NotNull ExchangeIdempotencyFilter filter(@NotNull ExchangeIdempotency cache) {
+    ExchangeBudget defaults =
+        new ExchangeBudget(template, DEFAULTS, new SimpleMeterRegistry(), clock);
     return new ExchangeIdempotencyFilter(
         cache,
-        new ExchangeBudget(template, DEFAULTS, new SimpleMeterRegistry(), clock),
+        defaults,
+        new ExchangeQuotas(template, defaults, clock),
         DEFAULTS,
         mock(ExchangeRefusals.class),
         JsonMapper.builder().build(),
@@ -463,6 +557,25 @@ class ExchangeStoreRedisIntegrationTest {
   private static @NotNull MockHttpServletResponse send(
       @NotNull ExchangeIdempotencyFilter filter, @NotNull String key, @NotNull AtomicInteger writes)
       throws Exception {
+    return send(filter, key, writes, null);
+  }
+
+  /**
+   * Sends one write through the filter as the limit filter left it: counted on a quota counter.
+   *
+   * @param filter the filter
+   * @param key the idempotency key
+   * @param writes counts the writes that reached the chain
+   * @param counted the quota counter the write was counted on, or {@code null} for none
+   * @return the response
+   * @throws Exception if the filter fails
+   */
+  private static @NotNull MockHttpServletResponse send(
+      @NotNull ExchangeIdempotencyFilter filter,
+      @NotNull String key,
+      @NotNull AtomicInteger writes,
+      @Nullable String counted)
+      throws Exception {
     MockHttpServletRequest request =
         new MockHttpServletRequest("POST", ExchangeTestSupport.BLUEPRINT_CHANGES);
     request.setContent("{\"ops\":[]}".getBytes(StandardCharsets.UTF_8));
@@ -477,6 +590,9 @@ class ExchangeStoreRedisIntegrationTest {
             Set.of("exchange.blueprints.write"),
             new ExchangeRegistry.Client("A", true, Set.of(), null, null, null),
             null));
+    if (counted != null) {
+      request.setAttribute(ExchangeQuotas.COUNTED, counted);
+    }
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain =
         (req, res) -> {

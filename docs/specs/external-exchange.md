@@ -1128,7 +1128,8 @@ mass change, or a store failure escaping a route — each answers `503 SERVICE_U
 `Retry-After: 60`, never a `500`. Two Redis reads answer otherwise: an unreadable registry or
 revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003) and a write quota that cannot be
 counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with `Retry-After: 30`; a full byte budget
-is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. *Corrected 2026-09-27: this paragraph
+is `503 EXCHANGE_BUDGET_EXHAUSTED` with a `Retry-After` read from the budget (REQ-XCH-023).
+*Changed 2026-09-28: it was a fixed `Retry-After: 60`.* *Corrected 2026-09-27: this paragraph
 said every Redis failure answered `Retry-After: 60`; the registry and quota reads have answered 30
 since they were built.*
 
@@ -1291,7 +1292,8 @@ Redis (`ingest:xch:quota:*`). All gateway-written exchange data in Redis is boun
 client and member, 16 MB per client and 64 MB in total, counted per stored value with a fixed
 per-entry overhead (an estimate of Redis's own bookkeeping, not a measurement of its memory — see
 *The byte budget* below); above a limit the gateway
-answers `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
+answers `503 EXCHANGE_BUDGET_EXHAUSTED` with a `Retry-After` of when enough of the budget expires
+(below) and gives the write's daily quota count back. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
 Responses carry `RateLimit` and `Retry-After` headers. The account check has its own tight limit.
 
 **The limits** (owner decision 2026-09-27; `app.exchange.limits.*`):
@@ -1304,13 +1306,36 @@ Responses carry `RateLimit` and `Retry-After` headers. The account check has its
 | write requests per client and member | 500 per UTC day — `writesPerDay` overrides it, at most 5000 | Redis, `ingest:xch:quota:<client>:<member>:<day>`, created with its expiry by `SET NX EX`, then `INCR`; kept until the end of the following UTC day |
 | live DPoP proofs per member (`dpop-proofs-per-member`) | 600, per path scope | in-process `jti` replay cache (REQ-XCH-006) |
 | live DPoP proofs in total (`dpop-proofs-total`) | 100 000, per path scope | in-process `jti` replay cache (REQ-XCH-006) |
+| change sets of more than 100 ops relayed at once, over all clients and members | 4 | in-process bulkhead `exchangeLargeChangeSets` (`resilience4j.bulkhead.instances.…max-concurrent-calls`) |
 
 The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
 a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
 `Retry-After` (the quota's until the next UTC day); a quota that cannot be counted is `503
-SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted answer carries
+SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every attempt at a write route
+counts, retries, replays and refusals included, except a `503 EXCHANGE_BUDGET_EXHAUSTED`: the
+limit filter notes the counter on the request (`ExchangeQuotas.COUNTED`) and a budget refusal gives
+that one count back (a Lua `GET` and `SET KEEPTTL` that never goes below zero or creates a
+counter). Before, a client that honoured the refusal's `Retry-After` burned its 500 writes in
+about eight hours of refusals (load test of 2026-09-28, finding 5). Every admitted answer carries
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
+
+**The relay's capacity** (load test of 2026-09-28, finding 3). The exchange relay has its own JDK
+client, circuit breaker (`exchange`) and bulkhead, none shared with the extractor's handoff relay
+(`BackendImportClient`, breaker `backend`), so a burst of exchange writes cannot open the
+extractor's breaker. A change set of more than 100 ops takes one of four slots while it is
+relayed; without a free slot it is not relayed but answered `503 RELAY_BUSY` with
+`Retry-After: 10`, counted as `relay_busy`, and — a `5xx` — never cached for its key; like a
+budget refusal it gives its daily write-quota count back (owner decision 2026-09-28). A set of at
+most 100 ops needs no slot. The relay's read timeout is **30 s**, the extractor relay's 15 s: a
+500-op stock set took up to 10.6 s at p99 with four in flight on a member with about 15 000
+journal rows (4.2 s on fresh data), and past the timeout the gateway answered `502` while the
+backend still committed, so the client's retry met `VERSION_CONFLICT` on its own write. The
+timeout stays below the idempotency claim's two minutes and the edge proxy's 90 s. Why four:
+one to four concurrent 500-op sets kept the p50 at 2.1 s, eight rose to 2.9 s (and on a member
+with history reached the old 15 s timeout), sixteen collapsed to 12.4 s with the backend at its
+3-CPU limit. The breaker's and the bulkhead's meters, `ExchangeLargeChangeSetsBusy` and the
+Exchange dashboard's *Relay capacity* row watch it (REQ-XCH-028).
 
 **In front of them**, before the token is read, the ingest-wide per-IP bucket
 (`RateLimitingFilter`, REQ-INGEST-005; `app.rate-limit.ip-capacity` / `ip-refill-tokens`, 120 a
@@ -1350,8 +1375,20 @@ A quota counter is recorded on every write, before the counter is touched and wi
 — the write still needs its own reservation. Its entry has a fixed name and expiry, so recording it
 again counts it once; the counter itself is created with that expiry in one command (`SET NX EX`)
 and only then incremented, so no crash between two commands can leave it without an expiry or
-outside the budget. `basetool_ingest_exchange_budget_used_ratio` reports the total's use;
-`ExchangeBudgetHigh` fires above 80 %.
+outside the budget. `basetool_ingest_exchange_budget_used_ratio` reports the total's use and
+`ExchangeBudgetHigh` fires above 80 % of it;
+`basetool_ingest_exchange_client_budget_used_ratio{client_id}` reports each registry client's use
+of its own budget and `ExchangeClientBudgetHigh` fires above 80 % of that. The second is the one that warns with a single client: its 16 MiB are a
+quarter of the total, so the total's gauge reads 25 % at most while that client's writes are all
+refused (load test of 2026-09-28, finding 4). Both are the value at the last write.
+
+**When a refused write may retry.** The sets are scored by expiry, so the refusal's
+`Retry-After` is read from them: for every scope the write's charge would overflow, a read-only
+script walks up to 1000 entries in expiry order until the bytes expiring cover the overflow, and
+the longest such wait is the answer, in whole seconds rounded up — at least 1 and at most 3600,
+the cap also when the entries read never free enough, and 60 when Redis cannot be read. A full
+budget frees only as cached answers expire, up to 24 hours; the cap makes a client ask again at
+least hourly instead of parking it for a day.
 
 What the budget counts, and what stays an estimate:
 
@@ -1378,11 +1415,26 @@ issues against the same user's key patterns and commands (REQ-SEC-068).
   the gateway, `scripts/sandbox-load.py budget` fills the member budget at its 1 MiB default and the
   client and total budgets lowered to 2.5 MiB, checking every admission against the live sets
   (REQ-XCH-029).*
+- [x] The exchange relay does not share the extractor relay's breaker, and more than four large
+  change sets at once are refused before the backend. *`ExchangeRelayTest` (an open `backend`
+  breaker leaves the relay working; a busy bulkhead refuses `RELAY_BUSY` without calling the
+  backend; a failed set frees its slot), `ExchangeChangeRouteTest` (101 ops take a slot, 100 do
+  not; `RELAY_BUSY` carries `Retry-After: 10`, is not cached and gives its quota count back, a
+  relayed set keeps it), `RestClientConfigTest` (the
+  exchange client waits past 15 s; its timeout ends within the claim),
+  `Resilience4jMetricsConfigTest`, `exchange_relay_capacity_alerts_test.yml`.*
 - [x] Parallel writes never overshoot a budget. *`ExchangeStoreRedisIntegrationTest`: sixteen
   parallel reservations on one member admit exactly what fits, and across two clients exactly what
   the total holds; a reservation settles on its value or stays when the value does not fit; a missing
   total is rebuilt. `RedisAclIngestIntegrationTest`: a script under the ingest user reaches no key the
   user could not.*
+- [x] A budget refusal gives its quota count back and says when enough of the budget expires; each
+  client's use is a gauge with its own alert. *`ExchangeStoreRedisIntegrationTest` under the
+  ingest ACL user: a refusal restores the counter and answers `Retry-After: 600` when the blocking
+  answer expires in ten minutes; the wait is the expiry that frees enough bytes; a refund keeps the
+  counter's expiry, stops at zero and creates nothing; each client's gauge reads its scope.
+  `ExchangeIdempotencyFilterTest`, `ExchangeChangeRouteTest`, `ExchangeDraftRouteTest`;
+  `exchange_client_budget_alert_test.yml`.*
 
 **Status:** built — WP 3.2 (#2082); the production Redis size and ACL follow with the go-live,
 WP 2.1 (#2092)
@@ -1406,7 +1458,8 @@ each with its HTTP status and the client action it requires. Codes are never reu
 The gateway's gates count their refusals on `basetool_ingest_exchange_refused_total` with the code
 as the `reason` label (`ExchangeRefusals.CODES`); the routes' own answers (`SCHEMA_INVALID`,
 `BATCH_TOO_LARGE`, `PAYLOAD_TOO_LARGE`, `CURSOR_EXPIRED`, `BACKEND_RELAY_FAILED`, a staging store's
-`503`) and those written before the token is read are not counted there. *Corrected 2026-09-28: this
+`503`) and those written before the token is read are not counted there; `RELAY_BUSY`, the relay's
+refusal of a large change set without a free slot (REQ-XCH-023), is, as `relay_busy`. *Corrected 2026-09-28: this
 said every gateway-side code was such a label.*
 
 No answer on an exchange route falls outside the registry. A body that is not a JSON document is
@@ -1524,7 +1577,8 @@ tombstones and journal reports task metrics.
   refusals outside its own limits. *`ExchangeRefusalsTest`, `ExchangeGateTest`,
   `exchange_gateway_alerts_test.yml`.* The admin page links there instead of showing an error rate
   itself (owner decision 2026-09-27).
-- [x] Registry changes and the Redis budget alert (`ExchangeRegistryChanged`, `ExchangeBudgetHigh`).
+- [x] Registry changes and the Redis budget alert (`ExchangeRegistryChanged`, `ExchangeBudgetHigh`,
+  and per client `ExchangeClientBudgetHigh`).
 - [x] A blackbox probe checks `GET /exchange/v1` for exactly `401` (`blackbox-http-401`, module
   `http_401`; `BlackboxProbeFailed` covers it).
 - [x] Per-client write metrics with the WP 3.3 journal, and the tombstone and journal purge task

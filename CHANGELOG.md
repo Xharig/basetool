@@ -367,6 +367,20 @@
   bei leeren Lots; ein Zurücknehmen konnte eine gleichzeitige Änderung überschreiben. Jetzt sperrt das
   Backend jedes Lot vorab, die zweite Änderung erhält `VERSION_CONFLICT` (ADR-0229, REQ-XCH-016).
 
+- **Datenaustausch: volles Speicherbudget ehrlich melden.** `503 EXCHANGE_BUDGET_EXHAUSTED` nennt im
+  `Retry-After` die Sekunden, bis genug Budget abläuft (höchstens eine Stunde), statt pauschal 60,
+  und zählt nicht mehr gegen das Tageskontingent von 500 Schreibzugriffen. Neue Metrik
+  `basetool_ingest_exchange_client_budget_used_ratio` mit Alarm `ExchangeClientBudgetHigh`, der das
+  volle Budget einer einzelnen Anwendung meldet (REQ-XCH-023).
+- **Monitoring: DPoP-Nonce-Abfrage ist keine Ablehnung mehr.** Der normale Nonce-Roundtrip zählt
+  nicht mehr als `dpop_invalid` in `basetool_ingest_exchange_refused_total` (REQ-XCH-028).
+
+- **Datenaustausch: große Änderungspakete legen den Extractor-Import nicht mehr lahm.** Das Gateway
+  leitet Datenaustausch-Anfragen über einen eigenen Circuit Breaker, eigene Verbindungen und 30 s
+  statt 15 s Timeout weiter und höchstens vier Pakete mit mehr als 100 Operationen gleichzeitig;
+  weitere erhalten `503 RELAY_BUSY` mit `Retry-After: 10`. Neuer Alarm `ExchangeLargeChangeSetsBusy`
+  (REQ-XCH-023).
+
 - **Redis: Ingest-Benutzer ohne ungenutzte Befehle.** Die ACL-Vorlage nimmt dem Benutzer
   `basetool-ingest` `ZREMRANGEBYSCORE` und `UNLINK`, die das Gateway nie sendet; wirksam mit dem
   nächsten Rendern der ACL.

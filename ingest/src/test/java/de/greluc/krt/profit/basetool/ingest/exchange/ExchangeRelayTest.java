@@ -32,10 +32,15 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.service.ServiceAccountTokenProvider;
 import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadConfig;
+import io.github.resilience4j.bulkhead.BulkheadRegistry;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,12 +49,19 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 class ExchangeRelayTest {
 
+  private static final String RESULT =
+      "{\"dryRun\":false,\"applied\":1,\"unchanged\":0,\"notApplied\":0,\"results\":[]}";
+
   private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
   private final JsonMapper mapper = JsonMapper.builder().build();
+  private final BulkheadRegistry bulkheads =
+      BulkheadRegistry.of(
+          BulkheadConfig.custom().maxConcurrentCalls(1).maxWaitDuration(Duration.ZERO).build());
   private MockRestServiceServer backend;
   private ExchangeRelay relay;
 
@@ -59,14 +71,7 @@ class ExchangeRelayTest {
     backend = MockRestServiceServer.bindTo(builder).build();
     ServiceAccountTokenProvider tokens = mock(ServiceAccountTokenProvider.class);
     when(tokens.currentToken()).thenReturn("gateway-token");
-    relay =
-        new ExchangeRelay(
-            builder.build(),
-            tokens,
-            CircuitBreakerRegistry.ofDefaults(),
-            mapper,
-            meters,
-            TestLoggingProperties.defaults());
+    relay = relay(builder.build(), tokens, CircuitBreakerRegistry.ofDefaults(), bulkheads);
     relay.register();
   }
 
@@ -267,17 +272,11 @@ class ExchangeRelayTest {
   @Test
   void anOpenCircuitIsARelayFailureAndCounted() {
     CircuitBreakerRegistry breakers = CircuitBreakerRegistry.ofDefaults();
-    breakers.circuitBreaker("backend").transitionToForcedOpenState();
+    breakers.circuitBreaker(ExchangeRelay.BREAKER).transitionToForcedOpenState();
     ServiceAccountTokenProvider tokens = mock(ServiceAccountTokenProvider.class);
     when(tokens.currentToken()).thenReturn("gateway-token");
     ExchangeRelay open =
-        new ExchangeRelay(
-            RestClient.builder().baseUrl("https://backend").build(),
-            tokens,
-            breakers,
-            mapper,
-            meters,
-            TestLoggingProperties.defaults());
+        relay(RestClient.builder().baseUrl("https://backend").build(), tokens, breakers, bulkheads);
 
     ExchangeRelay.Result result =
         open.forward(HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
@@ -293,13 +292,11 @@ class ExchangeRelayTest {
         .thenThrow(
             new ServiceAccountTokenProvider.ServiceAccountTokenException("no identity", null));
     ExchangeRelay tokenless =
-        new ExchangeRelay(
+        relay(
             RestClient.builder().baseUrl("https://backend").build(),
             tokens,
             CircuitBreakerRegistry.ofDefaults(),
-            mapper,
-            meters,
-            TestLoggingProperties.defaults());
+            bulkheads);
 
     ExchangeRelay.Result result =
         tokenless.forward(
@@ -307,6 +304,131 @@ class ExchangeRelayTest {
 
     assertThat(result.code()).isEqualTo("BACKEND_RELAY_FAILED");
     assertThat(count("failed")).isEqualTo(1.0d);
+  }
+
+  @Test
+  void anOpenExtractorBreakerDoesNotStopTheExchangeRelay() {
+    CircuitBreakerRegistry breakers = CircuitBreakerRegistry.ofDefaults();
+    breakers.circuitBreaker("backend").transitionToForcedOpenState();
+    RestClient.Builder builder = RestClient.builder().baseUrl("https://backend");
+    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+    server
+        .expect(requestTo("https://backend/api/v1/exchange/catalog/locations"))
+        .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
+    ServiceAccountTokenProvider tokens = mock(ServiceAccountTokenProvider.class);
+    when(tokens.currentToken()).thenReturn("gateway-token");
+
+    ExchangeRelay.Result result =
+        relay(builder.build(), tokens, breakers, bulkheads)
+            .forward(HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
+
+    server.verify();
+    assertThat(result.isOk()).isTrue();
+    assertThat(breakers.circuitBreaker(ExchangeRelay.BREAKER).getState())
+        .isEqualTo(CircuitBreaker.State.CLOSED);
+  }
+
+  @Test
+  void aLargeChangeSetWithoutAFreeSlotIsRefusedBusyWithoutReachingTheBackend() {
+    Bulkhead slots = bulkheads.bulkhead(ExchangeRelay.LARGE_CHANGE_SETS);
+    assertThat(slots.tryAcquirePermission()).isTrue();
+
+    ExchangeRelay.Result result =
+        relay.forwardLarge(
+            HttpMethod.POST, "/api/v1/exchange/me/stock/changes", changeSet(), context(), null);
+
+    backend.verify();
+    assertThat(result.status()).isEqualTo(503);
+    assertThat(result.code()).isEqualTo(ExchangeRefusals.RELAY_BUSY);
+    assertThat(ExchangeRelay.retryAfterSeconds(result.code()))
+        .isEqualTo(ExchangeRelay.BUSY_RETRY_AFTER_SECONDS);
+    assertThat(
+            meters
+                .get(MetricNames.EXCHANGE_REFUSED)
+                .tag(MetricNames.TAG_REASON, "relay_busy")
+                .tag(MetricNames.TAG_CLIENT_ID, "versekit")
+                .counter()
+                .count())
+        .isEqualTo(1.0d);
+    slots.onComplete();
+  }
+
+  @Test
+  void aLargeChangeSetTakesASlotOnlyWhileItIsRelayed() {
+    backend
+        .expect(requestTo("https://backend/api/v1/exchange/me/stock/changes"))
+        .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+    backend
+        .expect(requestTo("https://backend/api/v1/exchange/me/stock/changes"))
+        .andRespond(withSuccess(RESULT, MediaType.APPLICATION_JSON));
+
+    ExchangeRelay.Result failed =
+        relay.forwardLarge(
+            HttpMethod.POST, "/api/v1/exchange/me/stock/changes", changeSet(), context(), null);
+    ExchangeRelay.Result next =
+        relay.forwardLarge(
+            HttpMethod.POST, "/api/v1/exchange/me/stock/changes", changeSet(), context(), null);
+
+    backend.verify();
+    assertThat(failed.code()).isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(next.isOk()).isTrue();
+    assertThat(
+            bulkheads
+                .bulkhead(ExchangeRelay.LARGE_CHANGE_SETS)
+                .getMetrics()
+                .getAvailableConcurrentCalls())
+        .isEqualTo(1);
+  }
+
+  @Test
+  void aSmallRequestNeedsNoSlot() {
+    Bulkhead slots = bulkheads.bulkhead(ExchangeRelay.LARGE_CHANGE_SETS);
+    assertThat(slots.tryAcquirePermission()).isTrue();
+    backend
+        .expect(requestTo("https://backend/api/v1/exchange/me/stock/changes"))
+        .andRespond(withSuccess(RESULT, MediaType.APPLICATION_JSON));
+
+    ExchangeRelay.Result result =
+        relay.forward(
+            HttpMethod.POST, "/api/v1/exchange/me/stock/changes", changeSet(), context(), null);
+
+    backend.verify();
+    assertThat(result.isOk()).isTrue();
+    slots.onComplete();
+  }
+
+  /**
+   * Builds a relay on the given collaborators.
+   *
+   * @param client the backend client
+   * @param tokens the gateway identity
+   * @param breakers the breaker registry
+   * @param bulkheadRegistry the bulkhead registry
+   * @return the relay
+   */
+  private ExchangeRelay relay(
+      RestClient client,
+      ServiceAccountTokenProvider tokens,
+      CircuitBreakerRegistry breakers,
+      BulkheadRegistry bulkheadRegistry) {
+    return new ExchangeRelay(
+        client,
+        tokens,
+        breakers,
+        bulkheadRegistry,
+        new ExchangeRefusals(meters, mock(ExchangeRegistryReader.class)),
+        mapper,
+        meters,
+        TestLoggingProperties.defaults());
+  }
+
+  /**
+   * Builds a change set body.
+   *
+   * @return the body
+   */
+  private JsonNode changeSet() {
+    return mapper.readTree("{\"ops\":[]}");
   }
 
   /**

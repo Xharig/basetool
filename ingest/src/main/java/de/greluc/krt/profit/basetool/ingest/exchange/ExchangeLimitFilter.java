@@ -159,28 +159,34 @@ public class ExchangeLimitFilter extends OncePerRequestFilter {
             + member.getRemainingTokens()
             + ", reset="
             + secondsUntilFull(memberLimit, member.getRemainingTokens()));
-    if (route.get().write() && !withinQuota(context, response)) {
+    if (route.get().write() && !withinQuota(context, request, response)) {
       return;
     }
     filterChain.doFilter(request, response);
   }
 
   /**
-   * Counts a write against the member's daily quota.
+   * Counts a write against the member's daily quota and notes the counter on the request as {@link
+   * ExchangeQuotas#COUNTED}, so a later refusal can give the count back.
    *
    * @param context the admitted request
+   * @param request the request the counter is noted on
    * @param response the response a refusal is written to
    * @return {@code true} when the write is within the quota
    * @throws IOException if writing a refusal fails
    */
   private boolean withinQuota(
-      @NotNull ExchangeRequestContext context, @NotNull HttpServletResponse response)
+      @NotNull ExchangeRequestContext context,
+      @NotNull HttpServletRequest request,
+      @NotNull HttpServletResponse response)
       throws IOException {
     Integer override = context.client().writesPerDay();
     int limit = override == null ? properties.writesPerDay() : override;
     long count;
     try {
-      count = quotas.countWrite(context.clientId(), context.member());
+      ExchangeQuotas.Counted counted = quotas.countWrite(context.clientId(), context.member());
+      request.setAttribute(ExchangeQuotas.COUNTED, counted.key());
+      count = counted.count();
     } catch (ExchangeUnavailableException e) {
       response.setHeader(HttpHeaders.RETRY_AFTER, UNAVAILABLE_RETRY_AFTER_SECONDS);
       refuse(

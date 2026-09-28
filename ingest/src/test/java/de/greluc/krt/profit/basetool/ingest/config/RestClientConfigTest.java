@@ -30,6 +30,7 @@ import de.greluc.krt.profit.basetool.ingest.support.TestSslBundles;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
 import java.security.KeyStore;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -37,6 +38,9 @@ import okhttp3.mockwebserver.RecordedRequest;
 import okhttp3.tls.HandshakeCertificates;
 import okhttp3.tls.HeldCertificate;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 import org.springframework.boot.ssl.DefaultSslBundleRegistry;
 import org.springframework.boot.ssl.SslBundles;
 import org.springframework.mock.env.MockEnvironment;
@@ -45,10 +49,10 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /**
- * Integration tests for the profile-gated TLS trust of the gateway's two outbound {@code
- * RestClient}s (ADR-0204) against a real HTTPS server with a certificate issued for {@code
- * backend}: the backend relay accepts a pinned but misnamed certificate and refuses an unpinned
- * one, while the Keycloak client also verifies the hostname.
+ * Integration tests for the profile-gated TLS trust of the gateway's outbound {@code RestClient}s
+ * (ADR-0204) against a real HTTPS server with a certificate issued for {@code backend}: the backend
+ * relay accepts a pinned but misnamed certificate and refuses an unpinned one, while the Keycloak
+ * client also verifies the hostname; and for the exchange relay's longer read timeout.
  */
 class RestClientConfigTest {
 
@@ -238,6 +242,35 @@ class RestClientConfigTest {
       assertThat(client.get().uri(httpsUrl(keycloak)).retrieve().body(String.class))
           .isEqualTo("{}");
     }
+  }
+
+  @Test
+  void theExchangeRelayWaitsPastTheExtractorRelaysReadTimeout() throws Exception {
+    try (MockWebServer backend = new MockWebServer()) {
+      backend.enqueue(
+          new MockResponse()
+              .setBody("{}")
+              .setHeadersDelay(
+                  RestClientConfig.BACKEND_READ_TIMEOUT.toSeconds() + 1, TimeUnit.SECONDS));
+      backend.start();
+      RestClient client =
+          config(backend.url("/").toString(), new String[] {"test"}, new DefaultSslBundleRegistry())
+              .exchangeRestClient();
+
+      assertThat(client.get().uri("/api/v1/exchange/me/stock").retrieve().body(String.class))
+          .isEqualTo("{}");
+    }
+  }
+
+  @Test
+  void theExchangeReadTimeoutEndsWhileTheWritesIdempotencyClaimIsHeld() {
+    ExchangeStoreProperties store =
+        new Binder(new MapConfigurationPropertySource(Map.of()))
+            .bindOrCreate("app.exchange.store", Bindable.of(ExchangeStoreProperties.class));
+
+    assertThat(RestClientConfig.EXCHANGE_READ_TIMEOUT)
+        .isGreaterThan(RestClientConfig.BACKEND_READ_TIMEOUT)
+        .isLessThan(store.lockTtl());
   }
 
   @Test

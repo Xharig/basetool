@@ -121,6 +121,12 @@ body is at most 2 MiB (`413 PAYLOAD_TOO_LARGE`). A batch is applied in one trans
 has its own result. Split a large sync into several batches, each under its own key — but keep a stock
 move, the fall and its rise, in the same batch.
 
+The gateway relays at most **four change sets of more than 100 ops** at a time, over all clients
+and members. A fifth is not relayed but answered `503 RELAY_BUSY` with `Retry-After: 10`; nothing
+was written, so retry the same request under the same key after the wait. A batch of at most 100
+ops is never refused this way. Send the large batches of one member one after another rather than
+in parallel.
+
 ## The mass-change guard
 
 A client that suddenly removes much of a member's data is stopped until the member confirms it. The
@@ -185,7 +191,8 @@ mass-change window of your client.
 | Live DPoP proofs | 600 at a time, each live until just after 30 seconds past its `iat` (`429 DPOP_PROOF_LIMIT`, [details](authentication.md#live-proofs-per-member)) | member, over all clients |
 | Live DPoP proofs | 100 000 at a time (`503 SERVICE_UNAVAILABLE`) | gateway, over all members |
 
-Every attempt counts, retries and replays included. Admitted answers carry `RateLimit` and
+Every attempt counts, retries and replays included — except a `503 EXCHANGE_BUDGET_EXHAUSTED`,
+which gives its write back. Admitted answers carry `RateLimit` and
 `RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out. The
 per-IP limit is checked first, before the token is read: every member and client behind one address
 shares it, so the per-client 1200 cannot be reached from a single address, and its
@@ -199,8 +206,9 @@ table, as the limit, and send a fresh DPoP proof with every request, retries inc
 - `429 RATE_LIMITED`, `429 DPOP_PROOF_LIMIT` and `429 QUOTA_EXCEEDED` carry `Retry-After` in
   seconds — for the quota, until the next UTC day. Wait at least that long.
 - Every `503` of the gateway carries `Retry-After` too: 30 seconds for `EXCHANGE_DISABLED` and
-  `REGISTRY_UNAVAILABLE`, 60 for `EXCHANGE_BUDGET_EXHAUSTED`, and for `SERVICE_UNAVAILABLE` 60 when
-  a store cannot be reached, 30 when the daily write quota cannot be counted, 5 when the identity
+  `REGISTRY_UNAVAILABLE`, for `EXCHANGE_BUDGET_EXHAUSTED` the seconds until enough of the full
+  budget expires (at most an hour), 10 for `RELAY_BUSY`, and for `SERVICE_UNAVAILABLE` 60 when a
+  store cannot be reached, 30 when the daily write quota cannot be counted, 5 when the identity
   provider cannot be reached, and the seconds until the earliest live proof no longer counts when
   all members together hold the gateway's cap of live DPoP proofs. Wait at least that long and
   retry the same request under the same key; read the header rather than these numbers.

@@ -102,6 +102,8 @@ class ExchangeChangeRouteTest {
 
   @BeforeEach
   void setUp() throws Exception {
+    when(quotas.countWrite(anyString(), anyString()))
+        .thenReturn(new ExchangeQuotas.Counted("ingest:xch:quota:test", 1L));
     mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
     key = ExchangeTestSupport.newKey();
     member = UUID.randomUUID().toString();
@@ -164,6 +166,50 @@ class ExchangeChangeRouteTest {
         .andExpect(jsonPath("$.code").value("BATCH_TOO_LARGE"));
 
     verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void aChangeSetOfMoreThan100OpsIsRelayedWithinTheLargeSetLimit() throws Exception {
+    when(relay.forwardLarge(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+
+    post("/exchange/v1/me/blueprints/changes", removals(101)).andExpect(status().isOk());
+
+    verify(relay)
+        .forwardLarge(
+            eq(HttpMethod.POST), eq("/api/v1/exchange/me/blueprints/changes"), any(), any(), any());
+    verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void aChangeSetOf100OpsNeedsNoLargeSetSlot() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+
+    post("/exchange/v1/me/blueprints/changes", removals(100)).andExpect(status().isOk());
+
+    verify(relay, never()).forwardLarge(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void aLargeChangeSetWithoutAFreeSlotIsRelayBusyWithRetryAfterAndNotCached() throws Exception {
+    when(relay.forwardLarge(any(), anyString(), any(), any(), any()))
+        .thenReturn(ExchangeRelay.Result.busy());
+
+    post("/exchange/v1/me/blueprints/changes", removals(101))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("Retry-After", "10"))
+        .andExpect(jsonPath("$.code").value("RELAY_BUSY"));
+
+    verify(idempotency, never()).store(anyString(), any());
+    verify(quotas).refundCounted(any());
+  }
+
+  @Test
+  void aRelayedChangeSetKeepsItsQuotaCount() throws Exception {
+    when(relay.forwardLarge(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+
+    post("/exchange/v1/me/blueprints/changes", removals(101)).andExpect(status().isOk());
+
+    verify(quotas, never()).refundCounted(any());
   }
 
   @Test
@@ -304,14 +350,16 @@ class ExchangeChangeRouteTest {
         .thenReturn(new ExchangeRelay.Result(409, null, "MASS_CHANGE_CONFIRMATION_REQUIRED", ""));
     when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any()))
         .thenReturn(true, false);
+    when(budget.retryAfterSeconds(anyString(), anyString(), anyLong())).thenReturn(777L);
 
     post("/exchange/v1/me/blueprints/changes", ADD)
         .andExpect(status().isServiceUnavailable())
-        .andExpect(header().exists("Retry-After"))
+        .andExpect(header().string("Retry-After", "777"))
         .andExpect(jsonPath("$.code").value("EXCHANGE_BUDGET_EXHAUSTED"));
 
     verify(stagingService, never())
         .stageMassChange(anyString(), anyString(), anyString(), anyLong());
+    verify(quotas).refundCounted(any());
   }
 
   @Test
@@ -367,6 +415,23 @@ class ExchangeChangeRouteTest {
    */
   private static @NotNull String example(@NotNull String name) throws Exception {
     return Files.readString(EXAMPLES.resolve(name));
+  }
+
+  /**
+   * Builds a blueprint change set of removals.
+   *
+   * @param count the number of ops
+   * @return the body
+   */
+  private static @NotNull String removals(int count) {
+    StringBuilder body = new StringBuilder("{\"ops\":[");
+    for (int i = 0; i < count; i++) {
+      body.append(i == 0 ? "" : ",")
+          .append("{\"op\":\"remove\",\"key\":\"k")
+          .append(i)
+          .append("\"}");
+    }
+    return body.append("]}").toString();
   }
 
   /**

@@ -181,6 +181,15 @@ groups:
           summary: "The exchange's Redis budget is more than 80 % used"
           description: "The exchange data the ingest gateway keeps in Redis (the idempotency cache) uses more than 80 % of its 64 MiB budget. Above 100 % every exchange write is refused with 503 EXCHANGE_BUDGET_EXHAUSTED, while sessions keep their room (REQ-XCH-023, ADR-0221). Check which client writes most (the per-client sets under ingest:xch:budget:c:*) and whether a client loops."
 
+      - alert: ExchangeClientBudgetHigh
+        expr: max by (client_id) (basetool_ingest_exchange_client_budget_used_ratio) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exchange client {{ $labels.client_id }} uses more than 80 % of its Redis budget"
+          description: "The exchange data the ingest gateway keeps in Redis for client {{ $labels.client_id }} (cached answers, quota counters, staged drafts) uses more than 80 % of the client's 16 MiB budget. When it is full every write of every member of that client is refused 503 EXCHANGE_BUDGET_EXHAUSTED, long before ExchangeBudgetHigh can fire, because one client's budget is a quarter of the total (REQ-XCH-023). The budget frees only as the cached answers expire, up to 24 hours. Check on the Exchange dashboard whether the client pushes its whole list every sync or keeps re-sending conflicting change sets, and contact its author; members of other clients are not affected."
+
       - alert: ExchangeRelayFailing
         expr: sum(increase(basetool_ingest_exchange_relay_total{outcome="failed"}[15m])) > 3
         for: 5m
@@ -190,8 +199,17 @@ groups:
           summary: "Exchange relays to the backend keep failing"
           description: "The ingest gateway relayed admitted exchange requests but the backend answered unusably - 5xx, a refusal outside the exchange error registry, an answer that breaks the v1 schema, or no answer at all (unreachable, circuit open, no gateway token) - and the client got 502 BACKEND_RELAY_FAILED (REQ-XCH-011). Check the backend and its exchange layer and the gateway log lines 'Exchange relay to' or 'Exchange answer breaks'."
 
+      - alert: ExchangeLargeChangeSetsBusy
+        expr: sum(increase(basetool_ingest_exchange_refused_total{reason="relay_busy"}[15m])) > 30
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The gateway keeps refusing large exchange change sets as busy"
+          description: "More than 30 change sets of over 100 ops were refused 503 RELAY_BUSY in 15 minutes, for 15 minutes: the four slots of the exchangeLargeChangeSets bulkhead stay taken (REQ-XCH-023). Typical after a client release or on a launch day, when many members send their first sync at once; the clients retry after 10 s and nothing is lost. Check the backend's CPU and the p99 of POST /exchange/v1/me/stock/changes; only with headroom there raise resilience4j.bulkhead.instances.exchangeLargeChangeSets.max-concurrent-calls in the gateway."
+
       - alert: ExchangeClientRefusalsSpike
-        expr: sum by (client_id) (increase(basetool_ingest_exchange_refused_total{client_id!~"none|unknown|unregistered", reason!~"rate_limited|quota_exceeded|idempotency_in_progress"}[15m])) > 30
+        expr: sum by (client_id) (increase(basetool_ingest_exchange_refused_total{client_id!~"none|unknown|unregistered", reason!~"rate_limited|quota_exceeded|idempotency_in_progress|relay_busy"}[15m])) > 30
         for: 10m
         labels:
           severity: warning

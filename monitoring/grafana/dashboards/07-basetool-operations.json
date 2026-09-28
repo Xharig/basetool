@@ -3803,7 +3803,7 @@
       },
       "type": "timeseries",
       "title": "Exchange gateway refusals/hour by reason",
-      "description": "Every exchange request the ingest gateway refused before it reached the backend, by problem code in snake case (REQ-XCH-028): DPoP, audience, registry, revocation, scope, version, limit, quota, idempotency and budget refusals. The per-client split is the panel beside the relay outcomes. Backs ExchangeDpopProofsFailing and ExchangeRegistryUnreadableAtGateway.",
+      "description": "Every exchange request the ingest gateway refused before it reached the backend, by problem code in snake case (REQ-XCH-028): DPoP, audience, registry, revocation, scope, version, limit, quota, idempotency and budget refusals. The per-client split is the panel beside the relay outcomes. Backs ExchangeDpopProofsFailing and ExchangeRegistryUnreadableAtGateway. The normal DPoP nonce round trip is no refusal and is not counted here; it shows as use_dpop_nonce on the ingest auth failures.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

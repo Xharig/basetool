@@ -101,6 +101,8 @@ class ExchangeGateTest {
 
   @BeforeEach
   void setUp() throws Exception {
+    when(quotas.countWrite(anyString(), anyString()))
+        .thenReturn(new ExchangeQuotas.Counted("ingest:xch:quota:test", 1L));
     mockMvc =
         MockMvcBuilders.webAppContextSetup(context)
             .addFilters(

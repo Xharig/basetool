@@ -26,9 +26,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -40,7 +43,9 @@ import org.springframework.stereotype.Component;
  * client and in total (REQ-XCH-023, ADR-0221). Every stored value registers {@code <key>|<charge>}
  * in a sorted set per scope, scored by its expiry, and each scope keeps its running total beside
  * it. One Lua script prunes expired entries, checks all three limits and records the entry
- * atomically, so parallel writes cannot overshoot and no call reads a whole set.
+ * atomically, so parallel writes cannot overshoot and no call reads a whole set. The total's use
+ * and each registry client's use are published as gauges, and a refusal's wait is read from the
+ * expiries the sets are scored by.
  */
 @Slf4j
 @Component
@@ -70,8 +75,11 @@ public class ExchangeBudget {
   /** Marks a limit that is not checked. */
   private static final String UNCHECKED = "-1";
 
-  /** The check-and-record script; its result is the total in use, or {@code -1 - total}. */
-  private static final RedisScript<Long> SCRIPT =
+  /**
+   * The check-and-record script; its result is {@code <fits>:<member>:<client>:<total>}, whether
+   * the step was applied and the bytes each scope holds after it.
+   */
+  private static final RedisScript<String> SCRIPT =
       new DefaultRedisScript<>(
           """
           local release = ARGV[3]
@@ -146,17 +154,75 @@ public class ExchangeBudget {
               end
             end
           end
-          if fits == 1 then
-            return used[3]
+          return string.format('%d:%d:%d:%d', fits, used[1], used[2], used[3])
+          """,
+          String.class);
+
+  /**
+   * The wait script: for every scope whose limit a charge would overflow, it walks the scope's
+   * entries by expiry until enough bytes expire, and returns the longest such wait in milliseconds,
+   * {@code 0} when the charge fits, or {@code -1} when the entries it may read do not free enough.
+   */
+  private static final RedisScript<Long> WAIT_SCRIPT =
+      new DefaultRedisScript<>(
+          """
+          local now = tonumber(ARGV[1])
+          local charge = tonumber(ARGV[2])
+          local walk = tonumber(ARGV[3])
+          local function size(entry)
+            return tonumber(string.match(entry, '|(%d+)$')) or 0
           end
-          return -1 - used[3]
+          local wait = 0
+          for i = 1, 3 do
+            local limit = tonumber(ARGV[3 + i])
+            local used = tonumber(redis.call('GET', KEYS[i + 3]) or '0') or 0
+            local over = used + charge - limit
+            if over > 0 then
+              local freed = 0
+              local at = nil
+              local entries = redis.call('ZRANGE', KEYS[i], 0, walk - 1, 'WITHSCORES')
+              for j = 1, #entries, 2 do
+                freed = freed + size(entries[j])
+                if freed >= over then
+                  at = tonumber(entries[j + 1])
+                  break
+                end
+              end
+              if at == nil then
+                return -1
+              end
+              if at - now > wait then
+                wait = at - now
+              end
+            end
+          end
+          return wait
           """,
           Long.class);
 
+  /** The most entries per scope the wait script reads. */
+  static final int WAIT_WALK = 1000;
+
+  /** The shortest {@code Retry-After} of a budget refusal, in seconds. */
+  static final long MIN_RETRY_AFTER_SECONDS = 1;
+
+  /**
+   * The longest {@code Retry-After} of a budget refusal, in seconds: a full budget can take a day
+   * to free, and a client asks again at least hourly.
+   */
+  static final long MAX_RETRY_AFTER_SECONDS = 3600;
+
+  /** The {@code Retry-After} of a budget refusal whose wait cannot be read. */
+  static final long FALLBACK_RETRY_AFTER_SECONDS = 60;
+
   private final StringRedisTemplate redisTemplate;
   private final ExchangeStoreProperties properties;
+  private final MeterRegistry meterRegistry;
   private final Clock clock;
   private final AtomicLong totalUsed = new AtomicLong();
+
+  /** The bytes each registry client's scope held at its last measurement, one gauge per client. */
+  private final Map<String, AtomicLong> clientUsed = new ConcurrentHashMap<>();
 
   /**
    * Creates the budget on the system clock and registers its gauge.
@@ -188,6 +254,7 @@ public class ExchangeBudget {
       @NotNull Clock clock) {
     this.redisTemplate = redisTemplate;
     this.properties = properties;
+    this.meterRegistry = meterRegistry;
     this.clock = clock;
     Gauge.builder(
             MetricNames.EXCHANGE_BUDGET_USED_RATIO,
@@ -291,7 +358,7 @@ public class ExchangeBudget {
   }
 
   /**
-   * Runs the script for one client and member and keeps the gauge current.
+   * Runs the script for one client and member and keeps the gauges current.
    *
    * @param clientId the client
    * @param member the member
@@ -320,7 +387,7 @@ public class ExchangeBudget {
             sum(sets.get(0)),
             sum(sets.get(1)),
             sum(sets.get(2)));
-    Long result;
+    String result;
     try {
       result =
           redisTemplate.execute(
@@ -339,11 +406,106 @@ public class ExchangeBudget {
       log.warn("Exchange budget update failed: {}", e.getClass().getSimpleName());
       throw new ExchangeUnavailableException("The exchange budget cannot be reached.", e);
     }
+    long[] answer = parse(result);
+    clientGauge(clientId).set(answer[2]);
+    totalUsed.set(answer[3]);
+    return answer[0] == 1L;
+  }
+
+  /**
+   * Returns how many seconds a value of the given size has to wait before it fits every budget of
+   * its client and member, from the expiries of the entries each overflowing scope holds; bounded
+   * to {@value #MIN_RETRY_AFTER_SECONDS}…{@value #MAX_RETRY_AFTER_SECONDS}, the upper bound also
+   * when the entries it reads do not free enough, and {@value #FALLBACK_RETRY_AFTER_SECONDS} when
+   * Redis cannot be read.
+   *
+   * @param clientId the client
+   * @param member the member
+   * @param bytes the value's size, as passed to {@link #reserve}
+   * @return the seconds for {@code Retry-After}
+   */
+  public long retryAfterSeconds(@NotNull String clientId, @NotNull String member, long bytes) {
+    List<String> sets = List.of(memberScope(clientId, member), clientScope(clientId), totalScope());
+    Long waitMillis;
+    try {
+      waitMillis =
+          redisTemplate.execute(
+              WAIT_SCRIPT,
+              List.of(
+                  sets.get(0),
+                  sets.get(1),
+                  sets.get(2),
+                  sum(sets.get(0)),
+                  sum(sets.get(1)),
+                  sum(sets.get(2))),
+              Long.toString(clock.millis()),
+              Long.toString(charge(bytes)),
+              Integer.toString(WAIT_WALK),
+              Long.toString(properties.memberBytes()),
+              Long.toString(properties.clientBytes()),
+              Long.toString(properties.totalBytes()));
+    } catch (RuntimeException e) {
+      log.warn("Exchange budget wait could not be read: {}", e.getClass().getSimpleName());
+      return FALLBACK_RETRY_AFTER_SECONDS;
+    }
+    if (waitMillis == null) {
+      return FALLBACK_RETRY_AFTER_SECONDS;
+    }
+    if (waitMillis < 0) {
+      return MAX_RETRY_AFTER_SECONDS;
+    }
+    long seconds = (waitMillis + 999L) / 1000L;
+    return Math.clamp(seconds, MIN_RETRY_AFTER_SECONDS, MAX_RETRY_AFTER_SECONDS);
+  }
+
+  /**
+   * Parses the check-and-record script's answer.
+   *
+   * @param result {@code <fits>:<member>:<client>:<total>}, or {@code null}
+   * @return the four numbers in that order
+   * @throws ExchangeUnavailableException if the answer is missing or malformed
+   */
+  static long @NotNull [] parse(@Nullable String result) {
     if (result == null) {
       throw new ExchangeUnavailableException("The exchange budget answered nothing.", null);
     }
-    totalUsed.set(result >= 0 ? result : -1L - result);
-    return result >= 0;
+    String[] parts = result.split(":", -1);
+    if (parts.length != 4) {
+      throw new ExchangeUnavailableException("The exchange budget answered malformed.", null);
+    }
+    long[] numbers = new long[4];
+    try {
+      for (int i = 0; i < 4; i++) {
+        numbers[i] = Long.parseLong(parts[i]);
+      }
+    } catch (NumberFormatException e) {
+      throw new ExchangeUnavailableException("The exchange budget answered malformed.", e);
+    }
+    return numbers;
+  }
+
+  /**
+   * Returns the holder of a client's last measured use, registering its gauge on first use; the
+   * client is always an admitted request's registry client id, so the label stays bounded by the
+   * registry (REQ-OBS-011).
+   *
+   * @param clientId the registry client id
+   * @return the holder the gauge reads
+   */
+  private @NotNull AtomicLong clientGauge(@NotNull String clientId) {
+    return clientUsed.computeIfAbsent(
+        clientId,
+        id -> {
+          AtomicLong used = new AtomicLong();
+          Gauge.builder(
+                  MetricNames.EXCHANGE_CLIENT_BUDGET_USED_RATIO,
+                  used,
+                  value -> (double) value.get() / properties.clientBytes())
+              .description("The share of one client's Redis byte budget in use, last measured.")
+              .tag(MetricNames.TAG_CLIENT_ID, id)
+              .register(meterRegistry);
+          return used;
+        });
   }
 
   /**

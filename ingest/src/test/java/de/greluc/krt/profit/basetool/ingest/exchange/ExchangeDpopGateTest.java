@@ -133,6 +133,8 @@ class ExchangeDpopGateTest {
 
   @Test
   void aProofWithoutTheNonceGetsTheNonceAndTheRetryPasses() throws Exception {
+    double refusedBefore = refused("dpop_invalid");
+    double challengedBefore = authFailures("use_dpop_nonce");
     MvcResult challenge =
         mockMvc
             .perform(dpop(TOKEN, proof(key, TOKEN, null)))
@@ -151,18 +153,24 @@ class ExchangeDpopGateTest {
         .perform(dpop(TOKEN, proof(key, TOKEN, nonce)))
         .andExpect(status().isOk())
         .andExpect(header().exists(ExchangeTokenGateFilter.DPOP_NONCE_HEADER));
-    assertThat(authFailures("use_dpop_nonce")).isGreaterThanOrEqualTo(1.0d);
+    assertThat(authFailures("use_dpop_nonce") - challengedBefore).isEqualTo(1.0d);
+    assertThat(refused("dpop_invalid") - refusedBefore)
+        .as("the nonce round trip is no exchange refusal")
+        .isZero();
   }
 
   @Test
   void aReplayedProofIsRefused() throws Exception {
     String proof = proof(key, TOKEN, nonce());
-
     mockMvc.perform(dpop(TOKEN, proof)).andExpect(status().isOk());
+    double before = refused("dpop_invalid");
+
     mockMvc
         .perform(dpop(TOKEN, proof))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("DPOP_INVALID"));
+
+    assertThat(refused("dpop_invalid") - before).isEqualTo(1.0d);
   }
 
   @Test
