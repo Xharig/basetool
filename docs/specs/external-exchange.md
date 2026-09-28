@@ -275,7 +275,11 @@ Each product has its own public Keycloak client: device grant only, `consentRequ
 or `roles` scopes, `exchange.connect`, `offline_access` and every capability scope optional, the
 device code living 600 s at a pinned polling interval, and `dpop.bound.access.tokens` on. Clients
 request `offline_access`, because a device login joins the member's browser SSO session and a web
-logout would otherwise disconnect every client (owner decision 2026-09-26). Consent is shown in German, per capability. The consent and device
+logout would otherwise disconnect every client (owner decision 2026-09-26). Every session of such a
+client, offline or online, ends after 30 days without use and 90 days at the latest: the provisioner
+pins `client.offline.session.*` and `client.session.*` on the client, so a client that omits
+`offline_access` does not inherit the realm's 180-day SSO session (owner decision 2026-09-28,
+ADR-0217 amendment). Consent is shown in German, per capability. The consent and device
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
 A `verification_uri_complete` link skips the device page, so for a device login the consent page
 carries the same warning and shows the user code for the member to compare with the one on their PC,
@@ -296,7 +300,8 @@ accepted. The provisioner applies this on production only **after** the legacy s
   existing client too, 30/90-day offline session, owner decision 2026-09-26) and the SC Extractor's
   exchange scopes (`scripts/provision-keycloak-realm.test.sh`, sections 13–15). The extractor
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
-  (owner decision 2026-09-27).
+  (owner decision 2026-09-27). Both clients' online sessions are pinned at 30/90 days as well, and
+  section 13 fails without the pin (owner decision 2026-09-28).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
   *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
   only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
@@ -454,7 +459,8 @@ tombstones WP 3.3 (#2083)
 ### REQ-XCH-008 — Revocation takes effect on the next request
 
 Disconnecting **one installation** puts its key thumbprint on a persistent deny list (database,
-mirrored to Redis, kept at least as long as a client session can live — 90 days, ADR-0217 amendment); every token bound to that
+mirrored to Redis, kept 90 days — longer than any session of an exchange client can live, online or
+offline, since both are capped at 90 days, REQ-XCH-005, ADR-0217 amendments); every token bound to that
 key is refused (`401 INSTALLATION_REVOKED`) whatever its `iat`, and reconnecting needs a new key.
 Disconnecting **a whole client** removes the member's Keycloak consent for it — which ends its
 offline sessions and, for a client with consent, its online sessions — deletes the member's online
@@ -471,7 +477,10 @@ needs a sign-in after the disconnect, because a device login that joins an older
 keeps that session's `auth_time`. When a member leaves the org (disabled, deleted, membership lost), their exchange
 sessions and consents end — an admin logout, which also makes offline tokens stale — and then
 revocations are written at once, not at the next roster sync. The
-gateway reads the deny list and the timestamps per request, bypassing its cache.
+gateway reads the deny list and the timestamps per request, bypassing its cache. *Corrected
+2026-09-28: the deny list was said to be kept „as long as a client session can live", but only the
+offline session was capped at 90 days; the online session of a client without `offline_access` could
+live the realm's 180 days, so a denied key could be refreshed past its 90-day mirror entry.*
 
 **How it is built** (WP 3.1). A revoked installation row is the deny-list entry for its key; a
 member's disconnect of a whole client is a row in `exchange_client_revocation` (V249). Both reach the

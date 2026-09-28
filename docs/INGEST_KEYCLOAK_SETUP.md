@@ -233,6 +233,10 @@ the provisioner creates it — never the Admin Console.
      client's refresh-only policy;
    - an offline session of at most **30 days idle and 90 days** in total (owner decision 2026-09-26);
      clients request `offline_access` so a web logout does not disconnect them;
+   - an online session capped the same way, `client.session.idle.timeout` 30 days and
+     `client.session.max.lifespan` 90 days (owner decision 2026-09-28): without it a client that
+     omits `offline_access` would hold a session for the realm's 180 days, outliving the 90-day
+     installation deny list (ADR-0217 amendment of 2026-09-28);
    - `basic` as the only default scope (the `sub` claim), the ten `exchange.*` capability scopes and
      `offline_access` as optional scopes, no protocol mapper;
    - `profile`, `email`, `roles`, `web-origins` and both ingest scopes are **withheld** — removed
@@ -255,7 +259,9 @@ the provisioner creates it — never the Admin Console.
 release (2.10.0) it requests `offline_access` like one, and the provisioner pins the same offline
 session on its client: `client.offline.session.idle.timeout` 30 days and
 `client.offline.session.max.lifespan` 90 days (owner decision 2026-09-27). Until then those limits
-came only from the realm (90 days max) and Keycloak's own 30-day idle default.
+came only from the realm (90 days max) and Keycloak's own 30-day idle default. Its online session
+is capped at the same 30/90 days (`client.session.idle.timeout`, `client.session.max.lifespan`,
+owner decision 2026-09-28), as the template's.
 
 Since security finding H1 (owner decision 2026-09-27) the provisioner also gives the extractor's
 client the template's protections: **consent required**, `dpop.bound.access.tokens` on, only
