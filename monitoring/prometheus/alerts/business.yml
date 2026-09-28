@@ -170,7 +170,7 @@ groups:
           severity: warning
         annotations:
           summary: "Exchange registry mirror write failed ({{ $labels.phase }})"
-          description: "The backend could not write the exchange registry mirror to Redis ({{ $labels.phase }}). A failed pre_commit write refused an admin's restriction; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
+          description: "The backend could not write the exchange registry mirror to Redis ({{ $labels.phase }}). A failed pre_commit write refused an admin's restriction; switched_off means a start with APP_EXCHANGE_MIRROR_ENABLED=false could not switch off a registry document left in Redis, so the gateway may still admit clients on it until the next successful start; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
 
       - alert: ExchangeBudgetHigh
         expr: max(basetool_ingest_exchange_budget_used_ratio) > 0.8

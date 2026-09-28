@@ -174,8 +174,20 @@ transaction completes — committed or rolled back — the committed state is wr
 there is counted and left to the reconcile, which compares the content (not `revision` and
 `writtenAt`) at startup and every 60 s (`app.exchange.mirror.reconcile-interval`) and rewrites a
 differing, missing or unreadable document. The mirror is written only while
-`APP_EXCHANGE_MIRROR_ENABLED=true`; while it is off nothing is mirrored and the gateway, which then
-finds no document, refuses every exchange request.
+`APP_EXCHANGE_MIRROR_ENABLED=true`. While it is off nothing is mirrored, and a start switches off a
+document an earlier run left behind (`ExchangeRegistryMirrorClosure`, once when the application is
+ready): the document has no expiry, so it would otherwise keep admitting clients. It is rewritten
+with the same clients, `enabled: false` and a new revision, through the backend user's own `GET` and
+`SET`, so the gateway refuses every exchange request `503 EXCHANGE_DISABLED` — or `503
+REGISTRY_UNAVAILABLE` when there never was a document. A failed attempt is counted as
+`basetool_exchange_mirror_writes_total{phase="switched_off",outcome="failed"}`
+(`ExchangeMirrorWriteFailed`) and does not stop the start. A document's age is no signal here: the
+backend rewrites it only when the registry changes, so `writtenAt` can be days old on a healthy
+mirror, and the gateway's `basetool_exchange_registry_mirror_age_seconds` measures its last
+successful read instead. The backend's own gate needs none of this: it reads the switch, the
+client, the installation and the client revocations from the database (REQ-XCH-008). *Corrected
+2026-09-28 (security review G5, L2): this said the gateway refuses every exchange request while
+mirroring is off, which held only until a document had once been written.*
 
 **What a registry entry may hold** (security review 2, L6). The display name reaches Keycloak's
 consent page, the member page and the connection notification, so it is Latin letters, ASCII digits,
@@ -203,6 +215,10 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   `ExchangeRegistryReaderTest` — a missing document, an unknown `schemaVersion`, garbage and an
   unreachable Redis all fail closed, a failed read is not cached — and `ExchangeGateTest`, which
   answers them `503 REGISTRY_UNAVAILABLE` with `Retry-After` (WP 3.2).*
+- [x] A start with mirroring off switches off a document left behind, keeping its clients, under
+  the backend's ACL user; a missing or already switched-off document is left alone, and a refused
+  read is counted without failing the start. *`ExchangeRegistryMirrorClosureTest` (security review
+  G5, L2).*
 - [x] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
   `ExchangeRegistryChanged` alert.
 - [x] The admin page *Administration → Verbundene Anwendungen* (`/admin/exchange-clients`)
@@ -223,7 +239,8 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   (`APP_GRAFANA_OPERATIONS_DASHBOARD_URL`, owner decision 2026-09-27). *`AdminExchangeClientUsageTest`,
   `AdminExchangeClientsPageControllerMvcTest`.*
 
-**Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
+**Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistryMirrorClosureTest`,
+`ExchangeRegistrySnapshotTest`,
 `AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `ExchangeConnectionsE2eTest`,
 `RedisAclBackendIntegrationTest`,
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·

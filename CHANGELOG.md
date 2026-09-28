@@ -338,6 +338,12 @@
 
 ### Fixed
 
+- **Datenaustausch: abgeschaltete Registry-Spiegelung lässt keine Anwendung mehr durch.** Startet
+  das Backend mit `APP_EXCHANGE_MIRROR_ENABLED=false`, schaltet es ein zurückgebliebenes
+  Registry-Dokument in Redis ab, sodass das Gateway jede Austausch-Anfrage mit
+  `503 EXCHANGE_DISABLED` ablehnt. Die Backend-Prüfung erkennt das Trennen einer Anwendung jetzt
+  auch aus der Datenbank, nicht nur aus dem Redis-Spiegel.
+
 - **Datenschutzerklärung: durchgehend „Sie“.** Die Sätze zu Datenkopie und Löschantrag sprachen als
   einzige Stelle mit „du“ an.
 
