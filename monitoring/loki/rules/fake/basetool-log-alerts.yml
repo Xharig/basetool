@@ -65,7 +65,7 @@ groups:
           severity: warning
         annotations:
           summary: "Slow/hanging health contributor ({{ $labels.app }})"
-          description: "A Spring Boot health contributor took >10s to respond (logged by HealthEndpointSupport) — readiness and the Docker healthcheck (5s budget) are already failing while the app looks alive. 2026-07-22 pattern: a hung reactive Redis PING queued successive checks for minutes. Check the named contributor and the container's health state."
+          description: "A Spring Boot health contributor took >10s to respond (logged by HealthEndpointSupport) — readiness and the container's Podman health check (HealthTimeout=5s in its Quadlet unit) are already failing while the app looks alive. 2026-07-22 pattern: a hung reactive Redis PING queued successive checks for minutes. Check the named contributor and the container's health state."
 
       - alert: SshFailedAuthSpike
         expr: sum(rate({app="host-auth"} |~ "Failed password|authentication failure|Invalid user" [5m])) > 0.3
