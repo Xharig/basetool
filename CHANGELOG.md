@@ -202,6 +202,11 @@
 
 ### Changed
 
+- **Sandbox: aktuelle Images für amd64 und arm64.** `edge` wird nach jeder Änderung auf `main`
+  neu gebaut, die den Inhalt der Images betrifft, für `linux/amd64` und `linux/arm64`; jedes Image
+  trägt seinen Commit (`org.opencontainers.image.revision`). In der Sandbox sind
+  `429 DPOP_PROOF_LIMIT` und `DEFAULT_NOT_REMOVABLE` jetzt auslösbar (REQ-XCH-029).
+
 - **Blueprints: Herkunft nennt die Anwendung beim Namen.** „Über …“ in der Detailansicht zeigt den
   registrierten Namen der verbundenen Anwendung statt ihrer Client-ID; ist sie nicht mehr
   registriert, bleibt die ID. Die Blueprint-Antworten (auch die Admin-Ansicht) tragen dafür
@@ -321,6 +326,10 @@
   einem Lauf der Ansible-Rolle (`--tags deploy,scripts`).
 
 ### Fixed
+
+- **Sandbox: lokal gebaute Images verweigern `prod`.** `--build` baut die Images jetzt wie die
+  veröffentlichten mit der Sandbox-Markierung; `sandbox.ps1` bricht unter Windows PowerShell 5.1 bei
+  umgeleitetem Fehlerstrom nicht mehr mit `NativeCommandError` ab.
 
 - **Datenaustausch: Org-Bedarf nur mit Auftragsrecht.** `GET /exchange/v1/me/org-demand` liefert den
   Bedarf nur noch Mitgliedern, die auch im Basetool Aufträge sehen dürfen (`canViewJobOrders`);

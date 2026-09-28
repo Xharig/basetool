@@ -3,28 +3,72 @@ services:
     build:
       context: .
       dockerfile: docker/sandbox/keycloak/Dockerfile
+      labels:
+        org.opencontainers.image.title: basetool-sandbox-keycloak
+        org.opencontainers.image.description: Keycloak with the Basetool provider, theme and the sandbox realm; test values only
+        org.opencontainers.image.source: https://github.com/krt-profit/basetool
+        org.opencontainers.image.licenses: GPL-3.0-only
     image: ghcr.io/krt-profit/basetool-sandbox-keycloak:local
 
-  backend-dev:
+  backend-base:
+    profiles: ["sandbox"]
     build:
       context: .
       dockerfile: docker/app/Dockerfile
       args:
         MODULE: backend
+
+  backend-dev:
+    build:
+      context: .
+      dockerfile: docker/sandbox/app.Dockerfile
+      additional_contexts:
+        sandbox-base: service:backend-base
+      labels:
+        org.opencontainers.image.title: basetool-sandbox-backend
+        org.opencontainers.image.description: Profit Basetool backend for the local exchange sandbox; test values only, refuses the prod profile
+        org.opencontainers.image.source: https://github.com/krt-profit/basetool
+        org.opencontainers.image.licenses: GPL-3.0-only
     image: ghcr.io/krt-profit/basetool-sandbox-backend:local
 
-  frontend-dev:
+  frontend-base:
+    profiles: ["sandbox"]
     build:
       context: .
       dockerfile: docker/app/Dockerfile
       args:
         MODULE: frontend
+
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: docker/sandbox/app.Dockerfile
+      additional_contexts:
+        sandbox-base: service:frontend-base
+      labels:
+        org.opencontainers.image.title: basetool-sandbox-frontend
+        org.opencontainers.image.description: Profit Basetool frontend for the local exchange sandbox; test values only, refuses the prod profile
+        org.opencontainers.image.source: https://github.com/krt-profit/basetool
+        org.opencontainers.image.licenses: GPL-3.0-only
     image: ghcr.io/krt-profit/basetool-sandbox-frontend:local
 
-  ingest-dev:
+  ingest-base:
+    profiles: ["sandbox"]
     build:
       context: .
       dockerfile: docker/app/Dockerfile
       args:
         MODULE: ingest
+
+  ingest-dev:
+    build:
+      context: .
+      dockerfile: docker/sandbox/app.Dockerfile
+      additional_contexts:
+        sandbox-base: service:ingest-base
+      labels:
+        org.opencontainers.image.title: basetool-sandbox-ingest
+        org.opencontainers.image.description: Profit Basetool ingest for the local exchange sandbox; test values only, refuses the prod profile
+        org.opencontainers.image.source: https://github.com/krt-profit/basetool
+        org.opencontainers.image.licenses: GPL-3.0-only
     image: ghcr.io/krt-profit/basetool-sandbox-ingest:local

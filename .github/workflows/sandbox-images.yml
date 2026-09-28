@@ -2,10 +2,35 @@ name: Sandbox Images
 
 on:
   push:
+    branches: [main]
     tags: ['v*.*.*']
+    paths:
+      - backend/src/main/**
+      - frontend/src/main/**
+      - frontend/oss-bundled-components.json
+      - ingest/src/main/**
+      - logging-support/src/main/**
+      - keycloak-spi/src/main/**
+      - keycloak-spi/lombok.config
+      - keycloak-theme/**
+      - '**/build.gradle.kts'
+      - settings.gradle.kts
+      - gradle.properties
+      - gradle/**
+      - gradlew
+      - lombok.config
+      - .dockerignore
+      - docker/app/**
+      - docker/sandbox/**
+      - docker-compose.sandbox-build.yml
+      - scripts/build-sandbox-realm.py
+      - scripts/keycloak/**
+      - .github/actions/setup-buildx/**
+      - .github/workflows/sandbox-images.yml
   pull_request:
     paths:
       - docker/sandbox/**
+      - docker-compose.sandbox-build.yml
       - scripts/build-sandbox-realm.py
       - scripts/keycloak/**
       - .github/workflows/sandbox-images.yml
@@ -15,17 +40,17 @@ permissions: {}
 
 concurrency:
   group: sandbox-images-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
 
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: ${{ github.repository_owner }}
-  PUBLISH: ${{ github.event_name != 'pull_request' }}
+  PUBLISH: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
 
 jobs:
-  apps:
-    name: Build, check and publish basetool-sandbox-${{ matrix.module }}
-    runs-on: ubuntu-latest
+  build:
+    name: Build and check basetool-sandbox-${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -33,140 +58,84 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [backend, frontend, ingest]
+        image: [backend, frontend, ingest, keycloak]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      IMAGE: ${{ matrix.image }}
+      ARCH: ${{ matrix.arch }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
-      - name: Build the application image
-        env:
-          MODULE: ${{ matrix.module }}
-        run: |
-          set -euo pipefail
-          docker build --file docker/app/Dockerfile --build-arg "MODULE=${MODULE}" \
-            --tag "sandbox-base-${MODULE}:local" .
+      - name: Set up Docker Buildx
+        uses: ./.github/actions/setup-buildx
 
-      - name: Add the sandbox marker
-        env:
-          MODULE: ${{ matrix.module }}
+      - name: Build the image for this platform
         run: |
           set -euo pipefail
-          docker build --file docker/sandbox/app.Dockerfile \
-            --build-arg "BASE=sandbox-base-${MODULE}:local" \
-            --label "org.opencontainers.image.title=basetool-sandbox-${MODULE}" \
-            --label "org.opencontainers.image.description=Profit Basetool ${MODULE} for the local exchange sandbox; test values only, refuses the prod profile" \
-            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
-            --label "org.opencontainers.image.licenses=GPL-3.0-only" \
-            --tag "basetool-sandbox-${MODULE}:local" .
+          created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "CREATED=${created}" >> "$GITHUB_ENV"
+          docker buildx bake --file docker-compose.sandbox-build.yml "${IMAGE}-dev" \
+            --set "*.platform=linux/${ARCH}" \
+            --set "${IMAGE}-dev.labels.org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --set "${IMAGE}-dev.labels.org.opencontainers.image.created=${created}" \
+            --set "${IMAGE}-dev.tags=basetool-sandbox-${IMAGE}:check" \
+            --load
+          docker image inspect "basetool-sandbox-${IMAGE}:check" \
+            --format '{{.Os}}/{{.Architecture}} revision={{index .Config.Labels "org.opencontainers.image.revision"}} created={{index .Config.Labels "org.opencontainers.image.created"}}'
 
       - name: guard / The image refuses the prod profile
-        env:
-          MODULE: ${{ matrix.module }}
+        if: matrix.image != 'keycloak'
         run: |
           set -uo pipefail
           status=0
           output="$(timeout 120 docker run --rm -e SPRING_PROFILES_ACTIVE=prod \
-            "basetool-sandbox-${MODULE}:local" 2>&1)" || status=$?
+            "basetool-sandbox-${IMAGE}:check" 2>&1)" || status=$?
           if [ "$status" -eq 0 ] || [ "$status" -eq 124 ]; then
-            echo "::error::basetool-sandbox-${MODULE} did not refuse the prod profile (exit ${status})" >&2
+            echo "::error::basetool-sandbox-${IMAGE} (${ARCH}) did not refuse the prod profile (exit ${status})" >&2
             printf '%s\n' "$output" | tail -40 >&2
             exit 1
           fi
           if ! printf '%s\n' "$output" | grep -q "This is a sandbox image"; then
-            echo "::error::basetool-sandbox-${MODULE} stopped, but not because of the sandbox guard" >&2
+            echo "::error::basetool-sandbox-${IMAGE} (${ARCH}) stopped, but not because of the sandbox guard" >&2
             printf '%s\n' "$output" | tail -40 >&2
             exit 1
           fi
-          echo "basetool-sandbox-${MODULE} refuses the prod profile"
-
-      - name: secrets / Scan the image for secrets
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          image-ref: basetool-sandbox-${{ matrix.module }}:local
-          scanners: secret
-          exit-code: '1'
-          format: table
-
-      - name: Log in to GHCR
-        if: env.PUBLISH == 'true'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Image tags
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/basetool-sandbox-${{ matrix.module }}
-          tags: |
-            type=edge,branch=main
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
-
-      - name: Publish
-        if: env.PUBLISH == 'true'
-        env:
-          MODULE: ${{ matrix.module }}
-          TAGS: ${{ steps.meta.outputs.tags }}
-        run: |
-          set -euo pipefail
-          while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            docker tag "basetool-sandbox-${MODULE}:local" "$tag"
-            docker push "$tag"
-          done <<< "$TAGS"
-
-  keycloak:
-    name: Build, check and publish basetool-sandbox-keycloak
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - name: Build the image
-        run: |
-          set -euo pipefail
-          docker build --file docker/sandbox/keycloak/Dockerfile \
-            --label "org.opencontainers.image.title=basetool-sandbox-keycloak" \
-            --label "org.opencontainers.image.description=Keycloak with the Basetool provider, theme and the sandbox realm; test values only" \
-            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
-            --tag basetool-sandbox-keycloak:local .
+          echo "basetool-sandbox-${IMAGE} (${ARCH}) refuses the prod profile"
 
       - name: guard / The Keycloak image refuses a non-dev start
+        if: matrix.image == 'keycloak'
         run: |
           set -uo pipefail
           for command in "start" "start --optimized" "build"; do
             read -r -a args <<< "$command"
             status=0
-            output="$(timeout 60 docker run --rm basetool-sandbox-keycloak:local "${args[@]}" 2>&1)" \
+            output="$(timeout 60 docker run --rm basetool-sandbox-keycloak:check "${args[@]}" 2>&1)" \
               || status=$?
             if [ "$status" -ne 64 ]; then
-              echo "::error::basetool-sandbox-keycloak did not refuse '${command}' (exit ${status})" >&2
+              echo "::error::basetool-sandbox-keycloak (${ARCH}) did not refuse '${command}' (exit ${status})" >&2
               printf '%s\n' "$output" | tail -40 >&2
               exit 1
             fi
             if ! printf '%s\n' "$output" | grep -q "only runs as 'start-dev'"; then
-              echo "::error::basetool-sandbox-keycloak stopped on '${command}', but not because of the sandbox guard" >&2
+              echo "::error::basetool-sandbox-keycloak (${ARCH}) stopped on '${command}', but not because of the sandbox guard" >&2
               printf '%s\n' "$output" | tail -40 >&2
               exit 1
             fi
           done
-          echo "basetool-sandbox-keycloak refuses every command but start-dev"
+          echo "basetool-sandbox-keycloak (${ARCH}) refuses every command but start-dev"
 
       - name: secrets / Scan the image for secrets
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
-          image-ref: basetool-sandbox-keycloak:local
+          image-ref: basetool-sandbox-${{ matrix.image }}:check
           scanners: secret
           exit-code: '1'
           format: table
@@ -179,32 +148,118 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Push the checked image by digest
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          target="${IMAGE}-dev"
+          name="${REGISTRY}/${IMAGE_OWNER}/basetool-sandbox-${IMAGE}"
+          docker buildx bake --file docker-compose.sandbox-build.yml "$target" \
+            --set "*.platform=linux/${ARCH}" \
+            --set "${target}.labels.org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --set "${target}.labels.org.opencontainers.image.created=${CREATED}" \
+            --set "${target}.tags=${name}" \
+            --set "${target}.output=type=image,push-by-digest=true,name-canonical=true,push=true" \
+            --metadata-file /tmp/bake-metadata.json
+          digest="$(jq -r --arg t "$target" '.[$t]["containerimage.digest"] // empty' /tmp/bake-metadata.json)"
+          if [ -z "$digest" ]; then
+            echo "::error::the push of basetool-sandbox-${IMAGE} (${ARCH}) returned no digest" >&2
+            cat /tmp/bake-metadata.json >&2
+            exit 1
+          fi
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${digest#sha256:}"
+          echo "pushed ${name}@${digest}"
+
+      - name: Upload the digest
+        if: env.PUBLISH == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sandbox-digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish basetool-sandbox-${{ matrix.image }}
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [backend, frontend, ingest, keycloak]
+    env:
+      IMAGE: ${{ matrix.image }}
+    steps:
+      - name: Download the per-platform digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          path: /tmp/digests
+          pattern: sandbox-digest-${{ matrix.image }}-*
+          merge-multiple: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Image tags
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/basetool-sandbox-keycloak
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/basetool-sandbox-${{ matrix.image }}
           tags: |
             type=edge,branch=main
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
 
-      - name: Publish
-        if: env.PUBLISH == 'true'
+      - name: Tag the multi-platform image
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
+          name="${REGISTRY}/${IMAGE_OWNER}/basetool-sandbox-${IMAGE}"
+          count="$(find /tmp/digests -maxdepth 1 -type f | wc -l)"
+          if [ "$count" -ne 2 ]; then
+            echo "::error::expected 2 per-platform digests for basetool-sandbox-${IMAGE}, found ${count}" >&2
+            exit 1
+          fi
+          sources=()
+          for f in /tmp/digests/*; do
+            sources+=("${name}@sha256:$(basename "$f")")
+          done
+          tag_args=()
           while IFS= read -r tag; do
             [ -n "$tag" ] || continue
-            docker tag basetool-sandbox-keycloak:local "$tag"
-            docker push "$tag"
+            tag_args+=(--tag "$tag")
           done <<< "$TAGS"
+          if [ "${#tag_args[@]}" -eq 0 ]; then
+            echo "::error::no tag to publish basetool-sandbox-${IMAGE} under" >&2
+            exit 1
+          fi
+          docker buildx imagetools create "${tag_args[@]}" "${sources[@]}"
+          image="$(docker buildx imagetools inspect "${name}:${VERSION}" --format '{{json .Image}}')"
+          for platform in linux/amd64 linux/arm64; do
+            revision="$(jq -r --arg p "$platform" '.[$p].config.Labels["org.opencontainers.image.revision"] // empty' <<< "$image")"
+            if [ "$revision" != "$GITHUB_SHA" ]; then
+              echo "::error::${name}:${VERSION} ${platform} carries revision '${revision}', expected ${GITHUB_SHA}" >&2
+              exit 1
+            fi
+          done
+          echo "${name}:${VERSION} holds linux/amd64 and linux/arm64, both built from ${GITHUB_SHA}"
 
   smoke:
     name: Smoke-test the published images
-    if: github.event_name != 'pull_request'
-    needs: [apps, keycloak]
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
+    needs: publish
     permissions:
       contents: read
     uses: ./.github/workflows/sandbox-smoke.yml
