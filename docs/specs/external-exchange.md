@@ -1211,6 +1211,9 @@ the same undo for every member of one client at once (REQ-XCH-034).
 **Acceptance**
 
 - [x] Undo after a later web edit skips that row and reports it. *`ExchangeUndoControllerTest`.*
+- [x] An undo started while a client write of the same lot runs waits for it and skips the lot as
+  `CHANGED_AFTERWARDS`. *`ExchangeStockWriteConcurrencyIntegrationTest` (PostgreSQL). Corrected
+  2026-09-28: the undo checked before it locked, and set the lot back over the write.*
 - [x] An entry without a change-log entry is skipped, the reach follows the configured retention, a
   removed ship of a member of several units comes back without a unit, and a replaced link is not
   put back on another member's ship. *`ExchangeUndoControllerTest`.*
@@ -1231,7 +1234,9 @@ change-log entry is not the client's last write, or is missing, then it is skipp
 `CHANGED_AFTERWARDS`: without the change-log entry nothing proves that nobody changed the entry
 since. One that no longer belongs to the member or names something gone is skipped as `GONE`. A
 ship is locked only when it is still the member's; one given to another member is skipped without
-locking its row. A recreated ship is stamped like a client's create (REQ-XCH-017): the member's
+locking its row. The lots to restore are locked like a stock write's (ADR-0229) before any entry is
+checked, and restored in the order of their keys, so an undo meeting a running write waits for it
+and then skips its lot as `CHANGED_AFTERWARDS`. A recreated ship is stamped like a client's create (REQ-XCH-017): the member's
 only direct org unit, or none for a member of several. Links the client made are taken back, and a
 link one of them replaced is put back only while the ship is still the member's. The restored
 entries' journal rows are marked undone, the undo is audited as `EXCHANGE_CHANGES_UNDONE` (restored

@@ -30,6 +30,7 @@ import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClientStatus;
 import de.greluc.krt.profit.basetool.backend.model.Location;
 import de.greluc.krt.profit.basetool.backend.model.User;
+import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeUndoResultDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeChangeResultDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeItemRef;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeLocationRef;
@@ -41,6 +42,7 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
@@ -67,16 +69,18 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * Concurrent stock change sets of one member, on PostgreSQL: they never deadlock, and a set that
- * waited for another sees what that one wrote (REQ-XCH-016, ADR-0229).
+ * Concurrent stock change sets and undos of one member, on PostgreSQL: they never deadlock, and a
+ * set or undo that waited for another sees what that one wrote (REQ-XCH-016, ADR-0229).
  */
 @SpringBootTest
 @ActiveProfiles("test")
 class ExchangeStockWriteConcurrencyIntegrationTest {
 
   private static final String CLIENT = "versekit-lock";
+  private static final String OTHER_CLIENT = "versekit-lock-other";
 
   @Autowired private ExchangeStockWriteService service;
+  @Autowired private ExchangeUndoService undoService;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private DataSource dataSource;
   @Autowired private UserRepository userRepository;
@@ -193,6 +197,25 @@ class ExchangeStockWriteConcurrencyIntegrationTest {
 
     assertOneAppliedAndOneConflicted(results);
     assertThat(lot(9)).isEqualByComparingTo("1");
+  }
+
+  @Test
+  void anUndoWaitsForARunningWriteAndLeavesTheLotItChanged() throws Exception {
+    service.apply(caller(CLIENT, "A"), rise(1, "5", "6"));
+
+    List<Object> results =
+        whileTheFirstHolds(
+            () -> service.apply(caller(OTHER_CLIENT, "C"), rise(1, "6", "7")),
+            () -> undoService.undo(member, CLIENT, Instant.now().minusSeconds(3600)));
+
+    ExchangeUndoResultDto undo = (ExchangeUndoResultDto) results.get(1);
+    assertThat(undo.restored()).isZero();
+    assertThat(undo.skipped())
+        .singleElement()
+        .satisfies(
+            skipped ->
+                assertThat(skipped.reason()).isEqualTo(ExchangeUndoService.CHANGED_AFTERWARDS));
+    assertThat(lot(1)).isEqualByComparingTo("7");
   }
 
   /**
