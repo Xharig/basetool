@@ -1067,7 +1067,8 @@ In German, in the forum (vault *Announcing a release*), in three posts:
     and requests `offline_access` (#2179), so a member must hold the `offline_access` realm role, and
     production's `default-roles-iri` held only `KRT Member`, `uma_authorization` and the `account`
     roles: hardening step 10 had removed it. The `offline_access` client scope already mapped the
-    role — the reference export omits `scopeMappings`, so no reading of it showed that. The
+    role — the reference export omitted `scopeMappings` (kept since 2026-09-28), so no reading of
+    it showed that. The
     sandbox and E2E realms carry both, so no test caught it, and S15's provisioner did not touch
     default roles. **Fix:** the owner added `offline_access` to the composites of
     `default-roles-iri` with `kcadm` on 2026-09-28 (owner decision the same day: grant the role on

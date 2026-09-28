@@ -125,19 +125,22 @@ audit). A generated snapshot refreshes in seconds, so it stays true; it is also 
 curated subset — more noise in exchange for no drift.
 
 **What the snapshot deliberately does not carry.** `DROP_SECTIONS` removes `users`, `components`,
-`keys`, `authenticationFlows`, `authenticatorConfig`, `requiredActions`, `scopeMappings`,
-`clientScopeMappings`, `groups` and `federatedUsers`. The three in the middle matter to a reader of
+`keys`, `authenticationFlows`, `authenticatorConfig`, `requiredActions`, `clientScopeMappings`,
+`groups` and `federatedUsers`. The three after `keys` matter to a reader of
 the hardening runbook: **an authentication flow built by hand in the Console is not recorded here**,
 so the conditional-OTP sub-flow of WP-K2 step 11 exists in exactly one place. Keeping them would
 mean establishing first that `authenticatorConfig` carries nothing sensitive — this realm's
 `discord-guild-role-gate` has configuration of its own — which is a decision, not a flag flip.
 
-**One `scopeMappings` entry is in the file anyway, by hand (2026-09-28):** the `offline_access`
-client scope's mapping to the `offline_access` realm role. Production had it all along, but the
-sanitizer dropped it, so the reference could not show whether an offline token was possible at all
-when SC Extractor 2.10.0's sign-in was refused `400 not_allowed` on 2026-09-28 — what production
-lacked was the `offline_access` composite on `default-roles-iri`, now in the file too (ADR-0202
-amendment 5). **A regeneration drops the entry again; carry it forward by hand.**
+**`scopeMappings` are kept since 2026-09-28** (owner decision). They name only client scopes,
+clients and realm roles — which client scope or client may put which realm role into a token — and
+entries of Keycloak's built-in clients are dropped like those clients. Until then the sanitizer
+dropped them, so the reference could not show whether an offline token was possible at all when SC
+Extractor 2.10.0's sign-in was refused `400 not_allowed`: production's `offline_access` client
+scope mapped the role all along, and what it lacked was the `offline_access` composite on
+`default-roles-iri` (ADR-0202 amendment 5). The current file carries that one mapping by hand; the
+next regeneration brings every entry. `scripts/sanitize-realm-export.py --selftest` (in
+`repo-lint.yml`) pins what is kept and dropped.
 
 **Current snapshot: 2026-09-09**, still a sanitized reference and still **not** importable, taken
 mid-procedure during WP-K2. It therefore records an

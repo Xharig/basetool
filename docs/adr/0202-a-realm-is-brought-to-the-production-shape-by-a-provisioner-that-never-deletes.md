@@ -179,8 +179,8 @@ only when the member holds the `offline_access` realm role within the client's s
 `REQ-XCH-005`), and production's `default-roles-iri` held `KRT Member`, `uma_authorization` and the
 `account` roles but not `offline_access`: hardening step 10 (`KEYCLOAK_HARDENING_RUNBOOK.md`, done by
 2026-09-09) had removed it so that no account could mint an offline token. The `offline_access`
-client scope already mapped the role; the sanitized reference does not show it because the
-sanitizer drops `scopeMappings`. The sandbox and E2E realms carried both, so no test saw the gap, and
+client scope already mapped the role; the sanitized reference did not show it because the
+sanitizer dropped `scopeMappings` (it keeps them since the same day). The sandbox and E2E realms carried both, so no test saw the gap, and
 the go-live's provisioner apply (S15) left it, because decision 8 put the default roles out of scope.
 
 **Decision: grant the role on the server, as the sandbox does, and let the provisioner converge
