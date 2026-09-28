@@ -98,6 +98,9 @@ public class ExchangeRefusals {
   /** A Redis byte budget of the exchange is full. */
   public static final String EXCHANGE_BUDGET_EXHAUSTED = "EXCHANGE_BUDGET_EXHAUSTED";
 
+  /** The gateway already relays as many large change sets as it admits at once. */
+  public static final String RELAY_BUSY = "RELAY_BUSY";
+
   /** Every code this counter knows, registered at zero. */
   static final @Unmodifiable List<String> CODES =
       List.of(
@@ -120,7 +123,8 @@ public class ExchangeRefusals {
           IDEMPOTENCY_KEY_MISSING,
           IDEMPOTENCY_KEY_REUSED,
           IDEMPOTENCY_IN_PROGRESS,
-          EXCHANGE_BUDGET_EXHAUSTED);
+          EXCHANGE_BUDGET_EXHAUSTED,
+          RELAY_BUSY);
 
   private final MeterRegistry meterRegistry;
 
