@@ -310,13 +310,21 @@ groups:
           description: "The backend is returning 409 optimistic-lock conflicts at an elevated rate — a likely locking/version-propagation regression."
 
       - alert: IdentityProviderUnavailable
-        expr: sum by (application) (rate(basetool_http_error_total{code="SERVICE_UNAVAILABLE"}[5m])) > 0.1
+        expr: >-
+          (
+            sum by (application) (rate(basetool_http_error_total{code="SERVICE_UNAVAILABLE"}[5m]))
+            - (
+              sum by (application) (rate(basetool_ingest_auth_failures_total{reason="dpop_store_full"}[5m]))
+              or
+              sum by (application) (rate(basetool_http_error_total{code="SERVICE_UNAVAILABLE"}[5m])) * 0
+            )
+          ) > 0.1
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Identity provider unavailable (503 spike, {{ $labels.application }})"
-          description: "{{ $labels.application }} is re-mapping unreachable-Keycloak-JWKS failures to 503 at an elevated rate — the root cause of the past Http5xxRateHigh incident. Check Keycloak reachability / DNS before 5xx surfaces to users."
+          description: "{{ $labels.application }} is re-mapping unreachable-Keycloak-JWKS failures to 503 at an elevated rate — the root cause of the past Http5xxRateHigh incident. Check Keycloak reachability / DNS before 5xx surfaces to users. The ingest gateway's 503 for a full DPoP replay store (auth-failure reason dpop_store_full) is not counted here; IngestDpopReplayCacheFull reports it."
 
       - alert: AccessDeniedSpike
         expr: sum by (application) (rate(basetool_http_error_total{code="ACCESS_DENIED"}[5m])) > 0.2

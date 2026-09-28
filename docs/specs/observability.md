@@ -1691,8 +1691,10 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   scope's cache holds its total cap), registered at zero. On the exchange scope a `member_cap`
   refusal counts as `dpop_proof_limit` on the auth-failure counter and a `full` one as
   `dpop_store_full` (also `service_unavailable` on the exchange refusal counter and
-  `SERVICE_UNAVAILABLE` on `basetool_http_error_total`, so `IdentityProviderUnavailable` can fire
-  alongside); every other refusal as `invalid_dpop_proof`. `IngestDpopReplayCacheFull` (warning)
+  `SERVICE_UNAVAILABLE` on `basetool_http_error_total`, which `IdentityProviderUnavailable`
+  subtracts again by the `dpop_store_full` rate, so a full store raises only
+  `IngestDpopReplayCacheFull`; owner decision 2026-09-28, `identity_provider_unavailable_test.yml`);
+  every other refusal as `invalid_dpop_proof`. `IngestDpopReplayCacheFull` (warning)
   fires on any `full`, because then every proof of that scope is refused (REQ-XCH-006). Shown per hour by path scope and reason
   on the Exchange dashboard (under the gateway refusals) and on the operations dashboard (under the
   ingest auth failures); the metric carries no client, so the Exchange dashboard's `client_id`
