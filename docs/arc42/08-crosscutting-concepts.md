@@ -272,4 +272,4 @@ Three rules hold for every exchange route, and each new resource or capability i
   that shrank since the last release (REQ-XCH-026, ADR-0219).
 
 Authority: [`external-exchange.md`](../specs/external-exchange.md) (`REQ-XCH-*`), ADR-0216 …
-ADR-0221, ADR-0224; the third-party view is published from `docs/exchange/`.
+ADR-0221, ADR-0224 … ADR-0228; the third-party view is published from `docs/exchange/`.
