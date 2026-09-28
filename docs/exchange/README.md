@@ -46,7 +46,7 @@ the registry grants it to the client.
 - [Client security requirements](client-security.md) — sign-in, DPoP, token storage, releases.
 - [Becoming an approved client](onboarding.md) — how to apply and what approval means.
 - [Local sandbox](sandbox.md) — the Basetool on your own machine, with a test client and synthetic
-  members, to build and test a client against.
+  members, to build and test a client against: requirements, test scenarios, troubleshooting.
 - [Conformance fixtures](examples/README.md) — valid and invalid examples for every schema.
 - [Sync guide](sync-guide.md) — pull before push, baselines, tombstones, conflicts, idempotency, the
   mass-change guard, rate limits and back-off. Read it before writing a sync.
