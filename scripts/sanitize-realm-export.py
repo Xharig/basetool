@@ -6,8 +6,10 @@ only, never a secret.
 
 Usage:
     python scripts/sanitize-realm-export.py RAW_EXPORT.json OUT.json
+    python scripts/sanitize-realm-export.py --selftest
 
-Exit codes: 0 written, 1 a guard pattern survived (nothing written), 2 bad invocation.
+Exit codes: 0 written (or the self-test passed), 1 a guard pattern survived (nothing written) or
+the self-test failed, 2 bad invocation.
 """
 
 from __future__ import annotations
@@ -30,7 +32,6 @@ DROP_SECTIONS = (
     "authenticationFlows",
     "authenticatorConfig",
     "requiredActions",
-    "scopeMappings",
     "clientScopeMappings",
     "groups",
     "federatedUsers",
@@ -111,6 +112,13 @@ def sanitize(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
         stats["dropped:builtinClients"] = len(clients) - len(kept)
         raw["clients"] = kept
 
+    mappings = raw.get("scopeMappings")
+    if isinstance(mappings, list):
+        kept_mappings = [m for m in mappings if m.get("client") not in BUILTIN_CLIENTS]
+        if len(kept_mappings) != len(mappings):
+            stats["dropped:builtinClientScopeMappings"] = len(mappings) - len(kept_mappings)
+        raw["scopeMappings"] = kept_mappings
+
     client_roles = (raw.get("roles") or {}).get("client")
     if isinstance(client_roles, dict):
         removed = [name for name in client_roles if name in BUILTIN_CLIENTS]
@@ -159,11 +167,53 @@ def guard(text: str) -> list[str]:
     return findings
 
 
+def selftest() -> int:
+    """Sanitize a synthetic export and check what is kept and what is dropped.
+
+    :return: process exit code, 0 when every check holds.
+    """
+    raw = {
+        "realm": "iri",
+        "users": [{"username": "someone", "email": "someone@mail.test"}],
+        "clientScopeMappings": {"account": [{"client": "account-console", "roles": ["manage-account"]}]},
+        "scopeMappings": [
+            {"clientScope": "offline_access", "roles": ["offline_access"]},
+            {"client": "basetool-sc-extractor", "roles": ["KRT Member"]},
+            {"client": "admin-cli", "roles": ["uma_authorization"]},
+        ],
+        "clients": [
+            {"clientId": "account", "secret": "**********"},
+            {"clientId": "backend-service", "secret": "a-real-looking-secret",
+             "redirectUris": ["https://profit-base.online/*"]},
+        ],
+    }
+    sanitized, _ = sanitize(raw)
+    text = json.dumps(sanitized, indent=2, ensure_ascii=False)
+    checks = {
+        "scopeMappings are kept": sanitized.get("scopeMappings") == [
+            {"clientScope": "offline_access", "roles": ["offline_access"]},
+            {"client": "basetool-sc-extractor", "roles": ["KRT Member"]}],
+        "a built-in client's scope mapping is dropped": "admin-cli" not in text,
+        "clientScopeMappings are dropped": "clientScopeMappings" not in sanitized,
+        "users are dropped": "users" not in sanitized,
+        "a secret is replaced": sanitized["clients"][0].get("secret") == DEPLOY_PLACEHOLDER,
+        "the real hostname is neutralized": "profit-base.online" not in text,
+        "the guard passes the result": guard(text) == [],
+    }
+    for label, passed in checks.items():
+        print(f"  {'ok  ' if passed else 'FAIL'} {label}")
+    failed = [label for label, passed in checks.items() if not passed]
+    print("selftest: FAILED" if failed else "selftest: passed")
+    return 1 if failed else 0
+
+
 def main() -> int:
     """Sanitize the export given on the command line and write it unless a guard pattern survives.
 
     :return: process exit code; non-zero means nothing was written.
     """
+    if sys.argv[1:] == ["--selftest"]:
+        return selftest()
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
