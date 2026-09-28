@@ -518,16 +518,22 @@ demand feed needs, arriving with it; the feed was built without any membership a
 
 **Acceptance**
 
-- [ ] An `ADMIN` member reads and writes only own rows and holds no admin authority on exchange
-  paths. *The authority half is in (`ExchangeCatalogControllerTest`: an `ADMIN` member's exchange
-  request holds only `ROLE_EXCHANGE_MEMBER` and the relayed capabilities); the own-rows half is
-  proven by each read and write route as it ships (WP 3.3).*
+- [x] An `ADMIN` member reads and writes only own rows and holds no admin authority on exchange
+  paths. *The authority half: `ExchangeCatalogControllerTest` — an `ADMIN` member's exchange
+  request holds only `ROLE_EXCHANGE_MEMBER` and the relayed capabilities. The own-rows half:
+  `ExchangeAdminActingMemberTest` — an `ADMIN` acting through the exchange, with an admin pin on
+  the request, reads only their own blueprints, stock lots and ships beside another member's; a
+  blueprint `remove` of the other's product is `unchanged`, a `set-quantity` on a lot only the
+  other holds is `VERSION_CONFLICT`, and a ship `remove` or `upsert` of the other's ship is
+  `unmatched`, each leaving the other's rows as they were.*
+  *Corrected 2026-09-28: this box said the own-rows half was proven by each route as it shipped;
+  no route test used an `ADMIN` member until then (epic #2078 plan audit).*
 - [x] ArchUnit: exchange services never call an admin-gated method or the admin scope predicate;
   exchange controllers call exchange services only; exchange DTOs stay in the exchange layer
   (`ArchitectureTest`).
 
 **Status:** relay and reduced authentication built — WP 3.1 (#2083); the data routes built with
-WP 3.3 and WP 4.1–4.4
+WP 3.3 and WP 4.1–4.4; the `ADMIN` own-rows test built (`ExchangeAdminActingMemberTest`)
 
 ### REQ-XCH-010 — The relay names the external client, and only the gateway may
 
