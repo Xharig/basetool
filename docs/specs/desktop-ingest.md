@@ -176,7 +176,9 @@ internet-unreachable — the gateway reaches it over the internal network only.
   (`RestClientConfig`, ADR-0204, 2026-09-22) — the module carries no WebFlux, no Reactor Netty and
   no `resilience4j-reactor`. Relay: 5 s connect, 15 s read, response body capped at
   `app.ingest.max-payload-bytes`, HTTP/1.1, the `backend` circuit breaker applied with
-  `executeSupplier` and ignoring `RestClientResponseException`. Token grant: 5 s connect, read bounded
+  `executeSupplier` and ignoring `RestClientResponseException`. The exchange relay has its own JDK
+  client with a 30 s read, its own `exchange` breaker and a bulkhead for large change sets, so it
+  never opens the extractor relay's breaker (REQ-XCH-023). Token grant: 5 s connect, read bounded
   by the smaller of 10 s and `app.ingest.service-account.timeout-millis`. TLS trust: outside
   `dev`/`test` the `backend-trust` bundle (`INTERNAL_TLS_TRUSTSTORE`) is the relay's only anchor,
   **without** a hostname check by default and **with** one when

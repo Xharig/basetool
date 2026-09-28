@@ -128,3 +128,26 @@ tells the backend from the frontend or Keycloak. So the opt-out is now `app.inge
 pinned `X509TrustManager` unwrapped, so it verifies the name. The pinned truststore itself is now read
 from `INTERNAL_TLS_TRUSTSTORE` (falling back to the keystore, as before). `dev`/`test`, the no-bundle
 path and the token client are unchanged.
+
+## Amendment 2 (2026-09-28) — the exchange relay gets its own client, breaker and bulkhead
+
+Decision 7 kept one breaker, `backend`, for every relayed call, and decision 2 one 15 s read
+timeout. The exchange relay (REQ-XCH-023) was built on both. The go-live load test of 2026-09-28
+showed what that costs: sixteen concurrent 500-op stock change sets reached the 15 s timeout, the
+timeouts opened `backend`, and every extractor handoff failed with them; and a timed-out set had
+still been committed, so the client's retry met `VERSION_CONFLICT` on its own write.
+
+So the exchange relay now has its own `exchangeRestClient` (a separate JDK client, the same trust,
+logging and body cap) with a **30 s** read timeout — about three times the measured p99 of a
+500-op set with four in flight, below the idempotency claim's two minutes and the edge's 90 s —,
+its own breaker **`exchange`** (configured like `backend`), and a semaphore bulkhead
+**`exchangeLargeChangeSets`** that admits four change sets of more than 100 ops at once and
+answers a fifth `503 RELAY_BUSY` with `Retry-After: 10` without relaying it. The extractor relay
+keeps `backendRestClient`, 15 s and `backend`. The gateway binds the breaker and bulkhead meters
+itself (`Resilience4jMetricsConfig`), because Resilience4j's auto-configuration does not on Boot 4;
+until then the ingest published no `resilience4j_*` series at all.
+
+Rejected: raising the shared timeout (a slow exchange would then hold the extractor's breaker
+window longer, and nothing would bound the backend's load); a bulkhead that waits for a slot (it
+holds the client's connection for an unknown time, where `Retry-After` states it); weighting every
+set by its op count (small sets, 65 ms at p50, would queue behind large ones).
