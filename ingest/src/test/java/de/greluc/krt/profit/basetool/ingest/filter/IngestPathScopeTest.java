@@ -58,7 +58,6 @@ class IngestPathScopeTest {
   @Test
   void doesNotMatchTheUnauthenticatedOperationalEndpoints() {
     assertThat(IngestPathScope.isExchangeRequest(request("/actuator/health"))).isFalse();
-    assertThat(IngestPathScope.isExchangeRequest(request("/v3/api-docs"))).isFalse();
   }
 
   @Test

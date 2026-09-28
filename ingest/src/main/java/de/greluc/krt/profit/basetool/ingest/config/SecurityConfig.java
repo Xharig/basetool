@@ -235,8 +235,6 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/actuator/health", "/actuator/health/**")
                     .permitAll()
-                    .requestMatchers("/v3/api-docs/**")
-                    .permitAll()
                     .requestMatchers(
                         HttpMethod.GET, "/exchange/v1/openapi.json", "/exchange/v1/schemas/*")
                     .permitAll()

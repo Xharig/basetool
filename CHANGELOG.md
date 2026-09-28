@@ -10,6 +10,10 @@
   `IRI_INGEST_ALLOWED_CLIENT_IDS`, `IRI_INGEST_CLIENT_AUDIT_ONLY`, `IRI_INGEST_REQUIRED_SCOPE` und
   `IRI_INGEST_ALLOWED_TOOLS` samt Alarm `IngestUnknownClient` (#2092).
 
+- **Ingest-Gateway: kein generiertes OpenAPI-Dokument mehr.** springdoc, `/v3/api-docs` und
+  `ingest/src/main/resources/api/openapi.json` sind entfernt; der Vertrag des Gateways ist allein
+  `exchange-v1.openapi.json`, weiterhin unter `/exchange/v1/openapi.json`.
+
 ### Fixed
 
 - **Datenaustausch: das Gateway holt nach einer Abweisung seines eigenen Tokens ein neues.** Lehnt

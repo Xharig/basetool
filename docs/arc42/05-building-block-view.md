@@ -95,8 +95,8 @@ that has to cross that boundary — the active-OrgUnit pin, the correlation id �
 - **`ingest`** — a gateway in front of the exchange API: DPoP authentication (`REQ-INGEST-012`,
   REQ-XCH-006), the registry gate, per-IP and per-client limits, payload size limits, idempotency,
   a relay to the backend under the gateway's own service identity, and the single-use Redis handoff
-  (§5.5). Its contract is the committed `exchange-v1.openapi.json`; the generated `openapi.json`
-  lists no operation since the extractor's `/v1` routes were removed on 2026-09-28. Its two
+  (§5.5). Its contract is the committed `exchange-v1.openapi.json`; it has no springdoc and no
+  generated document since the extractor's `/v1` routes were removed on 2026-09-28. Its two
   outbound calls — the relay and its own token grant — are blocking `RestClient`s on the JDK HTTP
   client (`config.RestClientConfig`, ADR-0204); the module has no WebFlux and no Reactor Netty, so
   the worker-thread trap of §5.3 does not exist there. Specification:

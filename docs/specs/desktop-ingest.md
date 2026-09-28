@@ -147,7 +147,7 @@ internet-unreachable — the gateway reaches it over the internal network only.
 - [x] The routed surface is **exactly** the exchange routes of REQ-XCH-001 — the service
   document, the two anonymous documents `GET /exchange/v1/openapi.json` and
   `GET /exchange/v1/schemas/{name}`, and the member, catalogue, change and draft routes (plus
-  springdoc's non-prod `/v3/api-docs` tree and Boot's `/error` dispatch target). `IngestPathScope`
+  Boot's `/error` dispatch target; springdoc's `/v3/api-docs` tree until 2026-09-28). `IngestPathScope`
   names the **protected** surface, `/exchange/**`, which gets the payload cap, the per-IP rate
   limit and the access log. A controller mapped anywhere else would be served with none of them;
   `IngestEndpointSurfaceTest` asks the dispatcher for every mapping through the shared
@@ -614,8 +614,7 @@ answers an unknown route or method.
 The filter runs after `CorrelationIdFilter` (a blocked request is still correlation-tagged) and
 before the size-cap, rate-limit and Spring Security filters. The gateway's real surface — the
 exchange routes under `/exchange/**` (REQ-XCH-001), `/actuator/health` (+ liveness/readiness),
-`/actuator/prometheus` (exact match → the fail-closed scrape chain still runs) and `/v3/api-docs`
-(non-prod) — is never blocked. Each reject bumps `basetool_bot_blocked_total{rule}` (bounded `rule` ∈ {`method`, `path_prefix`, `file_extension`,
+`/actuator/prometheus` (exact match → the fail-closed scrape chain still runs) — is never blocked. Each reject bumps `basetool_bot_blocked_total{rule}` (bounded `rule` ∈ {`method`, `path_prefix`, `file_extension`,
 `query_string`}; never the URI or method — `REQ-OBS-006/-011`), shared with the frontend counter
 and distinguished by the `application` common tag; it makes the otherwise `log.debug`-only rejects visible and surfaces a
 self-inflicted false positive if a future legit route matches a blocked prefix.
@@ -628,7 +627,7 @@ self-inflicted false positive if a future legit route matches a blocked prefix.
 - [x] A query string with an empty-named chunk (`/?=phpinfo()`) is answered with a bare 400 — no
   body, no error dispatch — and wins over the path/extension/method rules when several apply.
 - [x] The gateway's real surface (`/exchange/**`, `/actuator/health*`,
-  `/actuator/prometheus`, `/v3/api-docs*`) passes the filter unchanged; every route of the
+  `/actuator/prometheus`) passes the filter unchanged; every route of the
   committed exchange OpenAPI document and every schema URL is checked against the method, prefix and
   suffix lists (`ExchangeRouteBotCompatibilityTest`).
 - [x] Every reject increments `basetool_bot_blocked_total` under its bounded `rule` tag and nothing
@@ -645,9 +644,11 @@ counter) · **Code:** `BotProtectionFilter`, `MetricNames` (`BOT_BLOCKED` + `rul
 
 > **Superseded 2026-09-28 (#2092 step 9).** The two endpoints this contract described are removed.
 > The exchange's committed contract, `ingest/src/main/resources/api/exchange-v1.openapi.json`, served
-> at `/exchange/v1/openapi.json` (REQ-XCH-001, REQ-XCH-011), is the gateway's only published API. The
-> springdoc document `ingest/src/main/resources/api/openapi.json` stays generated and committed, and
-> lists no operation; it points at the exchange's document. The text below is the record.
+> at `/exchange/v1/openapi.json` (REQ-XCH-001, REQ-XCH-011), is the gateway's only published API.
+> The springdoc document `ingest/src/main/resources/api/openapi.json` listed nothing after the
+> removal, and by owner decision of the same day springdoc, `OpenApiConfig`, that document and
+> `OpenApiGeneratorTest` were removed from the module; the gateway serves no `/v3/api-docs` in any
+> profile. The text below is the record.
 
 The gateway's two endpoints are the contract a **separately developed, separately released** client
 (the `basetool-sc-extractor` desktop app) codes against, so that contract is published as a
@@ -672,12 +673,12 @@ serves it statically and anonymously at `/exchange/v1/openapi.json` with the JSO
 
 **Acceptance**
 
-- [x] `ingest/src/main/resources/api/openapi.json` is committed and matches the live SpringDoc
-  output; since 2026-09-28 it lists no path and names the exchange's document.
-- [x] `/v3/api-docs` is reachable without authentication in non-prod and 404s in prod.
+- [x] ~~`ingest/src/main/resources/api/openapi.json` is committed and matches the live SpringDoc
+  output.~~ Removed with springdoc on 2026-09-28.
+- [x] The gateway serves no `/v3/api-docs` tree in any profile
+  (`IngestEndpointSurfaceTest#theGatewayServesNoGeneratedApiDocument`).
 
-**Enforced by:** `OpenApiGeneratorTest` (regeneration; no path is published, the description points at
-the exchange's document) · **Code:** `ingest/.../config/OpenApiConfig`, `application-prod.yml`
+**Enforced by:** `IngestEndpointSurfaceTest` · **Code:** `ingest/build.gradle.kts` (no springdoc)
 
 ### REQ-INGEST-011 — Client-identity gate: approved clients only *(superseded, except the audience check)*
 

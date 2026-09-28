@@ -34,7 +34,6 @@ import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
@@ -73,11 +72,10 @@ import tools.jackson.databind.node.ObjectNode;
  * The authenticated exchange routes built so far (REQ-XCH-001). Each request has passed both
  * exchange gates; a body is checked against its v1 schema before the relay, undeclared fields are
  * reported as {@code UNKNOWN_FIELD} warnings where the answer carries warnings, and the backend's
- * answer is checked against its schema before it reaches the client. Kept out of the gateway's
- * generated API document; the committed exchange document describes these routes.
+ * answer is checked against its schema before it reaches the client. The committed exchange
+ * document describes these routes.
  */
 @Slf4j
-@Hidden
 @RestController
 @RequestMapping("/exchange/v1")
 @RequiredArgsConstructor

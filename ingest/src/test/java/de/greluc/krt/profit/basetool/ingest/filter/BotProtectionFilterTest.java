@@ -46,9 +46,9 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Unit tests for the gateway {@link BotProtectionFilter} (REQ-INGEST-009): known bot/scanner paths
  * and file extensions get 404, disallowed HTTP methods get 405 — on an exchange route a problem
- * with a registered code instead — and the gateway's real surface ({@code /v1/...}, {@code
- * /actuator/health}, {@code /actuator/prometheus}, {@code /v3/api-docs}) passes through. Every
- * reject bumps {@code basetool_bot_blocked_total} under its bounded {@code rule} tag.
+ * with a registered code instead — and the gateway's real surface ({@code /exchange/...}, {@code
+ * /actuator/health}, {@code /actuator/prometheus}) passes through. Every reject bumps {@code
+ * basetool_bot_blocked_total} under its bounded {@code rule} tag.
  */
 class BotProtectionFilterTest {
 
@@ -264,9 +264,7 @@ class BotProtectionFilterTest {
         "/actuator/health",
         "/actuator/health/readiness",
         "/actuator/health/liveness",
-        "/actuator/prometheus",
-        "/v3/api-docs",
-        "/v3/api-docs/swagger-config"
+        "/actuator/prometheus"
       })
   void doFilterInternal_shouldPassThrough_whenLegitimatePathRequested(String appUri)
       throws Exception {
@@ -313,8 +311,6 @@ class BotProtectionFilterTest {
   void isBotPath_shouldReturnFalse_forLegitimateGatewayPaths() {
     assertFalse(filter.isBotPath("/exchange/v1/me/drafts/refinery-orders"));
     assertFalse(filter.isBotPath("/exchange/v1/me/drafts/blueprints"));
-    assertFalse(filter.isBotPath("/v3/api-docs"));
-    assertFalse(filter.isBotPath("/v3/api-docs/swagger-config"));
   }
 
   @Test
@@ -365,7 +361,6 @@ class BotProtectionFilterTest {
   void isBotFileExtension_shouldReturnFalse_forGatewaySurface() {
     assertFalse(filter.isBotFileExtension("/exchange/v1/me/drafts/refinery-orders"));
     assertFalse(filter.isBotFileExtension("/actuator/prometheus"));
-    assertFalse(filter.isBotFileExtension("/v3/api-docs"));
   }
 
   @ParameterizedTest

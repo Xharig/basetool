@@ -18,10 +18,6 @@ spring:
             password: ${INTERNAL_TLS_TRUSTSTORE_PASSWORD:${SERVER_SSL_KEY_STORE_PASSWORD}}
             type: PKCS12
 
-springdoc:
-  api-docs:
-    enabled: false
-
 management:
   server:
     port: 11272

@@ -3659,9 +3659,10 @@ that spelling fell through to the catch-all and was merely authenticated, on a p
 whole surface. Corrected 2026-09-06; the sweep excluded it too, by prefix, and now excludes nothing
 of the kind.
 
-**Ingest** — the gateway's chain `permitAll`s only `/actuator/health(/**)` and `/v3/api-docs/**`;
-the springdoc document is disabled in prod (`springdoc.api-docs.enabled: false`, so it answers
-`404`), and in prod Actuator lives on the internal management port `11272` (ADR-0090). Its
+**Ingest** — the gateway's chain `permitAll`s only `/actuator/health(/**)` and the exchange's two
+anonymous documents (`GET /exchange/v1/openapi.json`, `GET /exchange/v1/schemas/*`, REQ-XCH-011);
+it has no springdoc document since 2026-09-28, and in prod Actuator lives on the internal management
+port `11272` (ADR-0090). Its
 exchange routes require a DPoP-bound token and the exchange gates (REQ-XCH-006…-008); the
 extractor's `/v1/**` endpoints were removed on 2026-09-28 (#2092 step 9).
 

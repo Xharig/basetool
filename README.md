@@ -122,7 +122,7 @@ docker compose --profile dev up -d db-backend-dev db-keycloak-dev keycloak-dev r
 ./gradlew :frontend:bootRun
 ```
 
-Host ports: backend `11261`, frontend `18081`, ingest `11262`, Keycloak `18080`, backend DB `15432`, Keycloak DB `15433`, Redis `6379`. The OpenAPI documents are served at `https://localhost:11261/v3/api-docs` (backend) and `https://localhost:11262/v3/api-docs` (ingest gateway) in the `dev`/`test` profiles only (disabled in `prod`); there is no Swagger UI. The exchange contract is the exception: `/exchange/v1/openapi.json` and its schemas under `/exchange/v1/schemas/` are public on the ingest gateway in every profile (REQ-XCH-011).
+Host ports: backend `11261`, frontend `18081`, ingest `11262`, Keycloak `18080`, backend DB `15432`, Keycloak DB `15433`, Redis `6379`. The backend's OpenAPI document is served at `https://localhost:11261/v3/api-docs` in the `dev`/`test` profiles only (disabled in `prod`); there is no Swagger UI. The ingest gateway has no generated document; its exchange contract is the exception: `/exchange/v1/openapi.json` and its schemas under `/exchange/v1/schemas/` are public on the ingest gateway in every profile (REQ-XCH-011).
 
 ### Full stack via Docker Compose
 
@@ -287,7 +287,7 @@ If you only need the stack to *start* (health checks, a UI smoke test that does 
 - **Security** — Spring Security with OAuth2 / OIDC (Keycloak 26.7)
 - **Frontend** — Thymeleaf + Spring Security OAuth2 Client, WebClient wrapped with Resilience4j (Timeout, Retry, CircuitBreaker, Bulkhead)
 - **Outbound HTTP in backend and ingest** — blocking `RestClient` on the JDK HTTP client; neither module carries WebFlux (ADR-0204)
-- **API docs** — SpringDoc / OpenAPI; each REST-serving module ships its committed contract as its documentation artifact — `backend/src/main/resources/api/openapi.json`, and for ingest `exchange-v1.openapi.json` (the exchange contract, also served anonymously at `/exchange/v1/openapi.json`); the gateway's generated `ingest/src/main/resources/api/openapi.json` lists no operation and points there
+- **API docs** — SpringDoc / OpenAPI; each REST-serving module ships its committed contract as its documentation artifact — `backend/src/main/resources/api/openapi.json`, and for ingest `exchange-v1.openapi.json` (the exchange contract, also served anonymously at `/exchange/v1/openapi.json`)
 - **DTO mapping** — MapStruct
 - **Containerization** — Docker Compose for local, test and E2E stacks; rootless Podman + Quadlet (generated from the compose files) in production; images published to GHCR, Cosign-signed with SLSA provenance + SBOM attestations, and additionally attested to GitHub's attestation store so provenance survives a registry-side rewrite (`gh attestation verify`, REQ-OPS-023)
 
