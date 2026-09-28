@@ -1569,6 +1569,7 @@ PersonalBlueprintResponse.productName=string
 PersonalBlueprintResponse.removable=boolean
 PersonalBlueprintResponse.source=string
 PersonalBlueprintResponse.sourceClientId=string
+PersonalBlueprintResponse.sourceClientName=string
 PersonalBlueprintResponse.updatedAt=string/date-time
 PersonalBlueprintResponse.version=integer/int64
 PersonalBlueprintUpdateRequest.acquiredAt=string/date-time

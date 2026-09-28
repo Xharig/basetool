@@ -1,4 +1,4 @@
-> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-26.
+> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-28.
 > **Owner area:** INV/UI · **Related ADRs:** [ADR-0017](../adr/0017-default-blueprints-admin-curated-materialized.md), [ADR-0024](../adr/0024-opt-in-global-blueprint-sharing.md), [ADR-0035](../adr/0035-blueprint-craftability-from-own-stock.md), [ADR-0046](../adr/0046-blueprint-craftability-bridges-piece-item-ingredients.md)
 
 # Personal inventory — "Meine Blueprints" master-detail (V3)
@@ -604,8 +604,17 @@ exchange `add` the source its `provenance` names (`log`, `manual`, `import`; `de
 and none are `OTHER`, since a default grant is the server's alone). Rows older than the record keep
 no source, except default products, which the migration marks `DEFAULT`. The source is never
 changed afterwards. „Meine Blueprints" shows it in the detail pane („Herkunft: Spiel-Log über
-versekit"), the exchange feed publishes it as `provenance.source` (REQ-XCH-015), and the member's
-responses carry `source` and `sourceClientId`.
+VerseKit"), the exchange feed publishes it as `provenance.source` (REQ-XCH-015), and the member's
+responses carry `source`, `sourceClientId` and `sourceClientName`.
+
+**The client is shown by its name.** `sourceClientName` is the client's registry display name
+(`exchange_client.display_name`), read live, so a renamed client shows its new name. It is absent
+when no client added the entry, and also when the client id is no longer registered; the server does
+not fall back, so the field only ever holds a name. A reader shows the name and falls back to
+`sourceClientId` when it is absent („über versekit"). No name is kept on the row. The same field is
+in every response that carries the entry: the member's and the admin's list
+(`/api/v1/admin/personal-blueprints/{userId}`), the single add and the update. A list resolves the
+names of all its rows in one registry query, and none when no row came from a client.
 
 **Acceptance**
 
@@ -615,7 +624,15 @@ responses carry `source` and `sourceClientId`.
   *`ExchangeBlueprintWriteControllerTest`.*
 - [x] The feed publishes a recorded source and leaves an unrecorded one out.
   *`ExchangeBlueprintControllerTest`.*
+- [x] The add, the update, the member's list and the admin's list name a registered client, and
+  leave the name out for an unregistered client, a client removed from the registry, and an entry
+  no client added. *`PersonalBlueprintProvenanceTest`.*
+- [x] A list names all its clients with one registry query, and makes none without a client.
+  *`PersonalBlueprintServiceTest`.*
+- [x] The page carries the name beside the id and leaves it out when it is absent.
+  *`PersonalInventoryBlueprintsPageControllerMvcTest`.*
 
 **Code:** `BlueprintSource`, `PersonalBlueprintService#add`, `BlueprintImportService`,
 `PersonalBlueprintRepository#grantDefaultBlueprintsTo…`, `ExchangeBlueprintWriteService`,
-`ExchangeBlueprintFeedService` · **Issues:** #2084 (epic #2078).
+`ExchangeBlueprintFeedService`, `ExchangeClientRepository#findDisplayNamesByClientIdIn`,
+`personal-inventory-blueprints-recipe.js` `describeSource` · **Issues:** #2084 (epic #2078), #2231.

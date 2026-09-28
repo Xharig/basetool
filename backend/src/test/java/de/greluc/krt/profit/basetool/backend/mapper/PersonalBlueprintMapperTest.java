@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.greluc.krt.profit.basetool.backend.model.BlueprintSource;
 import de.greluc.krt.profit.basetool.backend.model.GameItem;
 import de.greluc.krt.profit.basetool.backend.model.PersonalBlueprint;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintResponse;
@@ -56,7 +57,7 @@ class PersonalBlueprintMapperTest {
             .build();
     entity.setVersion(4L);
 
-    PersonalBlueprintResponse response = mapper.toResponse(entity, false);
+    PersonalBlueprintResponse response = mapper.toResponse(entity, false, null);
 
     assertEquals(id, response.id());
     assertEquals("arclight pistol", response.productKey());
@@ -78,9 +79,29 @@ class PersonalBlueprintMapperTest {
             .productName("Aril Core")
             .build();
 
-    PersonalBlueprintResponse response = mapper.toResponse(entity, true);
+    PersonalBlueprintResponse response = mapper.toResponse(entity, true, null);
 
     assertNull(response.outputItemId());
     assertTrue(response.removable());
+    assertNull(response.sourceClientName());
+  }
+
+  @Test
+  void toResponse_carriesTheSourceClientBesideItsName() {
+    PersonalBlueprint entity =
+        PersonalBlueprint.builder()
+            .id(UUID.randomUUID())
+            .ownerUserId(UUID.fromString("11111111-1111-1111-1111-111111111111"))
+            .productKey("aril core")
+            .productName("Aril Core")
+            .build();
+    entity.setSource(BlueprintSource.LOG);
+    entity.setSourceClientId("versekit");
+
+    PersonalBlueprintResponse response = mapper.toResponse(entity, true, "VerseKit");
+
+    assertEquals(BlueprintSource.LOG, response.source());
+    assertEquals("versekit", response.sourceClientId());
+    assertEquals("VerseKit", response.sourceClientName());
   }
 }

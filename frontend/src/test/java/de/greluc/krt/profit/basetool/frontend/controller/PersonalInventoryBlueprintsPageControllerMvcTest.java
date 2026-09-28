@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.frontend.controller;
 
 import static de.greluc.krt.profit.basetool.frontend.support.ResponseTypeMatchers.anyTypeRef;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -91,7 +92,8 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             Instant.parse("2026-01-01T00:00:00Z"),
             Instant.parse("2026-01-01T00:00:00Z"),
             "LOG",
-            "versekit");
+            "versekit",
+            "VerseKit");
     PageResponse<PersonalBlueprintDto> page =
         new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
     when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(page);
@@ -103,7 +105,37 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
         .andExpect(model().attributeExists("blueprints"))
         .andExpect(content().string(containsString("ID_PLACEHOLDER")))
         .andExpect(content().string(containsString("data-source=\"LOG\"")))
-        .andExpect(content().string(containsString("data-source-client=\"versekit\"")));
+        .andExpect(content().string(containsString("data-source-client=\"versekit\"")))
+        .andExpect(content().string(containsString("data-source-client-name=\"VerseKit\"")));
+  }
+
+  @Test
+  @WithMockUser
+  void view_leavesTheClientNameOut_whenTheClientIsNoLongerRegistered() throws Exception {
+    PersonalBlueprintDto bp =
+        new PersonalBlueprintDto(
+            UUID.randomUUID(),
+            "arclight pistol",
+            "Arclight Pistol",
+            null,
+            null,
+            null,
+            true,
+            0L,
+            Instant.parse("2026-01-01T00:00:00Z"),
+            Instant.parse("2026-01-01T00:00:00Z"),
+            "LOG",
+            "retired-tool",
+            null);
+    PageResponse<PersonalBlueprintDto> page =
+        new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
+    when(backendApiClient.get(anyString(), anyTypeRef())).thenReturn(page);
+
+    mockMvc
+        .perform(get("/personal-inventory/blueprints"))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("data-source-client=\"retired-tool\"")))
+        .andExpect(content().string(not(containsString("data-source-client-name"))));
   }
 
   @Test
@@ -122,6 +154,7 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             Instant.parse("2026-01-01T00:00:00Z"),
             Instant.parse("2026-01-01T00:00:00Z"),
             null,
+            null,
             null);
     PersonalBlueprintDto second =
         new PersonalBlueprintDto(
@@ -135,6 +168,7 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
             Instant.parse("2026-01-01T00:00:00Z"),
+            null,
             null,
             null);
     PageResponse<PersonalBlueprintDto> page0 =
@@ -168,6 +202,7 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             Instant.parse("2026-01-01T00:00:00Z"),
             Instant.parse("2026-01-01T00:00:00Z"),
             null,
+            null,
             null);
     PageResponse<PersonalBlueprintDto> page =
         new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
@@ -196,6 +231,7 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
             Instant.parse("2026-01-01T00:00:00Z"),
+            null,
             null,
             null);
     PageResponse<PersonalBlueprintDto> page =
@@ -237,6 +273,7 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             Instant.parse("2026-01-01T00:00:00Z"),
             Instant.parse("2026-01-01T00:00:00Z"),
             null,
+            null,
             null);
     PageResponse<PersonalBlueprintDto> page =
         new PageResponse<>(List.of(bp), 0, 200, 1, 1, List.of());
@@ -268,6 +305,7 @@ class PersonalInventoryBlueprintsPageControllerMvcTest {
             0L,
             Instant.parse("2026-01-01T00:00:00Z"),
             Instant.parse("2026-01-01T00:00:00Z"),
+            null,
             null,
             null);
     PageResponse<PersonalBlueprintDto> page =

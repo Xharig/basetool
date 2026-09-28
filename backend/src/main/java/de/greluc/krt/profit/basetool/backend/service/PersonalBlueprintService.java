@@ -32,6 +32,8 @@ import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintCreateRe
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintRecipeResponse;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintResponse;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintUpdateRequest;
+import de.greluc.krt.profit.basetool.backend.model.projection.ExchangeClientDisplayName;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.GameItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.PersonalBlueprintRepository;
 import de.greluc.krt.profit.basetool.backend.service.BlueprintProductService.ResolvedProduct;
@@ -40,8 +42,11 @@ import de.greluc.krt.profit.basetool.backend.support.OptimisticLock;
 import de.greluc.krt.profit.basetool.logging.LogSafe;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -82,6 +87,7 @@ public class PersonalBlueprintService {
   private final GameItemRepository gameItemRepository;
   private final DefaultBlueprintKeyService defaultBlueprintKeyService;
   private final AuditService auditService;
+  private final ExchangeClientRepository exchangeClientRepository;
 
   /**
    * Owner-scoped paged list of owned blueprints, optionally filtered by a case-insensitive product
@@ -99,7 +105,8 @@ public class PersonalBlueprintService {
             ? repository.findAllByOwnerUserId(ownerUserId, pageable)
             : repository.findAllByOwnerUserIdAndProductNameContainingIgnoreCase(
                 ownerUserId, query.trim(), pageable);
-    return page.map(this::toResponse);
+    Map<String, String> clientNames = clientNames(page.getContent());
+    return page.map(entity -> toResponse(entity, clientNames));
   }
 
   /**
@@ -452,15 +459,59 @@ public class PersonalBlueprintService {
   }
 
   /**
-   * Maps an owned blueprint to its response DTO; {@code removable} is {@code false} for a default
-   * blueprint (REQ-INV-016).
+   * Maps one owned blueprint to its response DTO, looking up its source client's display name.
    *
    * @param entity the owned blueprint
-   * @return the response DTO with {@code removable} populated
+   * @return the response DTO
    */
   @NotNull
   private PersonalBlueprintResponse toResponse(@NotNull PersonalBlueprint entity) {
-    return mapper.toResponse(entity, !defaultBlueprintKeyService.isDefault(entity.getProductKey()));
+    return toResponse(entity, clientNames(List.of(entity)));
+  }
+
+  /**
+   * Maps an owned blueprint to its response DTO; {@code removable} is {@code false} for a default
+   * blueprint (REQ-INV-016) and {@code sourceClientName} is the registry name of its source client
+   * (REQ-INV-054).
+   *
+   * @param entity the owned blueprint
+   * @param clientNames display names by client id, holding every registered client of the entry
+   * @return the response DTO
+   */
+  @NotNull
+  private PersonalBlueprintResponse toResponse(
+      @NotNull PersonalBlueprint entity, @NotNull Map<String, String> clientNames) {
+    String clientId = entity.getSourceClientId();
+    return mapper.toResponse(
+        entity,
+        !defaultBlueprintKeyService.isDefault(entity.getProductKey()),
+        clientId == null ? null : clientNames.get(clientId));
+  }
+
+  /**
+   * Resolves the display names of the source clients of the given entries in one registry query,
+   * and without any query when none of them came from a client (REQ-INV-054).
+   *
+   * @param entities the owned blueprints about to be mapped
+   * @return display names by client id; an id no longer registered is absent
+   */
+  @NotNull
+  private Map<String, String> clientNames(@NotNull Collection<PersonalBlueprint> entities) {
+    Set<String> clientIds = new HashSet<>();
+    for (PersonalBlueprint entity : entities) {
+      if (entity.getSourceClientId() != null) {
+        clientIds.add(entity.getSourceClientId());
+      }
+    }
+    if (clientIds.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, String> names = new HashMap<>();
+    for (ExchangeClientDisplayName row :
+        exchangeClientRepository.findDisplayNamesByClientIdIn(clientIds)) {
+      names.put(row.clientId(), row.displayName());
+    }
+    return names;
   }
 
   /**

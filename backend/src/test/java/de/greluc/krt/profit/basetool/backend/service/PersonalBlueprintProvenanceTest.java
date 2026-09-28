@@ -27,6 +27,7 @@ import de.greluc.krt.profit.basetool.backend.model.User;
 import de.greluc.krt.profit.basetool.backend.model.dto.BlueprintImportResolutionDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintCreateRequest;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintResponse;
+import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintUpdateRequest;
 import de.greluc.krt.profit.basetool.backend.model.scwiki.Blueprint;
 import de.greluc.krt.profit.basetool.backend.repository.BlueprintRepository;
 import de.greluc.krt.profit.basetool.backend.repository.PersonalBlueprintRepository;
@@ -44,12 +45,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Integration tests that every way a blueprint is added records where it came from. */
+/**
+ * Integration tests that every way a blueprint is added records where it came from, and that the
+ * responses name the source client.
+ */
 @SpringBootTest
 @ActiveProfiles("test")
 class PersonalBlueprintProvenanceTest {
@@ -68,6 +74,7 @@ class PersonalBlueprintProvenanceTest {
   private UUID member;
   private final List<UUID> blueprints = new ArrayList<>();
   private final List<String> defaults = new ArrayList<>();
+  private final List<String> clients = new ArrayList<>();
 
   @BeforeEach
   void setUp() {
@@ -88,6 +95,7 @@ class PersonalBlueprintProvenanceTest {
     defaults.forEach(k -> jdbc.update("DELETE FROM default_blueprint WHERE product_key = ?", k));
     defaultKeys.refresh();
     blueprints.forEach(id -> jdbc.update("DELETE FROM blueprint WHERE id = ?", id));
+    clients.forEach(c -> jdbc.update("DELETE FROM exchange_client WHERE client_id = ?", c));
   }
 
   @Test
@@ -116,6 +124,69 @@ class PersonalBlueprintProvenanceTest {
     assertThat(sources())
         .contains(
             single + ":MANUAL", batched + ":MANUAL", imported + ":IMPORT", granted + ":DEFAULT");
+  }
+
+  @Test
+  void everyResponseNamesARegisteredSourceClientAndOnlyThat() {
+    String client = "bp-name-" + UUID.randomUUID().toString().substring(0, 8);
+    jdbc.update(
+        "INSERT INTO exchange_client (id, client_id, display_name, status, created_at)"
+            + " VALUES (?, ?, 'Verse Kit', 'ACTIVE', now())",
+        UUID.randomUUID(),
+        client);
+    clients.add(client);
+    String viaClient = product("Arrowhead Rifle");
+    String viaUnknown = product("Arclight Pistol");
+    String byHand = product("Oracle Helmet");
+
+    PersonalBlueprintResponse added =
+        blueprintService.add(
+            member,
+            new PersonalBlueprintCreateRequest(viaClient, null, null),
+            BlueprintSource.LOG,
+            client);
+    PersonalBlueprintResponse unknown =
+        blueprintService.add(
+            member,
+            new PersonalBlueprintCreateRequest(viaUnknown, null, null),
+            BlueprintSource.LOG,
+            "never-registered");
+    PersonalBlueprintResponse manual =
+        blueprintService.add(member, new PersonalBlueprintCreateRequest(byHand, null, null));
+    PersonalBlueprintResponse updated =
+        blueprintService.update(
+            member,
+            added.id(),
+            new PersonalBlueprintUpdateRequest(null, "edited", added.version()));
+
+    assertThat(added.sourceClientName()).isEqualTo("Verse Kit");
+    assertThat(updated.sourceClientName()).isEqualTo("Verse Kit");
+    assertThat(unknown.sourceClientId()).isEqualTo("never-registered");
+    assertThat(unknown.sourceClientName()).isNull();
+    assertThat(manual.sourceClientId()).isNull();
+    assertThat(manual.sourceClientName()).isNull();
+    assertThat(names(blueprintService.listOwn(member, null, Pageable.unpaged())))
+        .containsExactlyInAnyOrder(viaClient + ":Verse Kit", viaUnknown + ":-", byHand + ":-");
+    assertThat(names(blueprintService.listForUser(member, null, Pageable.unpaged())))
+        .containsExactlyInAnyOrder(viaClient + ":Verse Kit", viaUnknown + ":-", byHand + ":-");
+
+    jdbc.update("DELETE FROM exchange_client WHERE client_id = ?", client);
+
+    assertThat(names(blueprintService.listOwn(member, null, Pageable.unpaged())))
+        .containsExactlyInAnyOrder(viaClient + ":-", viaUnknown + ":-", byHand + ":-");
+  }
+
+  /**
+   * Pairs each listed blueprint with the client name its response carries.
+   *
+   * @param page the listed blueprints
+   * @return {@code key:name}, with {@code -} for an absent name
+   */
+  private static @NotNull List<String> names(@NotNull Page<PersonalBlueprintResponse> page) {
+    return page.getContent().stream()
+        .map(
+            r -> r.productKey() + ":" + (r.sourceClientName() == null ? "-" : r.sourceClientName()))
+        .toList();
   }
 
   /**
