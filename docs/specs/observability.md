@@ -1664,7 +1664,7 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `client_suspended`, `installation_revoked`, `client_revoked`, `scope_missing`,
   `client_version_unsupported`, `rate_limited`, `quota_exceeded`, `service_unavailable`,
   `idempotency_key_missing`, `idempotency_key_reused`, `idempotency_in_progress`,
-  `exchange_budget_exhausted` — registered at zero (REQ-XCH-028).
+  `exchange_budget_exhausted`, `relay_busy` — registered at zero (REQ-XCH-028).
   `basetool_ingest_exchange_mass_changes_staged_total{client_id}` counts change sets the
   mass-change guard held back and the gateway staged for the member's confirmation (REQ-XCH-021;
   panel 74 of the operations dashboard).
@@ -1705,7 +1705,18 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   passed on to the client) or `failed` (answered `502 BACKEND_RELAY_FAILED` — including a backend
   that cannot be reached, an open circuit breaker and a missing gateway token), registered at zero.
   `ExchangeRelayFailing` (warning) fires on more than three failures in 15 minutes (REQ-XCH-011,
-  REQ-XCH-028).
+  REQ-XCH-028). A large change set refused for want of a slot is not relayed and not counted here
+  but as `relay_busy` on the refusal counter.
+- The exchange relay's own Resilience4j circuit breaker `exchange` and its bulkhead
+  `exchangeLargeChangeSets` (four change sets of more than 100 ops at once, REQ-XCH-023) report
+  through `resilience4j_circuitbreaker_state{application="basetool-ingest",name}` and
+  `resilience4j_bulkhead_{available,max_allowed}_concurrent_calls`, which the gateway binds itself
+  (`Resilience4jMetricsConfig`, as the frontend does); the extractor relay's `backend` breaker
+  reports beside it. `CircuitBreakerOpen` covers both breakers by their `name` label;
+  `BulkheadNearSaturation` leaves the four-slot bulkhead out, and `ExchangeLargeChangeSetsBusy`
+  (warning) fires instead when more than 30 sets are refused `relay_busy` in 15 minutes for
+  15 minutes (`exchange_relay_capacity_alerts_test.yml`). The Exchange dashboard's *Relay
+  capacity* row shows the slots in use, the busy refusals and any breaker that is not closed.
 - `basetool_ingest_legacy_endpoints_enabled` gauge (`1` while the legacy extractor endpoints answer,
   `0` once switched off) and `basetool_ingest_legacy_gone_total` counter (legacy requests refused
   with `410 LEGACY_ENDPOINT_GONE`, registered at zero). No alert: after the go-live a trickle of
@@ -2996,7 +3007,8 @@ or free-text values.
 
 **Enforced by:** `AlertedMeterPresenceTest` (dead-alert guard: a meter an alert rule names must be
 registered) · `frontend/.../config/Resilience4jMetricsConfig` (publishes the three meters Boot 4
-silently stopped publishing) · `monitoring/prometheus/alerts/meta.yml` (`meta-self-health` + `meta-log-pipeline`
+silently stopped publishing) · `ingest/.../config/Resilience4jMetricsConfig` (the gateway's breaker
+and bulkhead meters, which had no series at all until then; `Resilience4jMetricsConfigTest`) · `monitoring/prometheus/alerts/meta.yml` (`meta-self-health` + `meta-log-pipeline`
 groups, incl. `MonitoringReconcileDisabled`) · `monitoring/prometheus/alerts/infrastructure.yml`
 (container guards, incl. `ContainerPidsHigh` + the `changes()`-based `ContainerRestartLoop`) ·
 `monitoring/alertmanager/alertmanager.yml.tmpl` (route grouping + the five root-cause `inhibit_rules`) ·
