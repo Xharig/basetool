@@ -262,7 +262,12 @@ def build_realm(provisioner: ModuleType, base: dict, builtin_scopes: list[dict],
     realm["clientScopes"] = copy.deepcopy(builtin_scopes) + own
     realm["defaultDefaultClientScopes"] = list(provisioner._STANDARD_DEFAULT)
     realm["defaultOptionalClientScopes"] = list(provisioner._STANDARD_OPTIONAL)
-    realm["scopeMappings"] = [{"clientScope": "offline_access", "roles": ["offline_access"]}]
+    offline = provisioner.OFFLINE_ACCESS
+    realm["scopeMappings"] = [{"clientScope": offline, "roles": [offline]}]
+    default_role = next(r for r in realm["roles"]["realm"] if r["name"] == f"default-roles-{REALM}")
+    held = default_role.setdefault("composites", {}).setdefault("realm", [])
+    if offline not in held:
+        held.append(offline)
 
     clients = []
     for client in base["clients"]:
@@ -353,6 +358,15 @@ def problems(realm: dict, provisioner: ModuleType, target: Target) -> list[str]:
     for scope in provisioner.SCOPES:
         if scope.name not in scopes:
             found.append(f"the provisioner scope {scope.name} is missing")
+    offline = provisioner.OFFLINE_ACCESS
+    default_role = next((r for r in realm.get("roles", {}).get("realm", [])
+                         if r.get("name") == f"default-roles-{REALM}"), {})
+    if offline not in default_role.get("composites", {}).get("realm", []):
+        found.append(f"default-roles-{REALM} lacks {offline}, so no member gets an offline token")
+    if not any(m.get("clientScope") == offline and offline in m.get("roles", [])
+               for m in realm.get("scopeMappings", [])):
+        found.append(f"the {offline} client scope maps no {offline} role, so a client without "
+                     f"full scope gets no offline token")
     for key, value in provisioner.REALM_SETTINGS.items():
         if realm.get(key) != value:
             found.append(f"realm setting {key} differs from the provisioner")
@@ -435,6 +449,17 @@ def selftest() -> int:
         broken["users"] = [u for u in broken["users"]
                            if u["username"] != target.offline_users[0]]
         expect(f"{prefix} a missing device-grant account is caught", caught(broken))
+
+        broken = copy.deepcopy(realm)
+        default_role = next(r for r in broken["roles"]["realm"]
+                            if r["name"] == f"default-roles-{REALM}")
+        default_role["composites"]["realm"].remove(provisioner.OFFLINE_ACCESS)
+        expect(f"{prefix} a default role without offline_access is caught", caught(broken))
+
+        broken = copy.deepcopy(realm)
+        broken["scopeMappings"] = []
+        expect(f"{prefix} an offline_access scope without its role mapping is caught",
+               caught(broken))
 
     sandbox = build_realm(provisioner, base, builtin, SANDBOX)
     expect("sandbox: the E2E accounts are dropped",

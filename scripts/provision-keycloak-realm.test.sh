@@ -41,7 +41,9 @@ scopes = [{"id": f"s-{n}", "name": n, "protocol": "openid-connect", "attributes"
           for n in builtin_scopes]
 roles = [{"id": "r-default", "name": "default-roles-iri"},
          {"id": "r-krt", "name": "KRT Member"}, {"id": "r-off", "name": "Officer"},
-         {"id": "r-adm", "name": "Admin"}, {"id": "r-bem", "name": "Bank Employee"}]
+         {"id": "r-adm", "name": "Admin"}, {"id": "r-bem", "name": "Bank Employee"},
+         {"id": "r-offline", "name": "offline_access"},
+         {"id": "r-uma", "name": "uma_authorization"}]
 realm_management = {"id": "c-rm", "clientId": "realm-management", "attributes": {}}
 account = {"id": "c-account", "clientId": "account", "attributes": {}}
 
@@ -52,10 +54,13 @@ realm = {
     "offlineSessionMaxLifespan": 5184000, "clientSessionIdleTimeout": 0,
     "clientSessionMaxLifespan": 0, "clientOfflineSessionIdleTimeout": 0,
     "clientOfflineSessionMaxLifespan": 0, "oauth2DeviceCodeLifespan": 600,
+    "defaultRole": {"id": "r-default", "name": "default-roles-iri"},
 }
 data = {
     "realm": realm,
     "roles": roles,
+    "role_composites": {"r-default": ["r-krt", "r-uma"]},
+    "scope_role_mappings": {},
     "clients": [realm_management, account],
     "client_roles": {"c-rm": [{"id": f"rm-{n}", "name": n} for n in
                               ("manage-users", "view-realm", "view-users", "manage-clients")]},
@@ -213,6 +218,14 @@ if verb == "get":
         out([{"id": s, "name": scope_by_id(s)["name"]} for s in data[key].get(parts[1], [])])
     if parts[0] == "clients" and parts[2:] == ["scope-mappings", "realm"]:
         out(data["client_scope_mappings"].get(parts[1], []))
+    if parts[0] == "roles" and parts[2:] == ["composites", "realm"]:
+        owner = next((r for r in data["roles"] if r["name"] == parts[1]), None)
+        if owner is None:
+            fail(f"Could not find role {parts[1]}")
+        held = data["role_composites"].get(owner["id"], [])
+        out([r for r in data["roles"] if r["id"] in held])
+    if parts[0] == "client-scopes" and parts[2:] == ["scope-mappings", "realm"]:
+        out(data["scope_role_mappings"].get(parts[1], []))
     if parts[0] == "clients" and parts[2] == "service-account-user":
         user = next((u for u in data["users"].values() if u["client"] == parts[1]), None)
         out({"id": user["id"], "username": "service-account"} if user else None)
@@ -265,6 +278,21 @@ if verb == "create":
         sys.exit(0)
     if parts[0] == "clients" and parts[2:] == ["scope-mappings", "realm"]:
         data["client_scope_mappings"].setdefault(parts[1], []).extend(body)
+        save()
+        sys.exit(0)
+    if parts[0] == "roles" and parts[2:] == ["composites"]:
+        owner = next((r for r in data["roles"] if r["name"] == parts[1]), None)
+        if owner is None or any(r.get("id") not in {x["id"] for x in data["roles"]} for r in body):
+            fail("stub: a composite names an unknown role or role id")
+        held = data["role_composites"].setdefault(owner["id"], [])
+        held += [r["id"] for r in body if r["id"] not in held]
+        save()
+        sys.exit(0)
+    if parts[0] == "client-scopes" and parts[2:] == ["scope-mappings", "realm"]:
+        if any(r.get("id") not in {x["id"] for x in data["roles"]} for r in body):
+            fail("stub: a scope mapping names an unknown role id")
+        mapped = data["scope_role_mappings"].setdefault(parts[1], [])
+        mapped += [r for r in body if r["id"] not in {m["id"] for m in mapped}]
         save()
         sys.exit(0)
     if parts[0] == "users":
@@ -871,6 +899,64 @@ assert_eq "$(query "$state" "'testing-only-mapper' in mappers('basetool-frontend
 output="$(run_provisioner "$state" --apply)"
 assert_contains "$output" "No changes" "a second apply is empty"
 assert_eq "$(writes_in "$state")" "0" "and sends no write"
+rm -rf "$state"
+
+echo "18. every member may hold an offline session: the default role and the client scope carry offline_access"
+OFFLINE_TITLE="offline_access for every member"
+COMPOSITE_LINE="+ default role 'default-roles-iri': composite realm role 'offline_access' (every member may hold an offline session)"
+MAPPING_LINE="+ client scope 'offline_access': realm role 'offline_access' mapped (a client with fullScopeAllowed off may then issue an offline token)"
+section_first_line() { printf '%s\n' "$1" | grep -A1 -F "] ${OFFLINE_TITLE}" | tail -1; }
+seed_offline() {
+  STUB_STATE="$1" SEED="$2" "$PYTHON" -c '
+import json, os, pathlib
+p = pathlib.Path(os.environ["STUB_STATE"]) / "state.json"
+d = json.loads(p.read_text(encoding="utf-8"))
+if "composite" in os.environ["SEED"]:
+    d["role_composites"]["r-default"].append("r-offline")
+if "mapping" in os.environ["SEED"]:
+    d["scope_role_mappings"]["s-offline_access"] = [{"id": "r-offline", "name": "offline_access"}]
+p.write_text(json.dumps(d), encoding="utf-8")
+'
+}
+state="$(mktemp -d)"
+make_stub "$state" empty
+before="$(cat "${state}/state.json")"
+output="$(run_provisioner "$state")"
+assert_eq "$(cat "${state}/rc")" "2" "a realm without either item plans changes"
+assert_contains "$output" "  ${COMPOSITE_LINE}" "the dry run plans offline_access as a composite of the default role"
+assert_contains "$output" "  ${MAPPING_LINE}" "and the role mapped on the offline_access client scope"
+assert_eq "$(cat "${state}/state.json")" "$before" "the dry run writes nothing"
+output="$(run_provisioner "$state" --apply)"
+assert_eq "$(cat "${state}/rc")" "0" "the apply succeeds and verifies clean"
+assert_contains "$output" "Applied. A second run reports no changes." "the verify pass finds nothing left"
+assert_eq "$(query "$state" "sorted(r['name'] for r in d['roles'] if r['id'] in d['role_composites']['r-default'])")" \
+  "['KRT Member', 'offline_access', 'uma_authorization']" "the default role holds offline_access beside what it had"
+assert_eq "$(query "$state" "[r['name'] for r in d['scope_role_mappings']['s-offline_access']]")" \
+  "['offline_access']" "the offline_access client scope maps the offline_access role"
+assert_contains "$(cat "${state}/bodies.log")" 'create roles/default-roles-iri/composites [{"id": "r-offline", "name": "offline_access"}]' \
+  "the composite is posted by the role's id"
+assert_contains "$(cat "${state}/bodies.log")" 'create client-scopes/s-offline_access/scope-mappings/realm [{"id": "r-offline", "name": "offline_access"}]' \
+  "and so is the scope mapping"
+output="$(run_provisioner "$state")"
+assert_eq "$(cat "${state}/rc")" "0" "a dry run afterwards finds the realm in shape"
+assert_eq "$(section_first_line "$output")" "  in shape" "and the offline_access section in shape"
+rm -rf "$state"
+state="$(mktemp -d)"
+make_stub "$state" empty
+seed_offline "$state" mapping
+output="$(run_provisioner "$state")"
+assert_contains "$output" "  ${COMPOSITE_LINE}" "production before the fix, scope mapped and composite missing: the composite is planned"
+assert_not_contains "$output" "$MAPPING_LINE" "and the existing scope mapping is not"
+rm -rf "$state"
+state="$(mktemp -d)"
+make_stub "$state" empty
+seed_offline "$state" composite+mapping
+output="$(run_provisioner "$state")"
+assert_eq "$(section_first_line "$output")" "  in shape" "a realm with both is in shape"
+assert_not_contains "$output" "offline_access' (every member" "no composite line is planned"
+run_provisioner "$state" --apply >/dev/null
+assert_eq "$(grep -cE '^create (roles/[^/]+/composites|client-scopes/[^/]+/scope-mappings/realm)$' "${state}/calls.log" || true)" \
+  "0" "and the apply sends neither write"
 rm -rf "$state"
 
 echo
