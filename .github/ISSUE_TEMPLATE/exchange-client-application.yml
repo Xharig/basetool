@@ -113,6 +113,8 @@ body:
           required: true
         - label: Refresh token and DPoP key only in the platform's secret store; the key non-exportable where the platform allows.
           required: true
+        - label: A Linux fallback key file is readable by the user alone (0600), in a directory only the user can open (0700).
+          required: true
         - label: No token or key in logs, backups, diagnostics or problem reports; Authorization, DPoP and JWT-shaped strings redacted.
           required: true
         - label: Installations labelled by the member or the product, never with a host or computer name.
@@ -145,6 +147,14 @@ body:
         - label: Stock is sent with the expectedQuantity last seen; a VERSION_CONFLICT is resolved by pulling.
           required: true
         - label: The account check runs before the first sync of a newly detected game account, with a warning on mismatch.
+          required: true
+        - label: Baseline, ship links and feed cursors are kept per installation, never shared with another installation or through a shared data folder.
+          required: true
+        - label: Every Idempotency-Key is random, such as a UUID, and used for one logical write only.
+          required: true
+        - label: detachedFromMissions, offersReduced and offersRemoved are shown to the member when a change result reports them.
+          required: true
+        - label: Every ship upsert sends the ship's current name and location, because an upsert clears an omitted one.
           required: true
 
   - type: checkboxes

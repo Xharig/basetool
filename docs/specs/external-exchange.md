@@ -97,7 +97,8 @@ all (owner decision 2026-09-27): Basetool pages and controls go by the English w
 („Verbundene Anwendungen" is *Connected applications*, the Lager the *warehouse*, the Materialbörse
 the *Material Exchange*), and German test data stays only in the conformance fixtures under
 `examples/`. `.github/workflows/exchange-docs.yml`, on every change to the pages, the OpenAPI
-document or the schemas, checks that each relative link stays on the site and resolves and that no
+document or the schemas, checks that each relative link stays on the site and resolves — an anchor
+to one of the target page's headings, with the id kramdown's GFM parser gives it — and that no
 umlaut, sharp s or German low quotation mark appears in the site's sources, the OpenAPI document or
 the schemas outside those fixtures (`check_exchange_docs_links.py`), lints the Markdown, renders the OpenAPI document into a
 static reference from the committed schemas (`prepare_exchange_reference.py` and the Redoc bundle of
@@ -138,8 +139,9 @@ mirrors them into Redis under `exchange:*` with a version and a timestamp, rewri
 startup and reconciles it every 60 s. Restrictive changes (suspend, capability removal, global
 switch off, revocations) are written to Redis **before** the database commit and fail the action if
 the mirror write fails; permissive changes are written **after** the commit. The gateway reads the
-mirror through a cache of at most 5 s and refuses every exchange request when it cannot read it
-(`503 REGISTRY_UNAVAILABLE`) or when the switch is off (`503 EXCHANGE_DISABLED`).
+mirror through a cache of at most 5 s and refuses every exchange request when it cannot read it or
+the revocations (`503 REGISTRY_UNAVAILABLE`) or when the switch is off (`503 EXCHANGE_DISABLED`),
+each with `Retry-After: 30`.
 
 **How the backend keeps the mirror** (WP 3.1). The tables are `exchange_client`,
 `exchange_client_capability` and the single-row `exchange_settings` (`V248`); the switch starts
@@ -333,7 +335,10 @@ without affecting anyone else, and filling a store takes more than 160 members a
 registry `requestsPerMinute` far above the default may need a larger per-member cap. Refusals are
 counted as `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`,
 `full`) and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on
-any `full`.
+any `full`. A proof refused for either cap gets the same answer as a replayed one — `401
+DPOP_INVALID`, `error="invalid_dpop_proof"`, the same `detail` — so a client cannot tell them apart;
+the developer site documents both caps and tells a client to pause a member's requests for at least
+40 s when a proof it knows is fresh is refused (`docs/exchange/authentication.md`).
 
 **Acceptance**
 
@@ -343,8 +348,10 @@ any `full`.
 - [x] A member at the cap is refused while another member and the other path scope still pass; a
   proof without the nonce stores nothing; an unreadable or pathless target needs the nonce
   (`DpopProofReplayStoreTest`).
+- [x] Through the whole gateway, a member over the cap gets exactly the answer of a replayed proof,
+  and another member still passes (`ExchangeDpopMemberCapTest`).
 
-**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest` · **Status:** built — WP 3.2
+**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest`, `ExchangeDpopMemberCapTest` · **Status:** built — WP 3.2
 (#2082); the partitioned replay cache and the fail-closed nonce scope — security review 2 (#2092)
 
 ### REQ-XCH-007 — Installations are identified by their DPoP key and labelled by the client
@@ -537,12 +544,13 @@ The formats are JSON Schema 2020-12 files. Their source is
 permanent `$id`, `https://ingest.profit-base.online/exchange/v1/schemas/<name>.schema.json` (owner
 decision 2026-09-26), and a `$id` is never changed once published. The schemas are:
 `item-ref` (precedence `bt` › `scRecord` › `scGuid` › `uexId` › `locKey` › `name` + `nameLocale`),
-`quantity` (`{amount, unit: SCU|PIECE}`, SCU ≤ 3 decimals, PIECE whole), `quality` (integer
+`quantity` (`{amount, unit: SCU|PIECE}`, PIECE whole; an SCU amount is not limited in its decimals — the backend rounds it half-up to three, and so does every comparison with `expectedQuantity`), `quality` (integer
 0–1000; trade goods fixed 0), `location-ref`, `provenance` (`log|manual|import|default|other`,
 `observedAt`), `material-kind` (`RAW|REFINED|NO_REFINE` plus `commodity`), `blueprint`, `stock-lot`
 (material, location, quality, `stolen`, quantity — no org unit, no row id), `ship` (with required
 `version`), `org-demand`, `location`, `installation`, `account-check`, `change-set` (at most 500
-ops), `change-result` (compact, at most 32 KiB), `page`, `service-document`, `problem` and the
+ops), `change-result` (compact, at most 32 KiB; its optional `cursor` is reserved and never sent in
+v1 — a client reads the feed after a push), `page`, `service-document`, `problem` and the
 offline-file `envelope` (`format`, `formatVersion`, `generator`, `generatedAt`, `items`,
 `extensions`; no handle, player, source folder or file path). One OpenAPI 3.1 document,
 `ingest/src/main/resources/api/exchange-v1.openapi.json`, is authoritative for the exchange routes.
@@ -901,6 +909,11 @@ Every write carries an `Idempotency-Key` (`400 IDEMPOTENCY_KEY_MISSING`), kept 2
 produced after them are cached — never `401`, `403`, `429`, `503`,
 `MASS_CHANGE_CONFIRMATION_REQUIRED` or a `5xx`. A duplicate in flight gets
 `409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different body `422 IDEMPOTENCY_KEY_REUSED`.
+These two and `400 IDEMPOTENCY_KEY_MISSING` are the filter's own answers about the key, written
+before anything is claimed, and are never cached; the cached statuses below are those of the route
+behind the filter (`ExchangeIdempotencyFilter.cacheable`). An answer above
+`app.exchange.store.max-result-bytes` (32 KiB), one the byte budget cannot take or one whose store
+write fails is not cached, and a retry under its key runs again.
 
 The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash, under
 `ingest:xch:idem:<client>:<member>:<sha256>`; a request's fingerprint is the SHA-256 of method, path
@@ -910,7 +923,12 @@ change. The lock of a key in flight lives two minutes, so a crashed request cann
 the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write. That
 holds on every exchange route and for every kind of Redis failure — a lost connection, a timeout, a
 refused command while staging a draft or a mass change, or a store failure escaping a route — each
-answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`.
+answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`. Two Redis reads answer
+otherwise: an unreadable registry or revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003)
+and a write quota that cannot be counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with
+`Retry-After: 30`; a full byte budget is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`.
+*Corrected 2026-09-27: this paragraph said every Redis failure answered `Retry-After: 60`; the
+registry and quota reads have answered 30 since they were built.*
 
 The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
 per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
@@ -984,7 +1002,10 @@ cached.
 The confirmation link opens `/connected-apps/confirm?handoff=…`. As ADR-0110 requires, loading the
 page consumes nothing: its script strips the id from the address bar and consumes the staged batch
 with an explicit request, after which the batch waits in the member's server session and the
-browser names it only by its handoff id, so it cannot alter the batch or its client. The batch
+browser names it only by its handoff id, so it cannot alter the batch or its client. The staged
+entry is keyed by the member's subject (`ingest:handoff:<sub>:<id>`), so only that member can open
+it; the developer site still tells a client to treat the link like a draft's `frontendUrl`, as a
+secret it never logs or shares (`docs/exchange/sync-guide.md`). The batch
 carries its `stagedAt` through the frontend to the backend, and the staging lifetime of 30 minutes
 counts from it everywhere: the frontend neither loads nor applies a batch older than that (`404`)
 and drops expired session entries, and the backend refuses it (`403`; a `stagedAt` more than a
@@ -1053,7 +1074,7 @@ Redis (`ingest:xch:quota:*`). All gateway-written exchange data in Redis is boun
 client and member, 16 MB per client and 64 MB in total, counted per stored value with a fixed
 per-entry overhead (an estimate of Redis's own bookkeeping, not a measurement of its memory — see
 *The byte budget* below); above a limit the gateway
-answers `503 EXCHANGE_BUDGET_EXHAUSTED`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
+answers `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
 Responses carry `RateLimit` and `Retry-After` headers. The account check has its own tight limit.
 
 **The limits** (owner decision 2026-09-27; `app.exchange.limits.*`):
@@ -1172,6 +1193,16 @@ value at any time, so the gateway replaces the detail rather than trusting every
 message. `ExchangeRelayTest` feeds each passed-through and translated code a detail with a name,
 another member's id, SQL and a class name and checks none of it arrives.
 
+**The fields** (`Problems.of`, `problem.schema.json`, listed in `docs/exchange/errors.md`): `status`,
+`code`, `title` and `detail` always; `correlationId` always, equal to the `X-Correlation-Id` response
+header, which `CorrelationIdFilter` takes from the request when it is 1–128 characters of
+`[A-Za-z0-9._-]` and mints as a UUID otherwise; `instance` (the path) on the answers the routes
+build, not on the filters'; `errors` with the gateway's `SCHEMA_INVALID`; `confirmationUrl` with
+`MASS_CHANGE_CONFIRMATION_REQUIRED`. `type` and `retryAfterSeconds` are never sent — the schema
+reserves the latter, and `Retry-After` is the header. The schema allowed a `correlationId` of at most
+64 characters while the gateway echoes one of up to 128; the schema was widened to 128 on
+2026-09-27 (widening is compatible within v1, REQ-XCH-026).
+
 **Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error
 statuses), `ExchangeRelayTest` (no backend detail reaches a client) · **Status:** registry published
 — WP 0.2 (#2080); the gateway's refusal metrics carry the codes as `reason` labels
@@ -1208,7 +1239,7 @@ WP 0.2 (#2080)
 ### REQ-XCH-027 — Approved clients meet the client security requirements
 
 A client stores tokens only in the platform's secret store (Windows Credential Manager / DPAPI;
-Linux Secret Service, with a `0600` file fallback and a visible hint), keeps the DPoP private key
+Linux Secret Service, with a `0600` file fallback in a `0700` directory and a visible hint), keeps the DPoP private key
 non-exportable where the platform allows, never writes a token into logs, backups, diagnostics or a
 problem-report channel, pins the production issuer and allows another only through a developer
 environment variable, shows the device login's `user_code` with the bare `verification_uri` and
@@ -1216,7 +1247,12 @@ never opens, shows or sends `verification_uri_complete` (owner decision 2026-09-
 2 of #2092, M1), and sends a descriptive `User-Agent`. It also syncs as the sync guide
 requires: each resource an opt-in, pull before push, an add-only first sync, removals only from a
 diff, no re-add of what the member removed elsewhere without asking, ships linked before created,
-and the account check before a new game account's first sync. The checklist is
+and the account check before a new game account's first sync. Three more are approval criteria
+(owner decision 2026-09-27, from the review of the VerseKit requirements, #2089): the baseline, the
+ship links and the cursors are kept per installation and idempotency keys are random; the member
+is shown `detachedFromMissions`, `offersReduced` and `offersRemoved` when a sync reports them; and
+every ship `upsert` sends the ship's current `name` and `location`, since an omitted one is cleared.
+A sandbox demonstration is recommended, not a criterion. The checklist is
 `docs/exchange/client-security.md`; the application template asks for each point.
 
 **Status:** the checklist `docs/exchange/client-security.md` is written — WP 4.6 (#2090); the
@@ -1524,7 +1560,7 @@ count in `basetool_exchange_undo_total{client_id,resource,outcome}` like a membe
 | DoS against Redis (shared with sessions, `noeviction`) or the backend | hard byte budgets, quotas, batch cap, larger Redis (REQ-XCH-023, ADR-0221) |
 | Guard evasion by batching, near-zero cuts or overwriting stock updates | window counting rules against each lot's state at window start (REQ-XCH-021) |
 | Guard evasion by overwriting ship updates (retyping every ship, clearing names and locations) | counted only when one `upsert` changes both name and type, with no comparison to the window start; journal and undo restore the ships (REQ-XCH-021/-022) — accepted risk (owner decision 2026-09-27) |
-| A malicious release changing many members' data at once | journal and each member's own undo, suspension (REQ-XCH-022) — being addressed (admin bulk undo) |
+| A malicious release changing many members' data at once | journal and each member's own undo, suspension, and the admin's audited undo of the client for every member at once, which suspends it first (REQ-XCH-022/-034); Materialbörse offers and mission units it removed stay reported, not undone (rows below). *Changed 2026-09-27: the admin bulk undo is built; the row still said it was being addressed.* |
 | A single open order recognisable in the org demand feed | membership-only scope, catalogue fields only, no requester, title or free text; no low-count suppression, 7-day client cache (REQ-XCH-018) — accepted risk (ADR-0220) |
 | Silent removal of Materialbörse offers by a sync book-out | reported and audited, not undoable — accepted (REQ-XCH-016/-022) |
 | A ship removal through the exchange detaching the ship from its mission units, which are org data | reported (`detachedFromMissions`) and audited (`MISSION_UNIT_UPDATED`), not undoable: undo recreates the ship under a new id without its mission units — accepted (REQ-XCH-017/-022) |

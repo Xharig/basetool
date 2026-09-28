@@ -19,17 +19,17 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | Code | HTTP | Raised by | Meaning | Client action |
 | --- | --- | --- | --- | --- |
 | `CLIENT_NOT_ALLOWED` | 403 | gateway | The token's client is not in the registry. | Stop; the client is not approved. |
-| `CLIENT_SUSPENDED` | 403 | gateway | The client is suspended in the registry. | Stop and tell the member; retry after the maintainer resolved it. |
+| `CLIENT_SUSPENDED` | 403 | gateway | The client is suspended in the registry. | Stop and tell the member. Nothing tells a client when the suspension ends, so do not retry on a timer: try again at the client's next start or when the member asks. |
 | `CLIENT_REVOKED` | 401 | gateway | The member disconnected this client after this connection was made: an offline token issued before the disconnect, or a token without `offline_access` whose sign-in (`auth_time`) came before it. | Discard tokens; start a new device login only when the member asks. |
 | `INSTALLATION_REVOKED` | 401 | gateway | The member disconnected this installation; its DPoP key is refused for good. | Discard tokens **and** the DPoP key; reconnecting needs a new key. |
 | `CLIENT_VERSION_UNSUPPORTED` | 403 | gateway | The `User-Agent` version is below the client's minimum. | Ask the member to update. |
-| `EXCHANGE_DISABLED` | 503 | gateway | The exchange is switched off globally. | Back off; retry later. |
-| `REGISTRY_UNAVAILABLE` | 503 | gateway | The gateway cannot read the client registry and fails closed. | Back off; retry later. |
-| `EXCHANGE_BUDGET_EXHAUSTED` | 503 | gateway | A Redis byte budget of the exchange is full. | Back off; honour `Retry-After`. |
+| `EXCHANGE_DISABLED` | 503 | gateway | The exchange is switched off globally. `Retry-After: 30`. | Wait at least `Retry-After`, then retry. |
+| `REGISTRY_UNAVAILABLE` | 503 | gateway | The gateway cannot read the client registry or the revocations and fails closed. `Retry-After: 30`. | Wait at least `Retry-After`, then retry. |
+| `EXCHANGE_BUDGET_EXHAUSTED` | 503 | gateway | A Redis byte budget of the exchange is full. `Retry-After: 60`. | Wait at least `Retry-After`, then retry the same request under the same key. |
 | `SCOPE_MISSING` | 403 | gateway | The route's capability is not in the token or not granted to the client. A missing consent looks the same. | Start a device login requesting the scope, if the member wants it. |
-| `UNAUTHENTICATED` | 401 | gateway | The token is missing, invalid, expired, or not issued for this gateway. | Start a device login again. |
+| `UNAUTHENTICATED` | 401 | gateway | The token is missing, invalid, expired, or not issued for this gateway. | Refresh the token once and retry. Only when the refresh answers `invalid_grant` is the connection over: delete the refresh token and start a device login when the member asks. A freshly refreshed token that is refused again is not retried in a loop. |
 | `DPOP_REQUIRED` | 401 | gateway | The request carries no DPoP proof or an unbound token. | Send `Authorization: DPoP` with a proof. |
-| `DPOP_INVALID` | 401 | gateway | The proof is invalid, replayed, for another key, or lacks the server nonce. | Fix the proof; on a nonce challenge retry once with the `DPoP-Nonce`. |
+| `DPOP_INVALID` | 401 | gateway | The proof is invalid, replayed, for another key, or lacks the server nonce — or the member holds more than 600 live proofs, which answers exactly like a replay ([live proofs](authentication.md#live-proofs-per-member)). | Fix the proof; on a nonce challenge retry once with the `DPoP-Nonce`. A proof you know is fresh: pause the member's requests for at least 40 s. |
 | `TERMS_NOT_ACCEPTED` | 403 | backend | The member has not accepted the current terms. | Ask the member to open the Basetool and accept. |
 | `PENDING_APPROVAL` | 403 | backend | The member's registration awaits approval. | Stop; nothing to sync yet. |
 | `NO_ROLE` | 403 | backend | The member holds no role. | Stop and tell the member. |
@@ -47,7 +47,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `RATE_LIMITED` | 429 | gateway | A per-minute limit is exhausted. | Honour `Retry-After`. |
 | `QUOTA_EXCEEDED` | 429 | gateway | The daily write quota is exhausted. | Retry after `Retry-After`, the next day at the latest. |
 | `BACKEND_RELAY_FAILED` | 502 | gateway | The backend did not answer usably: an error, a refusal the contract does not name, or an answer that breaks the v1 schema. | Back off; retry with the same key. |
-| `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable. | Back off; retry with the same key. |
+| `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable: a store the exchange needs cannot be reached (`Retry-After: 60`), the daily write quota cannot be counted (`Retry-After: 30`), or the identity provider cannot be reached to check the token (`Retry-After: 5`). | Wait at least `Retry-After`, then retry the same request under the same key. |
 | `NOT_FOUND` | 404 | gateway | The requested document, such as a schema name, does not exist. | Check the name. |
 | `LEGACY_ENDPOINT_GONE` | 410 | gateway | A legacy `/v1/*` extractor endpoint after the go-live. | Update the client. |
 
@@ -71,3 +71,23 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 A change result or resolve result may carry `warnings[]` with a JSON Pointer and a code. v1 defines
 `UNKNOWN_FIELD` (the server ignored a field it does not know) and `LOC_KEY_UNRESOLVED` (no single
 catalogue entry carries that name key; the name was tried instead).
+
+## The problem document
+
+| Field | Sent | Meaning |
+| --- | --- | --- |
+| `status` | always | The HTTP status. |
+| `code` | always | The code from the tables above. Decide by it. |
+| `title` | always | A short English title, usually the status's reason phrase. |
+| `detail` | always | The fixed English sentence for the code; a hint at most. |
+| `correlationId` | always | The request's id, the same value as the `X-Correlation-Id` response header. |
+| `instance` | from the routes, not from the gateway's filters | The request path. |
+| `errors` | with `SCHEMA_INVALID` from the gateway | Up to 50 `{pointer, message}`; the message names the violated keyword, never a value you sent. |
+| `confirmationUrl` | with `MASS_CHANGE_CONFIRMATION_REQUIRED` | Where the member confirms the held batch ([sync guide](sync-guide.md#the-mass-change-guard)). |
+| `type` | never | Absent, which RFC 9457 reads as `about:blank`. |
+| `retryAfterSeconds` | never | Reserved; the delay is in the `Retry-After` header. |
+
+Every answer, a success included, carries `X-Correlation-Id`. Put it into a problem report or a log
+line, so the Basetool's maintainers can find the request; it identifies nothing but the request. A
+client may send its own `X-Correlation-Id` of 1 to 128 characters of `A–Z`, `a–z`, `0–9`, `.`, `_`
+and `-`; the gateway keeps it, and replaces any other value with a random UUID.

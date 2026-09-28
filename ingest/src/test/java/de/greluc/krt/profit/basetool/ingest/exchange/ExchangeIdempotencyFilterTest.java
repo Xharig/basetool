@@ -245,6 +245,7 @@ class ExchangeIdempotencyFilterTest {
     write(KEY, null)
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
+    verify(idempotency, never()).store(anyString(), any());
   }
 
   @Test
@@ -254,6 +255,7 @@ class ExchangeIdempotencyFilterTest {
     write(KEY, null)
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("IDEMPOTENCY_IN_PROGRESS"));
+    verify(idempotency, never()).store(anyString(), any());
   }
 
   @Test

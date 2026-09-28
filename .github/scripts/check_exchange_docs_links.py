@@ -4,7 +4,10 @@ A relative link must stay inside docs/exchange, which is all the site publishes,
 that exists; a link to a directory needs an index page there (README.md, index.md or index.html),
 or the site answers 404. Links into the site's generated parts (the OpenAPI reference and the
 schema copies, both with generated index pages) are checked against their sources in the
-repository. Anchors and absolute URLs are not followed.
+repository. An anchor into a Markdown page, or into the page itself, must be the id of one of its
+headings as GitHub Pages renders it: kramdown's GFM parser lower-cases the heading's source text,
+drops every character that is not a letter, digit, underscore, hyphen or space, turns each space
+into a hyphen and numbers repeats with -1, -2 and so on. Absolute URLs are not followed.
 
 Every page the site navigation (`_data/navigation.yml`) lists must exist too, or the layout would
 silently drop its entry.
@@ -20,7 +23,15 @@ import re
 import sys
 import tempfile
 
-LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)|^ {0,3}\[[^\]]+\]:[ \t]*<?([^\s>]+)>?", re.M)
+
+HEADING = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$")
+
+CUSTOM_ID = re.compile(r"[ \t]*\{:?[ \t]*#([A-Za-z][\w-]*)[ \t]*\}$")
+
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+
+NOT_IN_ID = re.compile(r"[^\w\- \t]")
 
 INDEX_PAGES = ("README.md", "index.md", "index.html")
 
@@ -99,6 +110,68 @@ def broken_navigation(repo: pathlib.Path) -> list[str]:
     return broken
 
 
+def heading_ids(text: str) -> set[str]:
+    """Returns the ids GitHub Pages gives the headings of a Markdown page.
+
+    Follows kramdown's GFM parser: an explicit ``{#id}`` wins; otherwise the heading's source text
+    is lower-cased, stripped of every character but letters, digits, underscores, hyphens and
+    spaces, each space becomes a hyphen, and a repeated id gets ``-1``, ``-2`` and so on. Headings
+    inside fenced code blocks are not headings.
+
+    Args:
+        text: the page's Markdown source.
+
+    Returns:
+        Every heading id of the page.
+    """
+    ids = set()
+    seen: dict[str, int] = {}
+    fence = None
+    for line in text.splitlines():
+        opening = FENCE.match(line)
+        if opening:
+            marker = opening.group(1)
+            if fence is None:
+                fence = marker
+            elif (marker[0] == fence[0] and len(marker) >= len(fence)
+                  and not line.strip(marker[0]).strip()):
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        heading = HEADING.match(line)
+        if not heading:
+            continue
+        source = heading.group(2)
+        custom = CUSTOM_ID.search(source)
+        if custom:
+            ids.add(custom.group(1))
+            continue
+        slug = NOT_IN_ID.sub("", source.lower()).replace(" ", "-").replace("\t", "-")
+        count = seen.get(slug, -1) + 1
+        seen[slug] = count
+        ids.add(slug if count == 0 else f"{slug}-{count}")
+    return ids
+
+
+def markdown_page(resolved: pathlib.Path) -> pathlib.Path | None:
+    """Returns the Markdown page a link target renders from, if it is one.
+
+    Args:
+        resolved: the link target inside docs/exchange, without its fragment.
+
+    Returns:
+        The Markdown file, or ``None`` for any other target.
+    """
+    if resolved.is_file():
+        return resolved if resolved.suffix == ".md" else None
+    if resolved.is_dir():
+        for name in ("README.md", "index.md"):
+            if (resolved / name).is_file():
+                return resolved / name
+    return None
+
+
 def broken_links(repo: pathlib.Path) -> list[str]:
     """Returns every relative link under docs/exchange that would not work on the site.
 
@@ -110,13 +183,16 @@ def broken_links(repo: pathlib.Path) -> list[str]:
     """
     docs = (repo / "docs" / "exchange").resolve()
     broken = []
+    ids: dict[pathlib.Path, set[str]] = {}
     for page in sorted(docs.rglob("*.md")):
         text = page.read_text(encoding="utf-8")
-        for target in LINK.findall(text):
-            if re.match(r"^[a-z][a-z0-9+.-]*:", target) or target.startswith("#"):
+        for inline, reference in LINK.findall(text):
+            target = inline or reference
+            if re.match(r"^[a-z][a-z0-9+.-]*:", target):
                 continue
             where = f"{page.relative_to(repo.resolve()).as_posix()}: {target}"
-            resolved = (page.parent / target.split("#", 1)[0]).resolve()
+            path, _, fragment = target.partition("#")
+            resolved = (page.parent / path).resolve() if path else page.resolve()
             if not resolved.is_relative_to(docs):
                 broken.append(f"{where} (leaves the published site)")
                 continue
@@ -124,10 +200,19 @@ def broken_links(repo: pathlib.Path) -> list[str]:
             if key in GENERATED:
                 if not (repo / GENERATED[key]).exists():
                     broken.append(f"{where} (source missing)")
-            elif not resolved.exists():
+                continue
+            if not resolved.exists():
                 broken.append(f"{where} (missing)")
-            elif resolved.is_dir() and not any((resolved / name).exists() for name in INDEX_PAGES):
+                continue
+            if resolved.is_dir() and not any((resolved / name).exists() for name in INDEX_PAGES):
                 broken.append(f"{where} (directory without an index page)")
+                continue
+            source = markdown_page(resolved)
+            if fragment and source is not None:
+                if source not in ids:
+                    ids[source] = heading_ids(source.read_text(encoding="utf-8"))
+                if fragment not in ids[source]:
+                    broken.append(f"{where} (no such heading)")
     return broken
 
 
@@ -139,7 +224,7 @@ def selftest() -> None:
         docs.mkdir(parents=True)
         (repo / "docs" / "other.md").write_text("# other", encoding="utf-8")
         (docs / "a.md").write_text(
-            "[ok](b.md#top) [web](https://example.org) [anchor](#x) [gone](missing.md)"
+            "# A page\n\n[ok](b.md#b) [web](https://example.org) [anchor](#a-page) [gone](missing.md)"
             " [ref](reference/) [out](../other.md) [bare](bare/) [indexed](indexed/)",
             encoding="utf-8",
         )
@@ -159,6 +244,30 @@ def selftest() -> None:
         (spec / "exchange-v1.openapi.json").write_text("{}", encoding="utf-8")
         found = broken_links(repo)
         assert len(found) == 3, found
+        (docs / "anchors.md").write_text(
+            "# Anchors\n\n"
+            "## Warehouse locations — `GET /exchange/v1/catalog/locations`\n\n"
+            "## Rate limits, quota and back-off\n\n"
+            "## Errors\n\n## Errors\n\n"
+            "### 4. Poll the token endpoint\n\n"
+            "## Custom {#own-id}\n\n"
+            "```python\n# not-a-heading\n```\n\n"
+            "[a](#warehouse-locations--get-exchangev1cataloglocations)"
+            " [b](#rate-limits-quota-and-back-off) [c](#errors-1) [d](#4-poll-the-token-endpoint)"
+            " [e](#own-id) [f](#not-a-heading) [g](#lager-locations--get-exchangev1cataloglocations)"
+            " [h](#errors-2) [i](indexed/#indexed) [j](indexed/#gone) [k](b.md#b)"
+            " [l](reference/#anything)\n\n[def]: b.md#nowhere\n",
+            encoding="utf-8",
+        )
+        found = [line for line in broken_links(repo) if "anchors.md" in line]
+        assert found == [
+            "docs/exchange/anchors.md: #not-a-heading (no such heading)",
+            "docs/exchange/anchors.md: #lager-locations--get-exchangev1cataloglocations (no such heading)",
+            "docs/exchange/anchors.md: #errors-2 (no such heading)",
+            "docs/exchange/anchors.md: indexed/#gone (no such heading)",
+            "docs/exchange/anchors.md: b.md#nowhere (no such heading)",
+        ], found
+        (docs / "anchors.md").unlink()
         assert broken_navigation(repo) == ["docs/exchange/_data/navigation.yml (missing)"]
         (docs / "_data").mkdir()
         (docs / "_data" / "navigation.yml").write_text(

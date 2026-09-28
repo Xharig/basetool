@@ -26,7 +26,8 @@ against the baseline, never against a guess.
 Every sync cycle starts by reading the feed to its end — until `hasMore` is `false` — and applying it
 locally, tombstones included. Only then compare, and push what changed locally since the baseline.
 After a push, read the feed again: it shows your own writes as the server stored them, and that state
-with its cursor is the new baseline. A change result carries no cursor in `v1`.
+with its cursor is the new baseline. A change result carries no cursor in `v1`: the schema reserves
+a `cursor` property, but the server does not send it, so do not wait for one.
 
 ## The first sync is add-only
 
@@ -56,7 +57,10 @@ elsewhere — drop it locally.
 
 ## Tombstones and never re-adding
 
-A tombstone's `removedBy` names who removed the entry. When it is your own `installationId`, it is
+A tombstone's `removedBy` names who removed the entry: `{channel, clientId?, installationId?}`, with
+`channel` one of `web`, `app`, `client` and `system`, and for `client` the client's id and its
+installation's `installationId`; a channel you do not know counts as a removal elsewhere
+([reading tolerantly](versioning.md#reading-tolerantly)). When `installationId` is your own, it is
 your own removal. Any other tombstone means the member removed the entry elsewhere: remove it locally
 and **do not add it back**. The server refuses such an add per op with `REMOVED_ELSEWHERE` while the
 tombstone lives (90 days). If you believe the entry should come back, ask the member; only after they
@@ -101,7 +105,12 @@ Every change set and draft carries an `Idempotency-Key` of 8 to 128 characters o
 - Keys are kept per client and member, not per installation: two installations of your client for
   one member share them. Random keys never collide.
 
-`401`, `403`, `429`, `5xx` and `409 MASS_CHANGE_CONFIRMATION_REQUIRED` are never cached.
+`401`, `403`, `413`, `429`, `5xx` and `409 MASS_CHANGE_CONFIRMATION_REQUIRED` are never cached, and
+neither are the answers about the key itself — `400 IDEMPOTENCY_KEY_MISSING`,
+`409 IDEMPOTENCY_IN_PROGRESS` and `422 IDEMPOTENCY_KEY_REUSED` — so a retry after
+`IDEMPOTENCY_IN_PROGRESS` gets the first request's answer once it is stored. An answer the server
+could not store — its store failed, or the answer exceeded 32 KiB — is not replayed either: a retry
+under the key runs the request again.
 
 ## Batches
 
@@ -143,6 +152,10 @@ A held batch writes nothing and answers `409 MASS_CHANGE_CONFIRMATION_REQUIRED` 
 }
 ```
 
+The URL carries a one-time handoff id, like a draft's `frontendUrl`: only the member the batch was
+held for can open it, but treat the id and the URL as a secret all the same — never log, store
+beyond the 30 minutes or share them, and redact them from diagnostics.
+
 Show the member the URL and **do not resend the batch**. The member reviews it in the browser within
 30 minutes and confirms or discards it; a newer held batch of your client replaces your older one for
 that member, while other clients' held batches stay. A held batch is
@@ -166,6 +179,7 @@ mass-change window of your client.
 | Requests | 1200 per minute | client, over all its members |
 | Account checks | 10 per hour | client and member |
 | Writes (change sets and drafts) | 500 per UTC day, or `limits.writesPerDay` | client and member |
+| Live DPoP proofs | 600 at a time, each live until about 30 to 40 seconds after its `iat` ([details](authentication.md#live-proofs-per-member)) | member, over all clients |
 
 Every attempt counts, retries and replays included. Admitted answers carry `RateLimit` and
 `RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out.
@@ -177,8 +191,11 @@ table, as the limit, and send a fresh DPoP proof with every request, retries inc
 
 - `429 RATE_LIMITED` and `429 QUOTA_EXCEEDED` carry `Retry-After` in seconds — for the quota, until
   the next UTC day. Wait at least that long.
-- `503 EXCHANGE_BUDGET_EXHAUSTED` and `503 SERVICE_UNAVAILABLE` carry `Retry-After` too; retry the
-  same request under the same key after it.
+- Every `503` of the gateway carries `Retry-After` too: 30 seconds for `EXCHANGE_DISABLED` and
+  `REGISTRY_UNAVAILABLE`, 60 for `EXCHANGE_BUDGET_EXHAUSTED`, and for `SERVICE_UNAVAILABLE` 60 when
+  a store cannot be reached, 30 when the daily write quota cannot be counted and 5 when the identity
+  provider cannot be reached. Wait at least that long and retry the same request under the same key;
+  read the header rather than these numbers.
 - `502 BACKEND_RELAY_FAILED` and a `503` without `Retry-After`: back off exponentially with jitter,
   starting at a few seconds, and retry under the same key.
 
