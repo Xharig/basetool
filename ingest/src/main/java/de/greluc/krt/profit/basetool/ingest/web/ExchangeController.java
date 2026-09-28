@@ -585,8 +585,9 @@ public class ExchangeController {
 
   /**
    * Checks a change set, relays it and checks the answer; a change set of more than {@value
-   * #LARGE_CHANGE_SET_OPS} ops is relayed within the large-set bulkhead, and one the backend's
-   * mass-change guard held back is staged for the member's confirmation.
+   * #LARGE_CHANGE_SET_OPS} ops is relayed within the large-set bulkhead, whose {@code RELAY_BUSY}
+   * refusal gives the write's quota count back, and one the backend's mass-change guard held back
+   * is staged for the member's confirmation.
    *
    * @param resource the resource's path segment
    * @param definition the change set's schema definition
@@ -626,6 +627,9 @@ public class ExchangeController {
         body.get("ops") instanceof ArrayNode ops && ops.size() > LARGE_CHANGE_SET_OPS
             ? relay.forwardLarge(HttpMethod.POST, target, body, context, acceptLanguage)
             : relay.forward(HttpMethod.POST, target, body, context, acceptLanguage);
+    if (ExchangeRefusals.RELAY_BUSY.equals(result.code())) {
+      quotas.refundCounted(request);
+    }
     if (!result.isOk() && MASS_CHANGE_CONFIRMATION_REQUIRED.equals(result.code())) {
       return staged(context, request, resource, body, result);
     }

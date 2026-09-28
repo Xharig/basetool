@@ -1309,7 +1309,8 @@ client, circuit breaker (`exchange`) and bulkhead, none shared with the extracto
 (`BackendImportClient`, breaker `backend`), so a burst of exchange writes cannot open the
 extractor's breaker. A change set of more than 100 ops takes one of four slots while it is
 relayed; without a free slot it is not relayed but answered `503 RELAY_BUSY` with
-`Retry-After: 10`, counted as `relay_busy`, and — a `5xx` — never cached for its key. A set of at
+`Retry-After: 10`, counted as `relay_busy`, and — a `5xx` — never cached for its key; like a
+budget refusal it gives its daily write-quota count back (owner decision 2026-09-28). A set of at
 most 100 ops needs no slot. The relay's read timeout is **30 s**, the extractor relay's 15 s: a
 500-op stock set took up to 10.6 s at p99 with four in flight on a member with about 15 000
 journal rows (4.2 s on fresh data), and past the timeout the gateway answered `502` while the
@@ -1402,7 +1403,8 @@ issues against the same user's key patterns and commands (REQ-SEC-068).
   change sets at once are refused before the backend. *`ExchangeRelayTest` (an open `backend`
   breaker leaves the relay working; a busy bulkhead refuses `RELAY_BUSY` without calling the
   backend; a failed set frees its slot), `ExchangeChangeRouteTest` (101 ops take a slot, 100 do
-  not; `RELAY_BUSY` carries `Retry-After: 10` and is not cached), `RestClientConfigTest` (the
+  not; `RELAY_BUSY` carries `Retry-After: 10`, is not cached and gives its quota count back, a
+  relayed set keeps it), `RestClientConfigTest` (the
   exchange client waits past 15 s; its timeout ends within the claim),
   `Resilience4jMetricsConfigTest`, `exchange_relay_capacity_alerts_test.yml`.*
 - [x] Parallel writes never overshoot a budget. *`ExchangeStoreRedisIntegrationTest`: sixteen

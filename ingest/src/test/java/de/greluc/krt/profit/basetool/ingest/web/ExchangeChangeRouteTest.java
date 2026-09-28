@@ -200,6 +200,16 @@ class ExchangeChangeRouteTest {
         .andExpect(jsonPath("$.code").value("RELAY_BUSY"));
 
     verify(idempotency, never()).store(anyString(), any());
+    verify(quotas).refundCounted(any());
+  }
+
+  @Test
+  void aRelayedChangeSetKeepsItsQuotaCount() throws Exception {
+    when(relay.forwardLarge(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+
+    post("/exchange/v1/me/blueprints/changes", removals(101)).andExpect(status().isOk());
+
+    verify(quotas, never()).refundCounted(any());
   }
 
   @Test
