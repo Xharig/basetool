@@ -1474,11 +1474,27 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       *`.github/workflows/sandbox-images.yml` builds `basetool-sandbox-{backend,frontend,ingest}`
       from the unchanged `docker/app/Dockerfile` plus the marker `docker/sandbox/SANDBOX`
       (`docker/sandbox/app.Dockerfile`) and `basetool-sandbox-keycloak` from
-      `docker/sandbox/keycloak/Dockerfile`; before publishing it proves each application image
-      refuses the `prod` profile (`SandboxProfileGuard`, which fails the start of any image carrying
-      the marker under `prod`) and fails on any secret Trivy finds. It publishes `edge` when run by
-      hand on `main` and the version and `latest` on a release tag; the production packages stay
-      private and untouched. The packages' public visibility is set once by the owner.*
+      `docker/sandbox/keycloak/Dockerfile`, all four through `docker buildx bake` on
+      `docker-compose.sandbox-build.yml`, for `linux/amd64` and `linux/arm64`, each natively on
+      its own runner. Before publishing it proves, on each platform's image, that an application
+      image refuses the `prod` profile (`SandboxProfileGuard`, which fails the start of any image
+      carrying the marker under `prod`) and fails on any secret Trivy finds. Every image carries
+      `org.opencontainers.image.revision` (the commit) and `org.opencontainers.image.created`; the
+      publish step joins both platforms under one tag and fails unless both carry the run's
+      commit. It publishes `edge` on every push to `main` that changes what the images contain
+      (a newer run cancels an older one), the version and `latest` on a release tag, and by hand
+      from either; the production packages stay private and untouched. The packages' public
+      visibility is set once by the owner.*
+- [x] An image built from a checkout (`--build`) is built like the published one and refuses
+      `prod` too. *`docker-compose.sandbox-build.yml` builds each application image from
+      `docker/sandbox/app.Dockerfile` on top of a build-only `<module>-base` service
+      (`additional_contexts: service:`), the same file CI builds from.*
+- [x] Every refusal a client must handle can be provoked in the sandbox. *The sandbox gateway
+      allows 6000 requests a minute per address (`APP_RATE_LIMIT_IP_CAPACITY` /
+      `APP_RATE_LIMIT_IP_REFILL_TOKENS` in `docker-compose.sandbox.yml`; production keeps 120),
+      so one member's flood reaches `429 DPOP_PROOF_LIMIT`; the seed puts the Basetool's eight
+      default blueprints into the catalogue, so removing one answers `DEFAULT_NOT_REMOVABLE`
+      instead of `UNMATCHED`. The smoke test checks both (`--proof-limit` for the flood).*
 - [x] The sandbox Keycloak image refuses to run as anything but `start-dev`, since its realm
       carries published throwaway secrets (security review 2, L4). *Its entrypoint
       `docker/sandbox/keycloak/entrypoint.sh` passes only `start-dev …` on to `kc.sh` and ends
@@ -1493,10 +1509,11 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       pulled without a registry login. It starts the sandbox with `scripts/sandbox.sh up` and runs
       `scripts/sandbox-smoke.py`: device login with DPoP through the sandbox Keycloak, a token bound
       to the key (`cnf.jkt`) for `basetool-ingest`, the service document, the installation, every
-      read resource, a resolve per kind, one blueprint, stock and ship sync, and with
-      `--conformance` every change-set fixture of `docs/exchange/examples/v1` (valid ones as dry
-      runs accepted, invalid ones refused); then the same without the fixtures as the second
-      member.*
+      read resource, a resolve per kind, one blueprint, stock and ship sync, the refused removal of
+      a default blueprint, with `--conformance` every change-set fixture of
+      `docs/exchange/examples/v1` (valid ones as dry runs accepted, invalid ones refused) and with
+      `--proof-limit` a flood until `429 DPOP_PROOF_LIMIT`; then the same without the fixtures and
+      the flood as the second member.*
 - [x] The E2E stack with the sandbox Keycloak and the ingest gateway, and the exchange round trip on
       it. *`E2eStackExtension`, `docker-compose.e2e.yml`, `ExchangeRoundTripE2eTest`, the
       `build-stack` job of `e2e.yml`; `E2ePrebuiltImageParityTest`, `build-sandbox-realm.py

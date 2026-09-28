@@ -44,8 +44,13 @@ the script as `powershell -ExecutionPolicy Bypass -File scripts/sandbox.ps1 up` 
 that one process only — or use PowerShell 7 (`pwsh`), which runs a script from a checkout under
 its default policy.
 
-The images are built for `linux/amd64` only. Docker Desktop on an Apple silicon Mac runs them under
-emulation, which is slower; building them locally (`--build`) has not been tried there.
+The images are published for `linux/amd64` and `linux/arm64`, so an Apple silicon Mac and an arm64
+Linux machine run them natively; Docker picks the right one. Each platform's image is built on its
+own platform and passes the same checks before it is published, but we run the sandbox itself on
+`amd64` only: the arm64 images are **not tested by us** beyond those checks.
+
+`--build` builds the images for your machine's platform. It needs Compose 2.37 or later, which
+builds one service's image on top of another's (`additional_contexts: service:`).
 
 ### Memory and disk
 
@@ -126,7 +131,9 @@ the next start is a clean sandbox. `up` on a running sandbox keeps its data and 
 again, which adds nothing that is already there but turns the exchange switch back on.
 
 To build the images from your checkout instead, add `--build` (Linux, macOS) or `-Build`
-(Windows). The first build takes several minutes. Locally built images are tagged `local`.
+(Windows). The first build takes several minutes. Locally built images are tagged `local`. They are
+built the way the published ones are, the application image with the sandbox marker on top, so
+they refuse the `prod` profile too.
 
 The scripts run this command line, which you can also use directly:
 
@@ -154,7 +161,7 @@ at once with exit code 64.
 
 | Tag | What it is |
 | --- | --- |
-| `edge` | The default. Built from `main` when the Basetool's maintainers publish it, which is not after every change: it can be older than `main`. |
+| `edge` | The default. Built from `main` after every change to what the images contain, so it trails `main` by the time a build takes. A change to anything else, such as these pages, the seed or the start scripts, publishes nothing: those come from your checkout. |
 | `X.Y.Z`, such as `1.13.0` | Built from the release tag `vX.Y.Z` — without the `v`. Published with every release from the first one that contains the sandbox; until then `edge` is the only tag. |
 | `latest` | The newest release. |
 
@@ -173,6 +180,18 @@ the images: the seeded accounts accept the Terms of Use version of the checkout,
 tables the images' database schema must have. Check out the release tag for an `X.Y.Z` image. On
 `main`, `edge` is the closest image — and when `main` has moved on since it was published, `--build`
 gives you exactly your checkout.
+
+**Which commit an image is.** Every image carries the commit it was built from in the label
+`org.opencontainers.image.revision`, and the build time in `org.opencontainers.image.created`:
+
+```sh
+docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+  ghcr.io/krt-profit/basetool-sandbox-backend:edge
+git merge-base --is-ancestor <that commit> HEAD && echo "the image is part of your checkout"
+```
+
+A published image without the label is older than the label itself; `reset` pulls the current one.
+Images you build with `--build` carry no revision: they are your checkout.
 
 **Updating.** `up` pulls the chosen tag every time, so after `git pull` run `reset`: it pulls the
 current images and starts with a fresh database. `up` alone replaces the containers whose image
@@ -347,10 +366,13 @@ exchange off. The gateway sees a change within about 5 seconds.
   refines into Sandbox Metal), Sandbox Metal (refined), Sandbox Trade Goods (a commodity) and
   Sandbox Component (counted in pieces); the items Sandbox Rifle and Sandbox Helmet; blueprints
   with the scmdb tags `BP_CRAFT_SBXM_RIFLE_01`, `BP_CRAFT_SBXM_HELMET_01` and
-  `BP_CRAFT_SBXM_KNIFE_01`. Nothing else: the catalogue imports of production do not run.
+  `BP_CRAFT_SBXM_KNIFE_01`; and the Basetool's eight default blueprints under their names, without
+  an scmdb tag: S-38 Magazine (20 cap), P4-AR Magazine (40 cap), Field Recon Suit Arms, Core, Helmet
+  and Legs, S-38 Pistol and P4-AR Rifle. Nothing else: the catalogue imports of production do not
+  run.
 - **Blueprints.** `sandbox-member` owns Sandbox Rifle and Sandbox Knife, `sandbox-member-2` owns
-  Sandbox Helmet. The Basetool's default blueprints (`isDefault: true` in the feed) are granted to
-  every member within a minute of the start.
+  Sandbox Helmet. The default blueprints (`isDefault: true` in the feed) are granted to every member
+  within a minute of the start.
 - **Personal stock of `sandbox-member`.** Sandbox Metal in the IRIDIUM pool and in the Sandbox
   Squadron pool at the same place and quality, so the two rows form one lot; Sandbox Trade Goods,
   Sandbox Component and Sandbox Ore (Raw) in no pool; one Sandbox Rifle. Part of the IRIDIUM row is
@@ -467,6 +489,12 @@ An `add` of the Sandbox Rifle from the first installation is refused per op as
 `REMOVED_ELSEWHERE`. The same op with `"override": true` is applied — send it only after the member
 agreed.
 
+**A default blueprint.** Once the defaults are granted, remove one, by its feed `key` or by name:
+`{"ops": [{"op": "remove", "key": "s-38 pistol"}]}` or
+`{"ops": [{"op": "remove", "ref": {"name": "S-38 Pistol"}}]}`. The op is refused:
+`results: [{"index": 0, "result": "rejected", "reason": "DEFAULT_NOT_REMOVABLE"}]`. Keep the entry
+and do not send the removal again; a dry run gives the same answer.
+
 ### The mass-change guard
 
 1. Create six ships in one change set (`upsert` without `shipId`), then pull them.
@@ -519,28 +547,45 @@ URL (see the scheme note above) and reviews the import.
 
 A `formatVersion` whose major is not 1, such as `2.0`, is refused `400 SCHEMA_INVALID` with
 `errors[]` at `/formatVersion` ([formats](formats.md)) — but only by images built since that refusal
-was added. An older image still answers `200`; if yours does, build from your checkout (`--build`)
-to test the refusal.
+was added. An older image still answers `200`; if yours does, check its
+[revision](#versions-and-updates), `reset` to pull the current `edge`, or build from your checkout
+(`--build`).
 
-### Scenarios the sandbox cannot show
+### The member's proof cap
 
-- **`429 DPOP_PROOF_LIMIT`.** All your requests reach the gateway from one address, and the gateway
-  allows 120 requests a minute per address before it checks the proof. That refuses a flood with
-  `429 RATE_LIMITED` long before a member holds 600 live proofs, even with the client's own limit
-  raised.
-- **`DEFAULT_NOT_REMOVABLE`.** The Basetool's default blueprints are not in the sandbox's catalogue,
-  so a `remove` of one is answered `UNMATCHED` instead.
+A member may hold 600 live DPoP proofs at a time, each for about 30 seconds
+([live proofs](authentication.md#live-proofs-per-member)). To see the refusal, send more than 600
+requests for one member within 30 seconds, each with a fresh proof — a tight loop over
+`GET /exchange/v1` does it.
+
+- Expect `200` until the client's per-member limit runs out, then `429 RATE_LIMITED`; those requests
+  still count their proofs.
+- Then `429 DPOP_PROOF_LIMIT` with `Retry-After`, the seconds until the member's oldest proof no
+  longer counts. Every client of that member is refused until then.
+
+`python3 scripts/sandbox-smoke.py --proof-limit` does it: on our machine the cap answered after 585
+requests in 19 seconds — 144 `200`, 440 `429 RATE_LIMITED`, then `429 DPOP_PROOF_LIMIT`.
+
+The sandbox gateway allows 6000 requests a minute per address; production allows 120 by default
+([rate limits](sync-guide.md#rate-limits-quota-and-back-off)), checked before the token. Production
+therefore refuses such a flood from one address with
+`429 RATE_LIMITED` long before the proof cap — the cap guards a member whose clients call from
+several addresses. Keep to the [rate limits](sync-guide.md#rate-limits-quota-and-back-off), and
+handle both answers.
 
 ## Checking the sandbox
 
 [`scripts/sandbox-smoke.py`][smoke] signs in as `sandbox-member` through the device flow with a DPoP
 key — opening the bare `verification_uri`, typing the code and checking that the code-entry and
 consent pages carry the phishing warning and the consent page the code — reads every resource,
-resolves one entry per kind and syncs one blueprint, stock lot and ship. With `--conformance` it
-also sends every change-set fixture of the [conformance examples](examples/README.md): valid ones as
-dry runs, which must be accepted, and invalid ones, which must be refused. It needs only Python 3
-and runs again on the same data; `--user` and `--password` pick another account. CI runs it against
-the published images after every release.
+resolves one entry per kind, syncs one blueprint, stock lot and ship, and checks that a default
+blueprint cannot be removed. With `--conformance` it also sends every change-set fixture of the
+[conformance examples](examples/README.md): valid ones as dry runs, which must be accepted, and
+invalid ones, which must be refused. With `--proof-limit` it finally floods the gateway until
+[the proof cap](#the-members-proof-cap) answers; the member is then refused for about 30 seconds.
+It needs only Python 3 and runs again on the same data; `--user` and `--password` pick another
+account, and `--demand withheld` expects the withheld org demand of `sandbox-member-2`. CI runs it
+against the published images after every publish and once a week.
 
 ```sh
 python3 scripts/sandbox-smoke.py --conformance
@@ -625,10 +670,6 @@ the seeded switch; wait at least `Retry-After`. Later it means an admin turned t
   too, compares it with the request: `http://host.docker.internal:18080/…/token` when you call that
   address, `http://127.0.0.1:18080/…/token` when you call this one.
 
-**In Windows PowerShell 5.1, the start script stops at Docker's first progress line** with
-`NativeCommandError` when you redirect its error stream, such as `2>&1`. Run it without
-redirection, or in PowerShell 7.
-
 **A scripted login loses its session at Keycloak.** Keycloak marks its cookies `Secure` even when
 it is called over plain HTTP at `127.0.0.1`, so a cookie jar that follows the rules drops them on
 the next plain-HTTP request. A browser at `host.docker.internal` is not affected. A script that
@@ -663,6 +704,10 @@ issue at [krt-profit/basetool][issues]. Never attach a credential of anything bu
 - **Not production's addresses.** The issuer, the gateway's address and the `htu` rule differ from
   production ([authentication](authentication.md)), which is why your client must pin the
   production issuer and switch everything together.
+- **Not production's per-address limit.** The sandbox gateway allows 6000 requests a minute per
+  address, production 120 by default, so that [the proof cap](#the-members-proof-cap) can be
+  reached from one machine. Test your back-off against the per-member limits, which are
+  production's.
 
 ## Maintaining the sandbox
 
@@ -676,6 +721,12 @@ E2E stack, which uses the same Keycloak image. Regenerate both after changing an
 scopes are read from a realm that the pinned Keycloak version created on its own; renew them when
 Keycloak is upgraded. The seed is [`docker/sandbox/seed.sql`][seed], safe to run twice.
 
+The images are built by [`sandbox-images.yml`][images-workflow] from
+[`docker-compose.sandbox-build.yml`][build-compose], the same file `--build` uses, for each platform
+on a runner of that platform. Before anything is published, each application image must refuse the
+`prod` profile, the Keycloak image every command but `start-dev`, and Trivy must find no secret;
+the published tag must hold both platforms with the run's commit as their revision.
+
 [adr-0139]: https://github.com/krt-profit/basetool/blob/main/docs/adr/0139-shared-committed-tls-material-for-the-test-stack.md
 [repo]: https://github.com/krt-profit/basetool
 [issues]: https://github.com/krt-profit/basetool/issues
@@ -686,3 +737,5 @@ Keycloak is upgraded. The seed is [`docker/sandbox/seed.sql`][seed], safe to run
 [builtin]: https://github.com/krt-profit/basetool/blob/main/scripts/keycloak/builtin-client-scopes.json
 [seed]: https://github.com/krt-profit/basetool/blob/main/docker/sandbox/seed.sql
 [smoke]: https://github.com/krt-profit/basetool/blob/main/scripts/sandbox-smoke.py
+[images-workflow]: https://github.com/krt-profit/basetool/blob/main/.github/workflows/sandbox-images.yml
+[build-compose]: https://github.com/krt-profit/basetool/blob/main/docker-compose.sandbox-build.yml
