@@ -203,7 +203,7 @@ on it.
 | R9 | The same, as the running ingest sees it | `for v in APP_INGEST_CLIENT_IDENTITY_ALLOWED_CLIENT_IDS APP_INGEST_CLIENT_IDENTITY_AUDIT_ONLY APP_INGEST_PUBLIC_BASE_URL; do printf '%s=' $v; ${UPOD} exec ingest printenv $v; done` | `basetool-sc-extractor`, `false`, `https://ingest.profit-base.online` · **TO BE READ on the day** (exec-based, gated). |
 | R10 | Android floor | `grep -E '^APP_ANDROID_(MINIMUM\|LATEST)_VERSION_CODE=[0-9]+$' $ENVF`; off the host: `curl -s https://api.profit-base.online/api/v1/app/version-policy` | `16` / `16` (vault *Android App*, 2026-09-25) · *Read 2026-09-28:* 16 / 16. |
 | R11 | Redis users in `.env` | `grep -cE '^REDIS_(BACKEND\|INGEST\|FRONTEND)_USERNAME=' $ENVF; grep -c '^REDIS_DEFAULT_USER=off$' $ENVF` | `3`; `1` (APPSEC-04 done 2026-09-25) · *Read 2026-09-28:* `3`; `1`. |
-| R12 | Keycloak realm shape (extractor, exchange scopes, provisioner client) | the snapshot read below the table | extractor `consent=f`, `dpop.bound.access.tokens=false`, default scopes incl. `extractor-ingest` and `extractor-ingest-only`; **no** `exchange.*` scope; no `versekit`, no `basetool-provisioner` · *Read 2026-09-28 in part (owner-approved exec):* realm login theme `krt-theme`, 0 `exchange.*` client scopes, 0 `versekit` clients. The full snapshot (the extractor's consent, DPoP and scope rows) **TO BE READ on the day**. |
+| R12 | Keycloak realm shape (extractor, exchange scopes, provisioner client) | the snapshot read below the table | extractor `consent=f`, `dpop.bound.access.tokens=false`, default scopes incl. `extractor-ingest` and `extractor-ingest-only`; **no** `exchange.*` scope; no `versekit`, no `basetool-provisioner`; no `mapper|basetool-sc-extractor|` row (optional cross-check of G5-L4) · *Read 2026-09-28 in part (owner-approved exec):* realm login theme `krt-theme`, 0 `exchange.*` client scopes, 0 `versekit` clients. The full snapshot (the extractor's consent, DPoP and scope rows) **TO BE READ on the day**. |
 | R13 | Last backup | `systemctl show iri-backup.service -p Result -p ExecMainExitTimestamp` | `success`, today 04:15 · *Read 2026-09-28:* `success`, 2026-09-28 04:17:40 UTC — re-read on the day. |
 | R14 | Extractor traffic to plan the announcement | Grafana → Basetool operations → panel 45 „Ingest calls/hour by client", last 7 days | how many sends a day the switch-off interrupts |
 | R15 | Firing alerts baseline | Grafana → Alerting | written down before S1 |
@@ -221,7 +221,7 @@ R12 — `scripts/keycloak-config-snapshot.sql` (read-only by its first statement
 ```powershell
 (Get-Content scripts\keycloak-config-snapshot.sql -Raw) -replace "`r","" |
   ssh root@46.225.24.180 'cd / && sudo -n -u iri podman exec -i db-keycloak sh -c "psql -qAt -U \$POSTGRES_USER -d \$POSTGRES_DB -p 15433 -f -"' |
-  Select-String -Pattern '^(client\|basetool-sc-extractor\||clientattr\|basetool-sc-extractor\|dpop|scopeuse\|basetool-sc-extractor\||scope\|exchange\.|client\|versekit\||client\|basetool-provisioner\|)'
+  Select-String -Pattern '^(client\|basetool-sc-extractor\||clientattr\|basetool-sc-extractor\|dpop|scopeuse\|basetool-sc-extractor\||mapper\|basetool-sc-extractor\||scope\|exchange\.|client\|versekit\||client\|basetool-provisioner\|)'
 ```
 
 ---
@@ -678,7 +678,13 @@ files under `/root/kc-realm/`, and a kcadm session file on the Keycloak tmpfs.
     `web-origins`, `acr` withheld; optional scopes the five extractor exchange scopes plus
     `offline_access`, the rest withheld; the loopback redirect URIs and the code flow gone if still
     there;
-  - **no** `versekit` line (the empty list); if one appears, the flag is missing — stop.
+  - **no** `versekit` line (the empty list); if one appears, the flag is missing — stop;
+  - **no** `- basetool-sc-extractor: mapper '…' (…) removed` line is expected (the reference realm
+    shows no client-level mapper on the extractor). If one appears, it is an ordinary planned change
+    that S15 removes (ADR-0202 amendment 4, G5-L4): note its type and target and go on — the
+    extractor needs no mapper of its own. Since that fix the provisioner never lists such a mapper
+    under `[only on this realm]`; if a `basetool-sc-extractor: mapper` line shows up there, the
+    copied script predates it — stop.
   No line may touch `basetool-frontend`'s type or secret, `basetool-android`, `backend-service` or
   `basetool-ingest-gateway`. `[only on this realm]` may list `basetool-provisioner` and `grafana`.
 - **Watch:** nothing moves — a dry run only reads.
@@ -799,6 +805,8 @@ every extractor token is; the approval must name it.
   ```
 - **Expected:** `[apply]`, `[verify] re-planning …`, `Applied. A second run reports no changes.`,
   `exit=0`; the second (dry) run: `The realm is in the production shape. Nothing to do.`, `exit=0`.
+  A clean verify also means no client-level mapper is left on the extractor: one that stayed would
+  fail it as `STILL PLANNED`.
   `exit=3` with `[manual]` means a service-account role to assign by hand — none is expected.
 - **Keep the session open** for S16; the clean-up is at S16's end.
 - **Verify:**
@@ -806,7 +814,8 @@ every extractor token is; the approval must name it.
     `clientattr|basetool-sc-extractor|dpop.bound.access.tokens=true`, `scopeuse|basetool-sc-extractor|basic|default`,
     five `exchange.*` and `offline_access` as `optional`, **no** `extractor-ingest` /
     `extractor-ingest-only` row for the extractor; ten `scope|exchange.…` rows; **no**
-    `client|versekit`; `basetool-provisioner` present until S16's clean-up.
+    `client|versekit`; `basetool-provisioner` present until S16's clean-up. *Optional
+    cross-check:* **no** `mapper|basetool-sc-extractor|…` row (R12's filter includes it).
   - **A real device login** with 2.10.0 on the owner's PC: the browser opens once, the device page
     warns and shows the code, the **consent page lists the five capabilities and the user code**
     (ADR-0228), the extractor asks for the installation's name, a blueprint send lands as a draft;
