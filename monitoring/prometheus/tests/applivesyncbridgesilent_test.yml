@@ -19,7 +19,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: "App live-sync bridge silent (web changes are not reaching the app)"
-              description: "The web frontend has been publishing live-sync changed frames for 30 minutes and the backend has consumed none, while app live-sync streams are open — so a browser edit never reaches the app and an app write never reaches a browser, with no error on either side. Check app.live-sync.redis-fanout.enabled on the backend (must be true in prod), that its channel is the frontend's basetool:livesync:changed and not a channel of its own, and the Redis default-user ACL (`&*` for PUBLISH/SUBSCRIBE)."
+              description: "The web frontend has been publishing live-sync changed frames for 30 minutes and the backend has consumed none, while app live-sync streams are open — so a browser edit never reaches the app and an app write never reaches a browser, with no error on either side. Check app.live-sync.redis-fanout.enabled on the backend (must be true in prod), that its channel is the frontend's basetool:livesync:changed and not a channel of its own, and that the basetool-backend ACL user is granted that channel with PUBLISH/SUBSCRIBE (the default user while REDIS_BACKEND_USERNAME is unset)."
 
   - name: fires - consumed counter exists but has flatlined
     interval: 1m
@@ -38,7 +38,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: "App live-sync bridge silent (web changes are not reaching the app)"
-              description: "The web frontend has been publishing live-sync changed frames for 30 minutes and the backend has consumed none, while app live-sync streams are open — so a browser edit never reaches the app and an app write never reaches a browser, with no error on either side. Check app.live-sync.redis-fanout.enabled on the backend (must be true in prod), that its channel is the frontend's basetool:livesync:changed and not a channel of its own, and the Redis default-user ACL (`&*` for PUBLISH/SUBSCRIBE)."
+              description: "The web frontend has been publishing live-sync changed frames for 30 minutes and the backend has consumed none, while app live-sync streams are open — so a browser edit never reaches the app and an app write never reaches a browser, with no error on either side. Check app.live-sync.redis-fanout.enabled on the backend (must be true in prod), that its channel is the frontend's basetool:livesync:changed and not a channel of its own, and that the basetool-backend ACL user is granted that channel with PUBLISH/SUBSCRIBE (the default user while REDIS_BACKEND_USERNAME is unset)."
 
   - name: silent - frames are crossing
     interval: 1m
