@@ -338,6 +338,10 @@
 
 ### Fixed
 
+- **Ingest: Produktion startet nur mit eigenem Redis-Benutzer.** Unter `prod` verweigert das
+  Gateway den Start, wenn `REDIS_INGEST_USERNAME` leer oder `default` ist; so kann es nie als
+  `default` die Registry oder die Sperrlisten des Datenaustauschs verändern.
+
 - **Datenaustausch: abgewiesenes Zurücknehmen blockiert nichts mehr.** Ist die Warteschlange für
   das Zurücknehmen bei allen Mitgliedern voll (zehn Läufe), wird der neue Lauf sofort als
   fehlgeschlagen vermerkt und der Admin bekommt eine Meldung; bisher blieb er bis zum nächsten

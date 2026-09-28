@@ -4828,6 +4828,12 @@ its service does:
 - **Merging changes nothing for the applications.** A service uses its own user only when its
   `REDIS_<SVC>_USERNAME` is set; empty, it sends a password-only `AUTH` with the shared
   `REDIS_PASSWORD`, which is `default`, exactly as before.
+- **Except the gateway in production.** Under `prod` the ingest gateway refuses to start when
+  `spring.data.redis.username` — `REDIS_USERNAME` in `application.yml`, which the compose file and
+  `quadlet/env.d/ingest.env.tmpl` fill from `REDIS_INGEST_USERNAME` — is blank or `default`
+  (`RedisUsernameGuard`): as `default` the internet-facing gateway could rewrite the exchange
+  registry and delete the deny list and revocations, and the `%R~exchange:*` guarantee would come
+  from the environment alone (security review G5, I3). Backend and frontend keep the fallback.
 - **Nothing depends on the ACL state that must not.** The server carries `--notify-keyspace-events
   Egx`, and the health probe is an unauthenticated `PING` accepting `NOAUTH`.
 - **A correctly configured service sends no command its user is refused — at startup included.**
@@ -4860,6 +4866,9 @@ its service does:
   by design and is refused `CONFIG SET`.*
 - [x] A password-only `AUTH` works while `default` is on and fails once it is off.
   *`RedisAclFrontendIntegrationTest`.*
+- [x] Under `prod` the gateway refuses to start with a blank or `default` Redis username, read
+  through the shipped `application.yml`; `dev` and `test` keep the fallback.
+  *`RedisUsernameGuardTest`.*
 - [x] The committed E2E ACL equals the template rendered with the E2E passwords, and the E2E stack
   runs every application on its own user with `default` off.
   *`RedisAclFrontendIntegrationTest#theCommittedE2eAclIsTheTemplate`, `E2eStackExtension`.*
