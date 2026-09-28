@@ -56,7 +56,7 @@ groups:
           severity: warning
         annotations:
           summary: "Frontend->Keycloak token backchannel failing (PrematureClose)"
-          description: "The frontend logs a sustained rate of PrematureCloseException against the Keycloak token endpoint — refresh grants are being lost and logins may fail. 2026-07-22 pattern: a transient L4 fault on the public hairpin stalled token POST bodies; the edge reaped each attempt after ~60s. Check the hairpin path (NPM, conntrack) and frontend re-auth rates."
+          description: "The frontend logs a sustained rate of PrematureCloseException against the Keycloak token endpoint — refresh grants are being lost and logins may fail. 2026-07-22 pattern: a transient L4 fault on the public hairpin stalled token POST bodies; the edge reaped each attempt after ~60s. Check the hairpin path (the public name's host-gateway alias, ADR-0196, the haproxy front end and the edge; conntrack) and frontend re-auth rates."
 
       - alert: HealthContributorHanging
         expr: 'sum by (app) (count_over_time({app=~"backend|frontend"} |~ "Health contributor .+ took" [10m])) > 0'

@@ -702,7 +702,7 @@ groups:
           severity: warning
         annotations:
           summary: "Ingest oversized-payload rejections spiking"
-          description: "The ingest gateway is refusing oversized /v1 request bodies (413) at an elevated rate — likely an oversized-body probing / DoS attempt against the public ingest surface, or a misconfigured client. Check the NPM edge and the fail2ban jails."
+          description: "The ingest gateway is refusing oversized /v1 request bodies (413) at an elevated rate — likely an oversized-body probing / DoS attempt against the public ingest surface, or a misconfigured client. Read the source addresses in the edge log ({app=\"edge\"}, the ingest vhost); the edge rate-limits per source address, and fail2ban on this host guards SSH only."
 
       - alert: IngestUnknownClient
         expr: sum by (reason) (rate(basetool_ingest_client_rejected_total[10m])) > 0
