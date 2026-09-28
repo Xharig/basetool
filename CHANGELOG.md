@@ -210,6 +210,10 @@
 
 ### Changed
 
+- **Blueprints: Herkunft nennt die Anwendung beim Namen.** „Über …“ in der Detailansicht zeigt den
+  registrierten Namen der verbundenen Anwendung statt ihrer Client-ID; ist sie nicht mehr
+  registriert, bleibt die ID. Die Blueprint-Antworten (auch die Admin-Ansicht) tragen dafür
+  `sourceClientName` (REQ-INV-054, #2231).
 - **Datenaustausch: eigener Code für die DPoP-Obergrenze.** Hält ein Mitglied schon 600 lebende
   DPoP-Nachweise, antwortet das Gateway mit `429 DPOP_PROOF_LIMIT` und `Retry-After` statt mit dem
   `401 DPOP_INVALID` eines wiederholten Nachweises (REQ-XCH-006).
