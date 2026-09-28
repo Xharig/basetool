@@ -329,16 +329,33 @@ gateway instead keeps one `DpopProofReplayStore` for the exchange routes and one
 route, and inside each counts the live proofs per member (the access token's `sub`; a token without
 one by its proof key). A member holds at most `app.exchange.limits.dpop-proofs-per-member` (**600**)
 live proofs, a store at most `app.exchange.limits.dpop-proofs-total` (**100 000**). A proof is kept
-until its `iat` plus 30 s, so a client at the default 120 requests a minute holds about 120 at once
-and 600 covers several clients of one member; a member over the cap is refused `401 DPOP_INVALID`
-without affecting anyone else, and filling a store takes more than 160 members at their cap. A
-registry `requestsPerMinute` far above the default may need a larger per-member cap. Refusals are
-counted as `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`,
-`full`) and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on
-any `full`. A proof refused for either cap gets the same answer as a replayed one — `401
-DPOP_INVALID`, `error="invalid_dpop_proof"`, the same `detail` — so a client cannot tell them apart;
-the developer site documents both caps and tells a client to pause a member's requests for at least
-40 s when a proof it knows is fresh is refused (`docs/exchange/authentication.md`).
+until its `iat` plus 30 s, so a client at the default 120 requests a minute holds about 60 at once
+and 600 covers several clients of one member; filling a store takes more than 160 members at their
+cap. A registry `requestsPerMinute` far above the default may need a larger per-member cap.
+
+**The cap has its own answer** (owner decision 2026-09-27). On an exchange route a member over its
+cap gets `429 DPOP_PROOF_LIMIT` with `Retry-After`: the whole seconds until the member's earliest
+live proof no longer counts, rounded up and at least 1. Before checking the cap, the store drops
+that member's expired proofs, so the answer is exact and does not wait for the ten-second sweep.
+The refused proof takes no room. The seam: the store's member view remembers why it refused a
+proof, and `ExchangeDpopProofValidation.capRefusals` turns Spring's generic replay error into a
+`DpopProofLimitError` when that reason is the cap; `SecurityProblemResponseHandler` finds it in the
+cause chain.
+
+**A full store has its own answer too** (owner decision 2026-09-28). On an exchange route a proof
+refused because the store holds its total cap gets `503 SERVICE_UNAVAILABLE` with `Retry-After`:
+the whole seconds until the store's earliest live proof no longer counts, rounded up and at least 1,
+read after a sweep of the expired proofs. The refused proof takes no room. It travels the same seam
+as a `DpopProofStoreFullError`. A replayed proof stays `401 DPOP_INVALID` with
+`error="invalid_dpop_proof"`; the legacy routes, which the exchange error registry does not govern,
+keep that answer for both caps. Refusals are counted as
+`basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`, `full`)
+and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on any
+`full`. The auth-failure counter records the exchange cap as `dpop_proof_limit` and the full store
+as `dpop_store_full`, apart from `invalid_dpop_proof`, so `ExchangeDpopProofsFailing` fires on
+neither. Sustained cap refusals raise `ExchangeDpopProofLimitSustained` (warning, owner decision
+2026-09-28): more than 3 a minute over 10 minutes, for 15 minutes, which a single burst cannot
+reach.
 
 **Acceptance**
 
@@ -348,10 +365,17 @@ the developer site documents both caps and tells a client to pause a member's re
 - [x] A member at the cap is refused while another member and the other path scope still pass; a
   proof without the nonce stores nothing; an unreadable or pathless target needs the nonce
   (`DpopProofReplayStoreTest`).
-- [x] Through the whole gateway, a member over the cap gets exactly the answer of a replayed proof,
-  and another member still passes (`ExchangeDpopMemberCapTest`).
+- [x] Through the whole gateway, a member over the cap gets `429 DPOP_PROOF_LIMIT` with
+  `Retry-After`, a replayed proof still gets `401 DPOP_INVALID`, and another member still passes
+  (`ExchangeDpopMemberCapTest`); the store answers the seconds until the member's earliest proof
+  expires, drops the member's expired proofs before the cap check and takes no room for a refused
+  proof (`DpopProofReplayStoreTest`).
+- [x] A full store answers the seconds until its earliest proof expires and takes no room, the
+  verifier reports it as `DpopProofStoreFullError` while a replay stays `invalid_dpop_proof`
+  (`DpopProofReplayStoreTest`), and the entry point writes `503 SERVICE_UNAVAILABLE` with that
+  `Retry-After`, the nonce and no challenge (`SecurityProblemResponseHandlerTest`).
 
-**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest`, `ExchangeDpopMemberCapTest` · **Status:** built — WP 3.2
+**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest`, `ExchangeDpopMemberCapTest`, `SecurityProblemResponseHandlerTest` · **Status:** built — WP 3.2
 (#2082); the partitioned replay cache and the fail-closed nonce scope — security review 2 (#2092)
 
 ### REQ-XCH-007 — Installations are identified by their DPoP key and labelled by the client
@@ -875,9 +899,21 @@ REQ-INGEST-004 requires today; nothing is written until the member confirms.
   uploads or another client's drafts. *`HandoffStagingServiceTest`.*
 - [x] The backend previews a blueprint draft as an upload would and writes nothing; each draft
   needs its own capability. *`ExchangeDraftControllerTest`.*
+- [x] A blueprint envelope of a `formatVersion` major other than 1 is refused by the gateway with
+  `errors[]` at `/formatVersion` before the relay, and by the backend on the draft route and in the
+  web import; any `1.x` passes. *`ExchangeDraftRouteTest`, `ExchangeDraftControllerTest`.*
 
 The gateway checks a draft against `blueprint-draft.schema.json` or `refinery-draft.schema.json`
-(`SCHEMA_INVALID`) and relays it to `POST /api/v1/exchange/me/drafts/blueprints` or
+(`SCHEMA_INVALID`). **A blueprint envelope's `formatVersion` must have the major `1`** (owner
+decision 2026-09-28): every `1.x` is read, a later minor only adds optional fields, and any other
+major — the part before the dot must be exactly `1` — is refused. The schema is not narrowed, since
+narrowing a `pattern` would break the v1 promise that schemas only grow; its description states the
+rule, and the gateway checks it right after the schema, answering `400 SCHEMA_INVALID` with
+`errors[{pointer:"/formatVersion", message:"unsupported major version"}]` before anything is
+relayed. The backend checks it again: `ExchangeBlueprintDraftDto.formatVersion` carries
+`@Pattern("^1\.[0-9]+$")` (a relayed refusal reaches the client as `SCHEMA_INVALID`), and the web
+import refuses a well-formed other major with the localised
+`error.personalBlueprint.formatVersionUnsupported` (REQ-INV-014). The gateway relays the draft to `POST /api/v1/exchange/me/drafts/blueprints` or
 `…/refinery-orders` (`exchange.drafts.blueprints` / `exchange.drafts.refinery`). The backend builds
 exactly what the extractor's upload builds: for blueprints it resolves each `ref` as
 `catalog/resolve` does and previews a resolved ref under its product's name and any other under the
@@ -1252,6 +1288,9 @@ and the account check before a new game account's first sync. Three more are app
 ship links and the cursors are kept per installation and idempotency keys are random; the member
 is shown `detachedFromMissions`, `offersReduced` and `offersRemoved` when a sync reports them; and
 every ship `upsert` sends the ship's current `name` and `location`, since an omitted one is cleared.
+Two numbers are binding too (owner decision 2026-09-27): a retry backs off from **5 s**, doubling up
+to at most **5 min**, with random jitter, and never waits less than the answer's `Retry-After`; a
+client syncs on start and after a local change, and a timed sync runs at most every **5 min**.
 A sandbox demonstration is recommended, not a criterion. The checklist is
 `docs/exchange/client-security.md`; the application template asks for each point.
 

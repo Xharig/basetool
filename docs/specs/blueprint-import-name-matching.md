@@ -100,7 +100,11 @@ document, the Basetool Blueprint Extractor `BlueprintExport` document (`schemaVe
 `format`, previewed as the exchange's blueprint draft is — each `items[].ref` resolved as
 `catalog/resolve` resolves it — and refused with `400` when it breaks its shape (at most 2000 items,
 every item with a `ref`); `generator`, `generatedAt`, `provenance` and `extensions` are ignored
-(owner decision 2026-09-27), and so is `formatVersion`, so any `<major>.<minor>` is read as 1.0.
+(owner decision 2026-09-27). `formatVersion` may be absent; when present it must be a `1.x`:
+every minor of major 1 is read as 1.0, a well-formed version of another major is refused with the
+localised message `error.personalBlueprint.formatVersionUnsupported`, and a malformed one as a
+broken envelope (owner decision 2026-09-28, REQ-XCH-019). *Until 2026-09-28 the field was ignored
+and any `<major>.<minor>` read as 1.0.*
 Every upload is at most 8 MiB: the frontend proxy (`PersonalBlueprintImportProxyController`) and
 `BlueprintExportParser` refuse a larger file before reading it. In every document form only
 the top-level `blueprints` array is consumed; every other envelope field is tolerated and ignored
@@ -153,8 +157,10 @@ entry level (`BlueprintExportEntryDto`):
 `preview_acceptsBpExtractorWithAdditionalSourceFolders`,
 `preview_acceptsBpExtractorWithNullAdditionalSourceFolders`, `preview_acceptsScmdbNetNameAlias`,
 `preview_acceptsFullScmdbNetProfileExportIgnoringMissions`, `preview_skipsNotCompletedScmdbNetEntries`,
-`preview_acceptsBareArrayOfScmdbNetEntries`) · **Code:** `BlueprintExportFileDto`,
-`BlueprintExportEntryDto`, `BlueprintExportParser#parse` (called from `BlueprintImportService`) ·
+`preview_acceptsBareArrayOfScmdbNetEntries`), `ExchangeDraftControllerTest`
+(`theWebImportReadsTheEnvelopeAndStillTheOldExport`) · **Code:** `BlueprintExportFileDto`,
+`BlueprintExportEntryDto`, `BlueprintExportParser#parse` (called from `BlueprintImportService`),
+`BlueprintUploadPreviewService` (the envelope) ·
 **Issues:**
 [#327](https://github.com/krt-profit/basetool/issues/327)
 

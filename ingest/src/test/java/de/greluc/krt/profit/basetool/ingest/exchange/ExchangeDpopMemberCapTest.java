@@ -27,8 +27,10 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.nimbusds.jose.jwk.ECKey;
+import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
@@ -47,9 +49,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
- * Pins the refusal a client sees when its member holds too many live DPoP proofs (REQ-XCH-006): the
- * same {@code 401 DPOP_INVALID} with {@code error="invalid_dpop_proof"} as a replayed proof, while
- * another member still passes.
+ * Pins the refusal a client sees when its member holds too many live DPoP proofs (REQ-XCH-006):
+ * {@code 429 DPOP_PROOF_LIMIT} with {@code Retry-After}, while a replayed proof stays {@code 401
+ * DPOP_INVALID} and another member still passes.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
@@ -61,6 +63,7 @@ class ExchangeDpopMemberCapTest {
   private static final String OTHER_TOKEN = "other-member-token";
 
   @Autowired private WebApplicationContext context;
+  @Autowired private MeterRegistry meterRegistry;
 
   @MockitoBean private JwtDecoder jwtDecoder;
   @MockitoBean private BackendImportClient backendImportClient;
@@ -105,27 +108,64 @@ class ExchangeDpopMemberCapTest {
   }
 
   @Test
-  void aMemberOverTheCapGetsTheSameRefusalAsAReplayedProof() throws Exception {
+  void aMemberOverTheCapGets429WithRetryAfterWhileAReplayStaysDpopInvalid() throws Exception {
     String first = ExchangeTestSupport.proof(key, TOKEN, "GET", STOCK, nonce(key, TOKEN));
     assertThat(call(TOKEN, first).getStatus()).isEqualTo(200);
     assertThat(call(TOKEN, fresh(key, TOKEN)).getStatus()).isEqualTo(200);
 
     MockHttpServletResponse capped = call(TOKEN, fresh(key, TOKEN));
+
+    assertThat(capped.getStatus()).isEqualTo(429);
+    assertThat(Long.parseLong(capped.getHeader(HttpHeaders.RETRY_AFTER))).isBetween(1L, 31L);
+    assertThat(capped.getHeader(HttpHeaders.WWW_AUTHENTICATE)).isNull();
+    assertThat(capped.getHeader(ExchangeTokenGateFilter.DPOP_NONCE_HEADER)).isNotBlank();
+    assertThat(capped.getContentAsString())
+        .contains("\"status\":429")
+        .contains("\"code\":\"DPOP_PROOF_LIMIT\"")
+        .contains(
+            "\"detail\":\"The member holds too many live DPoP proofs; retry after Retry-After.\"");
+    assertThat(refused("dpop_proof_limit")).isEqualTo(1.0d);
+    assertThat(authFailures("dpop_proof_limit")).isEqualTo(1.0d);
+
     MockHttpServletResponse replayed = call(TOKEN, first);
 
-    for (MockHttpServletResponse refusal : new MockHttpServletResponse[] {capped, replayed}) {
-      assertThat(refusal.getStatus()).isEqualTo(401);
-      assertThat(refusal.getHeader(HttpHeaders.WWW_AUTHENTICATE))
-          .startsWith("DPoP algs=")
-          .endsWith("error=\"invalid_dpop_proof\"");
-      assertThat(refusal.getHeader(ExchangeTokenGateFilter.DPOP_NONCE_HEADER)).isNotBlank();
-      assertThat(refusal.getContentAsString())
-          .contains("\"code\":\"DPOP_INVALID\"")
-          .contains("\"detail\":\"The DPoP proof is invalid, replayed or bound to another key.\"");
-    }
-    assertThat(capped.getContentAsString().replaceAll("\"correlationId\":\"[^\"]*\"", ""))
-        .isEqualTo(replayed.getContentAsString().replaceAll("\"correlationId\":\"[^\"]*\"", ""));
+    assertThat(replayed.getStatus()).isEqualTo(401);
+    assertThat(replayed.getHeader(HttpHeaders.RETRY_AFTER)).isNull();
+    assertThat(replayed.getHeader(HttpHeaders.WWW_AUTHENTICATE))
+        .startsWith("DPoP algs=")
+        .endsWith("error=\"invalid_dpop_proof\"");
+    assertThat(replayed.getContentAsString()).contains("\"code\":\"DPOP_INVALID\"");
     assertThat(call(OTHER_TOKEN, fresh(otherKey, OTHER_TOKEN)).getStatus()).isEqualTo(200);
+  }
+
+  /**
+   * Reads the exchange refusal counter of a reason for tokens outside the registry's clients.
+   *
+   * @param reason the reason label
+   * @return the count
+   */
+  private double refused(@NotNull String reason) {
+    return meterRegistry
+        .get(MetricNames.EXCHANGE_REFUSED)
+        .tag(MetricNames.TAG_REASON, reason)
+        .tag(MetricNames.TAG_CLIENT_ID, MetricNames.EXCHANGE_CLIENT_NONE)
+        .counter()
+        .count();
+  }
+
+  /**
+   * Reads the exchange auth-failure counter of a reason.
+   *
+   * @param reason the reason label
+   * @return the count
+   */
+  private double authFailures(@NotNull String reason) {
+    return meterRegistry
+        .get(MetricNames.INGEST_AUTH_FAILURES)
+        .tag(MetricNames.TAG_REASON, reason)
+        .tag(MetricNames.TAG_PATH_SCOPE, MetricNames.PATH_SCOPE_EXCHANGE)
+        .counter()
+        .count();
   }
 
   /**

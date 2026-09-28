@@ -179,7 +179,8 @@ mass-change window of your client.
 | Requests | 1200 per minute | client, over all its members |
 | Account checks | 10 per hour | client and member |
 | Writes (change sets and drafts) | 500 per UTC day, or `limits.writesPerDay` | client and member |
-| Live DPoP proofs | 600 at a time, each live until about 30 to 40 seconds after its `iat` ([details](authentication.md#live-proofs-per-member)) | member, over all clients |
+| Live DPoP proofs | 600 at a time, each live until just after 30 seconds past its `iat` (`429 DPOP_PROOF_LIMIT`, [details](authentication.md#live-proofs-per-member)) | member, over all clients |
+| Live DPoP proofs | 100 000 at a time (`503 SERVICE_UNAVAILABLE`) | gateway, over all members |
 
 Every attempt counts, retries and replays included. Admitted answers carry `RateLimit` and
 `RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out.
@@ -189,18 +190,32 @@ as is the DPoP `jti` replay check; the daily write quota is shared. The Basetool
 gateway instance, so the table above is what you get; still treat the `RateLimit` headers, not the
 table, as the limit, and send a fresh DPoP proof with every request, retries included.
 
-- `429 RATE_LIMITED` and `429 QUOTA_EXCEEDED` carry `Retry-After` in seconds — for the quota, until
-  the next UTC day. Wait at least that long.
+- `429 RATE_LIMITED`, `429 DPOP_PROOF_LIMIT` and `429 QUOTA_EXCEEDED` carry `Retry-After` in
+  seconds — for the quota, until the next UTC day. Wait at least that long.
 - Every `503` of the gateway carries `Retry-After` too: 30 seconds for `EXCHANGE_DISABLED` and
   `REGISTRY_UNAVAILABLE`, 60 for `EXCHANGE_BUDGET_EXHAUSTED`, and for `SERVICE_UNAVAILABLE` 60 when
-  a store cannot be reached, 30 when the daily write quota cannot be counted and 5 when the identity
-  provider cannot be reached. Wait at least that long and retry the same request under the same key;
-  read the header rather than these numbers.
-- `502 BACKEND_RELAY_FAILED` and a `503` without `Retry-After`: back off exponentially with jitter,
-  starting at a few seconds, and retry under the same key.
+  a store cannot be reached, 30 when the daily write quota cannot be counted, 5 when the identity
+  provider cannot be reached, and the seconds until the earliest live proof no longer counts when
+  all members together hold the gateway's cap of live DPoP proofs. Wait at least that long and
+  retry the same request under the same key; read the header rather than these numbers.
+- `502 BACKEND_RELAY_FAILED`, a `503` without `Retry-After` and a network error: back off as below
+  and retry under the same key.
 
-Never retry in a tight loop, and never sync more often than the member's use needs: a sync on start,
-on a local change and every few minutes while the client is open is plenty.
+### Back-off and sync cadence
+
+These numbers are binding; an application is checked against them
+([client security](client-security.md#sync-behaviour)).
+
+- **Back-off.** After a refused or failed request, the first wait is **5 seconds**, and each
+  further failure of the same request doubles it, up to at most **5 minutes**. Add random jitter to
+  every wait, so that installations do not retry in step. Every wait is **at least the
+  `Retry-After`** of the answer, when it carries one, even where that is longer than 5 minutes (the
+  daily quota). A success ends the back-off; the next failure starts again at 5 seconds.
+- **Sync cadence.** Sync on start and after a local change; beyond that, a timed sync runs **at
+  most every 5 minutes** while the client is open. Coalescing local changes that arrive close
+  together into one sync is recommended.
+
+Never retry in a tight loop, and never sync more often than the member's use needs.
 
 ## Undo
 

@@ -3,8 +3,33 @@
 Changes to the Exchange API contract, newest first. Every change within `v1` is additive
 ([versioning](versioning.md)).
 
+## 2026-09-28
+
+- **A full proof store answers `503 SERVICE_UNAVAILABLE`.** When all members together hold the
+  gateway's 100 000 live DPoP proofs, a proof is no longer refused like a replayed one
+  (`401 DPOP_INVALID`) but with `503 SERVICE_UNAVAILABLE` and `Retry-After`, the seconds until the
+  earliest live proof no longer counts ([errors](errors.md),
+  [authentication](authentication.md#live-proofs-per-member)). A client already handles the code
+  by its status: wait `Retry-After`, then retry.
+- **New approval criteria: back-off and sync cadence numbers.** "A few seconds" and "every few
+  minutes" are replaced by binding numbers: retries back off from 5 seconds, doubling up to at most
+  5 minutes, with random jitter and never less than `Retry-After`; a client syncs on start and after
+  a local change, and a timed sync runs at most every 5 minutes
+  ([sync guide](sync-guide.md#back-off-and-sync-cadence), [client security](client-security.md)).
+- **A `formatVersion` major other than 1 is refused.** A blueprint draft whose `formatVersion` is not
+  a `1.x` gets `400 SCHEMA_INVALID` with `errors[]` at `/formatVersion` ("unsupported major
+  version"), and the web import refuses such a file; every `1.x` is still read
+  ([formats](formats.md#offline-file--envelope), [drafts](resources/drafts.md#errors)). The schema
+  is unchanged; its description states the rule. Until now the field was not read, and `2.0` was
+  read as `1.0`.
+
 ## 2026-09-27
 
+- **New code `429 DPOP_PROOF_LIMIT`.** A proof whose member already holds 600 live proofs is no
+  longer refused like a replayed one (`401 DPOP_INVALID`) but with `429 DPOP_PROOF_LIMIT` and
+  `Retry-After`, the seconds until the member's earliest live proof no longer counts
+  ([errors](errors.md), [authentication](authentication.md#live-proofs-per-member)). A new code is
+  additive in `v1`; a client that does not know it handles it by its status, `429`.
 - **More approval criteria.** An application is now also checked for: a Linux fallback key
   file in a `0700` directory; baseline, ship links and cursors kept per installation and random
   idempotency keys; showing `detachedFromMissions`, `offersReduced` and `offersRemoved` to the
@@ -26,9 +51,8 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   `https://krt-profit.github.io/basetool/exchange/`, which does not exist. The gateway sends the
   site root, `https://krt-profit.github.io/basetool/`.
 - **Documented: the cap on live DPoP proofs.** A member holds at most 600 live proofs over all
-  clients; a proof over the cap is refused like a replayed one, `401 DPOP_INVALID` with
-  `invalid_dpop_proof` ([authentication](authentication.md#live-proofs-per-member)). The cap existed
-  before; only the page is new.
+  clients ([authentication](authentication.md#live-proofs-per-member)). The cap existed before;
+  only the page is new.
 - **Documented: the problem fields.** The [error registry](errors.md#the-problem-document) lists
   which fields a problem carries and when, and the `X-Correlation-Id` header. `retryAfterSeconds` is
   reserved and not sent. `problem.schema.json` allows a `correlationId` of up to 128 characters

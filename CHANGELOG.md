@@ -12,6 +12,9 @@
   verbundener Anwendung (Metriken und Gateway-Logs); Gateway-Logzeilen tragen Client und Route,
   neue Metriken `basetool_exchange_clients` und `basetool_exchange_registry_mirror_age_seconds` samt
   Alarm `ExchangeRegistryMirrorStaleAtGateway`.
+- **Monitoring: Alarm für die DPoP-Obergrenze.** `ExchangeDpopProofLimitSustained` (Warnung) meldet,
+  wenn Mitglieder 15 Minuten lang immer wieder an ihre Obergrenze lebender DPoP-Nachweise stoßen;
+  ein einzelner Ausreißer löst ihn nicht aus (REQ-XCH-006).
   
 - **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
   `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
@@ -207,6 +210,18 @@
 
 ### Changed
 
+- **Datenaustausch: eigener Code für die DPoP-Obergrenze.** Hält ein Mitglied schon 600 lebende
+  DPoP-Nachweise, antwortet das Gateway mit `429 DPOP_PROOF_LIMIT` und `Retry-After` statt mit dem
+  `401 DPOP_INVALID` eines wiederholten Nachweises (REQ-XCH-006).
+- **Datenaustausch: volle Nachweis-Ablage antwortet 503.** Halten alle Mitglieder zusammen die
+  100 000 lebenden DPoP-Nachweise des Gateways, antwortet es mit `503 SERVICE_UNAVAILABLE` und
+  `Retry-After` statt mit `401 DPOP_INVALID` (REQ-XCH-006).
+- **Datenaustausch: feste Zahlen für Back-off und Sync-Takt.** Fremd-Anwendungen warten nach einem
+  Fehler ab 5 Sekunden, verdoppelt bis höchstens 5 Minuten, mit Jitter und nie kürzer als
+  `Retry-After`; zeitgesteuert synchronisieren sie höchstens alle 5 Minuten (REQ-XCH-027).
+- **Blueprint-Import: nur Formatversion 1.x.** Eine `basetool.blueprints`-Datei oder ein
+  Blueprint-Entwurf mit einer anderen Hauptversion als 1 (etwa `2.0`) wird abgelehnt statt als 1.0
+  gelesen (REQ-XCH-019, REQ-INV-014).
 - **Datenaustausch: Doku-Seite im KRT-Design.** Die öffentliche Entwickler-Doku
   (`krt-profit.github.io/basetool`) nutzt statt des Standard-Themes das DAS-KARTELL-Design mit
   Basetool-Logo, Seitennavigation, „Improve this page“-Link und einer eingefärbten API-Referenz;

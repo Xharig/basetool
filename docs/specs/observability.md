@@ -1658,8 +1658,8 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   2026-09-27): it reports gates that can run audit-only, and the exchange gates cannot be switched
   off, so a posture gauge would be constantly 1 and say nothing.
 - `basetool_ingest_exchange_refused_total{reason,client_id}` counter — every exchange request the gateway
-  refused, by its problem code in snake case — `dpop_required`, `dpop_invalid`, `unauthenticated`,
-  `not_found`, `registry_unavailable`, `exchange_disabled`, `client_not_allowed`,
+  refused, by its problem code in snake case — `dpop_required`, `dpop_invalid`, `dpop_proof_limit`,
+  `unauthenticated`, `not_found`, `registry_unavailable`, `exchange_disabled`, `client_not_allowed`,
   `client_suspended`, `installation_revoked`, `client_revoked`, `scope_missing`,
   `client_version_unsupported`, `rate_limited`, `quota_exceeded`, `service_unavailable`,
   `idempotency_key_missing`, `idempotency_key_reused`, `idempotency_in_progress`,
@@ -1673,17 +1673,27 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `dpop_invalid`, since the client sees that code. `ExchangeRegistryUnreadableAtGateway` (warning,
   5 m) fires while the gateway fails closed on `registry_unavailable`.
 - `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`legacy`, `exchange`,
-  `other`) so a third-party client's failures stay apart from the extractor's, and two reasons:
-  `invalid_dpop_proof` and `use_dpop_nonce` (the normal first round trip, never alerted).
+  `other`) so a third-party client's failures stay apart from the extractor's, and four reasons:
+  `invalid_dpop_proof`, `use_dpop_nonce` (the normal first round trip, never alerted),
+  `dpop_proof_limit` for an exchange proof over its member's cap, answered `429 DPOP_PROOF_LIMIT`,
+  and `dpop_store_full` for an exchange proof refused by a full replay store, answered
+  `503 SERVICE_UNAVAILABLE`; neither of the last two is alerted as a failing proof.
   `IngestAuthFailureSpike` and `IngestUnauthenticatedFlood` alert per scope;
   `ExchangeDpopProofsFailing` (warning, 15 m) fires on sustained refused exchange proofs
-  (REQ-XCH-006).
+  (REQ-XCH-006). `ExchangeDpopProofLimitSustained` (warning) fires when the `dpop_proof_limit`
+  rate over 10 minutes stays above 0.05/s (3 a minute) for 15 minutes: a single burst stays in the
+  10-minute window for at most 10 minutes, so it cannot hold the condition for 15, while a client
+  that ignores `Retry-After` or keeps a member at its cap can (owner decision 2026-09-28;
+  `exchange_dpop_proof_limit_alert_test.yml`).
 - `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` counter — DPoP proofs the gateway's
   `jti` replay cache refused, per path scope (`exchange` / `legacy`) and reason: `replayed` (the
   `jti` was used before), `member_cap` (the member already holds its live-proof cap) or `full` (the
-  scope's cache holds its total cap), registered at zero. Each also counts as `invalid_dpop_proof`
-  on the auth-failure counter. `IngestDpopReplayCacheFull` (warning) fires on any `full`, because
-  then every proof of that scope is refused (REQ-XCH-006). Shown per hour by path scope and reason
+  scope's cache holds its total cap), registered at zero. On the exchange scope a `member_cap`
+  refusal counts as `dpop_proof_limit` on the auth-failure counter and a `full` one as
+  `dpop_store_full` (also `service_unavailable` on the exchange refusal counter and
+  `SERVICE_UNAVAILABLE` on `basetool_http_error_total`, so `IdentityProviderUnavailable` can fire
+  alongside); every other refusal as `invalid_dpop_proof`. `IngestDpopReplayCacheFull` (warning)
+  fires on any `full`, because then every proof of that scope is refused (REQ-XCH-006). Shown per hour by path scope and reason
   on the Exchange dashboard (under the gateway refusals) and on the operations dashboard (under the
   ingest auth failures); the metric carries no client, so the Exchange dashboard's `client_id`
   variable does not filter it.

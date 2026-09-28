@@ -70,6 +70,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -261,6 +262,48 @@ class ExchangeDraftRouteTest {
   }
 
   @Test
+  void aDraftOfAnotherMajorFormatVersionIsRefusedBeforeTheRelay() throws Exception {
+    String draft =
+        example("blueprint-draft/valid/corpus-slice.json")
+            .replace("\"formatVersion\": \"1.0\"", "\"formatVersion\": \"2.0\"");
+    assertThat(draft).contains("\"2.0\"");
+
+    post("/exchange/v1/me/drafts/blueprints", draft)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("SCHEMA_INVALID"))
+        .andExpect(jsonPath("$.errors[0].pointer").value("/formatVersion"))
+        .andExpect(jsonPath("$.errors[0].message").value("unsupported major version"));
+
+    verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void aDraftOfALaterMinorFormatVersionIsRelayed() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(PREVIEW));
+    when(stagingService.stageDraft(
+            eq("versekit"), eq(member), eq(HandoffKind.BLUEPRINT), anyString(), eq(10)))
+        .thenReturn(new HandoffStagingService.Staged("hid-m", "ingest:handoff:x:hid-m", 222L));
+    when(stagingService.stagedBytes(eq(HandoffKind.BLUEPRINT), anyString())).thenReturn(222L);
+    String draft =
+        example("blueprint-draft/valid/corpus-slice.json")
+            .replace("\"formatVersion\": \"1.0\"", "\"formatVersion\": \"1.7\"");
+    assertThat(draft).contains("\"1.7\"");
+
+    post("/exchange/v1/me/drafts/blueprints", draft)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.handoffId").value("hid-m"));
+  }
+
+  @Test
+  void onlyTheMajorOneIsSupported() {
+    assertThat(ExchangeController.unsupportedFormatMajor(envelope("1.0"))).isNull();
+    assertThat(ExchangeController.unsupportedFormatMajor(envelope("1.12"))).isNull();
+    assertThat(ExchangeController.unsupportedFormatMajor(envelope("0.9"))).isNotNull();
+    assertThat(ExchangeController.unsupportedFormatMajor(envelope("10.0"))).isNotNull();
+    assertThat(ExchangeController.unsupportedFormatMajor(envelope("01.0"))).isNotNull();
+  }
+
+  @Test
   void aRefusedDraftIsPassedOnAndNothingIsStaged() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any()))
         .thenReturn(new ExchangeRelay.Result(400, null, "SCHEMA_INVALID", "Unsupported panel."));
@@ -357,6 +400,16 @@ class ExchangeDraftRouteTest {
    */
   private static @NotNull String example(@NotNull String name) throws Exception {
     return Files.readString(EXAMPLES.resolve(name));
+  }
+
+  /**
+   * Builds an envelope that carries only a format version.
+   *
+   * @param formatVersion the version
+   * @return the envelope
+   */
+  private static @NotNull JsonNode envelope(@NotNull String formatVersion) {
+    return MAPPER.createObjectNode().put("formatVersion", formatVersion);
   }
 
   /**

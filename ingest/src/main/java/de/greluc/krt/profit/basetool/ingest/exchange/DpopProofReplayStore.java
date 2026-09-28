@@ -25,12 +25,15 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.cache.Cache;
@@ -41,8 +44,9 @@ import org.springframework.security.oauth2.jwt.DPoPProofReplayValidator;
  * The DPoP {@code jti} replay cache of one path scope, partitioned by member (REQ-XCH-006,
  * REQ-XCH-023): every member may hold at most {@code maxPerMember} live proofs, so one member
  * cannot fill the store and lock the others out, and the whole store holds at most {@code
- * maxTotal}. A proof is kept until its {@code iat} plus the clock skew, as Spring's own cache does,
- * and a refused proof is counted on {@code basetool_ingest_dpop_replay_refused_total}.
+ * maxTotal}. A proof is kept until its {@code iat} plus the clock skew, as Spring's own cache does;
+ * a member's expired proofs are dropped before its cap is checked, and a refused proof is counted
+ * on {@code basetool_ingest_dpop_replay_refused_total} and takes no room.
  */
 public final class DpopProofReplayStore {
 
@@ -52,11 +56,15 @@ public final class DpopProofReplayStore {
   /** The prefix of the partition of a token without a subject: the proof's key. */
   static final String KEY_PARTITION_PREFIX = "key:";
 
+  /** Orders a member's live proofs by when they expire, the earliest first. */
+  private static final Comparator<Held> BY_EXPIRY =
+      Comparator.comparing(held -> held.entry().expiresAt());
+
   /** Live proofs by the SHA-256 of their {@code jti}. */
   private final ConcurrentMap<String, Entry> proofs = new ConcurrentHashMap<>();
 
-  /** Live proofs per member partition. */
-  private final ConcurrentMap<String, Integer> perMember = new ConcurrentHashMap<>();
+  /** Each member partition's live proofs, earliest expiry first; changed only under its key. */
+  private final ConcurrentMap<String, PriorityQueue<Held>> perMember = new ConcurrentHashMap<>();
 
   /** Whether a sweep is running. */
   private final AtomicBoolean cleaning = new AtomicBoolean(false);
@@ -113,9 +121,10 @@ public final class DpopProofReplayStore {
    * The member's view of the store, for Spring's {@link DPoPProofReplayValidator}.
    *
    * @param member the access token's subject; a token without one is partitioned by its proof key
-   * @return a cache whose {@code putIfAbsent} claims a proof for that member
+   * @return a cache whose {@code putIfAbsent} claims a proof for that member and remembers a
+   *     refusal
    */
-  public @NotNull Cache forMember(@Nullable String member) {
+  public @NotNull MemberView forMember(@Nullable String member) {
     return new MemberView(member == null || member.isBlank() ? "" : member);
   }
 
@@ -134,42 +143,95 @@ public final class DpopProofReplayStore {
    * @param jtiHash the SHA-256 of the proof's {@code jti}
    * @param expiresAt when the proof may be forgotten
    * @param partition the member partition
-   * @return {@code true} when the proof is new and was stored; {@code false} when it was used
-   *     before, its member holds too many or the store is full
+   * @return {@link Claim#STORED} when the proof is new and was stored; otherwise why it was
+   *     refused, and for a member at its cap when it may try again
    */
-  boolean claim(@NotNull String jtiHash, @NotNull Instant expiresAt, @NotNull String partition) {
+  @NotNull
+  Claim claim(@NotNull String jtiHash, @NotNull Instant expiresAt, @NotNull String partition) {
     cleanupIfDue();
     if (proofs.containsKey(jtiHash)) {
       replayed.increment();
-      return false;
+      return Claim.REPLAYED;
     }
     if (proofs.size() >= maxTotal) {
       cleanup();
       if (proofs.size() >= maxTotal) {
         full.increment();
-        return false;
+        Instant now = clock.instant();
+        return Claim.full(retryAfterSeconds(now, earliestExpiry(now)));
       }
     }
-    AtomicBoolean capped = new AtomicBoolean(false);
+    Instant now = clock.instant();
+    Held held = new Held(jtiHash, new Entry(expiresAt, partition));
+    AtomicReference<Instant> oldest = new AtomicReference<>();
     perMember.compute(
         partition,
-        (k, v) -> {
-          if (v != null && v >= maxPerMember) {
-            capped.set(true);
-            return v;
+        (k, queue) -> {
+          PriorityQueue<Held> live = queue == null ? new PriorityQueue<>(BY_EXPIRY) : queue;
+          dropExpired(live, now);
+          Held first = live.peek();
+          if (first != null && live.size() >= maxPerMember) {
+            oldest.set(first.entry().expiresAt());
+          } else {
+            live.add(held);
           }
-          return v == null ? 1 : v + 1;
+          return live;
         });
-    if (capped.get()) {
+    Instant capUntil = oldest.get();
+    if (capUntil != null) {
       memberCap.increment();
-      return false;
+      return Claim.memberCap(retryAfterSeconds(now, capUntil));
     }
-    if (proofs.putIfAbsent(jtiHash, new Entry(expiresAt, partition)) != null) {
-      release(partition);
+    if (proofs.putIfAbsent(jtiHash, held.entry()) != null) {
+      release(held);
       replayed.increment();
-      return false;
+      return Claim.REPLAYED;
     }
-    return true;
+    return Claim.STORED;
+  }
+
+  /**
+   * Returns the whole seconds until a proof expiring at {@code oldest} no longer counts, at least
+   * one: a proof counts until a moment strictly after its expiry.
+   *
+   * @param now the current time
+   * @param oldest when the member's earliest live proof expires
+   * @return the seconds after which that proof no longer counts
+   */
+  static long retryAfterSeconds(@NotNull Instant now, @NotNull Instant oldest) {
+    return Math.max(0L, Duration.between(now, oldest).toMillis()) / 1000L + 1L;
+  }
+
+  /**
+   * Returns when the store's earliest live proof expires.
+   *
+   * @param now the current time, returned when the store holds no live proof
+   * @return the earliest expiry of a proof that still counts, or {@code now}
+   */
+  private @NotNull Instant earliestExpiry(@NotNull Instant now) {
+    Instant earliest = null;
+    for (Entry entry : proofs.values()) {
+      Instant expiresAt = entry.expiresAt();
+      if (!now.isAfter(expiresAt) && (earliest == null || expiresAt.isBefore(earliest))) {
+        earliest = expiresAt;
+      }
+    }
+    return earliest == null ? now : earliest;
+  }
+
+  /**
+   * Drops a member's expired proofs from its queue and from the store; runs under the member's key.
+   *
+   * @param live the member's live proofs
+   * @param now the current time
+   */
+  private void dropExpired(@NotNull PriorityQueue<Held> live, @NotNull Instant now) {
+    Held first = live.peek();
+    while (first != null && now.isAfter(first.entry().expiresAt())) {
+      live.poll();
+      proofs.remove(first.jtiHash(), first.entry());
+      first = live.peek();
+    }
   }
 
   /** Sweeps expired proofs when the last sweep is older than {@link #CLEANUP_INTERVAL}. */
@@ -179,7 +241,7 @@ public final class DpopProofReplayStore {
     }
   }
 
-  /** Forgets every expired proof and lowers its member's count. */
+  /** Forgets every expired proof and takes it off its member's queue. */
   void cleanup() {
     if (!cleaning.compareAndSet(false, true)) {
       return;
@@ -189,7 +251,7 @@ public final class DpopProofReplayStore {
       for (Map.Entry<String, Entry> proof : proofs.entrySet()) {
         if (now.isAfter(proof.getValue().expiresAt())
             && proofs.remove(proof.getKey(), proof.getValue())) {
-          release(proof.getValue().partition());
+          release(new Held(proof.getKey(), proof.getValue()));
         }
       }
       lastCleanup.set(clock.millis());
@@ -199,12 +261,17 @@ public final class DpopProofReplayStore {
   }
 
   /**
-   * Lowers a member's count by one, dropping the member at zero.
+   * Takes a proof off its member's queue, dropping the member when none is left.
    *
-   * @param partition the member partition
+   * @param held the proof
    */
-  private void release(@NotNull String partition) {
-    perMember.computeIfPresent(partition, (k, v) -> v > 1 ? v - 1 : null);
+  private void release(@NotNull Held held) {
+    perMember.computeIfPresent(
+        held.entry().partition(),
+        (k, queue) -> {
+          queue.remove(held);
+          return queue.isEmpty() ? null : queue;
+        });
   }
 
   /**
@@ -225,6 +292,55 @@ public final class DpopProofReplayStore {
         reason);
   }
 
+  /** Why a claim ended as it did. */
+  enum Outcome {
+    /** The proof was new and is now held. */
+    STORED,
+    /** The proof's {@code jti} is already held. */
+    REPLAYED,
+    /** The member already holds its cap of live proofs. */
+    MEMBER_CAP,
+    /** The store holds its total cap. */
+    FULL
+  }
+
+  /**
+   * The outcome of a claim.
+   *
+   * @param outcome why the claim ended as it did
+   * @param retryAfterSeconds for {@link Outcome#MEMBER_CAP}, the whole seconds until the member's
+   *     earliest live proof no longer counts, and for {@link Outcome#FULL} until the store's
+   *     earliest does, at least one; otherwise zero
+   */
+  record Claim(@NotNull Outcome outcome, long retryAfterSeconds) {
+
+    /** A stored proof. */
+    static final Claim STORED = new Claim(Outcome.STORED, 0L);
+
+    /** A replayed proof. */
+    static final Claim REPLAYED = new Claim(Outcome.REPLAYED, 0L);
+
+    /**
+     * A proof refused because the store is full.
+     *
+     * @param retryAfterSeconds the whole seconds until the store's earliest proof no longer counts
+     * @return the claim
+     */
+    static @NotNull Claim full(long retryAfterSeconds) {
+      return new Claim(Outcome.FULL, retryAfterSeconds);
+    }
+
+    /**
+     * A proof refused because its member is at the cap.
+     *
+     * @param retryAfterSeconds the whole seconds until the member's earliest proof no longer counts
+     * @return the claim
+     */
+    static @NotNull Claim memberCap(long retryAfterSeconds) {
+      return new Claim(Outcome.MEMBER_CAP, retryAfterSeconds);
+    }
+  }
+
   /**
    * A stored proof.
    *
@@ -233,11 +349,25 @@ public final class DpopProofReplayStore {
    */
   private record Entry(@NotNull Instant expiresAt, @NotNull String partition) {}
 
-  /** One member's view of the store; the replay validator only calls {@code putIfAbsent}. */
-  private final class MemberView implements Cache {
+  /**
+   * A proof in its member's queue.
+   *
+   * @param jtiHash the SHA-256 of its {@code jti}
+   * @param entry what the store holds for it
+   */
+  private record Held(@NotNull String jtiHash, @NotNull Entry entry) {}
+
+  /**
+   * One member's view of the store; the replay validator only calls {@code putIfAbsent}. A view
+   * serves one proof and remembers why that proof was refused.
+   */
+  public final class MemberView implements Cache {
 
     /** The subject this view claims proofs for, or empty to partition by proof key. */
     private final @NotNull String member;
+
+    /** The last refused claim of this view, or {@code null}. */
+    private volatile @Nullable Claim refused;
 
     /**
      * Creates the view.
@@ -246,6 +376,39 @@ public final class DpopProofReplayStore {
      */
     private MemberView(@NotNull String member) {
       this.member = member;
+    }
+
+    /**
+     * Returns when this view's member may send a proof again, if its last proof was refused for the
+     * member cap.
+     *
+     * @return the whole seconds until the member's earliest live proof no longer counts, or {@code
+     *     null} when the last proof was not refused for the cap
+     */
+    public @Nullable Long proofLimitRetryAfter() {
+      return retryAfter(Outcome.MEMBER_CAP);
+    }
+
+    /**
+     * Returns when a proof may be sent again, if this view's last proof was refused because the
+     * whole store was full.
+     *
+     * @return the whole seconds until the store's earliest live proof no longer counts, or {@code
+     *     null} when the last proof was not refused for a full store
+     */
+    public @Nullable Long storeFullRetryAfter() {
+      return retryAfter(Outcome.FULL);
+    }
+
+    /**
+     * Returns the seconds of the last refusal when it had the given outcome.
+     *
+     * @param outcome the refusal outcome asked about
+     * @return the refusal's seconds, or {@code null} when the last proof was not refused so
+     */
+    private @Nullable Long retryAfter(@NotNull Outcome outcome) {
+      Claim last = refused;
+      return last != null && last.outcome() == outcome ? last.retryAfterSeconds() : null;
     }
 
     @Override
@@ -294,7 +457,12 @@ public final class DpopProofReplayStore {
       }
       String partition =
           member.isEmpty() ? KEY_PARTITION_PREFIX + proof.getJwkThumbprint() : member;
-      return claim(jtiHash, proof.getExpiresAt(), partition) ? null : new SimpleValueWrapper(value);
+      Claim claim = claim(jtiHash, proof.getExpiresAt(), partition);
+      if (claim.outcome() == Outcome.STORED) {
+        return null;
+      }
+      refused = claim;
+      return new SimpleValueWrapper(value);
     }
 
     @Override

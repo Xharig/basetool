@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
+import de.greluc.krt.profit.basetool.ingest.exchange.DpopProofStoreFullError;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeDpopNonces;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRegistryReader;
@@ -40,6 +41,10 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -250,5 +255,52 @@ class SecurityProblemResponseHandlerTest {
 
     assertThat(response.getContentAsString()).isEmpty();
     assertThat(errorCount(MetricNames.CODE_UNAUTHENTICATED)).isZero();
+  }
+
+  @Test
+  void anExchangeProofRefusedByAFullReplayStoreGets503WithRetryAfterAndNoChallenge()
+      throws Exception {
+    String stock = "/exchange/v1/me/stock";
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", stock);
+    request.setRequestURI(stock);
+    request.addHeader(HttpHeaders.AUTHORIZATION, "DPoP token");
+    request.addHeader("DPoP", "proof");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    JwtValidationException refused =
+        new JwtValidationException("refused", List.of(new DpopProofStoreFullError(17L)));
+
+    handler.commence(
+        request,
+        response,
+        new OAuth2AuthenticationException(
+            new OAuth2Error(OAuth2ErrorCodes.INVALID_DPOP_PROOF), refused));
+
+    assertThat(response.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
+    assertThat(response.getHeader(HttpHeaders.RETRY_AFTER)).isEqualTo("17");
+    assertThat(response.getHeader(HttpHeaders.WWW_AUTHENTICATE)).isNull();
+    assertThat(response.getHeader("DPoP-Nonce")).isNotBlank();
+    assertThat(response.getContentAsString())
+        .contains("\"status\":503")
+        .contains("\"code\":\"SERVICE_UNAVAILABLE\"")
+        .contains(
+            "\"detail\":\"The gateway cannot take more DPoP proofs right now; retry after"
+                + " Retry-After.\"");
+    assertThat(
+            meterRegistry
+                .get(MetricNames.INGEST_AUTH_FAILURES)
+                .tag(MetricNames.TAG_REASON, MetricNames.AUTH_DPOP_STORE_FULL)
+                .tag(MetricNames.TAG_PATH_SCOPE, MetricNames.PATH_SCOPE_EXCHANGE)
+                .counter()
+                .count())
+        .isEqualTo(1.0d);
+    assertThat(
+            meterRegistry
+                .get(MetricNames.EXCHANGE_REFUSED)
+                .tag(MetricNames.TAG_REASON, "service_unavailable")
+                .tag(MetricNames.TAG_CLIENT_ID, MetricNames.EXCHANGE_CLIENT_NONE)
+                .counter()
+                .count())
+        .isEqualTo(1.0d);
+    assertThat(errorCount(MetricNames.CODE_SERVICE_UNAVAILABLE)).isEqualTo(1.0d);
   }
 }

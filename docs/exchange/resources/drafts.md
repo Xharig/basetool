@@ -60,7 +60,7 @@ used. To stage the draft again, send it under a new key.
 
 | Code | When |
 | --- | --- |
-| `400 SCHEMA_INVALID` with `errors[]` | The body breaks its schema. |
+| `400 SCHEMA_INVALID` with `errors[]` | The body breaks its schema, or a blueprint draft's `formatVersion` has a major other than `1` (`pointer` `/formatVersion`, `message` `unsupported major version`). |
 | `400 SCHEMA_INVALID` without `errors[]` | The body matches the schema, but the Basetool refuses its content: a `schemaVersion` other than 1, no order, or a first order that is not a `SETUP` panel. |
 | `413 PAYLOAD_TOO_LARGE` | The body exceeds 2 MiB, or the prepared draft is too large to hand off (256 KiB by default). Send fewer entries. |
 | `503 EXCHANGE_BUDGET_EXHAUSTED`, `503 SERVICE_UNAVAILABLE` | The draft cannot be staged now. Retry after `Retry-After`. |

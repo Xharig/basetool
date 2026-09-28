@@ -201,20 +201,25 @@ Every exchange call needs the gateway's **server nonce** (RFC 9449 §8).
 
 The gateway remembers every accepted proof's `jti` to refuse a replay, and it holds at most **600**
 live proofs per member, over all of the member's clients and installations together, and 100 000 in
-all. A proof stays live from its acceptance until 30 seconds after its `iat`, and up to ten seconds
-longer until the next sweep. A proof refused for its nonce takes no room, and neither does a proof
-refused for the cap; proofs sent to Keycloak do not count.
+all. A proof counts from its acceptance until just after 30 seconds past its `iat`. A proof refused
+for its nonce takes no room, and neither does a proof refused for either cap; proofs sent to
+Keycloak do not count.
 
 A client that keeps to the [rate limits](sync-guide.md#rate-limits-quota-and-back-off) stays far
-below the cap: 120 requests a minute hold about 60 to 80 live proofs. The cap is reached only when
-the member's clients together send far more.
+below the cap: 120 requests a minute hold about 60 live proofs. The cap is reached only when the
+member's clients together send far more.
 
-A proof over the cap is refused exactly like a replayed one: `401` with the code `DPOP_INVALID`,
-`WWW-Authenticate: DPoP algs="…", error="invalid_dpop_proof"`, a fresh `DPoP-Nonce` and the
-`detail` "The DPoP proof is invalid, replayed or bound to another key." Nothing in the answer tells
-the two apart. When a proof you know to be fresh — a new `jti`, the right key, method, URL and
-`ath`, a corrected clock — is refused this way, do not retry at once: pause this member's requests
-for at least 40 seconds, then continue more slowly. If it happens again, stop and tell the member.
+A proof over the member's cap is refused with `429` and the code `DPOP_PROOF_LIMIT`, a fresh
+`DPoP-Nonce` and `Retry-After`: the whole seconds, rounded up and at least 1, until the member's
+earliest live proof no longer counts. Wait at least that long, retry with a new proof, and send the
+member's requests more slowly — the [back-off](sync-guide.md#rate-limits-quota-and-back-off)
+applies.
+
+When all members together hold the 100 000, the gateway is overloaded, and its maintainers are
+alerted. A proof is then refused with `503` and the code `SERVICE_UNAVAILABLE`, a fresh `DPoP-Nonce`
+and `Retry-After`: the whole seconds, rounded up and at least 1, until the gateway's earliest live
+proof no longer counts. It is not the member's fault: wait at least `Retry-After`, then retry with a
+new proof, backing off as for any other `503`.
 
 ### Calling the API
 
@@ -295,7 +300,9 @@ a `code` from the [error registry](errors.md).
 | `UNAUTHENTICATED` | 401 | No token; a token that is invalid, expired, or not issued for the gateway | Refresh once and retry; after `invalid_grant` start a device login when the member asks. Do not loop when the refreshed token is refused too. |
 | `DPOP_REQUIRED` | 401 | The `Bearer` scheme, a `DPoP`-scheme request without a `DPoP` header, or a token that is not DPoP-bound | Send `Authorization: DPoP` with a proof; request the token with a DPoP proof so it is bound. |
 | `DPOP_INVALID` with `use_dpop_nonce` | 401 | The proof lacks the current server nonce | Retry once with a new proof carrying the `DPoP-Nonce` of the answer. |
-| `DPOP_INVALID` with `invalid_dpop_proof` | 401 | The proof is malformed, signed by another key than `cnf.jkt`, replayed, outside the `iat` window, for another method or URL, or has the wrong `ath` — or the member holds too many [live proofs](#live-proofs-per-member) | Fix the proof; correct the clock once; do not loop. For a proof you know is fresh, pause at least 40 s. |
+| `DPOP_INVALID` with `invalid_dpop_proof` | 401 | The proof is malformed, signed by another key than `cnf.jkt`, replayed, outside the `iat` window, for another method or URL, or has the wrong `ath` | Fix the proof; correct the clock once; do not loop. |
+| `DPOP_PROOF_LIMIT` | 429 | The member already holds its cap of [live proofs](#live-proofs-per-member) | Wait at least `Retry-After`, retry with a new proof, and slow down. |
+| `SERVICE_UNAVAILABLE` | 503 | All members together hold the gateway's cap of [live proofs](#live-proofs-per-member), or the identity provider cannot be reached | Wait at least `Retry-After`, then retry with a new proof. |
 | `SCOPE_MISSING` | 403 | The route's capability is not in the token, or not granted to the client | Start a device login with the scope, if the member wants the feature. |
 | `CLIENT_REVOKED` | 401 | The member disconnected the client after this connection was made | Discard the tokens; start a device login only when the member asks. |
 | `INSTALLATION_REVOKED` | 401 | The member disconnected this installation | Discard the tokens **and** the key; reconnecting needs a new key. |

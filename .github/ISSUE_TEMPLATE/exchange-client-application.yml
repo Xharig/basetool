@@ -156,6 +156,10 @@ body:
           required: true
         - label: Every ship upsert sends the ship's current name and location, because an upsert clears an omitted one.
           required: true
+        - label: Retries back off from 5 seconds, doubling up to at most 5 minutes, with random jitter, and never wait less than Retry-After.
+          required: true
+        - label: Syncs run on start and after a local change, and a timed sync at most every 5 minutes.
+          required: true
 
   - type: checkboxes
     id: terms

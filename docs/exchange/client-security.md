@@ -70,6 +70,11 @@ against:
   the member is shown what happened ([ships](resources/ships.md), [stock](resources/stock.md)).
 - Every ship `upsert` sends the ship's current `name` and `location` — the server's, or the member's
   change to them — because an `upsert` clears an omitted one ([ships](resources/ships.md)).
+- Retries back off from 5 seconds, doubling up to at most 5 minutes, with random jitter, and never
+  wait less than the answer's `Retry-After`
+  ([back-off](sync-guide.md#back-off-and-sync-cadence)).
+- Syncs run on start and after a local change, and a timed sync at most every 5 minutes
+  ([sync cadence](sync-guide.md#back-off-and-sync-cadence)).
 
 ## Response and supply chain
 
