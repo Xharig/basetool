@@ -69,7 +69,9 @@ is ever on the `api.*` allowlist (ADR-0135), and nothing of the exchange lives u
   are refused; `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the
   gateway without an acting member).
 - [x] The `api.*` allowlist test fails if an exchange or connected-apps path is added
-  (`ExternalContractTest.theExchangeStaysOffTheApiVhost`).
+  (`ExternalContractTest.theExchangeStaysOffTheApiVhost`). A line that touches `krt_api_allowed` in a
+  form the test cannot evaluate — another variable, a negation, an unquoted or multi-line rule —
+  fails it instead of being skipped; `~*` counts as case-insensitive (security review G5, I6).
 
 **Status:** built — WP 3.2 (#2082), WP 3.1 (#2083)
 
