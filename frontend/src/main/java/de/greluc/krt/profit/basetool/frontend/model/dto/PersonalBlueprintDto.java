@@ -40,6 +40,8 @@ import java.util.UUID;
  * @param source where the entry came from ({@code LOG}, {@code MANUAL}, {@code IMPORT}, {@code
  *     DEFAULT}, {@code OTHER}), or {@code null} when that was not recorded
  * @param sourceClientId the exchange client that added it, or {@code null}
+ * @param sourceClientName the registry display name of {@code sourceClientId}, or {@code null} when
+ *     there is no client or it is no longer registered
  */
 public record PersonalBlueprintDto(
     UUID id,
@@ -53,4 +55,5 @@ public record PersonalBlueprintDto(
     Instant createdAt,
     Instant updatedAt,
     String source,
-    String sourceClientId) {}
+    String sourceClientId,
+    String sourceClientName) {}

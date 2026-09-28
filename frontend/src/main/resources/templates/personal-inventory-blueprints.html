@@ -120,7 +120,8 @@
                                      data-removable=${bp.removable},
                                      data-acquired-at=${bp.acquiredAt},
                                      data-source=${bp.source},
-                                     data-source-client=${bp.sourceClientId}">
+                                     data-source-client=${bp.sourceClientId},
+                                     data-source-client-name=${bp.sourceClientName}">
                         <span th:text="${bp.productName}">Produkt</span>
                         <span class="krt-bp-row-aside">
                             <span class="master-row-note" th:if="${bp.note != null and !bp.note.isBlank()}"

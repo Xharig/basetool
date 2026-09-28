@@ -87,6 +87,7 @@ class PersonalBlueprintWriteAjaxControllerTest {
             null,
             null,
             null,
+            null,
             null);
     when(backendApiClient.put(
             eq("/api/v1/personal-blueprints/" + id), any(), eq(PersonalBlueprintDto.class)))

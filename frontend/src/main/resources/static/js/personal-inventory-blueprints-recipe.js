@@ -175,16 +175,19 @@
     }
 
     /**
-     * Describes where a blueprint came from, naming the exchange client that added it.
+     * Describes where a blueprint came from, naming the exchange client that added it by its
+     * registry display name, or by its id when the client is no longer registered.
      *
      * @param {string} source the recorded source, or an empty string
-     * @param {string} client the exchange client, or an empty string
+     * @param {string} clientId the exchange client's id, or an empty string
+     * @param {string} clientName the client's display name, or an empty string
      * @returns {string} the text, empty when no source was recorded
      */
-    function describeSource(source, client) {
+    function describeSource(source, clientId, clientName) {
         if (!source) {
             return '';
         }
+        const client = clientName || clientId;
         const dict = i18n();
         const label = window.krtI18nText(dict.sourceLabel, 'krtBlueprintsRecipeI18n.sourceLabel');
         const name = window.krtI18nText(
@@ -214,6 +217,7 @@
         const acquired = attr(row, 'data-acquired-at');
         const source = attr(row, 'data-source');
         const sourceClient = attr(row, 'data-source-client');
+        const sourceClientName = attr(row, 'data-source-client-name');
 
         nameEl.textContent = name;
         const formatted = formatAcquired(acquired);
@@ -223,7 +227,7 @@
               formatted
             : '';
         if (sourceEl) {
-            const sourceText = describeSource(source, sourceClient);
+            const sourceText = describeSource(source, sourceClient, sourceClientName);
             sourceEl.textContent = sourceText;
             sourceEl.hidden = !sourceText;
         }
