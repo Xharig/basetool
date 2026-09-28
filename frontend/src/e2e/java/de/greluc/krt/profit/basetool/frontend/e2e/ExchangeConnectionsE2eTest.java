@@ -166,8 +166,7 @@ class ExchangeConnectionsE2eTest {
 
     ExchangeTestClient after = new ExchangeTestClient(CLIENT_ID);
     ExchangeTestClient.DeviceLogin login = after.startDeviceLogin(SCOPES);
-    ExchangeE2eSupport.approveOnTheDevicePage(
-        browser, login.verificationUriComplete(), MEMBER, MEMBER_PASSWORD);
+    ExchangeE2eSupport.approveOnTheDevicePage(browser, login, MEMBER, MEMBER_PASSWORD);
     after.awaitToken(login);
     assertOk(after.call("GET", READ, null));
   }

@@ -119,8 +119,11 @@ What to know before running it:
 - **It never deletes what only the target has.** An extra client, mapper, redirect URI or scope
   assignment is listed under *only on this realm* and left alone. The exceptions are existing
   decisions: the Android client's realm-role scope is converged both ways (`REQ-SEC-035`),
-  `offline_access` is withheld from it (ADR-0131), and a client the run *creates* gets exactly its
-  production scope lists.
+  `offline_access` is withheld from it (ADR-0131), a client the run *creates* gets exactly its
+  production scope lists, and `basetool-sc-extractor` and every third-party client carry no
+  client-level protocol mapper: one found there is a planned `- … mapper '…' removed` change, never
+  a line under *only on this realm*, so an apply that verifies clean has removed it (ADR-0202
+  amendment 4).
 - **The frontend's client type is left alone unless you name it** (ADR-0202 amendment 2):
   `--frontend-client confidential` switches `basetool-frontend` to confidential and sets Keycloak's
   secret from `$KEYCLOAK_FRONTEND_CLIENT_SECRET` in the same update (refused without it);
@@ -241,7 +244,7 @@ the provisioner creates it — never the Admin Console.
      omits `offline_access` would hold a session for the realm's 180 days, outliving the 90-day
      installation deny list (ADR-0217 amendment of 2026-09-28);
    - `basic` as the only default scope (the `sub` claim), the ten `exchange.*` capability scopes and
-     `offline_access` as optional scopes, no protocol mapper;
+     `offline_access` as optional scopes, no protocol mapper (one found on the client is removed);
    - `profile`, `email`, `roles`, `web-origins` and both ingest scopes are **withheld** — removed
      from an existing client of the list too;
    - the `krt-theme` login theme, whose consent page names every requested capability and whose

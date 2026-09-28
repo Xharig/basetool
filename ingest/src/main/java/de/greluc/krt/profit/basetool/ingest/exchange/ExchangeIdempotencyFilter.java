@@ -46,11 +46,13 @@ import tools.jackson.databind.ObjectMapper;
  * Makes exchange writes idempotent (REQ-XCH-020) within the byte budget (REQ-XCH-023). A write
  * needs an {@code Idempotency-Key}; its answer is kept a day per client, member and key and
  * replayed for the same request, a different request under the same key is refused, and a duplicate
- * in flight waits for the first. Under the claim the cache is read again, so a request that raced
- * the first one's answer replays it instead of writing twice. The gates, limits and quota run
- * before this filter, so a refused request is never cached; neither is any {@code 401}, {@code
- * 403}, {@code 429}, {@code 5xx}, a staged mass change or the answer to a body that is not a JSON
- * document ({@link #NOT_REPLAYABLE}).
+ * while the first is in flight is refused with {@code 409 IDEMPOTENCY_IN_PROGRESS}. Under the claim
+ * the cache is read again, so a request that raced the first one's answer replays it instead of
+ * writing twice. The gates, limits and quota run before this filter, so a refused request is never
+ * cached; neither is any {@code 401}, {@code 403}, {@code 429}, {@code 5xx}, a staged mass change
+ * or the answer to a body that is not a JSON document ({@link #NOT_REPLAYABLE}). A write the byte
+ * budget refuses gives its daily quota count back and is told to retry when enough of the budget
+ * expires.
  */
 public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
 
@@ -70,11 +72,12 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
   /** The shape of an idempotency key. */
   private static final Pattern KEY = Pattern.compile("^[A-Za-z0-9._~-]{8,128}$");
 
-  /** What a client waits before retrying a budget or store refusal. */
+  /** What a client waits before retrying a store refusal. */
   static final String RETRY_AFTER_SECONDS = "60";
 
   private final ExchangeIdempotency idempotency;
   private final ExchangeBudget budget;
+  private final ExchangeQuotas quotas;
   private final ExchangeStoreProperties properties;
   private final ExchangeRefusals refusals;
   private final ObjectMapper objectMapper;
@@ -86,6 +89,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
    *
    * @param idempotency the cache
    * @param budget the byte budget
+   * @param quotas gives a budget refusal's quota count back
    * @param properties the cache's limits
    * @param refusals counts the refusals
    * @param objectMapper writes the problems and reads cached codes
@@ -95,6 +99,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
   public ExchangeIdempotencyFilter(
       @NotNull ExchangeIdempotency idempotency,
       @NotNull ExchangeBudget budget,
+      @NotNull ExchangeQuotas quotas,
       @NotNull ExchangeStoreProperties properties,
       @NotNull ExchangeRefusals refusals,
       @NotNull ObjectMapper objectMapper,
@@ -102,6 +107,7 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
       @NotNull MeterRegistry meterRegistry) {
     this.idempotency = idempotency;
     this.budget = budget;
+    this.quotas = quotas;
     this.properties = properties;
     this.refusals = refusals;
     this.objectMapper = objectMapper;
@@ -214,7 +220,11 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
       }
       if (!budget.reserve(
           context.clientId(), context.member(), reservation, reserved, properties.lockTtl())) {
-        wrapper.setHeader(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS);
+        quotas.refundCounted(request);
+        wrapper.setHeader(
+            HttpHeaders.RETRY_AFTER,
+            String.valueOf(
+                budget.retryAfterSeconds(context.clientId(), context.member(), reserved)));
         refuse(
             context.clientId(),
             wrapper,

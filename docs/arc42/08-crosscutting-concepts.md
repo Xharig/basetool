@@ -175,6 +175,12 @@ HTTP/1.1 and caps the response body with a `ResponseSizeLimitInterceptor`; a new
 either module goes through those clients rather than a fresh `RestClient.builder()`, or it is
 neither observed nor bounded.
 
+In the ingest the two relays are kept apart: the extractor's handoff relay runs on
+`backendRestClient` (15 s) under the breaker `backend`, the exchange relay on `exchangeRestClient`
+(30 s) under its own breaker `exchange` and, for change sets of more than 100 ops, a four-slot
+bulkhead (ADR-0204 amendment 2, REQ-XCH-023). A burst of exchange writes therefore cannot open
+the extractor's breaker.
+
 ## 8.8 Audit
 
 Thirteen audited areas (Bank, Lager, Aufträge, Raffinerie, Mein Inventar, Missionen, Operationen,

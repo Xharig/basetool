@@ -146,10 +146,10 @@ groups:
           severity: warning
         annotations:
           summary: "Circuit breaker OPEN ({{ $labels.application }}/{{ $labels.name }})"
-          description: "Resilience4j circuit breaker {{ $labels.name }} in {{ $labels.application }} is open — a downstream dependency is failing."
+          description: "Resilience4j circuit breaker {{ $labels.name }} in {{ $labels.application }} is open — a downstream dependency is failing. In basetool-ingest, backend is the extractor's relay and exchange the exchange relay's; each opens on its own."
 
       - alert: BulkheadNearSaturation
-        expr: resilience4j_bulkhead_available_concurrent_calls < 5
+        expr: resilience4j_bulkhead_available_concurrent_calls{name!="exchangeLargeChangeSets"} < 5
         for: 10m
         labels:
           severity: warning

@@ -1,0 +1,86 @@
+rule_files:
+  - ../alerts/business.yml
+  - ../alerts/apps.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - large change sets keep being refused as busy
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{application="basetool-ingest", client_id="versekit", reason="relay_busy"}'
+        values: "0+3x60"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: ExchangeLargeChangeSetsBusy
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "The gateway keeps refusing large exchange change sets as busy"
+              description: "More than 30 change sets of over 100 ops were refused 503 RELAY_BUSY in 15 minutes, for 15 minutes: the four slots of the exchangeLargeChangeSets bulkhead stay taken (REQ-XCH-023). Typical after a client release or on a launch day, when many members send their first sync at once; the clients retry after 10 s and nothing is lost. Check the backend's CPU and the p99 of POST /exchange/v1/me/stock/changes; only with headroom there raise resilience4j.bulkhead.instances.exchangeLargeChangeSets.max-concurrent-calls in the gateway."
+
+  - name: silent - a short burst of busy refusals
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{application="basetool-ingest", client_id="versekit", reason="relay_busy"}'
+        values: "0x5 40x55"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeLargeChangeSetsBusy
+        exp_alerts: []
+
+  - name: silent - busy refusals are no client defect
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_refused_total{application="basetool-ingest", client_id="versekit", reason="relay_busy"}'
+        values: "0+5x60"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: ExchangeClientRefusalsSpike
+        exp_alerts: []
+
+  - name: fires - the exchange relay's own breaker is open
+    interval: 1m
+    input_series:
+      - series: 'resilience4j_circuitbreaker_state{application="basetool-ingest", name="exchange", state="open"}'
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: CircuitBreakerOpen
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              application: basetool-ingest
+              name: exchange
+              state: open
+            exp_annotations:
+              summary: "Circuit breaker OPEN (basetool-ingest/exchange)"
+              description: "Resilience4j circuit breaker exchange in basetool-ingest is open — a downstream dependency is failing. In basetool-ingest, backend is the extractor's relay and exchange the exchange relay's; each opens on its own."
+
+  - name: silent - the large-change-set bulkhead has four slots by design
+    interval: 1m
+    input_series:
+      - series: 'resilience4j_bulkhead_available_concurrent_calls{application="basetool-ingest", name="exchangeLargeChangeSets"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: BulkheadNearSaturation
+        exp_alerts: []
+
+  - name: fires - another bulkhead near saturation still alerts
+    interval: 1m
+    input_series:
+      - series: 'resilience4j_bulkhead_available_concurrent_calls{application="basetool-frontend", name="backendApi"}'
+        values: "2x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: BulkheadNearSaturation
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              application: basetool-frontend
+              name: backendApi
+            exp_annotations:
+              summary: "Bulkhead near saturation (basetool-frontend/backendApi)"
+              description: "The backendApi bulkhead in basetool-frontend has had fewer than 5 free concurrent-call slots for 10 minutes — the parallel backend fan-out is about to queue and slow page renders. Check backend latency and concurrent load."

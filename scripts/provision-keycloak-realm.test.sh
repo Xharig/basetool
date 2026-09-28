@@ -326,6 +326,14 @@ if verb == "update":
     fail(f"stub: unexpected update {path}")
 
 if verb == "delete":
+    if parts[0] in ("clients", "client-scopes") and parts[2:4] == ["protocol-mappers", "models"]:
+        key = "client_mappers" if parts[0] == "clients" else "scope_mappers"
+        before = data[key].get(parts[1], [])
+        if not any(m["id"] == parts[4] for m in before):
+            fail(f"stub: no mapper {parts[4]} on {parts[1]}")
+        data[key][parts[1]] = [m for m in before if m["id"] != parts[4]]
+        save()
+        sys.exit(0)
     if parts[0] == "clients" and parts[2] in ("default-client-scopes", "optional-client-scopes"):
         key = "client_default_scopes" if parts[2].startswith("default") else "client_optional_scopes"
         data[key][parts[1]] = [s for s in data[key].get(parts[1], []) if s != parts[3]]
@@ -814,6 +822,55 @@ assert_eq "$(writes_in "$state")" "0" "nothing is written"
 printf '[{"clientId": "somebody"}]' >"${state}/bad.json"
 output="$(run_provisioner "$state" --external-clients "$(to_child_path "${state}/bad.json")")"
 assert_contains "$output" "needs a name for the consent page" "a client without a name is refused"
+rm -rf "$state"
+
+echo "17. a stray client-level mapper on the extractor or a third-party client is removed, elsewhere reported"
+state="$(mktemp -d)"
+make_stub "$state" empty
+run_provisioner "$state" --apply >/dev/null
+STUB_STATE="$state" "$PYTHON" -c '
+import json, os, pathlib
+path = pathlib.Path(os.environ["STUB_STATE"]) / "state.json"
+d = json.loads(path.read_text(encoding="utf-8"))
+by_id = {c["clientId"]: c["id"] for c in d["clients"]}
+aud = {"included.custom.audience": "basetool-backend", "access.token.claim": "true"}
+d["client_mappers"][by_id["basetool-sc-extractor"]] = [
+    {"id": "m-ex-aud", "name": "backend-audience", "protocol": "openid-connect",
+     "protocolMapper": "oidc-audience-mapper", "config": aud},
+    {"id": "m-ex-email", "name": "email", "protocol": "openid-connect",
+     "protocolMapper": "oidc-usermodel-property-mapper", "config": {"claim.name": "email"}}]
+d["client_mappers"][by_id["versekit"]] = [
+    {"id": "m-vk-roles", "name": "realm roles", "protocol": "openid-connect",
+     "protocolMapper": "oidc-usermodel-realm-role-mapper", "config": {"claim.name": "roles"}}]
+d["client_mappers"].setdefault(by_id["basetool-frontend"], []).append(
+    {"id": "m-fe-extra", "name": "testing-only-mapper", "protocol": "openid-connect",
+     "protocolMapper": "oidc-hardcoded-claim-mapper", "config": {"claim.name": "x"}})
+path.write_text(json.dumps(d), encoding="utf-8")
+'
+before="$(cat "${state}/state.json")"
+output="$(run_provisioner "$state")"
+assert_eq "$(cat "${state}/rc")" "2" "the dry run plans changes and exits 2"
+assert_contains "$output" "- basetool-sc-extractor: mapper 'backend-audience' (oidc-audience-mapper basetool-backend) removed (not in this client's spec)" \
+  "the dry run plans to remove the extractor's backend audience mapper"
+assert_contains "$output" "- basetool-sc-extractor: mapper 'email' (oidc-usermodel-property-mapper email) removed" \
+  "and every other mapper on the extractor"
+assert_contains "$output" "- versekit: mapper 'realm roles' (oidc-usermodel-realm-role-mapper roles) removed" \
+  "and every mapper on a third-party client"
+assert_not_contains "$output" "basetool-sc-extractor: mapper 'backend-audience' is not in the production shape" \
+  "the extractor's mapper is a planned change, not a report"
+assert_contains "$output" "basetool-frontend: mapper 'testing-only-mapper' is not in the production shape" \
+  "a mapper on any other client is still only reported"
+assert_eq "$(cat "${state}/state.json")" "$before" "the dry run writes nothing"
+output="$(run_provisioner "$state" --apply)"
+assert_eq "$(cat "${state}/rc")" "0" "the apply succeeds and verifies clean"
+assert_contains "$output" "Applied. A second run reports no changes." "the verify pass finds nothing left"
+assert_eq "$(query "$state" "mappers('basetool-sc-extractor'), mappers('versekit')")" "([], [])" \
+  "neither the extractor nor the third-party client keeps a mapper"
+assert_eq "$(query "$state" "'testing-only-mapper' in mappers('basetool-frontend')")" "True" \
+  "the mapper on the frontend is kept"
+output="$(run_provisioner "$state" --apply)"
+assert_contains "$output" "No changes" "a second apply is empty"
+assert_eq "$(writes_in "$state")" "0" "and sends no write"
 rm -rf "$state"
 
 echo

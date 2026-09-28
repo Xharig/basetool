@@ -313,6 +313,7 @@ public class SecurityConfig {
             new ExchangeIdempotencyFilter(
                 exchangeIdempotency,
                 exchangeBudget,
+                exchangeQuotas,
                 exchangeStoreProperties,
                 exchangeRefusals,
                 objectMapper,

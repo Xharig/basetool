@@ -131,9 +131,10 @@ class RedisAclIngestIntegrationTest {
 
     assertThat(template.opsForZSet().add(budget, "ingest:xch:idem:k|512", 1_000.0)).isTrue();
     assertThat(template.opsForZSet().add(budget, "ingest:xch:idem:j|256", 2_000.0)).isTrue();
-    assertThat(template.opsForZSet().removeRangeByScore(budget, 0, 1_500.0)).isEqualTo(1L);
-    assertThat(template.opsForZSet().rangeByScore(budget, 0, Double.MAX_VALUE))
-        .containsExactly("ingest:xch:idem:j|256");
+    assertThat(template.opsForZSet().rangeByScore(budget, 0, 1_500.0))
+        .containsExactly("ingest:xch:idem:k|512");
+    assertThat(template.opsForZSet().remove(budget, "ingest:xch:idem:k|512")).isEqualTo(1L);
+    assertThat(template.opsForZSet().score(budget, "ingest:xch:idem:j|256")).isEqualTo(2_000.0);
     assertThat(template.opsForZSet().range(budget, 0, -1)).containsExactly("ingest:xch:idem:j|256");
     assertThat(
             template
@@ -143,6 +144,21 @@ class RedisAclIngestIntegrationTest {
     assertThatThrownBy(() -> template.opsForZSet().add("exchange:registry", "x", 1.0))
         .as("the registry mirror stays read-only")
         .isInstanceOf(DataAccessException.class);
+  }
+
+  @Test
+  void commandsNoCodePathSendsAreRefusedOnItsOwnKeys() {
+    StringRedisTemplate template = template(ingest);
+    String budget = "ingest:xch:budget:m:versekit:m-2";
+    assertThat(template.opsForZSet().add(budget, "ingest:xch:idem:k|512", 1_000.0)).isTrue();
+
+    assertThatThrownBy(() -> template.opsForZSet().removeRangeByScore(budget, 0, 1_500.0))
+        .as("the budget prunes with ZRANGEBYSCORE and ZREM inside its script")
+        .isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(() -> template.unlink(budget))
+        .as("keys are deleted with DEL")
+        .isInstanceOf(DataAccessException.class);
+    assertThat(template.delete(budget)).isTrue();
   }
 
   @Test

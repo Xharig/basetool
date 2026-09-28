@@ -69,7 +69,9 @@ is ever on the `api.*` allowlist (ADR-0135), and nothing of the exchange lives u
   are refused; `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the
   gateway without an acting member).
 - [x] The `api.*` allowlist test fails if an exchange or connected-apps path is added
-  (`ExternalContractTest.theExchangeStaysOffTheApiVhost`).
+  (`ExternalContractTest.theExchangeStaysOffTheApiVhost`). A line that touches `krt_api_allowed` in a
+  form the test cannot evaluate — another variable, a negation, an unquoted or multi-line rule —
+  fails it instead of being skipped; `~*` counts as case-insensitive (security review G5, I6).
 
 **Status:** built — WP 3.2 (#2082), WP 3.1 (#2083)
 
@@ -174,8 +176,20 @@ transaction completes — committed or rolled back — the committed state is wr
 there is counted and left to the reconcile, which compares the content (not `revision` and
 `writtenAt`) at startup and every 60 s (`app.exchange.mirror.reconcile-interval`) and rewrites a
 differing, missing or unreadable document. The mirror is written only while
-`APP_EXCHANGE_MIRROR_ENABLED=true`; while it is off nothing is mirrored and the gateway, which then
-finds no document, refuses every exchange request.
+`APP_EXCHANGE_MIRROR_ENABLED=true`. While it is off nothing is mirrored, and a start switches off a
+document an earlier run left behind (`ExchangeRegistryMirrorClosure`, once when the application is
+ready): the document has no expiry, so it would otherwise keep admitting clients. It is rewritten
+with the same clients, `enabled: false` and a new revision, through the backend user's own `GET` and
+`SET`, so the gateway refuses every exchange request `503 EXCHANGE_DISABLED` — or `503
+REGISTRY_UNAVAILABLE` when there never was a document. A failed attempt is counted as
+`basetool_exchange_mirror_writes_total{phase="switched_off",outcome="failed"}`
+(`ExchangeMirrorWriteFailed`) and does not stop the start. A document's age is no signal here: the
+backend rewrites it only when the registry changes, so `writtenAt` can be days old on a healthy
+mirror, and the gateway's `basetool_exchange_registry_mirror_age_seconds` measures its last
+successful read instead. The backend's own gate needs none of this: it reads the switch, the
+client, the installation and the client revocations from the database (REQ-XCH-008). *Corrected
+2026-09-28 (security review G5, L2): this said the gateway refuses every exchange request while
+mirroring is off, which held only until a document had once been written.*
 
 **What a registry entry may hold** (security review 2, L6). The display name reaches Keycloak's
 consent page, the member page and the connection notification, so it is Latin letters, ASCII digits,
@@ -203,6 +217,10 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   `ExchangeRegistryReaderTest` — a missing document, an unknown `schemaVersion`, garbage and an
   unreachable Redis all fail closed, a failed read is not cached — and `ExchangeGateTest`, which
   answers them `503 REGISTRY_UNAVAILABLE` with `Retry-After` (WP 3.2).*
+- [x] A start with mirroring off switches off a document left behind, keeping its clients, under
+  the backend's ACL user; a missing or already switched-off document is left alone, and a refused
+  read is counted without failing the start. *`ExchangeRegistryMirrorClosureTest` (security review
+  G5, L2).*
 - [x] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
   `ExchangeRegistryChanged` alert.
 - [x] The admin page *Administration → Verbundene Anwendungen* (`/admin/exchange-clients`)
@@ -223,7 +241,8 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   (`APP_GRAFANA_OPERATIONS_DASHBOARD_URL`, owner decision 2026-09-27). *`AdminExchangeClientUsageTest`,
   `AdminExchangeClientsPageControllerMvcTest`.*
 
-**Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
+**Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistryMirrorClosureTest`,
+`ExchangeRegistrySnapshotTest`,
 `AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `ExchangeConnectionsE2eTest`,
 `RedisAclBackendIntegrationTest`,
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
@@ -308,6 +327,10 @@ accepted. The provisioner applies this on production only **after** the legacy s
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
   (owner decision 2026-09-27). Both clients' online sessions are pinned at 30/90 days as well, and
   section 13 fails without the pin (owner decision 2026-09-28).
+- [x] Neither `basetool-sc-extractor` nor a third-party client keeps a client-level protocol mapper:
+  the provisioner plans and applies the removal of any it finds, so the verify pass cannot pass with
+  a hand-added `basetool-backend` audience mapper in place (owner decision 2026-09-28, G5-L4 of
+  #2092, ADR-0202 amendment 4; self-test section 17).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
   *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
   only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
@@ -323,7 +346,15 @@ accepted. The provisioner applies this on production only **after** the legacy s
   forms provider `krt-freemarker` adds it as `krtDeviceUserCode` (ADR-0228,
   `DeviceConsentLoginFormsProviderTest`); `scripts/sandbox-smoke.py` asserts the warning on both
   pages and the code on the consent page against the sandbox Keycloak image, and the same run was
-  made through a `verification_uri_complete` link on 2026-09-27.*
+  made through a `verification_uri_complete` link on 2026-09-27.* The E2E device login
+  (`ExchangeE2eSupport.approveOnTheDevicePage`) opens the bare `verification_uri`, types the
+  `user_code` as a member does, and asserts `#krt-device-phishing-warning` on the code page and
+  `#krt-device-consent-warning` with exactly that code in `#krt-device-user-code` on the consent
+  page, on every exchange E2E connection (G5-I5 of #2092).
+- [x] The consent page's intro claims only what the page lists („Die Anwendung erhält nur die unten
+  aufgeführten Rechte."), never that the application does not learn name, e-mail or roles, which
+  the template cannot know for every client (owner decision 2026-09-28, G5-L1 of #2092, ADR-0228
+  amendment 1).
 - [x] The client documentation tells clients to show the bare `verification_uri` with the
   `user_code` and never `verification_uri_complete` (`docs/exchange/authentication.md`,
   `client-security.md`, `quickstart.md`, the application template).
@@ -511,10 +542,13 @@ itself (`installation_revoked`), and re-checks the client revocation the way the
 gateway that missed it is caught behind it (security review 2026-09-27): the gateway relays the
 connection time it compared — an offline token's `iat`, any other token's `auth_time`
 (`ExchangeGateFilter.connectionTime`) — as `X-Exchange-Connected-At` (honoured like the other relay
-headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from the mirror on every
-exchange request and refuses a connection made at or before that second (`client_revoked`); a request
-relayed without a connection time counts as connected before it, as a token without the claim does
-at the gateway. Both sides therefore compare the same time. A mirror the
+headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from the mirror **and**
+the member's row in `exchange_client_revocation` on every exchange request and refuses a connection
+made at or before the later of the two seconds (`client_revoked`); a request relayed without a
+connection time counts as connected before it, as a token without the claim does at the gateway.
+Both sides therefore compare the same time, and the stored row keeps the check working while the
+mirror is off or behind. *Corrected 2026-09-28 (security review G5, L2): the gate read only the
+mirror, so with mirroring switched off a whole-client disconnect went unseen by it.* A mirror the
 backend cannot read fails closed: the request is refused `503 REGISTRY_UNAVAILABLE`
 (`revocations_unreadable`), as the gateway refuses revocations it cannot read, with the gateway's
 `Retry-After: 30`. Every refusal of the backend's gate carries the gateway's code for the same
@@ -544,7 +578,8 @@ BACKEND_RELAY_FAILED`.* The backend's Redis user already holds `GET` on
   shared ones before it reads the time, and writes nothing when Keycloak fails
   (`ConnectedAppsServiceTest`, `KeycloakServiceTest`); the extension leaves the member's other
   clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).
-  The backend re-checks it from the relayed connection time and refuses an unreadable mirror
+  The backend re-checks it from the relayed connection time against the later of the stored row and
+  the mirror, so a disconnect the mirror lacks is still refused, and refuses an unreadable mirror
   (backend `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the compared time in the gateway's
   `ExchangeGateTest`, the relay header in `ExchangeRelayTest`). The disconnect answers only in a
   second after the revocation's, holding no transaction
@@ -1088,7 +1123,8 @@ mass change, or a store failure escaping a route — each answers `503 SERVICE_U
 `Retry-After: 60`, never a `500`. Two Redis reads answer otherwise: an unreadable registry or
 revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003) and a write quota that cannot be
 counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with `Retry-After: 30`; a full byte budget
-is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. *Corrected 2026-09-27: this paragraph
+is `503 EXCHANGE_BUDGET_EXHAUSTED` with a `Retry-After` read from the budget (REQ-XCH-023).
+*Changed 2026-09-28: it was a fixed `Retry-After: 60`.* *Corrected 2026-09-27: this paragraph
 said every Redis failure answered `Retry-After: 60`; the registry and quota reads have answered 30
 since they were built.*
 
@@ -1246,7 +1282,8 @@ Redis (`ingest:xch:quota:*`). All gateway-written exchange data in Redis is boun
 client and member, 16 MB per client and 64 MB in total, counted per stored value with a fixed
 per-entry overhead (an estimate of Redis's own bookkeeping, not a measurement of its memory — see
 *The byte budget* below); above a limit the gateway
-answers `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
+answers `503 EXCHANGE_BUDGET_EXHAUSTED` with a `Retry-After` of when enough of the budget expires
+(below) and gives the write's daily quota count back. A batch holds at most 500 ops (`413 BATCH_TOO_LARGE`).
 Responses carry `RateLimit` and `Retry-After` headers. The account check has its own tight limit.
 
 **The limits** (owner decision 2026-09-27; `app.exchange.limits.*`):
@@ -1259,13 +1296,36 @@ Responses carry `RateLimit` and `Retry-After` headers. The account check has its
 | write requests per client and member | 500 per UTC day — `writesPerDay` overrides it, at most 5000 | Redis, `ingest:xch:quota:<client>:<member>:<day>`, created with its expiry by `SET NX EX`, then `INCR`; kept until the end of the following UTC day |
 | live DPoP proofs per member (`dpop-proofs-per-member`) | 600, per path scope | in-process `jti` replay cache (REQ-XCH-006) |
 | live DPoP proofs in total (`dpop-proofs-total`) | 100 000, per path scope | in-process `jti` replay cache (REQ-XCH-006) |
+| change sets of more than 100 ops relayed at once, over all clients and members | 4 | in-process bulkhead `exchangeLargeChangeSets` (`resilience4j.bulkhead.instances.…max-concurrent-calls`) |
 
 The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
 a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
 `Retry-After` (the quota's until the next UTC day); a quota that cannot be counted is `503
-SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted answer carries
+SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every attempt at a write route
+counts, retries, replays and refusals included, except a `503 EXCHANGE_BUDGET_EXHAUSTED`: the
+limit filter notes the counter on the request (`ExchangeQuotas.COUNTED`) and a budget refusal gives
+that one count back (a Lua `GET` and `SET KEEPTTL` that never goes below zero or creates a
+counter). Before, a client that honoured the refusal's `Retry-After` burned its 500 writes in
+about eight hours of refusals (load test of 2026-09-28, finding 5). Every admitted answer carries
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
+
+**The relay's capacity** (load test of 2026-09-28, finding 3). The exchange relay has its own JDK
+client, circuit breaker (`exchange`) and bulkhead, none shared with the extractor's handoff relay
+(`BackendImportClient`, breaker `backend`), so a burst of exchange writes cannot open the
+extractor's breaker. A change set of more than 100 ops takes one of four slots while it is
+relayed; without a free slot it is not relayed but answered `503 RELAY_BUSY` with
+`Retry-After: 10`, counted as `relay_busy`, and — a `5xx` — never cached for its key; like a
+budget refusal it gives its daily write-quota count back (owner decision 2026-09-28). A set of at
+most 100 ops needs no slot. The relay's read timeout is **30 s**, the extractor relay's 15 s: a
+500-op stock set took up to 10.6 s at p99 with four in flight on a member with about 15 000
+journal rows (4.2 s on fresh data), and past the timeout the gateway answered `502` while the
+backend still committed, so the client's retry met `VERSION_CONFLICT` on its own write. The
+timeout stays below the idempotency claim's two minutes and the edge proxy's 90 s. Why four:
+one to four concurrent 500-op sets kept the p50 at 2.1 s, eight rose to 2.9 s (and on a member
+with history reached the old 15 s timeout), sixteen collapsed to 12.4 s with the backend at its
+3-CPU limit. The breaker's and the bulkhead's meters, `ExchangeLargeChangeSetsBusy` and the
+Exchange dashboard's *Relay capacity* row watch it (REQ-XCH-028).
 
 **In front of them**, before the token is read, the ingest-wide per-IP bucket
 (`RateLimitingFilter`, REQ-INGEST-005; `app.rate-limit.ip-capacity` / `ip-refill-tokens`, 120 a
@@ -1305,8 +1365,20 @@ A quota counter is recorded on every write, before the counter is touched and wi
 — the write still needs its own reservation. Its entry has a fixed name and expiry, so recording it
 again counts it once; the counter itself is created with that expiry in one command (`SET NX EX`)
 and only then incremented, so no crash between two commands can leave it without an expiry or
-outside the budget. `basetool_ingest_exchange_budget_used_ratio` reports the total's use;
-`ExchangeBudgetHigh` fires above 80 %.
+outside the budget. `basetool_ingest_exchange_budget_used_ratio` reports the total's use and
+`ExchangeBudgetHigh` fires above 80 % of it;
+`basetool_ingest_exchange_client_budget_used_ratio{client_id}` reports each registry client's use
+of its own budget and `ExchangeClientBudgetHigh` fires above 80 % of that. The second is the one that warns with a single client: its 16 MiB are a
+quarter of the total, so the total's gauge reads 25 % at most while that client's writes are all
+refused (load test of 2026-09-28, finding 4). Both are the value at the last write.
+
+**When a refused write may retry.** The sets are scored by expiry, so the refusal's
+`Retry-After` is read from them: for every scope the write's charge would overflow, a read-only
+script walks up to 1000 entries in expiry order until the bytes expiring cover the overflow, and
+the longest such wait is the answer, in whole seconds rounded up — at least 1 and at most 3600,
+the cap also when the entries read never free enough, and 60 when Redis cannot be read. A full
+budget frees only as cached answers expire, up to 24 hours; the cap makes a client ask again at
+least hourly instead of parking it for a day.
 
 What the budget counts, and what stays an estimate:
 
@@ -1329,12 +1401,30 @@ issues against the same user's key patterns and commands (REQ-SEC-068).
 - [x] A load test fills one member's budget, then one client's; sessions and other members keep
   working. *`ExchangeStoreRedisIntegrationTest` fills one member's and then one client's budget in a
   real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
-  free their bytes. Sessions live under keys the ingest user cannot reach at all.*
+  free their bytes. Sessions live under keys the ingest user cannot reach at all. End to end through
+  the gateway, `scripts/sandbox-load.py budget` fills the member budget at its 1 MiB default and the
+  client and total budgets lowered to 2.5 MiB, checking every admission against the live sets
+  (REQ-XCH-029).*
+- [x] The exchange relay does not share the extractor relay's breaker, and more than four large
+  change sets at once are refused before the backend. *`ExchangeRelayTest` (an open `backend`
+  breaker leaves the relay working; a busy bulkhead refuses `RELAY_BUSY` without calling the
+  backend; a failed set frees its slot), `ExchangeChangeRouteTest` (101 ops take a slot, 100 do
+  not; `RELAY_BUSY` carries `Retry-After: 10`, is not cached and gives its quota count back, a
+  relayed set keeps it), `RestClientConfigTest` (the
+  exchange client waits past 15 s; its timeout ends within the claim),
+  `Resilience4jMetricsConfigTest`, `exchange_relay_capacity_alerts_test.yml`.*
 - [x] Parallel writes never overshoot a budget. *`ExchangeStoreRedisIntegrationTest`: sixteen
   parallel reservations on one member admit exactly what fits, and across two clients exactly what
   the total holds; a reservation settles on its value or stays when the value does not fit; a missing
   total is rebuilt. `RedisAclIngestIntegrationTest`: a script under the ingest user reaches no key the
   user could not.*
+- [x] A budget refusal gives its quota count back and says when enough of the budget expires; each
+  client's use is a gauge with its own alert. *`ExchangeStoreRedisIntegrationTest` under the
+  ingest ACL user: a refusal restores the counter and answers `Retry-After: 600` when the blocking
+  answer expires in ten minutes; the wait is the expiry that frees enough bytes; a refund keeps the
+  counter's expiry, stops at zero and creates nothing; each client's gauge reads its scope.
+  `ExchangeIdempotencyFilterTest`, `ExchangeChangeRouteTest`, `ExchangeDraftRouteTest`;
+  `exchange_client_budget_alert_test.yml`.*
 
 **Status:** built — WP 3.2 (#2082); the production Redis size and ACL follow with the go-live,
 WP 2.1 (#2092)
@@ -1358,7 +1448,8 @@ each with its HTTP status and the client action it requires. Codes are never reu
 The gateway's gates count their refusals on `basetool_ingest_exchange_refused_total` with the code
 as the `reason` label (`ExchangeRefusals.CODES`); the routes' own answers (`SCHEMA_INVALID`,
 `BATCH_TOO_LARGE`, `PAYLOAD_TOO_LARGE`, `CURSOR_EXPIRED`, `BACKEND_RELAY_FAILED`, a staging store's
-`503`) and those written before the token is read are not counted there. *Corrected 2026-09-28: this
+`503`) and those written before the token is read are not counted there; `RELAY_BUSY`, the relay's
+refusal of a large change set without a free slot (REQ-XCH-023), is, as `relay_busy`. *Corrected 2026-09-28: this
 said every gateway-side code was such a label.*
 
 No answer on an exchange route falls outside the registry. A body that is not a JSON document is
@@ -1476,7 +1567,8 @@ tombstones and journal reports task metrics.
   refusals outside its own limits. *`ExchangeRefusalsTest`, `ExchangeGateTest`,
   `exchange_gateway_alerts_test.yml`.* The admin page links there instead of showing an error rate
   itself (owner decision 2026-09-27).
-- [x] Registry changes and the Redis budget alert (`ExchangeRegistryChanged`, `ExchangeBudgetHigh`).
+- [x] Registry changes and the Redis budget alert (`ExchangeRegistryChanged`, `ExchangeBudgetHigh`,
+  and per client `ExchangeClientBudgetHigh`).
 - [x] A blackbox probe checks `GET /exchange/v1` for exactly `401` (`blackbox-http-401`, module
   `http_401`; `BlackboxProbeFailed` covers it).
 - [x] Per-client write metrics with the WP 3.3 journal, and the tombstone and journal purge task
@@ -1544,7 +1636,9 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       commit. It publishes `edge` on every push to `main` that changes what the images contain
       (a newer run cancels an older one), the version and `latest` on a release tag, and by hand
       from either; the production packages stay private and untouched. The packages' public
-      visibility is set once by the owner.*
+      visibility is set once by the owner. Its `ref-guard` job, which every build waits for,
+      refuses to publish from a tag that is not `vMAJOR.MINOR.PATCH` or whose commit is not on
+      `main`, the same gate as `release-images.yml` (security review G5, L3).*
 - [x] An image built from a checkout (`--build`) is built like the published one and refuses
       `prod` too. *`docker-compose.sandbox-build.yml` builds each application image from
       `docker/sandbox/app.Dockerfile` on top of a build-only `<module>-base` service
@@ -1579,6 +1673,16 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       it. *`E2eStackExtension`, `docker-compose.e2e.yml`, `ExchangeRoundTripE2eTest`, the
       `build-stack` job of `e2e.yml`; `E2ePrebuiltImageParityTest`, `build-sandbox-realm.py
       --selftest` / `--check` (ADR-0225).*
+- [x] A load test of the gateway and its Redis budget runs against the sandbox, never production
+      (#2092). *The realm and the seed carry sixteen synthetic members `sandbox-load-01` …
+      `sandbox-load-16` without data. `scripts/sandbox-load.py throughput` signs them in and drives
+      snapshots in cursor pages, feed pages and change sets up to the 500-op cap and near the 32 KiB
+      result cap at a set rate, and reports latency percentiles, status and code counts, the
+      exchange metrics, Redis memory and the budget totals; `budget --scope member|client|total`
+      fills one budget and checks every admission against the live budget sets. The device login
+      and the DPoP-signed call it shares with the smoke test live in `scripts/sandbox_client.py`.
+      `docker-compose.sandbox-load.yml` adds the management ports, which the metrics need, and
+      makes the budget and the answers' lifetime settable.*
 
 **Status:** built — local sandbox, the image pipeline, its smoke job and the E2E stack with the
 gateway, WP 2.3 (#2099)
@@ -1737,6 +1841,8 @@ it changed, and is audited and instrumented. Re-activating the client stays a se
   `exchange_write_alerts_test.yml`.*
 - [x] One run per client at a time (`409`); a run a restart cut short is marked `FAILED` at the next
   start. *`ExchangeBulkUndoControllerTest`.*
+- [x] A run the executor refuses is ended `FAILED` at once and counted as a failed run, the start
+  answers `409`, and the client stays suspended. *`ExchangeBulkUndoRejectionTest`.*
 - [x] Each member whose data the run changed gets one notification per run; the admin page lists the
   runs, refreshes while one runs and shows a run's skipped entries.
   *`ExchangeBulkUndoControllerTest`, `AdminExchangeClientsPageControllerMvcTest`.*
@@ -1766,7 +1872,14 @@ the run with one atomic update, and publishes `EXCHANGE_BULK_UNDO_APPLIED` when 
 A member whose undo throws is rolled back alone and recorded as `FAILED`. At the end the run is
 `COMPLETED`, or `FAILED` when a member failed, and `EXCHANGE_BULK_UNDO_FINISHED` records the status
 and the totals. A run left `RUNNING` by a restart is marked `FAILED` (`interrupted=true`) at the next
-start; the admin starts it again, which touches only what is not undone yet.
+start; the admin starts it again, which touches only what is not undone yet. A run the executor
+refuses because its queue of ten is full is ended `FAILED` at once (`EXCHANGE_BULK_UNDO_FINISHED`,
+`interrupted=false`), counted as a failed `exchange_bulk_undo` run (`ExchangeBulkUndoFailed`) and
+answered `409` with a localized detail; the client stays suspended until an admin activates it, and
+the page reloads the registry and the run list in place. There is no admin notification for bulk
+undo runs, so the answer and the alert are the signal (owner decision 2026-09-28; security review
+G5, I2 — until then such a run stayed `RUNNING` and blocked every new run of the client until a
+restart).
 
 **Notification.** The rule-engine event `EXCHANGE_BULK_UNDO_APPLIED` (seed `V257`, selector
 `EVENT_RECIPIENT`) tells each member once per run how many entries the administration took back and
@@ -1859,7 +1972,7 @@ succeeding, never succeeded).
 | Guard evasion by batching, near-zero cuts or overwriting stock updates | window counting rules against each lot's state at window start (REQ-XCH-021) |
 | Guard evasion by overwriting ship updates (retyping every ship, clearing names and locations) | counted only when one `upsert` changes both name and type, with no comparison to the window start; journal and undo restore the ships (REQ-XCH-021/-022) — accepted risk (owner decision 2026-09-27) |
 | A malicious release changing many members' data at once | journal and each member's own undo, suspension, and the admin's audited undo of the client for every member at once, which suspends it first (REQ-XCH-022/-034); Materialbörse offers and mission units it removed stay reported, not undone (rows below). *Changed 2026-09-27: the admin bulk undo is built; the row still said it was being addressed.* |
-| A single open order recognisable in the org demand feed | membership-only scope, catalogue fields only, no requester, title or free text; no low-count suppression, 7-day client cache (REQ-XCH-018) — accepted risk (ADR-0220) |
+| A single open order recognisable in the org demand feed | withheld unless the member passes the web's job-order gate (`canViewJobOrders`, under the reduced authorities); membership-only scope, catalogue fields only, no requester, title or free text; no low-count suppression, 7-day client cache (REQ-XCH-018) — accepted risk (ADR-0220 and its 2026-09-28 amendment) |
 | Silent removal of Materialbörse offers by a sync book-out | reported and audited, not undoable — accepted (REQ-XCH-016/-022) |
 | A ship removal through the exchange detaching the ship from its mission units, which are org data | reported (`detachedFromMissions`) and audited (`MISSION_UNIT_UPDATED`), not undoable: undo recreates the ship under a new id without its mission units — accepted (REQ-XCH-017/-022) |
 | The version gate bypassed by a manipulated client | cooperative by design — accepted (REQ-XCH-024) |

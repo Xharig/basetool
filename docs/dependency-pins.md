@@ -1,6 +1,6 @@
 # Dependency pins, holds and floors
 
-> **Doc type:** Living reference — kept in sync with `main`. Last reviewed: 2026-09-25.
+> **Doc type:** Living reference — kept in sync with `main`. Last reviewed: 2026-09-28.
 
 This file records why a dependency version is **held** behind upstream, **pinned** to match another
 component, or **floored** / overridden for a security advisory — the standing reasons the version
@@ -64,16 +64,21 @@ A floor only has to clear its advisory: stay on the lines above rather than taki
 | backend `spring-boot-starter-data-jpa` | `org.springframework:spring-aspects`, `org.aspectj:aspectjweaver` | Licence, not size (ADR-0197): the AspectJ jar is `EPL-2.0 AND BSD-3-Clause AND Apache-1.1` with no GPL secondary licence and may not ship in a GPL-3.0-only image. Nothing uses AspectJ; the proxy-based advisors (`@Transactional`, `@PreAuthorize`, `@Cacheable`, `@Async`, `@Scheduled`) work without it. `:backend:licensee` refuses EPL-2.0 if a new path brings it back. | Never, while the images are GPL-3.0-only. |
 | backend, frontend, ingest `spring-boot-starter-opentelemetry` | `io.micrometer:micrometer-registry-otlp` | It would switch on Boot's OTLP metrics push to a localhost default endpoint in every environment. Metrics are Prometheus pull only (REQ-OBS-005). | Metrics export moves to OTLP. |
 
-## Proposals refused on the 2026-09-25 sweep
+## Proposals refused on the 2026-09-28 sweep
 
-These refreshVersions proposals were open in the catalog when the comments were removed. Refusing one
-again on a later sweep needs no new row; a changed reason does.
+These refreshVersions proposals were first refused on the 2026-09-25 sweep, when the comments were
+removed, and again unchanged on the 2026-09-28 sweep (#2248), with every reason re-checked. Refusing
+one again on a later sweep needs no new row; a changed reason does.
+
+The 2026-09-28 sweep took the two build-tooling patches it proposed: `spotbugs` (the
+`com.github.spotbugs-base` plugin) 6.5.11 → 6.5.12 and `spotless` 8.10.2 → 8.10.3. Both are Gradle
+plugins only, so neither reaches a runtime classpath or an image.
 
 | Entry | Refused proposals | Reason |
 |---|---|---|
 | `springBoot` | 4.2.0-M1, 4.2.0-M2 | Milestones only. |
 | `mapstruct` | 1.7.0.Beta1, 1.7.0.Beta2 | Betas only. |
-| `lombok` | 1.18.48 | Equality with the Boot-managed version (still 1.18.46 under Boot 4.1.1, re-verified 2026-09-21 and 2026-09-25). |
-| `netty41` | 4.2.0.Alpha1 … 4.2.18.Final | The floor is for Keycloak's 4.1 line (Quarkus 3.33.3.2 and vertx-core 4.5.31 still ask for 4.1.136.Final); a 4.2 BOM would make the scan describe a netty Keycloak never runs. No newer 4.1.x was proposed. |
+| `lombok` | 1.18.48 | Equality with the Boot-managed version (still 1.18.46 under Boot 4.1.1, re-verified 2026-09-21, 2026-09-25 and 2026-09-28). |
+| `netty41` | 4.2.0.Alpha1 … 4.2.18.Final | The floor is for Keycloak's 4.1 line (Quarkus 3.33.3.2 and vertx-core 4.5.31 still ask for 4.1.136.Final); a 4.2 BOM would make the scan describe a netty Keycloak never runs. No newer 4.1.x was proposed; 4.1.138.Final is still the newest 4.1 release. |
 | `protobuf3` | 4.0.0-rc-1 … 4.36.2 | grpc-protobuf is still 1.65.0, built for the 3.x line; 3.25.9 is still the newest 3.25 patch. |
 | `opentelemetry` | 1.63.0 … 1.66.0 | The Boot 4.1.1 BOM still selects 1.62.0 on the backend runtime classpath; taking a newer one would split the build into two versions for no advisory. |

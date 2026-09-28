@@ -199,11 +199,11 @@ on it.
 | R5 | The live ACL grants | `${UPOD} exec redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --user admin ACL DRYRUN basetool-backend SET exchange:registry x'` and `… ACL DRYRUN basetool-ingest EVALSHA 0000000000000000000000000000000000000000 1 ingest:xch:probe` | before S3: both refused, naming the key or the command; after S3: `OK` · **TO BE READ on the day** (exec-based — treated as gated, with the owner's yes). |
 | R6 | Redis memory now and at its peak | `${UPOD} exec redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --user admin INFO memory' \| grep -E '^(used_memory\|used_memory_peak\|used_memory_rss\|maxmemory):'`; Grafana → Explore: `max_over_time(redis_memory_used_bytes[30d])`, `max_over_time(redis_memory_used_rss_bytes[30d])`, `redis_memory_max_bytes` | peak well under 384 MB (`maxmemory` 402653184 until S6) · *Read 2026-09-28 (owner-approved exec):* `used_memory_human:4.26M`, `used_memory_peak_human:4.55M` (since the last Redis start), `maxmemory_human:384.00M`. The 30-day PromQL peak only through the Grafana UI — Prometheus answers `401` inside its own container and has no host listener. |
 | R7 | Host RAM headroom | `free -m`; Grafana → Explore: `min_over_time(node_memory_MemAvailable_bytes[30d])`, `node_memory_MemTotal_bytes`; `grep -h '^Memory=' /etc/containers/systemd/users/${IRI_UID}/*.container` | the 30-day minimum of available memory well above the 512 MiB the Redis limit grows by · *Read 2026-09-28:* 15 345 MiB total, 10 587 MiB available, no swap; unit `Memory=` sum 13 456 MiB today, **13 968 MiB** with Redis at 1024M. |
-| R8 | Exchange and ingest switches in `.env` | `grep -cE '^APP_EXCHANGE_MIRROR_ENABLED=' $ENVF; grep -cE '^IRI_INGEST_LEGACY_ENDPOINTS_ENABLED=' $ENVF; grep -c '^IRI_INGEST_ALLOWED_CLIENT_IDS=basetool-sc-extractor$' $ENVF; grep -cE '^IRI_INGEST_CLIENT_AUDIT_ONLY=(true\|"true")$' $ENVF; grep -cE '^IRI_INGEST_PUBLIC_BASE_URL=https://ingest\.profit-base\.online$' $ENVF; grep -cE '^APP_INVENTORY_STOLEN_MARKING_ENABLED=' $ENVF` | `0`, `0`, `1`, `0`, `1`, `0` · *Read 2026-09-28:* exactly as expected — **both new ingest start-up guards pass**. |
+| R8 | Exchange and ingest switches in `.env` | `grep -cE '^APP_EXCHANGE_MIRROR_ENABLED=' $ENVF; grep -cE '^IRI_INGEST_LEGACY_ENDPOINTS_ENABLED=' $ENVF; grep -c '^IRI_INGEST_ALLOWED_CLIENT_IDS=basetool-sc-extractor$' $ENVF; grep -cE '^IRI_INGEST_CLIENT_AUDIT_ONLY=(true\|"true")$' $ENVF; grep -cE '^IRI_INGEST_PUBLIC_BASE_URL=https://ingest\.profit-base\.online$' $ENVF; grep -cE '^APP_INVENTORY_STOLEN_MARKING_ENABLED=' $ENVF; grep -c '^REDIS_INGEST_USERNAME=basetool-ingest$' $ENVF` | `0`, `0`, `1`, `0`, `1`, `0`, `1` · *Read 2026-09-28:* the first six exactly as expected — `PublicBaseUrlGuard` and `LegacyClientGateGuard` pass; the seventh (for `RedisUsernameGuard`) is read on the day, R11 already showed all three service usernames set. |
 | R9 | The same, as the running ingest sees it | `for v in APP_INGEST_CLIENT_IDENTITY_ALLOWED_CLIENT_IDS APP_INGEST_CLIENT_IDENTITY_AUDIT_ONLY APP_INGEST_PUBLIC_BASE_URL; do printf '%s=' $v; ${UPOD} exec ingest printenv $v; done` | `basetool-sc-extractor`, `false`, `https://ingest.profit-base.online` · **TO BE READ on the day** (exec-based, gated). |
 | R10 | Android floor | `grep -E '^APP_ANDROID_(MINIMUM\|LATEST)_VERSION_CODE=[0-9]+$' $ENVF`; off the host: `curl -s https://api.profit-base.online/api/v1/app/version-policy` | `16` / `16` (vault *Android App*, 2026-09-25) · *Read 2026-09-28:* 16 / 16. |
 | R11 | Redis users in `.env` | `grep -cE '^REDIS_(BACKEND\|INGEST\|FRONTEND)_USERNAME=' $ENVF; grep -c '^REDIS_DEFAULT_USER=off$' $ENVF` | `3`; `1` (APPSEC-04 done 2026-09-25) · *Read 2026-09-28:* `3`; `1`. |
-| R12 | Keycloak realm shape (extractor, exchange scopes, provisioner client) | the snapshot read below the table | extractor `consent=f`, `dpop.bound.access.tokens=false`, default scopes incl. `extractor-ingest` and `extractor-ingest-only`; **no** `exchange.*` scope; no `versekit`, no `basetool-provisioner` · *Read 2026-09-28 in part (owner-approved exec):* realm login theme `krt-theme`, 0 `exchange.*` client scopes, 0 `versekit` clients. The full snapshot (the extractor's consent, DPoP and scope rows) **TO BE READ on the day**. |
+| R12 | Keycloak realm shape (extractor, exchange scopes, provisioner client) | the snapshot read below the table | extractor `consent=f`, `dpop.bound.access.tokens=false`, default scopes incl. `extractor-ingest` and `extractor-ingest-only`; **no** `exchange.*` scope; no `versekit`, no `basetool-provisioner`; no `mapper|basetool-sc-extractor|` row (optional cross-check of G5-L4) · *Read 2026-09-28 in part (owner-approved exec):* realm login theme `krt-theme`, 0 `exchange.*` client scopes, 0 `versekit` clients. The full snapshot (the extractor's consent, DPoP and scope rows) **TO BE READ on the day**. |
 | R13 | Last backup | `systemctl show iri-backup.service -p Result -p ExecMainExitTimestamp` | `success`, today 04:15 · *Read 2026-09-28:* `success`, 2026-09-28 04:17:40 UTC — re-read on the day. |
 | R14 | Extractor traffic to plan the announcement | Grafana → Basetool operations → panel 45 „Ingest calls/hour by client", last 7 days | how many sends a day the switch-off interrupts |
 | R15 | Firing alerts baseline | Grafana → Alerting | written down before S1 |
@@ -221,7 +221,7 @@ R12 — `scripts/keycloak-config-snapshot.sql` (read-only by its first statement
 ```powershell
 (Get-Content scripts\keycloak-config-snapshot.sql -Raw) -replace "`r","" |
   ssh root@46.225.24.180 'cd / && sudo -n -u iri podman exec -i db-keycloak sh -c "psql -qAt -U \$POSTGRES_USER -d \$POSTGRES_DB -p 15433 -f -"' |
-  Select-String -Pattern '^(client\|basetool-sc-extractor\||clientattr\|basetool-sc-extractor\|dpop|scopeuse\|basetool-sc-extractor\||scope\|exchange\.|client\|versekit\||client\|basetool-provisioner\|)'
+  Select-String -Pattern '^(client\|basetool-sc-extractor\||clientattr\|basetool-sc-extractor\|dpop|scopeuse\|basetool-sc-extractor\||mapper\|basetool-sc-extractor\||scope\|exchange\.|client\|versekit\||client\|basetool-provisioner\|)'
 ```
 
 ---
@@ -411,9 +411,10 @@ yes).
     `exchange_change` row (source `system`) per personal blueprint that is also a default blueprint —
     expected and harmless. **V258** indexes `exchange_change` by member, resource and key; the table
     is only as old as V252 in the same run, so the build is instant.
-  - **Ingest has two new start-up guards under `prod`**: `PublicBaseUrlGuard` (a blank
-    `IRI_INGEST_PUBLIC_BASE_URL`) and `LegacyClientGateGuard` (while the legacy endpoints are on, an
-    empty `IRI_INGEST_ALLOWED_CLIENT_IDS` or `IRI_INGEST_CLIENT_AUDIT_ONLY=true`). Either refuses the
+  - **Ingest has three new start-up guards under `prod`**: `PublicBaseUrlGuard` (a blank
+    `IRI_INGEST_PUBLIC_BASE_URL`), `LegacyClientGateGuard` (while the legacy endpoints are on, an
+    empty `IRI_INGEST_ALLOWED_CLIENT_IDS` or `IRI_INGEST_CLIENT_AUDIT_ONLY=true`) and
+    `RedisUsernameGuard` (a blank or `default` `REDIS_INGEST_USERNAME`). Any of them refuses the
     ingest start, the health gate fails, and the **whole release rolls back** — R8/R9 before S4 are
     the protection.
   - **Monitoring arrives with the bundle** (reconciled without gating; Prometheus, blackbox and the
@@ -679,7 +680,13 @@ files under `/root/kc-realm/`, and a kcadm session file on the Keycloak tmpfs.
     `web-origins`, `acr` withheld; optional scopes the five extractor exchange scopes plus
     `offline_access`, the rest withheld; the loopback redirect URIs and the code flow gone if still
     there;
-  - **no** `versekit` line (the empty list); if one appears, the flag is missing — stop.
+  - **no** `versekit` line (the empty list); if one appears, the flag is missing — stop;
+  - **no** `- basetool-sc-extractor: mapper '…' (…) removed` line is expected (the reference realm
+    shows no client-level mapper on the extractor). If one appears, it is an ordinary planned change
+    that S15 removes (ADR-0202 amendment 4, G5-L4): note its type and target and go on — the
+    extractor needs no mapper of its own. Since that fix the provisioner never lists such a mapper
+    under `[only on this realm]`; if a `basetool-sc-extractor: mapper` line shows up there, the
+    copied script predates it — stop.
   No line may touch `basetool-frontend`'s type or secret, `basetool-android`, `backend-service` or
   `basetool-ingest-gateway`. `[only on this realm]` may list `basetool-provisioner` and `grafana`.
 - **Watch:** nothing moves — a dry run only reads.
@@ -800,6 +807,8 @@ every extractor token is; the approval must name it.
   ```
 - **Expected:** `[apply]`, `[verify] re-planning …`, `Applied. A second run reports no changes.`,
   `exit=0`; the second (dry) run: `The realm is in the production shape. Nothing to do.`, `exit=0`.
+  A clean verify also means no client-level mapper is left on the extractor: one that stayed would
+  fail it as `STILL PLANNED`.
   `exit=3` with `[manual]` means a service-account role to assign by hand — none is expected.
 - **Keep the session open** for S16; the clean-up is at S16's end.
 - **Verify:**
@@ -807,7 +816,8 @@ every extractor token is; the approval must name it.
     `clientattr|basetool-sc-extractor|dpop.bound.access.tokens=true`, `scopeuse|basetool-sc-extractor|basic|default`,
     five `exchange.*` and `offline_access` as `optional`, **no** `extractor-ingest` /
     `extractor-ingest-only` row for the extractor; ten `scope|exchange.…` rows; **no**
-    `client|versekit`; `basetool-provisioner` present until S16's clean-up.
+    `client|versekit`; `basetool-provisioner` present until S16's clean-up. *Optional
+    cross-check:* **no** `mapper|basetool-sc-extractor|…` row (R12's filter includes it).
   - **A real device login** with 2.10.0 on the owner's PC: the browser opens once, the device page
     warns and shows the code, the **consent page lists the five capabilities and the user code**
     (ADR-0228), the extractor asks for the installation's name, a blueprint send lands as a draft;

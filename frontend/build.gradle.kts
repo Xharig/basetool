@@ -70,14 +70,14 @@ val resolvedAppVersion: Provider<String> =
     .orElse(
       provider {
         runCatching {
-            gitDescribe.result
-              .get()
-              .exitValue
-              .takeIf { it == 0 }
-              ?.let {
-                gitDescribe.standardOutput.asText.get().trim().takeIf { out -> out.isNotBlank() }
-              }
-          }
+          gitDescribe.result
+            .get()
+            .exitValue
+            .takeIf { it == 0 }
+            ?.let {
+              gitDescribe.standardOutput.asText.get().trim().takeIf { out -> out.isNotBlank() }
+            }
+        }
           .getOrNull() ?: projectVersion
       }
     )

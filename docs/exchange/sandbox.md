@@ -161,8 +161,8 @@ at once with exit code 64.
 
 | Tag | What it is |
 | --- | --- |
-| `edge` | The default. Built from `main` after every change to what the images contain, so it trails `main` by the time a build takes. A change to anything else, such as these pages, the seed or the start scripts, publishes nothing: those come from your checkout. |
-| `X.Y.Z`, such as `1.13.0` | Built from the release tag `vX.Y.Z` — without the `v`. Published with every release from the first one that contains the sandbox; until then `edge` is the only tag. |
+| `edge` | The default. Built from `main` after every change to what the images contain, so it trails `main` by the time a build takes. A change to these pages or the start scripts publishes nothing: those come from your checkout. A change under `docker/sandbox/`, the seed included, republishes `edge` with a new revision even when the images' content is unchanged; the seed itself still comes from your checkout. |
+| `X.Y.Z`, such as `1.13.0` | Built from the release tag `vX.Y.Z` — without the `v` — and only when that tag's commit is on `main`. Published with every release from the first one that contains the sandbox; until then `edge` is the only tag. |
 | `latest` | The newest release. |
 
 Pick a tag with `BASETOOL_SANDBOX_VERSION`:
@@ -338,10 +338,11 @@ Discord.
 | `sandbox-member` | `sandbox-member-pw-do-not-use-in-prod` | `5a4d0000-0000-4000-8000-000000000001` | a member of two squadrons, IRIDIUM and Sandbox Squadron, with data |
 | `sandbox-member-2` | `sandbox-member-2-pw-do-not-use-in-prod` | `5a4d0000-0000-4000-8000-000000000002` | a member of IRIDIUM only, for isolation checks |
 | `sandbox-admin` | `sandbox-admin-pw-do-not-use-in-prod` | `5a4d0000-0000-4000-8000-000000000003` | an administrator, for the registry page in the web frontend |
+| `sandbox-load-01` … `sandbox-load-16` | `sandbox-load-NN-pw-do-not-use-in-prod` | `5a4d0000-0000-4000-8000-0000000002NN` | members of IRIDIUM without data, for our load test (`scripts/sandbox-load.py`); you do not need them |
 
-All three are approved and have accepted the Terms of Use version of your checkout, which is why
+All of them are approved and have accepted the Terms of Use version of your checkout, which is why
 the image tag should match it. `sandbox-member` has the RSI handle `Sandbox_Member` stored for the
-account check; the other two have none.
+account check; the others have none.
 
 ## Clients
 

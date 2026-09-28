@@ -5,6 +5,18 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-28
 
+- **`EXCHANGE_BUDGET_EXHAUSTED` tells when to retry and costs no write.** Its `Retry-After` is now
+  the seconds until enough of the full budget expires, at most 3600, instead of a fixed 60 that a
+  full budget never kept; and the refused write no longer counts against the daily write quota, so
+  a client that honours `Retry-After` keeps its writes ([errors](errors.md),
+  [sync guide](sync-guide.md#rate-limits-quota-and-back-off)).
+- **New code `RELAY_BUSY`, and large change sets are relayed at most four at a time.** A change set
+  of more than 100 ops that arrives while the gateway already relays four such sets, over all
+  clients, is answered `503 RELAY_BUSY` with `Retry-After: 10` and not relayed; retry it under the
+  same key; the refused set costs no write of the daily quota. Sets of at most 100 ops are unaffected. The gateway also waits up to 30 s for the
+  Basetool instead of 15 s, so a slow large set is answered rather than failed with
+  `502 BACKEND_RELAY_FAILED` after it was written ([errors](errors.md),
+  [sync guide](sync-guide.md#batches)).
 - **A connection without `offline_access` ends after 90 days too.** Its online session now ends
   after 30 days without use and after 90 days at the latest, as an offline session always did,
   instead of after the browser session's 180 days. A client that requests `offline_access`, as it
