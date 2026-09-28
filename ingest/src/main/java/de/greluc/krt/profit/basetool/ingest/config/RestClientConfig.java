@@ -49,8 +49,9 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
- * Builds the gateway's two outbound {@link RestClient}s on the JDK {@link HttpClient}: the backend
- * relay and the Keycloak client-credentials client (ADR-0204).
+ * Builds the gateway's three outbound {@link RestClient}s on the JDK {@link HttpClient}: the
+ * extractor's backend relay, the exchange relay and the Keycloak client-credentials client
+ * (ADR-0204).
  *
  * <p>In {@code dev}/{@code test} all certificates are trusted. Elsewhere the backend relay trusts
  * only the {@code backend-trust} bundle (hostname checked per {@code
@@ -69,6 +70,13 @@ public class RestClientConfig {
    * the body read.
    */
   static final Duration BACKEND_READ_TIMEOUT = Duration.ofSeconds(15);
+
+  /**
+   * Timeout on the exchange relay once connected: about three times the p99 of a 500-op stock
+   * change set with the admitted number of large sets in flight, and below the idempotency claim's
+   * lifetime, so a write the backend commits is answered rather than failed (REQ-XCH-023).
+   */
+  static final Duration EXCHANGE_READ_TIMEOUT = Duration.ofSeconds(30);
 
   /**
    * Ceiling on the token call once connected; the effective bound is the smaller of this and {@code
@@ -102,6 +110,24 @@ public class RestClientConfig {
     return RestClient.builder()
         .baseUrl(ingestProperties.backendBaseUrl())
         .requestFactory(requestFactory(backendSslContext(), BACKEND_READ_TIMEOUT))
+        .observationRegistry(observationRegistry)
+        .requestInterceptor(backendCallLoggingInterceptor)
+        .requestInterceptor(new ResponseSizeLimitInterceptor(ingestProperties.maxPayloadBytes()))
+        .build();
+  }
+
+  /**
+   * The exchange relay's own backend client: the backend client's trust, logging and body cap on a
+   * separate JDK client, so its connections and its 30&nbsp;s read timeout ({@link
+   * #EXCHANGE_READ_TIMEOUT}) are the exchange's alone.
+   *
+   * @return a {@link RestClient} bound to the configured backend base URL
+   */
+  @Bean
+  public RestClient exchangeRestClient() {
+    return RestClient.builder()
+        .baseUrl(ingestProperties.backendBaseUrl())
+        .requestFactory(requestFactory(backendSslContext(), EXCHANGE_READ_TIMEOUT))
         .observationRegistry(observationRegistry)
         .requestInterceptor(backendCallLoggingInterceptor)
         .requestInterceptor(new ResponseSizeLimitInterceptor(ingestProperties.maxPayloadBytes()))

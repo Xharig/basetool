@@ -170,7 +170,7 @@ groups:
           severity: warning
         annotations:
           summary: "Exchange registry mirror write failed ({{ $labels.phase }})"
-          description: "The backend could not write the exchange registry mirror to Redis ({{ $labels.phase }}). A failed pre_commit write refused an admin's restriction; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
+          description: "The backend could not write the exchange registry mirror to Redis ({{ $labels.phase }}). A failed pre_commit write refused an admin's restriction; switched_off means a start with APP_EXCHANGE_MIRROR_ENABLED=false could not switch off a registry document left in Redis, so the gateway may still admit clients on it until the next successful start; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
 
       - alert: ExchangeBudgetHigh
         expr: max(basetool_ingest_exchange_budget_used_ratio) > 0.8
@@ -199,8 +199,17 @@ groups:
           summary: "Exchange relays to the backend keep failing"
           description: "The ingest gateway relayed admitted exchange requests but the backend answered unusably - 5xx, a refusal outside the exchange error registry, an answer that breaks the v1 schema, or no answer at all (unreachable, circuit open, no gateway token) - and the client got 502 BACKEND_RELAY_FAILED (REQ-XCH-011). Check the backend and its exchange layer and the gateway log lines 'Exchange relay to' or 'Exchange answer breaks'."
 
+      - alert: ExchangeLargeChangeSetsBusy
+        expr: sum(increase(basetool_ingest_exchange_refused_total{reason="relay_busy"}[15m])) > 30
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The gateway keeps refusing large exchange change sets as busy"
+          description: "More than 30 change sets of over 100 ops were refused 503 RELAY_BUSY in 15 minutes, for 15 minutes: the four slots of the exchangeLargeChangeSets bulkhead stay taken (REQ-XCH-023). Typical after a client release or on a launch day, when many members send their first sync at once; the clients retry after 10 s and nothing is lost. Check the backend's CPU and the p99 of POST /exchange/v1/me/stock/changes; only with headroom there raise resilience4j.bulkhead.instances.exchangeLargeChangeSets.max-concurrent-calls in the gateway."
+
       - alert: ExchangeClientRefusalsSpike
-        expr: sum by (client_id) (increase(basetool_ingest_exchange_refused_total{client_id!~"none|unknown|unregistered", reason!~"rate_limited|quota_exceeded|idempotency_in_progress"}[15m])) > 30
+        expr: sum by (client_id) (increase(basetool_ingest_exchange_refused_total{client_id!~"none|unknown|unregistered", reason!~"rate_limited|quota_exceeded|idempotency_in_progress|relay_busy"}[15m])) > 30
         for: 10m
         labels:
           severity: warning
@@ -268,7 +277,7 @@ groups:
           severity: warning
         annotations:
           summary: "An admin's bulk undo of an exchange client failed"
-          description: "A bulk undo under Administration - Verbundene Anwendungen ended FAILED: at least one member could not be processed, or the run broke off. The members it did process are undone; the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed - it only touches what is not undone yet (REQ-XCH-034)."
+          description: "A bulk undo under Administration - Verbundene Anwendungen ended FAILED: at least one member could not be processed, the run broke off, or the queue of ten runs was full and refused it (the client then stays suspended). The members it did process are undone; the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed - it only touches what is not undone yet (REQ-XCH-034)."
 
       - alert: ExchangeUnknownClient
         expr: sum(increase(basetool_ingest_exchange_refused_total{client_id="unregistered"}[15m])) > 10

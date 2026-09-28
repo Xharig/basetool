@@ -99,7 +99,11 @@ public class AdminExchangeBulkUndoController {
   @ApiResponse(responseCode = "202", description = "The started run")
   @ApiResponse(responseCode = "400", description = "The span starts in the future")
   @ApiResponse(responseCode = "404", description = "No such client or installation")
-  @ApiResponse(responseCode = "409", description = "A bulk undo of the client is already running")
+  @ApiResponse(
+      responseCode = "409",
+      description =
+          "A bulk undo of the client is already running, or too many runs are queued; a queued-out"
+              + " run is recorded as failed and the client stays suspended")
   @ApiResponse(responseCode = "502", description = "The suspension could not reach the mirror")
   public ResponseEntity<ExchangeBulkUndoRunDto> start(
       @PathVariable @NotNull UUID id,

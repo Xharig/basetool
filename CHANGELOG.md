@@ -26,9 +26,14 @@
   wenn Mitglieder 15 Minuten lang immer wieder an ihre Obergrenze lebender DPoP-Nachweise stoßen;
   ein einzelner Ausreißer löst ihn nicht aus (REQ-XCH-006).
 
+- **Datenaustausch: Lasttest gegen die Sandbox.** `scripts/sandbox-load.py` misst Feed-, Snapshot-
+  und Änderungs-Routen des Gateways samt Redis-Byte-Budget an der lokalen Sandbox, nie an
+  Produktion; dafür hat die Sandbox 16 synthetische Mitglieder `sandbox-load-01` … `-16` (#2092).
+
 - **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
   `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
-  das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Die
+  das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Eine Version
+  und `latest` erscheinen nur zu einem Release-Tag `vX.Y.Z` auf `main`. Die
   Produktions-Images bleiben privat. Ein Smoke-Test (`scripts/sandbox-smoke.py`) zieht sie danach
   ohne Anmeldung und prüft Geräte-Login, DPoP, alle Ressourcen und die Konformitäts-Beispiele.
 
@@ -299,6 +304,17 @@
   ohne Nutzung, 90 Tage insgesamt), weil der Extractor ab 2.10.0 `offline_access` anfordert. Bisher
   galten nur die Realm-Werte.
 
+- **Keycloak-Provisioner: keine fremden Mapper am SC Extractor und an Drittanwendungen.** Ein
+  Protocol-Mapper direkt an `basetool-sc-extractor` oder an einem Client aus
+  `external-clients.json` wird jetzt als geplante Änderung gelistet und beim `--apply` entfernt,
+  statt nur gemeldet. Ein von Hand ergänzter Audience-Mapper kann so kein Token für die Backend-API
+  mehr liefern; an allen anderen Clients bleibt es beim Melden.
+
+- **Keycloak: Zustimmungsseite verspricht nichts mehr, was sie nicht weiß.** Statt „Deinen Namen,
+  deine E-Mail-Adresse und deine Rollen erfährt sie nicht" steht dort jetzt „Die Anwendung erhält nur
+  die unten aufgeführten Rechte." Der alte Satz stimmte nicht für jede Anwendung, etwa für den SC
+  Extractor vor seiner Umstellung.
+
 - **Datenaustausch: Lager-Änderungen wie im Web.** Ein Umbuchen auf „gestohlen“ oder zurück markiert
   die Zeilen wie im Lager (Teilmengen werden abgespalten) statt aus- und neu einzubuchen;
   Stück-Einbuchungen werden mit der vorhandenen Zeile zusammengeführt. Als Verschiebung zählt ein
@@ -349,6 +365,31 @@
   volle Budget einer einzelnen Anwendung meldet (REQ-XCH-023).
 - **Monitoring: DPoP-Nonce-Abfrage ist keine Ablehnung mehr.** Der normale Nonce-Roundtrip zählt
   nicht mehr als `dpop_invalid` in `basetool_ingest_exchange_refused_total` (REQ-XCH-028).
+
+- **Datenaustausch: große Änderungspakete legen den Extractor-Import nicht mehr lahm.** Das Gateway
+  leitet Datenaustausch-Anfragen über einen eigenen Circuit Breaker, eigene Verbindungen und 30 s
+  statt 15 s Timeout weiter und höchstens vier Pakete mit mehr als 100 Operationen gleichzeitig;
+  weitere erhalten `503 RELAY_BUSY` mit `Retry-After: 10`. Neuer Alarm `ExchangeLargeChangeSetsBusy`
+  (REQ-XCH-023).
+
+- **Redis: Ingest-Benutzer ohne ungenutzte Befehle.** Die ACL-Vorlage nimmt dem Benutzer
+  `basetool-ingest` `ZREMRANGEBYSCORE` und `UNLINK`, die das Gateway nie sendet; wirksam mit dem
+  nächsten Rendern der ACL.
+
+- **Ingest: Produktion startet nur mit eigenem Redis-Benutzer.** Unter `prod` verweigert das
+  Gateway den Start, wenn `REDIS_INGEST_USERNAME` leer oder `default` ist; so kann es nie als
+  `default` die Registry oder die Sperrlisten des Datenaustauschs verändern.
+
+- **Datenaustausch: abgewiesenes Zurücknehmen blockiert nichts mehr.** Ist die Warteschlange für
+  das Zurücknehmen bei allen Mitgliedern voll (zehn Läufe), wird der neue Lauf sofort als
+  fehlgeschlagen vermerkt und der Admin bekommt eine Meldung; bisher blieb er bis zum nächsten
+  Neustart „laufend“ und sperrte jeden weiteren Lauf der Anwendung. Die Anwendung bleibt gesperrt.
+
+- **Datenaustausch: abgeschaltete Registry-Spiegelung lässt keine Anwendung mehr durch.** Startet
+  das Backend mit `APP_EXCHANGE_MIRROR_ENABLED=false`, schaltet es ein zurückgebliebenes
+  Registry-Dokument in Redis ab, sodass das Gateway jede Austausch-Anfrage mit
+  `503 EXCHANGE_DISABLED` ablehnt. Die Backend-Prüfung erkennt das Trennen einer Anwendung jetzt
+  auch aus der Datenbank, nicht nur aus dem Redis-Spiegel.
 - **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
   auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
   90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede

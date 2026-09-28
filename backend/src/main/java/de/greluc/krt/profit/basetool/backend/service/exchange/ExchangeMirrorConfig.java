@@ -31,8 +31,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
  * Wires the registry mirror: Redis when {@code app.exchange.mirror.enabled=true}, otherwise a
- * mirror that stores nothing, so the backend starts without Redis and the gateway stays
- * fail-closed.
+ * mirror that stores nothing, so the backend starts without Redis; a document an earlier run left
+ * behind is then switched off by {@link ExchangeRegistryMirrorClosure}.
  */
 @Slf4j
 @Configuration
@@ -88,7 +88,9 @@ public class ExchangeMirrorConfig {
   @Bean
   @ConditionalOnMissingBean(ExchangeRegistryMirror.class)
   public ExchangeRegistryMirror disabledExchangeRegistryMirror() {
-    log.info("Exchange registry mirror disabled — the gateway refuses every exchange request");
+    log.info(
+        "Exchange registry mirror disabled; a registry document left in Redis is switched off,"
+            + " so the gateway refuses every exchange request");
     return new DisabledExchangeRegistryMirror();
   }
 }

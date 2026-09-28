@@ -23,6 +23,8 @@ import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.ServiceAccountTokenProvider;
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -59,6 +61,10 @@ import tools.jackson.databind.ObjectMapper;
  * gate passes only with the status the gateway's gate answers it with, so a client sees one code
  * and status whichever side refuses; the backend's generic codes are translated, everything else
  * becomes {@code 502 BACKEND_RELAY_FAILED}.
+ *
+ * <p>The relay has its own backend client, circuit breaker ({@value #BREAKER}) and, for large
+ * change sets, bulkhead ({@value #LARGE_CHANGE_SETS}), none of them shared with the extractor's
+ * {@link BackendImportClient} (REQ-XCH-023).
  */
 @Slf4j
 @Service
@@ -83,7 +89,20 @@ public class ExchangeRelay {
   /** The code of a relay failure. */
   public static final String RELAY_FAILED = "BACKEND_RELAY_FAILED";
 
-  /** The largest backend answer the gateway accepts. */
+  /** The name of the exchange relay's circuit breaker. */
+  public static final String BREAKER = "exchange";
+
+  /** The name of the bulkhead that bounds how many large change sets are relayed at once. */
+  public static final String LARGE_CHANGE_SETS = "exchangeLargeChangeSets";
+
+  /** The seconds a client waits after {@code RELAY_BUSY}. */
+  static final String BUSY_RETRY_AFTER_SECONDS = "10";
+
+  /**
+   * The ceiling on a backend answer the relay reads; the relay client's own cap, {@code
+   * app.ingest.max-payload-bytes} (2 MiB by default), refuses a larger answer first, so this bound
+   * applies only when that cap is configured above it.
+   */
   static final int MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
   /** Backend codes that mean the same as a registry code. */
@@ -173,30 +192,38 @@ public class ExchangeRelay {
   private final RestClient backendRestClient;
   private final ServiceAccountTokenProvider tokenProvider;
   private final CircuitBreaker circuitBreaker;
+  private final Bulkhead largeChangeSets;
+  private final ExchangeRefusals refusals;
   private final ObjectMapper objectMapper;
   private final MeterRegistry meterRegistry;
   private final LoggingProperties loggingProperties;
 
   /**
-   * Creates the relay on the backend client the extractor relay uses.
+   * Creates the relay on the exchange's own backend client, breaker and bulkhead.
    *
-   * @param backendRestClient the mutually-authenticated backend client
+   * @param exchangeRestClient the exchange relay's backend client
    * @param tokenProvider the gateway's own backend identity
-   * @param circuitBreakerRegistry supplies the shared backend breaker
+   * @param circuitBreakerRegistry supplies the {@value #BREAKER} breaker
+   * @param bulkheadRegistry supplies the {@value #LARGE_CHANGE_SETS} bulkhead
+   * @param refusals counts a large change set refused for want of a slot
    * @param objectMapper parses the backend's answers
    * @param meterRegistry counts the outcomes
    * @param loggingProperties names the correlation header and MDC key
    */
   public ExchangeRelay(
-      @Qualifier("backendRestClient") @NotNull RestClient backendRestClient,
+      @Qualifier("exchangeRestClient") @NotNull RestClient exchangeRestClient,
       @NotNull ServiceAccountTokenProvider tokenProvider,
       @NotNull CircuitBreakerRegistry circuitBreakerRegistry,
+      @NotNull BulkheadRegistry bulkheadRegistry,
+      @NotNull ExchangeRefusals refusals,
       @NotNull ObjectMapper objectMapper,
       @NotNull MeterRegistry meterRegistry,
       @NotNull LoggingProperties loggingProperties) {
-    this.backendRestClient = backendRestClient;
+    this.backendRestClient = exchangeRestClient;
     this.tokenProvider = tokenProvider;
-    this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("backend");
+    this.circuitBreaker = circuitBreakerRegistry.circuitBreaker(BREAKER);
+    this.largeChangeSets = bulkheadRegistry.bulkhead(LARGE_CHANGE_SETS);
+    this.refusals = refusals;
     this.objectMapper = objectMapper;
     this.meterRegistry = meterRegistry;
     this.loggingProperties = loggingProperties;
@@ -245,6 +272,34 @@ public class ExchangeRelay {
       return Result.failed();
     }
     return interpret(raw, backendPath, context.clientId());
+  }
+
+  /**
+   * Relays one large change set within the {@value #LARGE_CHANGE_SETS} bulkhead; when every slot is
+   * taken the set is not relayed but refused and counted.
+   *
+   * @param method the method
+   * @param backendPath the backend path
+   * @param body the change set
+   * @param context what the gate established
+   * @param acceptLanguage the caller's {@code Accept-Language}, or {@code null}
+   * @return the backend's answer as the exchange contract allows it, or {@code 503 RELAY_BUSY}
+   */
+  public @NotNull Result forwardLarge(
+      @NotNull HttpMethod method,
+      @NotNull String backendPath,
+      @NotNull JsonNode body,
+      @NotNull ExchangeRequestContext context,
+      @Nullable String acceptLanguage) {
+    if (!largeChangeSets.tryAcquirePermission()) {
+      refusals.count(ExchangeRefusals.RELAY_BUSY, context.clientId());
+      return Result.busy();
+    }
+    try {
+      return forward(method, backendPath, body, context, acceptLanguage);
+    } finally {
+      largeChangeSets.onComplete();
+    }
   }
 
   /**
@@ -355,13 +410,16 @@ public class ExchangeRelay {
   }
 
   /**
-   * Returns the {@code Retry-After} a relayed refusal carries, the same the gateway's gate sends
-   * with that code.
+   * Returns the {@code Retry-After} a relay result carries: for a relayed refusal the same the
+   * gateway's gate sends with that code, for {@code RELAY_BUSY} {@value #BUSY_RETRY_AFTER_SECONDS}.
    *
    * @param code a problem code, or {@code null}
    * @return the seconds, or {@code null} when the code carries none
    */
   public static @Nullable String retryAfterSeconds(@Nullable String code) {
+    if (ExchangeRefusals.RELAY_BUSY.equals(code)) {
+      return BUSY_RETRY_AFTER_SECONDS;
+    }
     return ExchangeRefusals.EXCHANGE_DISABLED.equals(code)
             || ExchangeRefusals.REGISTRY_UNAVAILABLE.equals(code)
         ? ExchangeGateFilter.RETRY_AFTER_SECONDS
@@ -469,6 +527,20 @@ public class ExchangeRelay {
           null,
           RELAY_FAILED,
           "The Basetool did not answer usably; try again later.");
+    }
+
+    /**
+     * A large change set refused because the gateway already relays as many as it admits at once.
+     *
+     * @return the result
+     */
+    public static @NotNull Result busy() {
+      return new Result(
+          HttpStatus.SERVICE_UNAVAILABLE.value(),
+          null,
+          ExchangeRefusals.RELAY_BUSY,
+          "The gateway is relaying as many large change sets as it admits at once; retry after"
+              + " Retry-After or send smaller change sets.");
     }
 
     /**

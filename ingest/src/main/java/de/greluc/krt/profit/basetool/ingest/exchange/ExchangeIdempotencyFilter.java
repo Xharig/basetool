@@ -46,12 +46,13 @@ import tools.jackson.databind.ObjectMapper;
  * Makes exchange writes idempotent (REQ-XCH-020) within the byte budget (REQ-XCH-023). A write
  * needs an {@code Idempotency-Key}; its answer is kept a day per client, member and key and
  * replayed for the same request, a different request under the same key is refused, and a duplicate
- * in flight waits for the first. Under the claim the cache is read again, so a request that raced
- * the first one's answer replays it instead of writing twice. The gates, limits and quota run
- * before this filter, so a refused request is never cached; neither is any {@code 401}, {@code
- * 403}, {@code 429}, {@code 5xx}, a staged mass change or the answer to a body that is not a JSON
- * document ({@link #NOT_REPLAYABLE}). A write the byte budget refuses gives its daily quota count
- * back and is told to retry when enough of the budget expires.
+ * while the first is in flight is refused with {@code 409 IDEMPOTENCY_IN_PROGRESS}. Under the claim
+ * the cache is read again, so a request that raced the first one's answer replays it instead of
+ * writing twice. The gates, limits and quota run before this filter, so a refused request is never
+ * cached; neither is any {@code 401}, {@code 403}, {@code 429}, {@code 5xx}, a staged mass change
+ * or the answer to a body that is not a JSON document ({@link #NOT_REPLAYABLE}). A write the byte
+ * budget refuses gives its daily quota count back and is told to retry when enough of the budget
+ * expires.
  */
 public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
 

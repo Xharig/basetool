@@ -948,6 +948,138 @@
           }
         }
       ]
+    },
+    {
+      "id": 23,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 82
+      },
+      "type": "row",
+      "title": "Relay capacity",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 24,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 83
+      },
+      "type": "timeseries",
+      "title": "Large change sets in flight and refused busy",
+      "description": "Change sets of more than 100 ops the gateway relays at once, against the four slots of its exchangeLargeChangeSets bulkhead, and those it refused 503 RELAY_BUSY per 5 minutes (REQ-XCH-023). Sustained refusals fire ExchangeLargeChangeSetsBusy. Not filtered by client: the slots are shared.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max(resilience4j_bulkhead_max_allowed_concurrent_calls{application=\"basetool-ingest\", name=\"exchangeLargeChangeSets\"}) - min(resilience4j_bulkhead_available_concurrent_calls{application=\"basetool-ingest\", name=\"exchangeLargeChangeSets\"})",
+          "refId": "A",
+          "legendFormat": "in flight",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "max(resilience4j_bulkhead_max_allowed_concurrent_calls{application=\"basetool-ingest\", name=\"exchangeLargeChangeSets\"})",
+          "refId": "B",
+          "legendFormat": "slots",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "sum(increase(basetool_ingest_exchange_refused_total{reason=\"relay_busy\"}[5m]))",
+          "refId": "C",
+          "legendFormat": "refused busy / 5 min",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 83
+      },
+      "type": "timeseries",
+      "title": "Gateway circuit breakers not closed",
+      "description": "The gateway's two relay breakers: exchange (the exchange relay) and backend (the extractor's handoff relay). Each opens on its own, so an open exchange breaker leaves the extractor working (REQ-XCH-023). Empty while both are closed; CircuitBreakerOpen fires on either after 2 minutes open.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max by (name, state) (resilience4j_circuitbreaker_state{application=\"basetool-ingest\", state!=\"closed\"}) > 0",
+          "refId": "A",
+          "legendFormat": "{{name}} {{state}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
     }
   ]
 }

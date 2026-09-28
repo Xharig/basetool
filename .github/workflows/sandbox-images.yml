@@ -48,8 +48,55 @@ env:
   PUBLISH: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
 
 jobs:
+  ref-guard:
+    name: Check the ref may publish the public images
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (full history — the tag check is an ancestry question)
+        if: env.PUBLISH == 'true' && github.ref_type == 'tag'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Refuse to publish from any ref other than main or a release tag on main
+        env:
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$PUBLISH" != "true" ]; then
+            echo "ref ${REF}: this run publishes nothing"
+            exit 0
+          fi
+          case "$REF" in
+            refs/heads/main)
+              echo "ref ${REF}: main may publish edge"
+              ;;
+            refs/tags/v*)
+              if ! printf '%s' "${REF#refs/tags/}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+                echo "::error::${REF} is not a vMAJOR.MINOR.PATCH release tag; it may not publish a version or latest"
+                exit 1
+              fi
+              git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+              if ! git merge-base --is-ancestor "$SHA" origin/main; then
+                echo "::error::${REF} points at ${SHA}, which is not on main; a release tag may only publish reviewed code"
+                exit 1
+              fi
+              echo "ref ${REF}: ${SHA} is an ancestor of main"
+              ;;
+            *)
+              echo "::error::${REF} may not publish the sandbox images; run this workflow from main or a release tag"
+              exit 1
+              ;;
+          esac
+
   build:
     name: Build and check basetool-sandbox-${{ matrix.image }} (${{ matrix.arch }})
+    needs: ref-guard
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     permissions:

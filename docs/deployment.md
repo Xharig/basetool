@@ -242,11 +242,13 @@ refuses, writing nothing, when a variable is missing or the result lacks exactly
 | `monitoring` | `REDIS_EXPORTER_PASSWORD` | introspection for `redis-exporter`; no key, no `SCAN` (a key's name is a session id) |
 | `basetool-frontend` | `REDIS_FRONTEND_PASSWORD` | `basetool:session:*`, `GETDEL` of `ingest:handoff:*`, the session-event, keyspace-event and live-sync channels, `SCAN`, `INFO` |
 | `basetool-backend` | `REDIS_BACKEND_PASSWORD` | `GET`/`SET` on `exchange:*` (the exchange registry mirror, ADR-0221), publish/subscribe on `basetool:livesync:changed` and `basetool:notify:published`, `INFO` |
-| `basetool-ingest` | `REDIS_INGEST_PASSWORD` | strings, lists and sorted sets on `ingest:*` (`GET`, `SET`, `SETEX`, `PSETEX`, `INCR`, `RPUSH`, `LPOP`, `ZADD`, `ZRANGE`, `ZRANGEBYSCORE`, `ZREMRANGEBYSCORE`, `ZREM`, `ZSCORE`, `EXPIRE`, `PEXPIRE`, `DEL`, `UNLINK`) and `EVAL`/`EVALSHA` for the exchange's budget and idempotency-lock scripts, whose commands the same rules check; read-only `GET` of `exchange:*`; `INFO`; no channel, no `SCAN` |
+| `basetool-ingest` | `REDIS_INGEST_PASSWORD` | strings, lists and sorted sets on `ingest:*` (`GET`, `SET`, `SETEX`, `PSETEX`, `INCR`, `RPUSH`, `LPOP`, `ZADD`, `ZRANGE`, `ZRANGEBYSCORE`, `ZREM`, `ZSCORE`, `EXPIRE`, `PEXPIRE`, `DEL`) and `EVAL`/`EVALSHA` for the exchange's budget and idempotency-lock scripts, whose commands the same rules check; read-only `GET` of `exchange:*`; `INFO`; no channel, no `SCAN` |
 
 An application reaches Redis as its own user only when its `REDIS_<SVC>_USERNAME` is set; with it
 empty it sends a password-only `AUTH` with the shared `REDIS_PASSWORD`, which is the `default` user —
-exactly the pre-rollout behaviour. The server carries `--notify-keyspace-events Egx` itself, so the
+exactly the pre-rollout behaviour. The ingest gateway is the exception from the release after 1.12.0
+on: under `prod` it refuses to start when `REDIS_INGEST_USERNAME` is empty or `default`
+(`RedisUsernameGuard`, REQ-SEC-068). The server carries `--notify-keyspace-events Egx` itself, so the
 frontend no longer needs `CONFIG`, and the unit's health probe is an unauthenticated `PING` that
 accepts `NOAUTH`, so it does not care which users exist.
 
@@ -401,7 +403,9 @@ can be stopped and rolled back on its own.
 **Rollback**, from any step: step 5 — set `REDIS_DEFAULT_USER=on` (or delete the line), render,
 `ACL LOAD`. Step 4 — delete the three `REDIS_*_USERNAME` lines **and** the three
 `REDIS_{FRONTEND,BACKEND,INGEST}_PASSWORD` lines, render `env.d/`, restart the three services: they
-are back on `default` with the shared password. Step 3 — `cat` the `users.acl.backup-*` back into
+are back on `default` with the shared password — except ingest from the release after 1.12.0 on,
+which then refuses to start; there, keep `REDIS_INGEST_USERNAME` and `REDIS_INGEST_PASSWORD` (and
+its ACL user) or roll the release back first. Step 3 — `cat` the `users.acl.backup-*` back into
 `users.acl` (keeping the inode, as above) and `ACL LOAD` (authenticating as `default`); step 2 —
 delete the three password lines. *(Corrected 2026-09-25: this used to say the passwords may stay in
 `.env` because nothing reads them without the usernames — the templates read them either way, see

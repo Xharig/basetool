@@ -169,6 +169,40 @@ class ExchangeChangeRouteTest {
   }
 
   @Test
+  void aChangeSetOfMoreThan100OpsIsRelayedWithinTheLargeSetLimit() throws Exception {
+    when(relay.forwardLarge(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+
+    post("/exchange/v1/me/blueprints/changes", removals(101)).andExpect(status().isOk());
+
+    verify(relay)
+        .forwardLarge(
+            eq(HttpMethod.POST), eq("/api/v1/exchange/me/blueprints/changes"), any(), any(), any());
+    verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void aChangeSetOf100OpsNeedsNoLargeSetSlot() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+
+    post("/exchange/v1/me/blueprints/changes", removals(100)).andExpect(status().isOk());
+
+    verify(relay, never()).forwardLarge(any(), anyString(), any(), any(), any());
+  }
+
+  @Test
+  void aLargeChangeSetWithoutAFreeSlotIsRelayBusyWithRetryAfterAndNotCached() throws Exception {
+    when(relay.forwardLarge(any(), anyString(), any(), any(), any()))
+        .thenReturn(ExchangeRelay.Result.busy());
+
+    post("/exchange/v1/me/blueprints/changes", removals(101))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("Retry-After", "10"))
+        .andExpect(jsonPath("$.code").value("RELAY_BUSY"));
+
+    verify(idempotency, never()).store(anyString(), any());
+  }
+
+  @Test
   void anUnknownFieldTooLongToReportIsRefusedBeforeTheRelay() throws Exception {
     when(relay.forward(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
     String name = "x".repeat(250);
@@ -371,6 +405,23 @@ class ExchangeChangeRouteTest {
    */
   private static @NotNull String example(@NotNull String name) throws Exception {
     return Files.readString(EXAMPLES.resolve(name));
+  }
+
+  /**
+   * Builds a blueprint change set of removals.
+   *
+   * @param count the number of ops
+   * @return the body
+   */
+  private static @NotNull String removals(int count) {
+    StringBuilder body = new StringBuilder("{\"ops\":[");
+    for (int i = 0; i < count; i++) {
+      body.append(i == 0 ? "" : ",")
+          .append("{\"op\":\"remove\",\"key\":\"k")
+          .append(i)
+          .append("\"}");
+    }
+    return body.append("]}").toString();
   }
 
   /**

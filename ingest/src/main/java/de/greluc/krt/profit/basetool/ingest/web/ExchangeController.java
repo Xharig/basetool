@@ -90,6 +90,12 @@ public class ExchangeController {
   /** The largest change set, as the contract fixes it. */
   static final int BATCH_MAX_OPS = 500;
 
+  /**
+   * The most ops a change set may hold and still be relayed outside the large-set bulkhead
+   * (REQ-XCH-023).
+   */
+  static final int LARGE_CHANGE_SET_OPS = 100;
+
   /** The warning code of an undeclared field. */
   static final String UNKNOWN_FIELD = "UNKNOWN_FIELD";
 
@@ -578,8 +584,9 @@ public class ExchangeController {
   }
 
   /**
-   * Checks a change set, relays it and checks the answer; a change set the backend's mass-change
-   * guard held back is staged for the member's confirmation.
+   * Checks a change set, relays it and checks the answer; a change set of more than {@value
+   * #LARGE_CHANGE_SET_OPS} ops is relayed within the large-set bulkhead, and one the backend's
+   * mass-change guard held back is staged for the member's confirmation.
    *
    * @param resource the resource's path segment
    * @param definition the change set's schema definition
@@ -614,13 +621,11 @@ public class ExchangeController {
     if (unreportable != null) {
       return unreportable;
     }
+    String target = BACKEND + "/me/" + resource + "/changes";
     ExchangeRelay.Result result =
-        relay.forward(
-            HttpMethod.POST,
-            BACKEND + "/me/" + resource + "/changes",
-            body,
-            context,
-            acceptLanguage);
+        body.get("ops") instanceof ArrayNode ops && ops.size() > LARGE_CHANGE_SET_OPS
+            ? relay.forwardLarge(HttpMethod.POST, target, body, context, acceptLanguage)
+            : relay.forward(HttpMethod.POST, target, body, context, acceptLanguage);
     if (!result.isOk() && MASS_CHANGE_CONFIRMATION_REQUIRED.equals(result.code())) {
       return staged(context, request, resource, body, result);
     }
