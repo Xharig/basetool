@@ -55,10 +55,10 @@ row by row against production's configuration snapshot of **2026-09-22**
 
 |         Object          |                                                                                              State                                                                                               |
 |-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `basetool-sc-extractor` | public, no secret, device grant on, direct access grants off, service accounts off, `fullScopeAllowed: false`; default scopes include `extractor-ingest` **and** `extractor-ingest-only`. Still carries the unused standard flow with `http://127.0.0.1/*` + `http://localhost/*` — **retired by owner decision 2026-09-22** (step 1), removed on the provisioner's next production apply |
+| `basetool-sc-extractor` | public, no secret, device grant on, direct access grants off, service accounts off, `fullScopeAllowed: false`; default scopes include `extractor-ingest` **and** `extractor-ingest-only`. Carried the unused standard flow with `http://127.0.0.1/*` + `http://localhost/*` in the 2026-09-22 snapshot — **retired by owner decision 2026-09-22** (step 1); whether a later production apply already removed it is **to be confirmed at the go-live dry run** (`EXCHANGE_GO_LIVE_RUNBOOK.md`, S10). From the go-live apply (S15) the client is exchange-only (H1): consent, DPoP-bound tokens, both ingest scopes withheld |
 | `basetool-ingest-gateway` | confidential, service account only (standard flow and direct access grants off), empty redirect/origin lists — the gateway's own identity for the hop to the backend (step 9); still carries both ingest scopes, inherited from the realm defaults at creation (hardening step 9b leaves that to its own audience needs) |
 | `basetool-frontend`     | carries `extractor-ingest` (so its relayed token has `aud=basetool-backend`), **not** `extractor-ingest-only`                                                                                    |
-| `basetool-android`      | carries **both** ingest scopes as defaults, inherited from the realm defaults when it was provisioned — so an app token has `aud=basetool-ingest` and `extractor-ingest-only` in `scope`, and only the gateway's `azp` allowlist (step 7c) keeps it out of ingest. **Retired by owner decision 2026-09-22** (`REQ-INGEST-011`): the app requests neither scope and never calls ingest; removed on the provisioner's next production apply. Its own `aud=basetool-backend` mapper stays and is what the backend checks |
+| `basetool-android`      | carries **both** ingest scopes as defaults, inherited from the realm defaults when it was provisioned — so an app token has `aud=basetool-ingest` and `extractor-ingest-only` in `scope`, and only the gateway's `azp` allowlist (step 7c) keeps it out of ingest. **Retired by owner decision 2026-09-22** (`REQ-INGEST-011`): the app requests neither scope and never calls ingest; whether a later production apply already removed them is **to be confirmed at the go-live dry run** (`EXCHANGE_GO_LIVE_RUNBOOK.md`, S10). Its own `aud=basetool-backend` mapper stays and is what the backend checks |
 | `extractor-ingest`      | audience mapper `aud-basetool-backend` → `basetool-backend`; `include.in.token.scope: false`; no longer a realm default scope (hardening step 9, 2026-09-09)                                     |
 | `extractor-ingest-only` | audience mapper `aud-basetool-ingest` → `basetool-ingest`; `include.in.token.scope: true`; no longer a realm default scope                                                                       |
 | Realm                   | `revokeRefreshToken: false` (step 4); client policies: only `krt-mobile-dpop`, scoped to `basetool-android` by its marker role — none applies to the extractor (step 8)                         |
@@ -161,9 +161,12 @@ production it needs the owner's per-action approval, on testing it is the owner'
 
 ```bash
 cd /
-install -d -m 0700 /root/kc-realm
-# 1. copy BOTH scripts next to each other — the realm provisioner imports the mobile one
+install -d -m 0700 /root/kc-realm /root/kc-realm/keycloak
+# 1. copy BOTH scripts next to each other — the realm provisioner imports the mobile one — and the
+#    approved-client list into keycloak/ beside them: the provisioner reads it from there by default
+#    and stops with "cannot read the third-party client list" without it (or pass --external-clients)
 install -m 0700 provision-keycloak-realm.py provision-keycloak-mobile-client.py /root/kc-realm/
+install -m 0600 keycloak/external-clients.json /root/kc-realm/keycloak/
 # 2. open a kcadm session: the KCCFG/kc/KCADM definitions and the truststore + credentials
 #    commands of docs/keycloak/README.md, "Runbook — provisioning the mobile client", steps 1-2
 # 3. the rollback basis
@@ -233,6 +236,10 @@ the provisioner creates it — never the Admin Console.
      client's refresh-only policy;
    - an offline session of at most **30 days idle and 90 days** in total (owner decision 2026-09-26);
      clients request `offline_access` so a web logout does not disconnect them;
+   - an online session capped the same way, `client.session.idle.timeout` 30 days and
+     `client.session.max.lifespan` 90 days (owner decision 2026-09-28): without it a client that
+     omits `offline_access` would hold a session for the realm's 180 days, outliving the 90-day
+     installation deny list (ADR-0217 amendment of 2026-09-28);
    - `basic` as the only default scope (the `sub` claim), the ten `exchange.*` capability scopes and
      `offline_access` as optional scopes, no protocol mapper;
    - `profile`, `email`, `roles`, `web-origins` and both ingest scopes are **withheld** — removed
@@ -255,7 +262,9 @@ the provisioner creates it — never the Admin Console.
 release (2.10.0) it requests `offline_access` like one, and the provisioner pins the same offline
 session on its client: `client.offline.session.idle.timeout` 30 days and
 `client.offline.session.max.lifespan` 90 days (owner decision 2026-09-27). Until then those limits
-came only from the realm (90 days max) and Keycloak's own 30-day idle default.
+came only from the realm (90 days max) and Keycloak's own 30-day idle default. Its online session
+is capped at the same 30/90 days (`client.session.idle.timeout`, `client.session.max.lifespan`,
+owner decision 2026-09-28), as the template's.
 
 Since security finding H1 (owner decision 2026-09-27) the provisioner also gives the extractor's
 client the template's protections: **consent required**, `dpop.bound.access.tokens` on, only

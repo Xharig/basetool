@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.greluc.krt.profit.basetool.backend.support.AuditRetentionProperties;
 import de.greluc.krt.profit.basetool.backend.support.AuthoritiesCacheProperties;
+import de.greluc.krt.profit.basetool.backend.support.ExchangeConnectionRetentionProperties;
 import de.greluc.krt.profit.basetool.backend.support.NotificationRetentionProperties;
 import de.greluc.krt.profit.basetool.backend.support.RateLimitProperties;
 import de.greluc.krt.profit.basetool.backend.support.RejectedRegistrationRetentionProperties;
@@ -53,6 +54,8 @@ class BackendPropertiesValidationTest {
       runnerFor(NotificationRetentionConfig.class);
   private final ApplicationContextRunner rejectedRetentionRunner =
       runnerFor(RejectedRegistrationRetentionConfig.class);
+  private final ApplicationContextRunner connectionRetentionRunner =
+      runnerFor(ExchangeConnectionRetentionConfig.class);
 
   /**
    * Builds a context runner around one properties configuration and a real JSR-380 validator.
@@ -130,6 +133,23 @@ class BackendPropertiesValidationTest {
   @Configuration
   @EnableConfigurationProperties(NotificationRetentionProperties.class)
   static class NotificationRetentionConfig {
+    /**
+     * The JSR-380 validator {@code @Validated} properties binding delegates to.
+     *
+     * @return a real validator factory, so constraint violations fail the context as in production
+     */
+    @Bean
+    LocalValidatorFactoryBean validator() {
+      return new LocalValidatorFactoryBean();
+    }
+  }
+
+  /**
+   * Registers {@link ExchangeConnectionRetentionProperties} and the validator enforcing its floor.
+   */
+  @Configuration
+  @EnableConfigurationProperties(ExchangeConnectionRetentionProperties.class)
+  static class ExchangeConnectionRetentionConfig {
     /**
      * The JSR-380 validator {@code @Validated} properties binding delegates to.
      *
@@ -336,6 +356,29 @@ class BackendPropertiesValidationTest {
     rejectedRetentionRunner
         .withPropertyValues("app.registrations.rejected-retention.max-age=P0D")
         .run((context) -> assertThat(context).hasFailed());
+  }
+
+  /** A connection retention shorter than the 90-day session cap refuses to start. */
+  @Test
+  void shouldFail_WhenConnectionRetentionMaxAgeIsBelowNinetyDays() {
+    connectionRetentionRunner
+        .withPropertyValues("app.exchange.connection-retention.max-age=P89D")
+        .run((context) -> assertThat(context).hasFailed());
+  }
+
+  /** The connection retention defaults to its ninety-day floor, and a longer value binds. */
+  @Test
+  void shouldBind_WhenConnectionRetentionMaxAgeIsAtOrAboveNinetyDays() {
+    connectionRetentionRunner.run(
+        (context) ->
+            assertThat(context.getBean(ExchangeConnectionRetentionProperties.class).maxAge())
+                .isEqualTo(Duration.ofDays(90)));
+    connectionRetentionRunner
+        .withPropertyValues("app.exchange.connection-retention.max-age=P120D")
+        .run(
+            (context) ->
+                assertThat(context.getBean(ExchangeConnectionRetentionProperties.class).maxAge())
+                    .isEqualTo(Duration.ofDays(120)));
   }
 
   /** The one-day floor itself binds, and the default stays ninety days. */

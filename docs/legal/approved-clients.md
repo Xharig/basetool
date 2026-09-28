@@ -1,9 +1,12 @@
 # Approved clients of the Exchange API
 
-This is the public record of the third-party applications approved to use the Basetool's Exchange
-API on a member's behalf (REQ-XCH-002, ADR-0217). A client is approved when the owner merges the pull
-request that adds it here, following its public application issue; the criteria are in
-[`docs/exchange/onboarding.md`](../exchange/onboarding.md).
+This is the public record of the client applications approved to use the Basetool's Exchange API on a
+member's behalf (REQ-XCH-002, ADR-0217). Section 4 of the terms of use links this list and defines
+what it covers: every program that reaches the Basetool's interfaces and is not part of the platform
+itself (REQ-SEC-027). The web interface and the Android app are part of the platform and are not
+listed; the SC Extractor is a separate program, so it is listed although the operator publishes it.
+A third-party client is approved when the owner merges the pull request that adds it here, following
+its public application issue; the criteria are in [`docs/exchange/onboarding.md`](../exchange/onboarding.md).
 
 The list records the **approval**: who the client is, who maintains it, which capabilities were
 approved and where the approval was decided. It does not mirror the client's runtime state — a
@@ -16,5 +19,4 @@ consent again (REQ-SEC-028).
 
 | Client id | Product | Publisher and maintainer contact | Approved capabilities | Approval issue | Approval PR | Approved since |
 |:----------|:--------|:---------------------------------|:----------------------|:---------------|:------------|:---------------|
-
-No client is approved yet.
+| `basetool-sc-extractor` | [Basetool SC Extractor](https://github.com/krt-profit/basetool-sc-extractor), version 2.10.0 or newer | The Basetool's operator (see the Impressum); security contact per [`.github/SECURITY.md`](../../.github/SECURITY.md); its processing is described in the Basetool's privacy policy, section „Begleitende Desktop-Anwendung (Datenimport)" | `exchange.connect`, `exchange.blueprints.read`, `exchange.blueprints.write`, `exchange.drafts.blueprints`, `exchange.drafts.refinery` | [#2092](https://github.com/krt-profit/basetool/issues/2092) | [#2245](https://github.com/krt-profit/basetool/pull/2245) | 2026-09-29 |

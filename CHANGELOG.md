@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: getrennte Verbindungen werden nach 90 Tagen gelöscht.** Ein nächtlicher Job
+  löscht getrennte Installationen (samt ihrer Bezeichnung) und die Trennung ganzer Anwendungen 90 Tage
+  nach der Trennung, statt sie bis zum Löschen des Kontos aufzubewahren; jeder Lauf mit Löschungen
+  steht mit den Anzahlen im Audit „Verbundene Anwendungen" (REQ-XCH-035).
 - **Verbundene Anwendungen: Link auf die Liste der zugelassenen Anwendungen.** Die Seite
   *Persönlich → Verbundene Anwendungen* verlinkt die öffentliche Liste
   (`docs/legal/approved-clients.md` auf GitHub), damit Mitglieder prüfen können, welche Anwendungen
@@ -206,6 +210,17 @@
 
 ### Changed
 
+- **Datenschutzerklärung: Abschnitt „Verbundene Anwendungen“.** Er nennt, welche Daten eine verbundene
+  Anwendung erhält, was zu Verbindungen gespeichert wird und wie lange (getrennte Installationen und
+  Trennungen 90 Tage nach der Trennung, Änderungsprotokoll 90 Tage) und wie man trennt und zurücknimmt;
+  der Abschnitt zum SC Extractor nennt den direkten Blueprint-Abgleich.
+
+- **Nutzungsbedingungen: neue Fassung vom 29.09.2026.** Abschnitt 4 verweist auf die öffentliche Liste
+  zugelassener Anwendungen (erster Eintrag: der SC Extractor ab 2.10.0) und regelt, was eine verbundene
+  Anwendung darf; Einleitung und Abschnitt 12 verlangen eine Zustimmung statt „Zugriff“ oder
+  „fortgesetzter Nutzung“. Jedes Mitglied stimmt einmal neu zu; bis dahin pausieren SC Extractor und verbundene
+  Anwendungen.
+
 - **Sandbox: aktuelle Images für amd64 und arm64.** `edge` wird nach jeder Änderung auf `main`
   neu gebaut, die den Inhalt der Images betrifft, für `linux/amd64` und `linux/arm64`; jedes Image
   trägt seinen Commit (`org.opencontainers.image.revision`). In der Sandbox sind
@@ -330,6 +345,13 @@
   einem Lauf der Ansible-Rolle (`--tags deploy,scripts`).
 
 ### Fixed
+
+- **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
+  auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
+  90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede
+  Sitzung einer getrennten Installation (ADR-0217, REQ-XCH-008).
+- **Datenschutzerklärung: durchgehend „Sie“.** Die Sätze zu Datenkopie und Löschantrag sprachen als
+  einzige Stelle mit „du“ an.
 
 - **Sandbox: lokal gebaute Images verweigern `prod`.** `--build` baut die Images jetzt wie die
   veröffentlichten mit der Sandbox-Markierung; `sandbox.ps1` bricht unter Windows PowerShell 5.1 bei

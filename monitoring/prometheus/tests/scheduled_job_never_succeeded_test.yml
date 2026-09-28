@@ -150,3 +150,37 @@ tests:
             exp_annotations:
               summary: "Scheduled job stale >26h (exchange_change_retention)"
               description: "The exchange_change_retention job last succeeded more than 26 hours ago \u2014 it may have stopped being scheduled."
+
+  - name: fires - the exchange connection sweep that has never succeeded
+    interval: 1m
+    input_series:
+      - series: 'process_start_time_seconds{job="basetool-backend"}'
+        values: "0x1900"
+      - series: 'basetool_scheduled_job_enabled{task="exchange_connection_retention"}'
+        values: "1x1900"
+    alert_rule_test:
+      - eval_time: 30h
+        alertname: ScheduledJobStale
+        exp_alerts:
+          - exp_labels:
+              severity: "warning"
+              task: "exchange_connection_retention"
+            exp_annotations:
+              summary: "Scheduled job stale >26h (exchange_connection_retention)"
+              description: "The exchange_connection_retention job last succeeded more than 26 hours ago \u2014 it may have stopped being scheduled."
+
+  - name: fires - the exchange connection sweep stopped succeeding
+    interval: 1m
+    input_series:
+      - series: 'basetool_scheduled_job_last_success_timestamp_seconds{task="exchange_connection_retention"}'
+        values: "60x1900"
+    alert_rule_test:
+      - eval_time: 30h
+        alertname: ScheduledJobStale
+        exp_alerts:
+          - exp_labels:
+              severity: "warning"
+              task: "exchange_connection_retention"
+            exp_annotations:
+              summary: "Scheduled job stale >26h (exchange_connection_retention)"
+              description: "The exchange_connection_retention job last succeeded more than 26 hours ago \u2014 it may have stopped being scheduled."

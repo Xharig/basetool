@@ -722,6 +722,12 @@ public enum AuditEventType {
   /** An admin's bulk undo of a client ended, completed or failed (REQ-XCH-034). */
   EXCHANGE_BULK_UNDO_FINISHED(AuditDomain.CONNECTED_APPS),
 
+  /**
+   * The nightly retention sweep deleted disconnected installations and client revocations past
+   * their retention; the details carry only the counts (REQ-XCH-035).
+   */
+  EXCHANGE_CONNECTIONS_PURGED(AuditDomain.CONNECTED_APPS),
+
   /** The connected-applications audit log was exported as a PDF or JSON for a period. */
   CONNECTED_APPS_AUDIT_EXPORTED(AuditDomain.CONNECTED_APPS),
 

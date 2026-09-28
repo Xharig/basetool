@@ -19,7 +19,7 @@ the gateway and the identity provider check it. The
 | Client | public, your registered client id, **no secret**, device grant only |
 | Proof of possession | DPoP with ES256 (P-256) on every token request and every API call |
 | Access token | lives **300 s**, audience `basetool-ingest` |
-| Connection | ends after **30 days** without use and after **90 days** at the latest |
+| Connection | ends after **30 days** without use and after **90 days** at the latest, with or without `offline_access` |
 
 Take the endpoints from the discovery document, and use it only when its `issuer` is exactly the
 pinned value. Another issuer — the local sandbox — may be chosen only through a developer
@@ -39,7 +39,9 @@ Request, space-separated:
   offline session, signing out of the Basetool in the browser would end the connection too. And
   after the member disconnected the client, a token without `offline_access` counts from the
   browser session's sign-in, which a device login that joins it does not renew: it stays
-  `CLIENT_REVOKED` until the member signs in again.
+  `CLIENT_REVOKED` until the member signs in again. A client that omits it holds an online session,
+  which ends like an offline one after 30 days without use and after 90 days at the latest; the
+  member then signs in again.
 
 Do not request `openid`, `profile` or `email`: the client receives no personal data. The token
 response's `scope` lists what was granted. A route passes only when its scope is in the token

@@ -1,6 +1,6 @@
 # Record of processing activities (Art. 30 GDPR)
 
-> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-22.
+> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-28.
 
 Art. 30 GDPR requires a controller to maintain a record of its processing activities. The small-
 organisation exemption in **Art. 30(5) does not apply**: it is available only where processing is
@@ -178,15 +178,59 @@ requires it and duplicating it into further files spreads personal data for no g
 
 - **Purpose:** let a member import data the game produced (refinery results, personal blueprints)
   without typing it, and use the tool from an Android phone.
-- **Data:** the desktop extractor analyses its source locally and sends only the reviewed result, as
-  text, to the ingest gateway after a device login. The gateway stages it **single-use, for the
-  uploading account only**, until the member confirms it in the web interface; only then is it
-  stored, under A2. The Android app shows the same data with the same permissions and processes
-  nothing server-side of its own; on the device it keeps an encrypted refresh token and the content
-  last fetched, both excluded from Android backup and deleted on sign-out.
+- **Data:** the desktop extractor analyses its source locally and sends only the result, as text,
+  to the ingest gateway; screenshots and log files never leave the device. From 2.10.0 it is a
+  connected application under A11 and the first entry of the public approved-client list: a draft is
+  staged **single-use, for the uploading account only**, until the member confirms it in the web
+  interface, and only then stored under A2; the opt-in direct blueprint sync writes through the
+  exchange like any other connected application. The Android app is part of the platform, shows the
+  same data with the same permissions and processes nothing server-side of its own; on the device it
+  keeps an encrypted refresh token and the content last fetched, both excluded from Android backup
+  and deleted on sign-out.
 - **Legal basis:** Art. 6(1)(b).
-- **Where:** the ingest handoff staging in Redis (REQ-INGEST-003); on the member's own device.
+- **Where:** the ingest handoff staging in Redis (REQ-INGEST-003, REQ-XCH-019); for the direct sync,
+  A11; on the member's own device.
 - **Retention:** a staged handoff expires after **30 minutes** unread; see [Retention](#retention).
+
+### A11 — Connected applications (the exchange API)
+
+- **Purpose:** let an approved client on the member's own device read and write the member's own
+  blueprints, personal warehouse stock and ships and read the anonymised open demand of the
+  member's units, at the member's request; let the member see, disconnect and undo every
+  connection; detect and reverse a faulty or malicious client (REQ-XCH-*,
+  [`external-exchange.md`](../specs/external-exchange.md)).
+- **Data held by the tool:** per installation the client, the DPoP key thumbprint, the
+  client-supplied label (at most 40 characters, never logged or audited), first and last seen, and
+  the ship links; per disconnected client the revocation time; the change sequence of the member's
+  synced data (resource, key, channel, client, installation) with its tombstones; the write journal
+  (client, installation, resource, key, action and the entry before and after — which can carry a
+  blueprint note or a ship name); the entries an admin bulk undo left alone; audit rows in the
+  Blueprints, Lager, Hangar and „Verbundene Anwendungen" areas naming the client; the notifications
+  `EXCHANGE_INSTALLATION_CONNECTED` and `EXCHANGE_BULK_UNDO_APPLIED`; transient entries (idempotency
+  results 24 h, a staged mass change 30 min, the Redis revocation and deny-list mirror 90 days); in
+  Keycloak the member's consent per client and the client's offline session. The account check
+  compares a sent RSI handle with the stored one and keeps neither (REQ-XCH-031).
+- **Disclosed to the client:** only the member's own data within the capabilities the member
+  consented to, the anonymised org demand and catalogue data — never the e-mail address, the
+  display name or another member's data (REQ-XCH-009, REQ-XCH-018).
+- **Legal basis:** Art. 6(1)(b) for the transfer the member asked for and the connection records;
+  Art. 6(1)(f) for the journal and the audit attribution (detecting misuse, undoing it). The
+  Keycloak consent is an OAuth authorisation of the client, not a consent under Art. 6(1)(a) (owner
+  decision 2026-09-28).
+- **Where:** `exchange_installation`, `exchange_client_revocation`, `exchange_change`,
+  `exchange_journal`, `exchange_ship_link`, `exchange_bulk_undo_run` / `exchange_bulk_undo_skip`;
+  Redis `exchange:*` and `ingest:xch:*`; the Keycloak realm.
+- **Retention:** a connected installation for as long as it stays connected; a **disconnected
+  installation with its label 90 days after the disconnection**, and a **client revocation 90 days
+  after the revocation** (owner decision 2026-09-28, `ExchangeConnectionRetentionTask`, REQ-XCH-035;
+  each run is audited in „Verbundene Anwendungen" as counts only); a ship link until its
+  ship is deleted, at the latest with the account; the change sequence, the journal and the
+  bulk-undo runs 90 days. Every member row goes with the account (`ON DELETE CASCADE`,
+  REQ-DATA-008); a bulk-undo run keeps its counts with `requested_by` nulled. All six are in the
+  Art. 15 export (REQ-SEC-058).
+- **After the transfer:** the client runs on the member's device and is not operated by the
+  controller; what it does with the data is governed by its provider's privacy statement, which the
+  approval requires (REQ-XCH-002). See [Recipients](#recipients).
 
 ---
 
@@ -207,13 +251,22 @@ The single table every other statement about retention must agree with.
 | Metrics (no personal data)              | 180 days                                                                       | Prometheus TSDB retention                                                  | `--storage.tsdb.retention.time` in `docker-compose.monitoring.yml` (→ `quadlet/systemd/prometheus.container`) |
 | Sessions                                | 30 days idle for an authenticated session                                      | Spring Session / Redis (REQ-SEC-025)                                       | `app.session.authenticated-timeout`                     |
 | Ingest handoff (companion import)       | **30 minutes**, single use                                                     | Redis key expiry (REQ-INGEST-003)                                          | `app.ingest.handoff-ttl`                                |
+| Exchange: disconnected installation with its label | **90 days** after the disconnection | `ExchangeConnectionRetentionTask` (REQ-XCH-035) | `app.exchange.connection-retention.max-age` |
+| Exchange: client revocation | **90 days** after the revocation | `ExchangeConnectionRetentionTask` (REQ-XCH-035) | `app.exchange.connection-retention.max-age` |
+| Exchange: connected installation, ship links | While connected; a ship link until its ship is deleted, at the latest with the account | Disconnection, then the sweep above; `ON DELETE CASCADE` (REQ-DATA-008) | — |
+| Exchange change sequence, write journal, bulk-undo runs | **90 days** | `ExchangeChangeRetentionTask` (REQ-XCH-013/-022/-034) | `app.exchange.change-retention.max-age` |
+| Exchange revocation and deny-list mirror (Redis) | **90 days** after the revocation | Redis key expiry (REQ-XCH-008) | `ExchangeRevocationMirror.RETENTION` |
+| Exchange idempotency results (Redis) | **24 hours** | Redis key expiry (REQ-XCH-020) | `app.exchange.store.idempotency-ttl` (ingest) |
+| Exchange staged mass change | **30 minutes** | Expiry of the staged change (REQ-XCH-021) | `ExchangeMassChangeService.STAGING_REACH` |
+| Exchange client session, online and offline (Keycloak) | **30 days** idle, **90 days** at most | Keycloak client attributes (REQ-XCH-005) | `EXCHANGE_OFFLINE_SESSION_*` and `EXCHANGE_SESSION_*` in `scripts/provision-keycloak-realm.py` |
 | Backups                                 | Up to ~6 months (7d/4w/6m)                                                     | `restic forget` (REQ-OPS-008)                                              | `IRI_KEEP_DAILY` / `_WEEKLY` / `_MONTHLY` in `scripts/backup.sh` |
 | Bank booking history (handle snapshots) | Kept beyond account deletion under Art. 6(1)(f), subject to an Art. 17 request | —                                                                          | —                                                       |
 | Audit trail handle snapshots            | Outlive the account, but only to the 24-month ceiling above                    | `AuditRetentionTask` (REQ-AUDIT-006)                                       | `app.audit.retention.max-age`                           |
 | Erasure requests (`deletion_request`)   | Life of the account; removed with it when carried out                          | `ON DELETE CASCADE` (REQ-SEC-061)                                          | —                                                       |
 
-**Every number in this table is also a sentence in the privacy policy**, with one exception: the
-policy describes the ingest handoff as cached only briefly and names no figure. Changing a number
+**Every number in this table is also a sentence in the privacy policy**, with two exceptions: the
+policy describes the ingest handoff as cached only briefly and names no figure, and the Redis mirror
+of an exchange revocation is an internal copy of a revocation time the policy already names. Changing a number
 without its sentence publishes a false statement — see the note in [`README.md`](README.md).
 
 ---
@@ -228,6 +281,7 @@ Full detail, including the role each party plays, in [`processors.md`](processor
 | Discord                           | Independent controller | The authentication exchange for members who use the Discord login |
 | GitHub                            | Independent controller | Nothing from the tool — the Android app is downloaded from, and checks for updates at, GitHub directly |
 | Other members of the organisation | —                      | The data the visibility rules expose inside the tool              |
+| Providers of approved exchange clients | Not a processor; an independent controller for anything their software passes on | The member's own data within the consented capabilities, delivered to the member's own device at the member's request (A11) |
 
 **No transfer to a third country takes place through the tool itself.** The Discord login involves a
 US parent company; that transfer is described in the privacy policy with the mechanism the provider
