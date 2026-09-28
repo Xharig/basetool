@@ -258,7 +258,7 @@ The single table every other statement about retention must agree with.
 | Exchange revocation and deny-list mirror (Redis) | **90 days** after the revocation | Redis key expiry (REQ-XCH-008) | `ExchangeRevocationMirror.RETENTION` |
 | Exchange idempotency results (Redis) | **24 hours** | Redis key expiry (REQ-XCH-020) | `app.exchange.store.idempotency-ttl` (ingest) |
 | Exchange staged mass change | **30 minutes** | Expiry of the staged change (REQ-XCH-021) | `ExchangeMassChangeService.STAGING_REACH` |
-| Exchange offline session (Keycloak) | **30 days** idle, **90 days** at most | Keycloak client attributes (REQ-XCH-005) | `EXCHANGE_OFFLINE_SESSION_*` in `scripts/provision-keycloak-realm.py` |
+| Exchange client session, online and offline (Keycloak) | **30 days** idle, **90 days** at most | Keycloak client attributes (REQ-XCH-005) | `EXCHANGE_OFFLINE_SESSION_*` and `EXCHANGE_SESSION_*` in `scripts/provision-keycloak-realm.py` |
 | Backups                                 | Up to ~6 months (7d/4w/6m)                                                     | `restic forget` (REQ-OPS-008)                                              | `IRI_KEEP_DAILY` / `_WEEKLY` / `_MONTHLY` in `scripts/backup.sh` |
 | Bank booking history (handle snapshots) | Kept beyond account deletion under Art. 6(1)(f), subject to an Art. 17 request | —                                                                          | —                                                       |
 | Audit trail handle snapshots            | Outlive the account, but only to the 24-month ceiling above                    | `AuditRetentionTask` (REQ-AUDIT-006)                                       | `app.audit.retention.max-age`                           |

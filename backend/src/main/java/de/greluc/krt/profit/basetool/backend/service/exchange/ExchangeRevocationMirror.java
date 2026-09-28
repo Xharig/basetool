@@ -32,7 +32,11 @@ import org.jetbrains.annotations.Nullable;
  */
 public interface ExchangeRevocationMirror {
 
-  /** How long a denial or revocation is enforced: the longest a client session can live. */
+  /**
+   * How long a denial or revocation is enforced: the 90-day maximum lifespan the provisioner pins
+   * on every exchange client's online and offline session, so no session that existed at the
+   * revocation outlives it (ADR-0217).
+   */
   Duration RETENTION = Duration.ofDays(90);
 
   /**

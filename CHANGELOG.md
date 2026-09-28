@@ -342,6 +342,10 @@
 
 ### Fixed
 
+- **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
+  auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
+  90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede
+  Sitzung einer getrennten Installation (ADR-0217, REQ-XCH-008).
 - **Datenschutzerklärung: durchgehend „Sie“.** Die Sätze zu Datenkopie und Löschantrag sprachen als
   einzige Stelle mit „du“ an.
 
