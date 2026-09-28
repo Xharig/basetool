@@ -83,7 +83,11 @@ public class ExchangeRelay {
   /** The code of a relay failure. */
   public static final String RELAY_FAILED = "BACKEND_RELAY_FAILED";
 
-  /** The largest backend answer the gateway accepts. */
+  /**
+   * The ceiling on a backend answer the relay reads; the backend client's own cap, {@code
+   * app.ingest.max-payload-bytes} (2 MiB by default), refuses a larger answer first, so this bound
+   * applies only when that cap is configured above it.
+   */
   static final int MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
   /** Backend codes that mean the same as a registry code. */

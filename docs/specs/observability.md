@@ -1767,7 +1767,8 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   (REQ-XCH-003, REQ-XCH-028).
 - `basetool_exchange_mirror_writes_total{phase,outcome}` counter for every attempt to bring the
   registry's Redis mirror in line (`phase` = `pre_commit` / `post_commit` / `rollback` / `startup` /
-  `reconcile`, `outcome` = `written` / `unchanged` / `failed`), registered at zero. It backs
+  `reconcile`, and `switched_off` for a start with mirroring off switching off a document left
+  behind; `outcome` = `written` / `unchanged` / `failed`), registered at zero. It backs
   `ExchangeMirrorWriteFailed` (warning, a failure in 10 m held 5 m). The reconcile runs as the
   `exchange_registry_reconcile` scheduled job with the usual task metrics and its own
   `ExchangeRegistryReconcileStale` (no success for 10 m, only while the job's enabled gauge is 1).

@@ -39,6 +39,13 @@ have restarted Redis in a loop.
    `ingest:*`, no channel, no `SCAN`), `monitoring` (as before, minus `SCAN` and `RANDOMKEY`, which
    are not key-checked and would list session ids), `admin` (the operator, `REDIS_PASSWORD`), and
    `default`, `on` until the rollout completes and `off` afterwards.
+
+   > **Amended 2026-09-28** (ADR-0221, found by security review G5). The exchange partition widened
+   > two of these users, and this decision had not said so: `basetool-backend` now owns the
+   > `exchange:*` keys (`GET`, `SET`), and `basetool-ingest` reads `exchange:*` (`%R~`) beside its
+   > own `ingest:*` keys and runs its budget and store updates as Lua scripts (`EVAL`/`EVALSHA`),
+   > which Redis checks against the same key patterns. Neither gained a channel, `SCAN` or a
+   > dangerous command. The template is the list of record; REQ-SEC-068 names each user's commands.
 2. **Rendered, hashed, all-or-nothing.** `scripts/render-redis-acl.py`, installed by the role next to
    `render-env-d.py`, fills the template from `.env` with SHA-256 hashes, refuses a missing variable or
    a result without exactly one `default` line, writes atomically, and is applied live with `ACL LOAD`.

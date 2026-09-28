@@ -34,6 +34,8 @@ import org.springframework.validation.annotation.Validated;
  * @param key the Redis key of the mirror document; must stay under {@code exchange:}, the only
  *     family the backend's ACL user may write
  * @param reconcileInterval the delay between two reconcile runs
+ * @param closeWhenOff whether a start with mirroring off switches off a document left under {@code
+ *     key}; a start that tries it reaches Redis once and survives a failure
  */
 @Validated
 @ConfigurationProperties("app.exchange.mirror")
@@ -41,4 +43,5 @@ public record ExchangeMirrorProperties(
     @DefaultValue("false") boolean enabled,
     @DefaultValue("exchange:registry") @NotBlank @Pattern(regexp = "exchange:[a-z0-9:_-]+")
         String key,
-    @DefaultValue("PT60S") Duration reconcileInterval) {}
+    @DefaultValue("PT60S") Duration reconcileInterval,
+    @DefaultValue("true") boolean closeWhenOff) {}

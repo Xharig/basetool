@@ -41,6 +41,34 @@ VALUES ('5a4d0000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-0000000
        ('5a4d0000-0000-4000-8000-000000000003', '00000000-0000-0000-0000-000000000001', 'SQUADRON')
 ON CONFLICT DO NOTHING;
 
+INSERT INTO app_user (id, version, created_at, updated_at, username, email, display_name, in_keycloak,
+                      enabled_in_keycloak, join_date, approval_status, approved_at, rsi_handle)
+SELECT format('5a4d0000-0000-4000-8000-0000000002%s', lpad(n::text, 2, '0'))::uuid, 0, now(), now(),
+       format('sandbox-load-%s', lpad(n::text, 2, '0')),
+       format('sandbox-load-%s@example.invalid', lpad(n::text, 2, '0')),
+       format('Sandbox Load %s', lpad(n::text, 2, '0')), true, true, current_date, 'ACTIVE', now(), NULL
+FROM generate_series(1, 16) AS n
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id
+FROM app_user u
+JOIN role r ON r.code = 'KRT_MEMBER'
+WHERE u.username LIKE 'sandbox-load-%'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO terms_acceptance (id, user_id, terms_version, accepted_at)
+SELECT gen_random_uuid(), u.id, :'terms_version', now()
+FROM app_user u
+WHERE u.username LIKE 'sandbox-load-%'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO org_unit_membership (user_id, org_unit_id, kind)
+SELECT u.id, '00000000-0000-0000-0000-000000000001', 'SQUADRON'
+FROM app_user u
+WHERE u.username LIKE 'sandbox-load-%'
+ON CONFLICT DO NOTHING;
+
 INSERT INTO manufacturer (id, version, created_at, updated_at, name, abbreviation, hidden)
 VALUES ('5a4d0000-0000-4000-8000-000000001001', 0, now(), now(), 'Sandbox Manufacturer', 'SBXM', false)
 ON CONFLICT (id) DO NOTHING;

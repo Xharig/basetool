@@ -69,8 +69,9 @@ final class DisabledExchangeRevocationMirror implements ExchangeRevocationMirror
   }
 
   /**
-   * Always {@code null}: nothing is mirrored, and the gateway, which then finds no registry,
-   * refuses every exchange request before it reaches the backend.
+   * Always {@code null}: nothing is mirrored; the backend's gate reads the stored revocations
+   * instead, and the gateway finds no registry or one {@link ExchangeRegistryMirrorClosure}
+   * switched off.
    *
    * @param clientId ignored
    * @param member ignored

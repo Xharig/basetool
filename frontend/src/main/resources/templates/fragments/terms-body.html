@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="de">
 <body>
-<th:block th:fragment="termsBody(terms)">
+<div class="terms-body" th:fragment="termsBody(terms)">
     <p th:text="${terms.intro}">Diese Nutzungsbedingungen regeln die Nutzung des Profit Basetool.</p>
 
     <th:block th:each="section : ${terms.sections}">
@@ -19,6 +19,6 @@
 
     <br>
     <p><em th:text="${terms.lastUpdated}">Stand dieser Nutzungsbedingungen: 05.08.2026</em></p>
-</th:block>
+</div>
 </body>
 </html>
