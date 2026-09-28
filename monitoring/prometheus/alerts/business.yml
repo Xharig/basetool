@@ -170,7 +170,7 @@ groups:
           severity: warning
         annotations:
           summary: "Exchange registry mirror write failed ({{ $labels.phase }})"
-          description: "The backend could not write the exchange registry mirror to Redis ({{ $labels.phase }}). A failed pre_commit write refused an admin's restriction; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
+          description: "The backend could not write the exchange registry mirror to Redis ({{ $labels.phase }}). A failed pre_commit write refused an admin's restriction; switched_off means a start with APP_EXCHANGE_MIRROR_ENABLED=false could not switch off a registry document left in Redis, so the gateway may still admit clients on it until the next successful start; any other phase leaves the mirror behind the database until the 60-second reconcile succeeds. Check Redis and the basetool-backend ACL user's ~exchange:* grant (REQ-XCH-003)."
 
       - alert: ExchangeBudgetHigh
         expr: max(basetool_ingest_exchange_budget_used_ratio) > 0.8
@@ -268,7 +268,7 @@ groups:
           severity: warning
         annotations:
           summary: "An admin's bulk undo of an exchange client failed"
-          description: "A bulk undo under Administration - Verbundene Anwendungen ended FAILED: at least one member could not be processed, or the run broke off. The members it did process are undone; the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed - it only touches what is not undone yet (REQ-XCH-034)."
+          description: "A bulk undo under Administration - Verbundene Anwendungen ended FAILED: at least one member could not be processed, the run broke off, or the queue of ten runs was full and refused it (the client then stays suspended). The members it did process are undone; the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed - it only touches what is not undone yet (REQ-XCH-034)."
 
       - alert: ExchangeUnknownClient
         expr: sum(increase(basetool_ingest_exchange_refused_total{client_id="unregistered"}[15m])) > 10

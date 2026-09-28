@@ -41,3 +41,14 @@ We will expose exactly two pieces of non-personal data to external clients.
 - **Suppress lines below k = 2.** Recommended, rejected by the owner.
 - **A 24 h client cache.** Recommended, rejected by the owner in favour of 7 days.
 - **No org data at all.** Rejected: the demand is the main thing VerseKit's farming list lacks.
+
+## Amendment — 2026-09-28: the demand follows the web's job-order gate
+
+#2095 decided that only a member who may open the Aufträge area gets the org demand, and #2230
+built it: the backend asks `OwnerScopeService.canViewJobOrders()` — evaluated with the exchange's
+reduced authorities, so an `ADMIN` role does not open it — before it reads any order, and any other
+member gets empty lists with `reason: NOT_PERMITTED` (REQ-XCH-018). The exposure is therefore
+narrower than decision 1 and the first consequence state: the feed reaches only members who could
+read the same orders in the web, and a unit that loses its profit eligibility stops showing its
+demand. The rest of the decision — membership scope only, no low-count suppression, the 7-day
+cache — is unchanged.

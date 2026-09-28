@@ -64,6 +64,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
@@ -177,7 +178,9 @@ public class ExchangeBulkUndoService {
    * @return the started run
    * @throws NotFoundException when the client or the installation is unknown
    * @throws BadRequestException when the span starts in the future
-   * @throws BusinessConflictException when a bulk undo of the client is already running
+   * @throws BusinessConflictException when a bulk undo of the client is already running, or when
+   *     the bulk undo executor refuses the run, which is then ended {@code FAILED} with the client
+   *     left suspended
    */
   public @NotNull ExchangeBulkUndoRunDto start(
       @NotNull UUID registryId,
@@ -205,7 +208,13 @@ public class ExchangeBulkUndoService {
     if (run == null) {
       throw new IllegalStateException("The bulk undo run was not created");
     }
-    runner.run(run.getId(), admin);
+    try {
+      runner.run(run.getId(), admin);
+    } catch (TaskRejectedException e) {
+      log.warn("Bulk undo run {} was refused by its executor and is marked failed", run.getId());
+      runner.rejected(run.getId());
+      throw new BusinessConflictException("error.exchange.bulkUndo.queueFull", e);
+    }
     return toDto(
         run, suspended.getDisplayName(), names(adminId == null ? Set.of() : Set.of(adminId)));
   }

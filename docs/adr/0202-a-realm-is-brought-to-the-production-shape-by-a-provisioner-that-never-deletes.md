@@ -143,3 +143,26 @@ written into another realm. `baseUrl` affects only where Keycloak *links* to the
 info pages, the account console's application list) — it is not a redirect-URI allowance and widens
 nothing. Production gets it on the owner's next `--apply`. Requirement: `REQ-SEC-071`; pinned by
 cases 2 and 5 of `scripts/provision-keycloak-realm.test.sh`.
+
+## Amendment 4 — 2026-09-28: the exchange clients carry no mapper but their own
+
+- **Deciders:** @greluc (owner decision in chat, 2026-09-28, on finding G5-L4 of the final security
+  review of #2092)
+
+Decision 4 left a client-level protocol mapper that only the target realm has in place and reported
+it under *only on this realm*. For `basetool-sc-extractor` and the third-party clients of
+`scripts/keycloak/external-clients.json` that is the one piece of their shape the provisioner could
+not enforce: a hand-added `oidc-audience-mapper` stamping `basetool-backend` would survive an apply,
+and since reports are not planned changes the verify pass still ended *"Applied. A second run
+reports no changes."* A phished device code would then yield a token the backend API accepts —
+finding H1 of review 1 again. Their documented shape is "no protocol mapper"
+(`REQ-XCH-005`).
+
+**For these clients the mapper list converges in both directions.** The spec flag `exact_mappers`
+makes every live client-level mapper that is not in the client's own `mappers` list — for these
+clients that is every one — a planned `- <client>: mapper '<name>' (<type> <target>) removed`
+change: the dry run lists it and exits `2`, the apply deletes it, and the verify pass fails with
+`STILL PLANNED` if one is left. Mappers of client scopes are unaffected; the withheld scopes already
+keep every identity- or audience-carrying scope off these clients. Decision 4 holds for every other
+client, whose extra mappers are still reported and left alone. Requirements: `REQ-OPS-033`,
+`REQ-XCH-005`; pinned by case 17 of `scripts/provision-keycloak-realm.test.sh`.

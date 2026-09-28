@@ -83,6 +83,23 @@ public class ExchangeBulkUndoRunner {
   }
 
   /**
+   * Ends a run the executor refused to queue as {@code FAILED}, audited like any other end, and
+   * counts it as a failed {@code exchange_bulk_undo} run, which {@code ExchangeBulkUndoFailed}
+   * alerts on.
+   *
+   * @param runId the refused run
+   */
+  public void rejected(@NotNull UUID runId) {
+    taskMetrics.record(
+        ScheduledJob.EXCHANGE_BULK_UNDO,
+        () -> {
+          step.finish(runId, ExchangeBulkUndoStatus.FAILED, false);
+          throw new IllegalStateException(
+              "Bulk undo run " + runId + " was refused because the queue is full");
+        });
+  }
+
+  /**
    * Processes every member in the run's scope and ends the run.
    *
    * @param runId the run

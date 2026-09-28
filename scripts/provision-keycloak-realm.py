@@ -144,8 +144,9 @@ class ClientSpec:
 
     `fields` are converged on every run; `create_only` is written only on creation. List fields
     are unions: missing entries are added, extra ones reported, and `withheld_*` entries removed
-    wherever found. `value_env` names the environment variable that supplies a confidential
-    client's credential; only that name is ever printed.
+    wherever found. With `exact_mappers`, every client-level protocol mapper not in `mappers` is
+    removed instead of reported. `value_env` names the environment variable that supplies a
+    confidential client's credential; only that name is ever printed.
     """
 
     client_id: str
@@ -162,6 +163,7 @@ class ClientSpec:
     withheld_web_origins: list[str] = field(default_factory=list)
     withheld_reason: str = ""
     mappers: list[dict] = field(default_factory=list)
+    exact_mappers: bool = False
     client_roles: list[dict] = field(default_factory=list)
     realm_role_scope: list[str] | None = None
     service_account_roles: dict[str, list[str]] | None = None
@@ -412,6 +414,7 @@ def client_specs(realm: str, public_origin: str, grafana_origin: str | None,
                              "web-origins"],
             withheld_redirect_uris=["http://127.0.0.1/*", "http://localhost/*"],
             withheld_reason="exchange-only since the extractor's 2.10.0 (H1, #2088); unused code flow retired 2026-09-22",
+            exact_mappers=True,
         ),
     ]
     if grafana_origin:
@@ -516,6 +519,7 @@ def external_client_spec(entry: dict) -> ClientSpec:
                          "microprofile-jwt", "organization", "phone", "profile", "roles",
                          "web-origins"],
         withheld_reason="never offered to a third-party client, REQ-XCH-005",
+        exact_mappers=True,
     )
 
 
@@ -750,10 +754,10 @@ class Planner:
 
     @staticmethod
     def _mapper_summary(mapper: dict) -> str:
-        config = mapper["config"]
+        config = mapper.get("config") or {}
         target = (config.get("included.custom.audience") or config.get("included.client.audience")
                   or config.get("claim.name") or "")
-        return f"{mapper['protocolMapper']} {target}".strip()
+        return f"{mapper.get('protocolMapper') or '<no type>'} {target}".strip()
 
     def _create_mapper(self, base: str, mapper: dict) -> None:
         self.kc.write("create", f"{base}/protocol-mappers/models",
@@ -763,8 +767,13 @@ class Planner:
                       f"mapper '{mapper['name']}' created")
 
     def _mapper_changes(self, owner: str, base: str, desired: list[dict],
-                        live_mappers: list[dict], frozen: bool = False) -> list[Change]:
-        """Create missing mappers, correct drifted ones, report those production does not have."""
+                        live_mappers: list[dict], frozen: bool = False,
+                        exact: bool = False) -> list[Change]:
+        """Create missing mappers and correct drifted ones.
+
+        With `exact`, every other live mapper is removed, a second one of a desired name included;
+        without it, a mapper of any other name is reported and left alone.
+        """
         changes: list[Change] = []
         by_name = {m.get("name"): m for m in live_mappers}
         for mapper in desired:
@@ -790,6 +799,17 @@ class Planner:
                          "config": {**(lv.get("config") or {}), **m["config"]}},
                         f"mapper '{m['name']}' corrected"), frozen))
         wanted = {m["name"] for m in desired}
+        if exact:
+            kept = {by_name[n].get("id") for n in wanted if n in by_name}
+            for extra in sorted((m for m in live_mappers if m.get("id") not in kept),
+                                key=lambda m: (str(m.get("name")), str(m.get("id")))):
+                changes.append(Change(
+                    f"- {owner}: mapper '{extra.get('name')}' ({self._mapper_summary(extra)}) "
+                    f"removed (not in this client's spec)",
+                    lambda m=extra: self.kc.delete(
+                        f"{base}/protocol-mappers/models/{m['id']}",
+                        f"mapper '{m.get('name')}' removed"), frozen))
+            return changes
         for name in sorted(n for n in by_name if n not in wanted):
             self.reports.append(f"{owner}: mapper '{name}' is not in the production shape")
         return changes
@@ -864,7 +884,8 @@ class Planner:
         changes += self._plan_scope_assignments(spec, uuid, frozen)
         changes += self._mapper_changes(
             spec.client_id, f"clients/{uuid}", spec.mappers,
-            self.kc.get(f"clients/{uuid}/protocol-mappers/models") or [], frozen=frozen)
+            self.kc.get(f"clients/{uuid}/protocol-mappers/models") or [], frozen=frozen,
+            exact=spec.exact_mappers)
         changes += self._plan_client_roles(spec, uuid, frozen)
         changes += self._plan_role_scope(spec, uuid, frozen)
         changes += self._plan_service_account_roles(spec, uuid)
