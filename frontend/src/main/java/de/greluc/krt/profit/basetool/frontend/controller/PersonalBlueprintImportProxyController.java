@@ -26,14 +26,18 @@ import de.greluc.krt.profit.basetool.frontend.model.dto.BlueprintImportResultDto
 import de.greluc.krt.profit.basetool.frontend.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
 import de.greluc.krt.profit.basetool.frontend.service.IngestHandoffService;
+import de.greluc.krt.profit.basetool.frontend.support.BackendErrorResponses;
 import de.greluc.krt.profit.basetool.frontend.support.CurrentUser;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -65,6 +69,9 @@ public class PersonalBlueprintImportProxyController {
   private final BackendApiClient backendApiClient;
   private final IngestHandoffService ingestHandoffService;
 
+  /** Resolves the localised refusals this proxy decides itself. */
+  private final MessageSource messageSource;
+
   /**
    * Returns and consumes the blueprint import handoff the desktop extractor staged for the current
    * user (REQ-INGEST-004). A POST because the pickup is single-use; an unknown, expired, consumed
@@ -90,30 +97,45 @@ public class PersonalBlueprintImportProxyController {
    */
   static final long MAX_EXPORT_BYTES = 8L * 1024 * 1024;
 
+  /** The message of an empty upload. */
+  static final String EMPTY_KEY = "personalInventory.blueprints.import.error.empty";
+
+  /** The message of an upload above {@link #MAX_EXPORT_BYTES}. */
+  static final String TOO_LARGE_KEY = "personalInventory.blueprints.import.error.tooLarge";
+
+  /** The problem code of an empty upload, as the frontend answers any {@code 400}. */
+  private static final String CODE_VALIDATION_FAILED = "VALIDATION_FAILED";
+
+  /** The problem code of an oversized upload, as the frontend answers any {@code 413}. */
+  private static final String CODE_UPLOAD_TOO_LARGE = "UPLOAD_TOO_LARGE";
+
   /**
    * Proxies a blueprint export JSON upload to the backend import-preview endpoint and returns the
    * resolution preview. The backend persists nothing at this step.
    *
-   * @param file the uploaded blueprint export JSON (SCMDB log-watcher, Basetool BP Extractor, or
-   *     scmdb.net export)
-   * @return the import preview (per-name rows + status counts)
-   * @throws ResponseStatusException 400 for an empty upload and 413 for one above {@link
-   *     #MAX_EXPORT_BYTES} (both refused before the upload is read), the backend's status if the
-   *     backend rejects it (e.g. 400 for a malformed file), or 500 on an unexpected error
+   * <p>A refusal answers {@code application/problem+json} with a localised {@code detail} the page
+   * shows: an empty upload ({@code 400}) and one above {@link #MAX_EXPORT_BYTES} ({@code 413}) are
+   * refused before they are read, and a backend refusal is relayed with its status, code and
+   * detail.
+   *
+   * @param file the uploaded blueprint export JSON (SCMDB log-watcher, Basetool BP Extractor,
+   *     scmdb.net export or the {@code basetool.blueprints} envelope)
+   * @return the import preview (per-name rows + status counts), or the refusal
+   * @throws ResponseStatusException 500 on an unexpected error
    */
   @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public BlueprintImportPreviewDto preview(@RequestParam("file") @NotNull MultipartFile file) {
+  public ResponseEntity<Object> preview(@RequestParam("file") @NotNull MultipartFile file) {
     if (file.isEmpty()) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "The uploaded blueprint export is empty.");
+      return BackendErrorResponses.problem(
+          HttpStatus.BAD_REQUEST, CODE_VALIDATION_FAILED, message(EMPTY_KEY));
     }
     if (file.getSize() > MAX_EXPORT_BYTES) {
       log.warn(
           "Blueprint import preview proxy: upload of {} bytes refused, the cap is {} bytes",
           file.getSize(),
           MAX_EXPORT_BYTES);
-      throw new ResponseStatusException(
-          HttpStatus.CONTENT_TOO_LARGE, "The uploaded blueprint export is too large.");
+      return BackendErrorResponses.problem(
+          HttpStatus.CONTENT_TOO_LARGE, CODE_UPLOAD_TOO_LARGE, message(TOO_LARGE_KEY));
     }
     try {
       byte[] bytes = file.getBytes();
@@ -131,20 +153,18 @@ public class PersonalBlueprintImportProxyController {
               })
           .contentType(MediaType.APPLICATION_OCTET_STREAM);
 
-      return webClient
-          .post()
-          .uri("/api/v1/personal-blueprints/import/preview")
-          .contentType(MediaType.MULTIPART_FORM_DATA)
-          .body(BodyInserters.fromMultipartData(builder.build()))
-          .retrieve()
-          .bodyToMono(BlueprintImportPreviewDto.class)
-          .block();
+      return ResponseEntity.ok(
+          webClient
+              .post()
+              .uri("/api/v1/personal-blueprints/import/preview")
+              .contentType(MediaType.MULTIPART_FORM_DATA)
+              .body(BodyInserters.fromMultipartData(builder.build()))
+              .retrieve()
+              .bodyToMono(BlueprintImportPreviewDto.class)
+              .block());
     } catch (WebClientResponseException e) {
-      log.warn(
-          "Blueprint import preview proxy: backend {} — {}", e.getStatusCode(), e.getMessage());
-      throw new ResponseStatusException(e.getStatusCode(), e.getMessage());
-    } catch (ResponseStatusException e) {
-      throw e;
+      log.warn("Blueprint import preview proxy: backend answered {}", e.getStatusCode());
+      return BackendErrorResponses.propagateBackendError(e);
     } catch (Exception e) {
       log.error("Blueprint import preview proxy: unexpected error", e);
       throw new ResponseStatusException(
@@ -154,26 +174,36 @@ public class PersonalBlueprintImportProxyController {
 
   /**
    * Relays the user's reviewed import resolutions to the backend apply endpoint and returns the
-   * summary.
+   * summary; a backend refusal is relayed with its status, code and localised detail.
    *
    * @param resolutions the per-name resolutions staged in the preview modal
-   * @return the apply summary (added / aliases learned / skipped / already owned)
+   * @return the apply summary (added / aliases learned / skipped / already owned), the relayed
+   *     refusal, or an empty {@code 500} on an unexpected error
    */
   @PostMapping("/apply")
-  public BlueprintImportResultDto apply(
-      @RequestBody List<BlueprintImportResolutionDto> resolutions) {
+  public ResponseEntity<Object> apply(@RequestBody List<BlueprintImportResolutionDto> resolutions) {
     List<BlueprintImportResolutionDto> list = resolutions == null ? List.of() : resolutions;
-    try {
-      BlueprintImportResultDto result =
-          backendApiClient.post(
-              "/api/v1/personal-blueprints/import/apply",
-              new BlueprintImportApplyRequest(list),
-              BlueprintImportResultDto.class);
-      return result == null ? new BlueprintImportResultDto(0, 0, 0, 0, 0) : result;
-    } catch (Exception e) {
-      log.error("Blueprint import apply proxy failed for {} resolution(s)", list.size(), e);
-      throw new ResponseStatusException(
-          HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred during import apply.");
-    }
+    return BackendErrorResponses.relay(
+        log,
+        "Blueprint import apply for " + list.size() + " resolution(s)",
+        () -> {
+          BlueprintImportResultDto result =
+              backendApiClient.post(
+                  "/api/v1/personal-blueprints/import/apply",
+                  new BlueprintImportApplyRequest(list),
+                  BlueprintImportResultDto.class);
+          return ResponseEntity.ok(
+              result == null ? new BlueprintImportResultDto(0, 0, 0, 0, 0) : result);
+        });
+  }
+
+  /**
+   * Resolves a message of this proxy in the caller's locale.
+   *
+   * @param key the message key
+   * @return the localised text, or the key when it is missing
+   */
+  private @NotNull String message(@NotNull String key) {
+    return messageSource.getMessage(key, null, key, LocaleContextHolder.getLocale());
   }
 }

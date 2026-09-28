@@ -21,6 +21,7 @@ package de.greluc.krt.profit.basetool.frontend.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,9 +37,12 @@ import de.greluc.krt.profit.basetool.frontend.model.dto.BlueprintImportResultDto
 import de.greluc.krt.profit.basetool.frontend.model.dto.BlueprintImportStatus;
 import de.greluc.krt.profit.basetool.frontend.model.dto.HandoffKind;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
+import de.greluc.krt.profit.basetool.frontend.service.BackendServiceException;
 import de.greluc.krt.profit.basetool.frontend.service.IngestHandoffService;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import okhttp3.mockwebserver.MockResponse;
@@ -47,8 +51,10 @@ import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.StaticMessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -73,9 +79,25 @@ class PersonalBlueprintImportProxyControllerTest {
     WebClient webClient = WebClient.builder().baseUrl(server.url("/").toString()).build();
     backendApiClient = mock(BackendApiClient.class);
     ingestHandoffService = mock(IngestHandoffService.class);
+    StaticMessageSource messages = new StaticMessageSource();
+    messages.addMessage(
+        PersonalBlueprintImportProxyController.EMPTY_KEY, Locale.getDefault(), "Leere Datei.");
+    messages.addMessage(
+        PersonalBlueprintImportProxyController.TOO_LARGE_KEY, Locale.getDefault(), "Zu gross.");
     controller =
         new PersonalBlueprintImportProxyController(
-            webClient, backendApiClient, ingestHandoffService);
+            webClient, backendApiClient, ingestHandoffService, messages);
+  }
+
+  /**
+   * Reads a field of a problem body.
+   *
+   * @param response the refusal
+   * @param field the field name
+   * @return its value
+   */
+  private static Object field(ResponseEntity<Object> response, String field) {
+    return ((Map<?, ?>) response.getBody()).get(field);
   }
 
   @AfterEach
@@ -111,7 +133,8 @@ class PersonalBlueprintImportProxyControllerTest {
             "application/json",
             "{\"blueprints\":[]}".getBytes(StandardCharsets.UTF_8));
 
-    BlueprintImportPreviewDto preview = controller.preview(file);
+    BlueprintImportPreviewDto preview =
+        (BlueprintImportPreviewDto) controller.preview(file).getBody();
 
     assertNotNull(preview);
     assertEquals(2, preview.total());
@@ -131,17 +154,71 @@ class PersonalBlueprintImportProxyControllerTest {
   }
 
   @Test
-  void preview_onBackend400_propagatesAsBadRequest() {
+  void preview_onBackend400_relaysTheBackendsLocalisedDetail() {
+    server.enqueue(
+        new MockResponse()
+            .setResponseCode(400)
+            .setHeader("Content-Type", "application/problem+json")
+            .setBody(
+                "{\"status\":400,\"code\":\"BAD_REQUEST\","
+                    + "\"detail\":\"Die Datei ist kein lesbares JSON.\","
+                    + "\"correlationId\":\"cid-7\"}"));
+
+    MultipartFile file =
+        new MockMultipartFile(
+            "file", "broken.json", "application/json", "garbage".getBytes(StandardCharsets.UTF_8));
+
+    ResponseEntity<Object> refused = controller.preview(file);
+
+    assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+    assertEquals(MediaType.APPLICATION_PROBLEM_JSON, refused.getHeaders().getContentType());
+    assertEquals("BAD_REQUEST", field(refused, "code"));
+    assertEquals("Die Datei ist kein lesbares JSON.", field(refused, "detail"));
+    assertEquals("cid-7", field(refused, "correlationId"));
+  }
+
+  @Test
+  void preview_onABackendAnswerWithoutAProblem_relaysTheStatusWithoutADetail() {
     server.enqueue(new MockResponse().setResponseCode(400).setBody("Invalid JSON"));
 
     MultipartFile file =
         new MockMultipartFile(
             "file", "broken.json", "application/json", "garbage".getBytes(StandardCharsets.UTF_8));
 
-    ResponseStatusException ex =
-        assertThrows(ResponseStatusException.class, () -> controller.preview(file));
+    ResponseEntity<Object> refused = controller.preview(file);
 
-    assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+    assertEquals("VALIDATION_FAILED", field(refused, "code"));
+    assertNull(field(refused, "detail"));
+  }
+
+  @Test
+  void preview_refusesAnEmptyUploadWithItsLocalisedMessageUnread() {
+    MultipartFile file =
+        new MockMultipartFile("file", "empty.json", "application/json", new byte[0]);
+
+    ResponseEntity<Object> refused = controller.preview(file);
+
+    assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+    assertEquals("Leere Datei.", field(refused, "detail"));
+    assertEquals(0, server.getRequestCount());
+  }
+
+  @Test
+  void preview_refusesAnOversizedUploadWithItsLocalisedMessageUnread() {
+    MultipartFile file =
+        new MockMultipartFile(
+            "file",
+            "big.json",
+            "application/json",
+            new byte[(int) PersonalBlueprintImportProxyController.MAX_EXPORT_BYTES + 1]);
+
+    ResponseEntity<Object> refused = controller.preview(file);
+
+    assertEquals(HttpStatus.CONTENT_TOO_LARGE, refused.getStatusCode());
+    assertEquals("UPLOAD_TOO_LARGE", field(refused, "code"));
+    assertEquals("Zu gross.", field(refused, "detail"));
+    assertEquals(0, server.getRequestCount());
   }
 
   @Test
@@ -153,27 +230,50 @@ class PersonalBlueprintImportProxyControllerTest {
         .thenReturn(new BlueprintImportResultDto(2, 1, 0, 0, 0));
 
     BlueprintImportResultDto result =
-        controller.apply(
-            List.of(
-                new BlueprintImportResolutionDto(
-                    "Arclight Pistol", "arclight pistol", null, "imported")));
+        (BlueprintImportResultDto)
+            controller
+                .apply(
+                    List.of(
+                        new BlueprintImportResolutionDto(
+                            "Arclight Pistol", "arclight pistol", null, "imported")))
+                .getBody();
 
+    assertNotNull(result);
     assertEquals(2, result.added());
     assertEquals(1, result.aliasesLearned());
   }
 
   @Test
-  void apply_onBackendError_wrapsAs500() {
+  void apply_onABackendRefusal_relaysItsLocalisedDetail() {
+    when(backendApiClient.post(any(), any(), eq(BlueprintImportResultDto.class)))
+        .thenThrow(
+            new BackendServiceException(
+                "Backend returned 400",
+                null,
+                400,
+                "BAD_REQUEST",
+                "cid-9",
+                List.of(),
+                "Die Auswahl ist ungueltig."));
+
+    ResponseEntity<Object> refused =
+        controller.apply(List.of(new BlueprintImportResolutionDto("x", "k", null, null)));
+
+    assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+    assertEquals("BAD_REQUEST", field(refused, "code"));
+    assertEquals("Die Auswahl ist ungueltig.", field(refused, "detail"));
+  }
+
+  @Test
+  void apply_onAnUnexpectedError_answersAnEmpty500() {
     when(backendApiClient.post(any(), any(), eq(BlueprintImportResultDto.class)))
         .thenThrow(new RuntimeException("boom"));
 
-    ResponseStatusException ex =
-        assertThrows(
-            ResponseStatusException.class,
-            () ->
-                controller.apply(List.of(new BlueprintImportResolutionDto("x", "k", null, null))));
+    ResponseEntity<Object> failed =
+        controller.apply(List.of(new BlueprintImportResolutionDto("x", "k", null, null)));
 
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatusCode());
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, failed.getStatusCode());
+    assertNull(failed.getBody());
   }
 
   @Test

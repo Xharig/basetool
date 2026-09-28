@@ -121,14 +121,7 @@
                 method: 'POST',
                 formData: fd,
                 toast: false,
-                onError() {
-                    toastError();
-                    return true;
-                },
-                onNetworkError() {
-                    toastError();
-                    return true;
-                },
+                errorMessage: i18n().error,
             })
             .then(function (result) {
                 showPreviewResult(result, toastError);

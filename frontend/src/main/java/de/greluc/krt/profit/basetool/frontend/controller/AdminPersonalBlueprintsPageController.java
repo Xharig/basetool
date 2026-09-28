@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.frontend.controller;
 
+import static de.greluc.krt.profit.basetool.frontend.support.BackendErrorResponses.propagateBackendError;
 import static de.greluc.krt.profit.basetool.frontend.support.BackendErrorResponses.relay;
 
 import de.greluc.krt.profit.basetool.frontend.config.UsesLayoutModel;
@@ -223,16 +224,17 @@ public class AdminPersonalBlueprintsPageController {
   }
 
   /**
-   * Previews a blueprint export import (SCMDB or Basetool BP Extractor) for the target user;
-   * backend parse failures (400) propagate.
+   * Previews a blueprint export import for the target user; a backend refusal is relayed as {@code
+   * application/problem+json} with its status, code and localised detail.
    *
    * @param userSub target user's Keycloak {@code sub}
    * @param file the uploaded blueprint export JSON
-   * @return the per-name resolution preview
+   * @return the per-name resolution preview, or the relayed refusal
+   * @throws ResponseStatusException 500 on an unexpected error
    */
   @PostMapping(value = "/{userSub}/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseBody
-  public BlueprintImportPreviewDto previewImport(
+  public ResponseEntity<Object> previewImport(
       @PathVariable UUID userSub, @RequestParam("file") @NotNull MultipartFile file) {
     try {
       byte[] bytes = file.getBytes();
@@ -250,19 +252,18 @@ public class AdminPersonalBlueprintsPageController {
               })
           .contentType(MediaType.APPLICATION_OCTET_STREAM);
 
-      return webClient
-          .post()
-          .uri("/api/v1/admin/personal-blueprints/" + userSub + "/import/preview")
-          .contentType(MediaType.MULTIPART_FORM_DATA)
-          .body(BodyInserters.fromMultipartData(builder.build()))
-          .retrieve()
-          .bodyToMono(BlueprintImportPreviewDto.class)
-          .block();
+      return ResponseEntity.ok(
+          webClient
+              .post()
+              .uri("/api/v1/admin/personal-blueprints/" + userSub + "/import/preview")
+              .contentType(MediaType.MULTIPART_FORM_DATA)
+              .body(BodyInserters.fromMultipartData(builder.build()))
+              .retrieve()
+              .bodyToMono(BlueprintImportPreviewDto.class)
+              .block());
     } catch (WebClientResponseException e) {
-      log.warn("Admin import preview proxy: backend {} — {}", e.getStatusCode(), e.getMessage());
-      throw new ResponseStatusException(e.getStatusCode(), e.getMessage());
-    } catch (ResponseStatusException e) {
-      throw e;
+      log.warn("Admin import preview proxy: backend answered {}", e.getStatusCode());
+      return propagateBackendError(e);
     } catch (Exception e) {
       log.error("Admin import preview proxy: unexpected error", e);
       throw new ResponseStatusException(
@@ -271,29 +272,30 @@ public class AdminPersonalBlueprintsPageController {
   }
 
   /**
-   * Applies reviewed blueprint-import resolutions on behalf of the target user.
+   * Applies reviewed blueprint-import resolutions on behalf of the target user; a backend refusal
+   * is relayed with its status, code and localised detail.
    *
    * @param userSub target user's Keycloak {@code sub}
    * @param resolutions the per-name resolutions
-   * @return the apply summary
+   * @return the apply summary, the relayed refusal, or an empty {@code 500} on an unexpected error
    */
   @PostMapping("/{userSub}/import/apply")
   @ResponseBody
-  public BlueprintImportResultDto applyImport(
+  public ResponseEntity<Object> applyImport(
       @PathVariable UUID userSub, @RequestBody List<BlueprintImportResolutionDto> resolutions) {
     List<BlueprintImportResolutionDto> list = resolutions == null ? List.of() : resolutions;
-    try {
-      BlueprintImportResultDto result =
-          backendApiClient.post(
-              "/api/v1/admin/personal-blueprints/" + userSub + "/import/apply",
-              new BlueprintImportApplyRequest(list),
-              BlueprintImportResultDto.class);
-      return result == null ? new BlueprintImportResultDto(0, 0, 0, 0, 0) : result;
-    } catch (Exception e) {
-      log.error("Admin import apply proxy failed for user {}", userSub, e);
-      throw new ResponseStatusException(
-          HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred during import apply.");
-    }
+    return relay(
+        log,
+        "Admin blueprint import apply for user " + userSub,
+        () -> {
+          BlueprintImportResultDto result =
+              backendApiClient.post(
+                  "/api/v1/admin/personal-blueprints/" + userSub + "/import/apply",
+                  new BlueprintImportApplyRequest(list),
+                  BlueprintImportResultDto.class);
+          return ResponseEntity.ok(
+              result == null ? new BlueprintImportResultDto(0, 0, 0, 0, 0) : result);
+        });
   }
 
   /**
