@@ -173,3 +173,25 @@ the comparison stays.
    old session for a whole access-token lifetime); a millisecond issue-time claim through a Keycloak
    mapper (precise, but an SPI, a realm, a mirror-format and two-gate change for a one-second window);
    denying the old session ids (a device login joins the same browser session and would be refused).
+
+## Amendment — 2026-09-28: disconnected connections are deleted after 90 days
+
+Owner decision (2026-09-28, storage limitation, Art. 5(1)(e) GDPR): the installation deny list of
+decision 4 and the per-member client revocations were kept for the life of the member's account.
+They are now deleted **90 days** after the disconnect by a nightly sweep (REQ-XCH-035). 90 days
+is the lifespan cap of every exchange session, online and offline, and the lifetime of the Redis
+entries, so no token issued before a disconnect outlives the entry that refuses it.
+
+1. **One transaction, in an order that shows nothing as connected again**: installations revoked on
+   their own; then installations a whole-client disconnect ended (last seen at or before it), which
+   carry no revocation of their own and are hidden only through the revocation row; then the
+   revocations.
+2. **The retention is configuration with a 90-day floor**, and never shorter than the change feed's
+   and journal's retention, so the entries that name an installation never outlive it.
+3. **Audited once per run that deleted anything**, with counts only: a system deletion in an audited
+   area is still a mutation (REQ-AUDIT-001), and a run that deletes nothing leaves no row, so the
+   trail does not grow by one row a night.
+4. **Not chosen:** keeping the entries for the account's life (no purpose after the sessions have
+   ended); marking installations revoked at a whole-client disconnect so one query suffices (a
+   write to rows of every installation of the client at each disconnect, and a migration of the
+   existing ones, for what one extra delete does).

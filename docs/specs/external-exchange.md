@@ -1764,6 +1764,61 @@ count in `basetool_exchange_undo_total{client_id,resource,outcome}` like a membe
 
 **Status:** built (#2092 follow-up)
 
+### REQ-XCH-035 — Disconnected installations and client revocations are deleted after 90 days
+
+A disconnected installation — with the label the member gave it — and a member's whole-client
+revocation are kept **90 days** after the disconnect and then deleted, not for the life of the
+account (owner decision 2026-09-28, storage limitation, Art. 5(1)(e) GDPR). 90 days is as long as
+any session of an exchange client can live, online or offline (REQ-XCH-005, ADR-0217), and as long as
+the Redis deny and revocation entries already live (REQ-XCH-008), so no token issued before a
+disconnect outlives the entry that refuses it. A live installation is never touched.
+
+**How it is built.** The nightly job `exchange_connection_retention` (`ExchangeConnectionRetentionTask`,
+03:45 UTC) calls `ExchangeConnectionRetentionService.purgeBefore(now − max-age)`, which deletes in one
+transaction and in this order:
+
+1. every installation revoked on its own before the cutoff (`revoked_at < cutoff`);
+2. every installation not revoked on its own that a whole-client disconnect before the cutoff ended —
+   one last seen at or before that revocation. A whole-client disconnect marks no installation; the
+   member's page and the client gauges hide such an installation only through the revocation row,
+   so deleting the revocation alone would show it as connected again;
+3. then every client revocation older than the cutoff.
+
+The retention is `app.exchange.connection-retention.max-age` (`ExchangeConnectionRetentionProperties`,
+default `P90D`, a floor of 90 days — the session cap — below which the backend does not start;
+`…enabled` turns the job off). The job also refuses to start when it is shorter than
+`app.exchange.change-retention.max-age`, so an installation outlives the journal and change-feed
+entries that name it: the admin bulk undo's per-installation filter (REQ-XCH-034) and a tombstone's
+`removedBy.installationId` (REQ-XCH-007) still resolve. Nothing references a deleted row by key:
+`exchange_bulk_undo_run.installation_id` is `ON DELETE SET NULL`, and the journal, the change feed and
+the ship links hold the installation's key as a string; a staged mass change of a deleted installation
+is refused like a revoked one (REQ-XCH-021).
+
+**Audit.** A run that deleted at least one row records one `EXCHANGE_CONNECTIONS_PURGED` in
+„Verbundene Anwendungen" with the installation and revocation counts and the cutoff — no subject, no
+target, no label, no user id; a run that deletes nothing records nothing.
+
+**Observability.** The job's `TaskMetrics` series carry `task="exchange_connection_retention"` (items =
+installations plus revocations deleted), and `ScheduledJobStale` watches it in both halves (stopped
+succeeding, never succeeded).
+
+**Acceptance**
+
+- [x] An installation disconnected 91 days ago is deleted, one disconnected 89 days ago kept; a client
+  revocation made 91 days ago is deleted with the installations it ended, one made 89 days ago kept
+  with them; a live installation, an installation reconnected after an old revocation and another
+  member's installation of the same client stay; the member's page shows no ended installation again;
+  a second run deletes and records nothing. *`ExchangeConnectionRetentionServiceTest`.*
+- [x] A run that deleted rows records one audit event with the counts only.
+  *`ExchangeConnectionRetentionServiceTest`.*
+- [x] The cutoff is the configured retention before now; a failure is counted and swallowed; a
+  retention shorter than the change retention, or than 90 days, refuses to start.
+  *`ExchangeConnectionRetentionTaskTest`, `BackendPropertiesValidationTest`.*
+- [x] `ScheduledJobStale` fires for the job when it stopped or never succeeded.
+  *`scheduled_job_never_succeeded_test.yml`.*
+
+**Status:** built (#2092)
+
 ## Threat model
 
 | Threat | Countered by |
