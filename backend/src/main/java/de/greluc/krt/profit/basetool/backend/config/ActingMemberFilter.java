@@ -68,18 +68,17 @@ import tools.jackson.databind.ObjectMapper;
  * <p>The header is honoured only when all of these hold:
  *
  * <ol>
- *   <li>the decoded path matches one of the ingest endpoints (REQ-SEC-029) or one of the exchange
- *       endpoints (REQ-XCH-009);
+ *   <li>the decoded path matches one of the exchange endpoints (REQ-SEC-029, REQ-XCH-009);
  *   <li>the caller is authenticated with a {@link Jwt} — a header without one is refused;
  *   <li>the caller's {@code azp} is a configured gateway ({@link
  *       IngestGatewayProperties#isGatewayClient(String)}); an empty allowlist admits nobody;
+ *   <li>the relay names a valid client and installation;
  *   <li>the named member is live.
  * </ol>
  *
  * <p>The exchange relay headers {@code X-Exchange-Client} and {@code X-Exchange-Capabilities} are
- * honoured only on an exchange endpoint from the gateway acting for a member and refused from
- * anyone else (REQ-XCH-010). On an exchange endpoint the member holds the reduced exchange
- * authorities and the authentication carries the external client.
+ * refused from anyone but the gateway acting for a member (REQ-XCH-010). The member holds the
+ * reduced exchange authorities and the authentication carries the external client.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -89,19 +88,11 @@ public class ActingMemberFilter extends OncePerRequestFilter {
   private static final PathPatternParser PATH_PARSER = PathPatternParser.defaultInstance;
 
   /**
-   * The only endpoints on which a caller may act for someone else.
+   * The only endpoints on which the gateway may act for a member, with the reduced exchange
+   * authentication (REQ-XCH-009).
    *
    * <p>Deliberately the exhaustive list rather than a prefix: a prefix would silently widen the
    * boundary the moment a sibling endpoint is added under the same path.
-   */
-  private static final List<PathPattern> ACTING_PATHS =
-      List.of(
-          PATH_PARSER.parse("/api/v1/refinery-orders/import-extract"),
-          PATH_PARSER.parse("/api/v1/personal-blueprints/import/preview"));
-
-  /**
-   * The exchange endpoints the gateway may call for a member, with the reduced exchange
-   * authentication (REQ-XCH-009); exhaustive for the same reason as {@link #ACTING_PATHS}.
    */
   private static final List<PathPattern> EXCHANGE_PATHS =
       List.of(
@@ -177,8 +168,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
       return;
     }
 
-    boolean exchangePath = matches(request, EXCHANGE_PATHS);
-    if (!exchangePath && !matches(request, ACTING_PATHS)) {
+    if (!matches(request, EXCHANGE_PATHS)) {
       refuse(
           request,
           response,
@@ -204,16 +194,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           MetricNames.ON_BEHALF_OF_NOT_A_GATEWAY);
       return;
     }
-    if (exchangeHeaders && !exchangePath) {
-      refuse(
-          request,
-          response,
-          "exchange relay header on an ingest endpoint",
-          MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
-      return;
-    }
-    if (exchangePath
-        && (exchangeClient == null || !EXCHANGE_CLIENT_ID.matcher(exchangeClient).matches())) {
+    if (exchangeClient == null || !EXCHANGE_CLIENT_ID.matcher(exchangeClient).matches()) {
       refuse(
           request,
           response,
@@ -221,8 +202,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID);
       return;
     }
-    if (exchangePath
-        && (installationKey == null || !KEY_THUMBPRINT.matcher(installationKey).matches())) {
+    if (installationKey == null || !KEY_THUMBPRINT.matcher(installationKey).matches()) {
       refuse(
           request,
           response,
@@ -242,10 +222,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
     Collection<GrantedAuthority> authorities;
     try {
       authorities =
-          exchangePath
-              ? actingMemberAuthorities.exchangeAuthoritiesFor(
-                  member, knownScopes(exchangeCapabilities))
-              : actingMemberAuthorities.authoritiesFor(member);
+          actingMemberAuthorities.exchangeAuthoritiesFor(member, knownScopes(exchangeCapabilities));
     } catch (AccessDeniedException notLive) {
       refuse(
           request,
@@ -260,11 +237,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
       SecurityContext acting = SecurityContextHolder.createEmptyContext();
       acting.setAuthentication(
           new ActingMemberAuthentication(
-              member,
-              authorities,
-              exchangePath ? exchangeClient : null,
-              exchangePath ? installationKey : null,
-              exchangePath ? epochSecond(connectedAt) : null));
+              member, authorities, exchangeClient, installationKey, epochSecond(connectedAt)));
       SecurityContextHolder.setContext(acting);
       filterChain.doFilter(request, response);
     } finally {

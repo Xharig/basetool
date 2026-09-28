@@ -141,9 +141,9 @@ class ActingMemberFilterRefusalTextTest {
     assertThat(problem.get("detail").asString()).contains("exchange request");
   }
 
-  /** A refusal on an ingest route keeps the import wording. */
+  /** A refusal outside the exchange layer keeps the import wording. */
   @Test
-  void anIngestRefusalKeepsTheImportWording() throws Exception {
+  void aRefusalOutsideTheExchangeKeepsTheImportWording() throws Exception {
     MockHttpServletRequest request =
         gatewayRequest("/api/v1/refinery-orders/import-extract", Locale.ENGLISH);
     request.addHeader(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit");

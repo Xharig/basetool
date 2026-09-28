@@ -60,7 +60,7 @@ public class RefineryImportController {
    * with 400; content-level problems (unmatched names, skipped rows, checksum mismatches) return
    * 200 with the draft plus issues.
    *
-   * @param owner the acting member, or the member an ingest-gateway call acts for
+   * @param owner the calling member
    * @param extract the validated extract payload
    * @return the draft order with issues and match counters; never persisted
    */

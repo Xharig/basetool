@@ -53,9 +53,7 @@ class OnBehalfOfHeaderParityTest {
 
     String source = Files.readString(gatewaySource, StandardCharsets.UTF_8);
     Matcher matcher = GATEWAY_DECLARATION.matcher(source);
-    assertThat(matcher.find())
-        .as("ExchangeRelay must still declare ON_BEHALF_OF_HEADER")
-        .isTrue();
+    assertThat(matcher.find()).as("ExchangeRelay must still declare ON_BEHALF_OF_HEADER").isTrue();
 
     assertThat(matcher.group(1))
         .as("a rename on one side alone attributes every exchange write to the service account")

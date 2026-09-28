@@ -71,7 +71,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 /**
  * Integration tests for the exchange drafts: the gateway relays a client's upload, the backend
- * previews it as the extractor's upload would, and nothing is written (REQ-XCH-019).
+ * previews it as the web import would, and nothing is written (REQ-XCH-019).
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -309,7 +309,7 @@ class ExchangeDraftControllerTest {
   }
 
   /**
-   * Uploads a file to the web blueprint import's preview, relayed by the gateway for the member.
+   * Uploads a file to the web blueprint import's preview as the member's own browser session.
    *
    * @param json the file's content
    * @return the result
@@ -321,8 +321,7 @@ class ExchangeDraftControllerTest {
             .file(
                 new MockMultipartFile(
                     "file", "bp.json", "application/json", json.getBytes(StandardCharsets.UTF_8)))
-            .with(jwt().jwt(t -> t.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-            .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, member.toString()));
+            .with(jwt().jwt(t -> t.subject(member.toString()).claim("azp", "basetool-frontend"))));
   }
 
   /**
