@@ -671,7 +671,9 @@ files under `/root/kc-realm/`, and a kcadm session file on the Keycloak tmpfs.
     `aud-basetool-ingest` mapper and a `${xchConsent…}` consent text;
   - `basetool-sc-extractor` (H1, #2201, #2179): `consentRequired` false → true;
     `dpop.bound.access.tokens` false → true; `client.offline.session.idle.timeout` 2592000 and
-    `client.offline.session.max.lifespan` 7776000; `login_theme` `krt-theme`; default scopes reduced
+    `client.offline.session.max.lifespan` 7776000; `client.session.idle.timeout` 2592000 and
+    `client.session.max.lifespan` 7776000 (the online-session cap, ADR-0217 amendment of
+    2026-09-28); `login_theme` `krt-theme`; default scopes reduced
     to `basic` — `extractor-ingest`, `extractor-ingest-only`, `profile`, `email`, `roles`,
     `web-origins`, `acr` withheld; optional scopes the five extractor exchange scopes plus
     `offline_access`, the rest withheld; the loopback redirect URIs and the code flow gone if still

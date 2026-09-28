@@ -173,3 +173,35 @@ the comparison stays.
    old session for a whole access-token lifetime); a millisecond issue-time claim through a Keycloak
    mapper (precise, but an SPI, a realm, a mirror-format and two-gate change for a one-second window);
    denying the old session ids (a device login joins the same browser session and would be refused).
+
+## Amendment — 2026-09-28: the online session is capped at 90 days too
+
+The first amendment pinned only the **offline** session (30 days idle, 90 days total) and reasoned
+that the installation deny list, kept 90 days, therefore outlives every token bound to a denied key.
+That holds only for a client that requests `offline_access`. `offline_access` is optional on the
+template, the gateway admits a token without it (judged by `auth_time`, amendment of 2026-09-27),
+and an installation disconnect ends no Keycloak session. Such a client's online session had no
+per-client bound, so it inherited the realm's SSO session maximum of **180 days**; Keycloak 26.7.4
+caps every token at its client session's maximum lifespan
+(`TokenManager.getTokenExpiration`, `SessionExpirationUtils.calculateClientSessionMaxLifespanTimestamp`),
+which for that session was 180 days. A denied key could so be refreshed for up to about 180 days
+after the disconnect while the Redis deny entry expired after 90, leaving only the backend's
+unbounded database check behind it. The same held for a whole-client revocation whose online session
+Keycloak did not end (a Keycloak without the session extension, a departure whose Keycloak step
+failed): from day 90 both gates admitted it.
+
+Owner decision (2026-09-28, security review of the retention sweep for #2092):
+
+1. **Every exchange client's online session is capped as its offline session is**:
+   `client.session.idle.timeout` 30 days and `client.session.max.lifespan` 90 days, pinned by
+   `scripts/provision-keycloak-realm.py` on the third-party template and on `basetool-sc-extractor`,
+   and carried into the sandbox and E2E realms. No session of an exchange client, online or offline,
+   and no token issued in one, lives longer than 90 days after it began, so the 90-day deny list and
+   revocation mirror outlive every session that existed at the revocation.
+2. **A client without `offline_access` signs in again after at most 90 days** (30 days idle), as a
+   client with it always had to. Nothing else changes for it.
+3. **Production** receives the pins with the go-live's provisioner run; no separate host step.
+4. **Not chosen:** keeping the deny list and its mirror 180 days (the privacy notice states 90);
+   refusing tokens without `offline_access` at the gates (reverses the decision of 2026-09-27 that
+   such a client works); accepting a denied key's return between day 90 and day 180; deleting only
+   the label at 90 days and keeping the key until day 180.
