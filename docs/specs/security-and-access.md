@@ -1416,8 +1416,8 @@ cannot exist in one locale only) · **Text:** `terms.list_4_1_5`, `terms.p_4_2` 
 ### REQ-SEC-028 — Terms-of-Use consent is recorded, versioned and enforced
 
 > [!note] The go-live consent round — 2026-09-29 (epic #2078, #2092)
-> The wording change of REQ-SEC-027 (section 4) and of section 12 moves the version from
-> `df1f9b31581b0d0d` to `1430e61126f269f4` (`generateTermsVersion` over the German bundle's
+> The wording change of REQ-SEC-027 (section 4), of the intro and of section 12 moves the version
+> from `df1f9b31581b0d0d` to `a25b108cc1fe8b41` (`generateTermsVersion` over the German bundle's
 > `terms.*` keys) once: every member re-consents, and every SC Extractor and connected application is
 > refused `TERMS_NOT_ACCEPTED` until its member has. The approved-client list sits outside those
 > keys, so later list changes need no consent (REQ-XCH-002).
@@ -1425,9 +1425,11 @@ cannot exist in one locale only) · **Text:** `terms.list_4_1_5`, `terms.p_4_2` 
 Using the platform requires **recorded consent** to the Terms-of-Use wording currently in force.
 Before this, the terms took effect merely on access (section intro) and section 12 treated
 continued use as acceptance — which leaves no evidence of who agreed to which wording, the thing
-actually needed when a clause is enforced against someone (REQ-SEC-027). Since 2026-09-29 section 12
-states the model the platform enforces: amended terms apply to a member only once they have agreed,
-and until then the platform cannot be used (`terms.p_12_2`, owner decision 2026-09-28).
+actually needed when a clause is enforced against someone (REQ-SEC-027). Since 2026-09-29 the terms
+state the model the platform enforces: the intro says they apply to every user who has agreed to
+them and that the platform cannot be used without that agreement (`terms.intro`), and section 12
+says amended terms apply to a member only once they have agreed (`terms.p_12_2`); both are owner
+decisions of 2026-09-28.
 
 **The version is derived from the wording, never declared.** The root Gradle task
 `generateTermsVersion` hashes every `terms.*` entry of the **backend's** German bundle into the
@@ -1608,8 +1610,9 @@ from this response blanks a legal document on a build nobody can redeploy.
 - [x] A wording change re-prompts every user, without anyone editing a version number.
   *`TermsVersionParityTest` (the committed version is the hash of the wording),
   `TermsAcceptanceQueryDataTest#existsIsScopedToTheExactVersion`.*
-- [x] The terms themselves say that amended terms need recorded consent, not that continued use
-  counts as it. *`TermsDocumentStructureTest#amendedTermsNeedRecordedConsent` (both languages).*
+- [x] The terms themselves say that they, and amended terms, need recorded consent — neither access
+  (intro) nor continued use (section 12) counts as it.
+  *`TermsDocumentStructureTest#termsNeedRecordedConsent` (both languages).*
 - [x] Consent history survives re-consent; a double submit adds no second row.
   *`TermsAcceptanceQueryDataTest#historyKeepsEveryAcceptedVersionNewestFirst`,
   `TermsAcceptanceServiceTest#repeatedConsentIsANoOp`,

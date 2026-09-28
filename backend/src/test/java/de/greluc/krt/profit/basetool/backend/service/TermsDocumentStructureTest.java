@@ -78,8 +78,13 @@ class TermsDocumentStructureTest {
     "deren Einsatz nicht", "does not support its use"
   };
 
-  /** The consent-by-continued-use wording that recorded consent replaced. */
-  private static final String[] CONSENT_FICTIONS = {"fortgesetzte Nutzung", "Continued use"};
+  /** The consent-by-access and consent-by-continued-use wordings that recorded consent replaced. */
+  private static final String[] CONSENT_FICTIONS = {
+    "fortgesetzte Nutzung",
+    "Continued use",
+    "Mit dem Zugriff auf die Plattform erkennt",
+    "By accessing the Platform, the user accepts"
+  };
 
   /**
    * Builds the service over the real bundle.
@@ -245,20 +250,22 @@ class TermsDocumentStructureTest {
   }
 
   /**
-   * Section 12 makes amended terms depend on recorded consent instead of treating continued use as
-   * consent (REQ-SEC-028).
+   * The intro and section 12 make the terms and their amendments depend on recorded consent instead
+   * of treating access or continued use as consent (REQ-SEC-028).
    *
    * @param language the language tag of the document
    */
   @ParameterizedTest
   @ValueSource(strings = {"de", "en"})
-  @DisplayName("section 12 no longer treats continued use as consent")
-  void amendedTermsNeedRecordedConsent(String language) {
-    TermsSectionDto section =
-        service().document(Locale.forLanguageTag(language)).sections().get(SECTION_AMENDMENTS);
+  @DisplayName("neither the intro nor section 12 treats access or continued use as consent")
+  void termsNeedRecordedConsent(String language) {
+    TermsDocumentDto document = service().document(Locale.forLanguageTag(language));
+    List<String> texts = new ArrayList<>();
+    texts.add(document.intro());
+    document.sections().get(SECTION_AMENDMENTS).clauses().stream()
+        .map(TermsClauseDto::text)
+        .forEach(texts::add);
 
-    assertThat(section.clauses())
-        .extracting(TermsClauseDto::text)
-        .noneSatisfy(text -> assertThat(text).containsAnyOf(CONSENT_FICTIONS));
+    assertThat(texts).noneSatisfy(text -> assertThat(text).containsAnyOf(CONSENT_FICTIONS));
   }
 }
