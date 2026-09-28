@@ -1113,6 +1113,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
   /**
    * Locks a member's personal rows of one material lot for the exchange (REQ-XCH-016).
    *
+   * <p>Compares the quality as stored, which a material row always carries ({@code
+   * chk_inventory_item_quality_by_kind}).
+   *
    * @param member the member
    * @param materialId the material
    * @param locationId the location
@@ -1125,7 +1128,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       """
       SELECT i FROM InventoryItem i WHERE i.user.id = :member AND i.personal = true
         AND i.material.id = :materialId AND i.location.id = :locationId
-        AND COALESCE(i.quality, 0) = :quality AND i.stolen = :stolen
+        AND i.quality = :quality AND i.stolen = :stolen
       """)
   List<InventoryItem> lockPersonalMaterialLot(
       @Param("member") UUID member,

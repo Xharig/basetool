@@ -105,7 +105,7 @@ so the comparison afterwards is against a baseline.
 | Exchange code (gateway, backend layer, registry, audit domains, admin and member pages, admin bulk undo) | on `main`; E2E incl. the exchange flows green (run 36400316929 at `26ff2b6c7`) |
 | Redis 768 MB / 1024 MB (ADR-0221, #2115) | in the units on `main` — `quadlet/systemd/redis.container`: `--maxmemory 768mb`, `Memory=1024M` |
 | Redis ACL rows (`exchange:*`, `ingest:xch:*`, `+eval +evalsha +zrem +zscore`) | in `scripts/redis-users.acl.tmpl` on `main`; **not rendered on production** |
-| Flyway `V246`–`V257` | on `main`; the latest release, **v1.12.0, ends at `V245`**; proven forward-compatible with v1.12.0 (§8, step 3) |
+| Flyway `V246`–`V258` | on `main`; the latest release, **v1.12.0, ends at `V245`**; proven forward-compatible with v1.12.0 up to `V257` (§8, step 3); `V258` only adds an index on `exchange_change` (load test, finding 2) |
 | Keycloak: `exchange.*` scopes, `versekit`, the extractor's H1 shape, #2179 | in `scripts/provision-keycloak-realm.py` on `main`; **not applied on production** |
 | keycloak-spi (ADR-0226 admin extension `basetool-exchange`, ADR-0228 login forms `krt-freemarker`) | on `main`; reaches production with the next release's provider JAR |
 | Terms change (`terms.list_4_1_5`, REQ-SEC-027/-028) | being built on `claude/golive-terms-privacy`; ships in this release — every member re-consents once at S6; no host step |
@@ -134,7 +134,7 @@ exchange rollout of #2092.
 | S3 | Render the Redis ACL, `ACL LOAD` | PRODUCTION WRITE | nothing |
 | S4 | Stage the exchange's `.env` values | PRODUCTION WRITE | nothing (read at S6) |
 | S5 | Cut the release | GitHub | — |
-| S6 | Promote the release; Redis 768 MB / 1024 MB, `V246`–`V257`, the SPI jar land | PRODUCTION WRITE | the whole stack, once (~2–3 min) |
+| S6 | Promote the release; Redis 768 MB / 1024 MB, `V246`–`V258`, the SPI jar land | PRODUCTION WRITE | the whole stack, once (~2–3 min) |
 | S7 | Publish the Android app | GitHub (app repo) | — |
 | S8 | Raise the app's minimum version | PRODUCTION WRITE | backend → frontend, ingest (~1 min) |
 | S9 | Switch „gestohlen" marking on | PRODUCTION WRITE | backend → frontend, ingest (~1 min) |
@@ -401,7 +401,7 @@ yes).
     on the new JAR and the new `krt-theme` pages before backend.
   - **Redis** restarts with `--maxmemory 768mb` in a 1024 MB container (ADR-0221, REQ-OPS-018); the
     AOF keeps every session.
-  - **Flyway** runs `V246`–`V257` (plus whatever the two parallel PRs add) before the new backend
+  - **Flyway** runs `V246`–`V258` (plus whatever the two parallel PRs add) before the new backend
     serves: RSI handle, `stolen` columns, the registry (switch **off**, registry **empty**),
     installations and revocations, catalogue name keys, the change feed with its triggers, the
     journal, ship links, blueprint provenance, bulk undo and two notification rules. **V247**
@@ -409,7 +409,8 @@ yes).
     `CONCURRENTLY` — writes to them block while it runs (R16 sizes it; the app is down anyway).
     **V255**'s backfill `UPDATE` runs after V252's triggers exist, so it writes one
     `exchange_change` row (source `system`) per personal blueprint that is also a default blueprint —
-    expected and harmless.
+    expected and harmless. **V258** indexes `exchange_change` by member, resource and key; the table
+    is only as old as V252 in the same run, so the build is instant.
   - **Ingest has two new start-up guards under `prod`**: `PublicBaseUrlGuard` (a blank
     `IRI_INGEST_PUBLIC_BASE_URL`) and `LegacyClientGateGuard` (while the legacy endpoints are on, an
     empty `IRI_INGEST_ALLOWED_CLIENT_IDS` or `IRI_INGEST_CLIENT_AUDIT_ONLY=true`). Either refuses the
@@ -509,7 +510,7 @@ yes).
   keeps `ScheduledJobStale` silent; Loki `{app="backend-stdout"} |= "ERROR"` and
   `{app="ingest-stdout"} |= "NOPERM"` empty.
 - **Rollback:** lock-step, never per service — `gh workflow run promote.yml -f version=1.12.0`
-  (§8, step 3). `V246`–`V257` stay and the schema is compatible, but v1.12.0 then runs **degraded**
+  (§8, step 3). `V246`–`V258` stay and the schema is compatible, but v1.12.0 then runs **degraded**
   (the admin notification-rules page and some audit pages answer 500) — **prefer rolling forward**
   with a fix. It also puts back v1.12.0's units, so Redis returns to 384 MB / 512 MB and restarts
   again.
@@ -928,7 +929,8 @@ Fastest first; each is its own production write with its own yes.
    - **The schema is compatible** — proven 2026-09-28: v1.12.0's backend suite ran green (76 tests)
      against a schema migrated to `V257`; its Flyway validates („Successfully validated 255
      migrations", tip 257) and Hibernate `validate` passes; its writes fire V252's triggers without
-     failing (source `system`). `V246`–`V257` stay (Flyway does not roll back).
+     failing (source `system`). `V258` came later and adds one index, which neither Flyway's
+     validation nor Hibernate's reads. `V246`–`V258` stay (Flyway does not roll back).
    - **Rows break v1.12.0 reads:** the seeded rules of V251 and V257 carry notification event types
      v1.12.0 has no enum constant for (`EXCHANGE_INSTALLATION_CONNECTED`,
      `EXCHANGE_BULK_UNDO_APPLIED`), so the **admin notification-rules page answers 500** from the

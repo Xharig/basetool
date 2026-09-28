@@ -342,6 +342,10 @@
 
 ### Fixed
 
+- **Datenaustausch: große Bestandsänderungen werden mit der Zeit nicht mehr langsamer.** Jede
+  Position einer Änderung las bisher die ganze Änderungshistorie des Mitglieds bzw. alle Zeilen des
+  Materials am Ort; ein neuer Index (Migration `V258`) und eine indexfähige Qualitätsabfrage halten
+  beide Zugriffe kurz (REQ-XCH-016).
 - **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
   auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
   90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede
