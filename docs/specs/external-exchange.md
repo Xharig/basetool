@@ -327,6 +327,10 @@ accepted. The provisioner applies this on production only **after** the legacy s
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
   (owner decision 2026-09-27). Both clients' online sessions are pinned at 30/90 days as well, and
   section 13 fails without the pin (owner decision 2026-09-28).
+- [x] Neither `basetool-sc-extractor` nor a third-party client keeps a client-level protocol mapper:
+  the provisioner plans and applies the removal of any it finds, so the verify pass cannot pass with
+  a hand-added `basetool-backend` audience mapper in place (owner decision 2026-09-28, G5-L4 of
+  #2092, ADR-0202 amendment 4; self-test section 17).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
   *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
   only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
@@ -342,7 +346,15 @@ accepted. The provisioner applies this on production only **after** the legacy s
   forms provider `krt-freemarker` adds it as `krtDeviceUserCode` (ADR-0228,
   `DeviceConsentLoginFormsProviderTest`); `scripts/sandbox-smoke.py` asserts the warning on both
   pages and the code on the consent page against the sandbox Keycloak image, and the same run was
-  made through a `verification_uri_complete` link on 2026-09-27.*
+  made through a `verification_uri_complete` link on 2026-09-27.* The E2E device login
+  (`ExchangeE2eSupport.approveOnTheDevicePage`) opens the bare `verification_uri`, types the
+  `user_code` as a member does, and asserts `#krt-device-phishing-warning` on the code page and
+  `#krt-device-consent-warning` with exactly that code in `#krt-device-user-code` on the consent
+  page, on every exchange E2E connection (G5-I5 of #2092).
+- [x] The consent page's intro claims only what the page lists („Die Anwendung erhält nur die unten
+  aufgeführten Rechte."), never that the application does not learn name, e-mail or roles, which
+  the template cannot know for every client (owner decision 2026-09-28, G5-L1 of #2092, ADR-0228
+  amendment 1).
 - [x] The client documentation tells clients to show the bare `verification_uri` with the
   `user_code` and never `verification_uri_complete` (`docs/exchange/authentication.md`,
   `client-security.md`, `quickstart.md`, the application template).

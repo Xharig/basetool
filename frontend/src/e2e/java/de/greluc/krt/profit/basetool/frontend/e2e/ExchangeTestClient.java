@@ -115,9 +115,10 @@ final class ExchangeTestClient {
    * One started device login.
    *
    * @param deviceCode the code the client polls the token endpoint with
-   * @param verificationUriComplete the page the member opens, user code included
+   * @param verificationUri the bare device page the member opens, without the user code
+   * @param userCode the code the member types on the device page and compares on the consent page
    */
-  record DeviceLogin(String deviceCode, String verificationUriComplete) {}
+  record DeviceLogin(String deviceCode, String verificationUri, String userCode) {}
 
   /**
    * One gateway answer.
@@ -141,7 +142,7 @@ final class ExchangeTestClient {
    * Starts a device login for the given scopes.
    *
    * @param scopes the space-separated scopes to request
-   * @return the device code and the verification page
+   * @return the device code, the bare verification page and the user code
    * @throws Exception if Keycloak does not answer 200
    */
   DeviceLogin startDeviceLogin(String scopes) throws Exception {
@@ -155,7 +156,9 @@ final class ExchangeTestClient {
     }
     JsonObject json = JsonParser.parseString(answer.body()).getAsJsonObject();
     return new DeviceLogin(
-        json.get("device_code").getAsString(), json.get("verification_uri_complete").getAsString());
+        json.get("device_code").getAsString(),
+        json.get("verification_uri").getAsString(),
+        json.get("user_code").getAsString());
   }
 
   /**
