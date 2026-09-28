@@ -40,6 +40,8 @@ BUILTIN_CLIENTS = frozenset({
 
 AUDIENCE_SCOPES = ("extractor-ingest", "extractor-ingest-only")
 
+OFFLINE_ACCESS = "offline_access"
+
 REALM_SETTINGS: dict[str, bool | int | str] = {
     "revokeRefreshToken": False,
     "refreshTokenMaxReuse": 5,
@@ -673,6 +675,7 @@ class Planner:
         """Build the whole plan in write order."""
         self.plan_realm_settings()
         self.plan_realm_roles()
+        self.plan_offline_access()
         self.plan_scopes()
         for spec in (s for s in self.specs if not s.frozen_by_dpop_policy):
             self.plan_client(spec)
@@ -705,6 +708,62 @@ class Planner:
                     f"+ create realm role '{name}'",
                     lambda n=name: self.kc.write("create", "roles", {"name": n},
                                                  f"realm role '{n}' created")))
+
+    def default_role_name(self) -> str:
+        """The realm's default role, which every account the realm creates holds."""
+        named = (self.kc.get_realm().get("defaultRole") or {}).get("name")
+        return named or f"default-roles-{self.realm.lower()}"
+
+    def plan_offline_access(self) -> None:
+        """Let every member hold an offline session, ADR-0202 amendment 5.
+
+        `offline_access` becomes a composite of the default role, and the `offline_access` client
+        scope maps it, so a client with `fullScopeAllowed` off that requests the scope gets an
+        offline token. Both are added, never taken away.
+        """
+        changes = self.section(f"{OFFLINE_ACCESS} for every member — default role and client scope")
+        roles = {role.get("name") for role in (self.kc.get("roles") or [])}
+        default_role = self.default_role_name()
+        for name in (OFFLINE_ACCESS, default_role):
+            if name not in roles:
+                self.problems.append(
+                    f"realm role '{name}' does not exist in realm '{self.realm}'. Keycloak creates "
+                    f"it with the realm; without it no member gets an offline token.")
+        if OFFLINE_ACCESS not in roles:
+            return
+        if default_role in roles:
+            held = {r.get("name") for r in
+                    (self.kc.get(f"roles/{default_role}/composites/realm") or [])}
+            if OFFLINE_ACCESS not in held:
+                changes.append(Change(
+                    f"+ default role '{default_role}': composite realm role '{OFFLINE_ACCESS}' "
+                    f"(every member may hold an offline session)",
+                    lambda r=default_role: self._add_offline_access(
+                        f"roles/{r}/composites", f"'{OFFLINE_ACCESS}' added to '{r}'")))
+        scope = self.scopes_by_name().get(OFFLINE_ACCESS)
+        if scope is None:
+            self.problems.append(
+                f"client scope '{OFFLINE_ACCESS}' does not exist in realm '{self.realm}'. It is a "
+                f"Keycloak built-in; a realm without it predates the Keycloak version production "
+                f"runs.")
+            return
+        mapped = {r.get("name") for r in
+                  (self.kc.get(f"client-scopes/{scope['id']}/scope-mappings/realm") or [])}
+        if OFFLINE_ACCESS not in mapped:
+            changes.append(Change(
+                f"+ client scope '{OFFLINE_ACCESS}': realm role '{OFFLINE_ACCESS}' mapped (a client "
+                f"with fullScopeAllowed off may then issue an offline token)",
+                lambda: self._add_offline_access(
+                    f"client-scopes/{self.scope_id(OFFLINE_ACCESS)}/scope-mappings/realm",
+                    f"'{OFFLINE_ACCESS}' mapped on client scope '{OFFLINE_ACCESS}'")))
+
+    def _add_offline_access(self, path: str, what: str) -> None:
+        """Post the `offline_access` realm role, resolved by name when the write runs, to `path`."""
+        role = next((r for r in (self.kc.get("roles") or []) if r.get("name") == OFFLINE_ACCESS),
+                    None)
+        if role is None:
+            raise KcadmError(f"realm role '{OFFLINE_ACCESS}' does not exist in realm '{self.realm}'")
+        self.kc.write("create", path, [{"id": role["id"], "name": OFFLINE_ACCESS}], what)
 
     def plan_scopes(self) -> None:
         changes = self.section("client scopes and their audience mappers")

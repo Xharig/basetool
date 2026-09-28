@@ -43,7 +43,7 @@ value (§ 0.5) before acting on an "open" row.**
 | 7     | Drop `http://backend:11261`                   | **Done**                       | gone from both lists; `http://frontend:18081` remains — **retired 2026-09-22** by owner decision, removed on the provisioner's next production apply |
 | 8     | Extractor `fullScopeAllowed: false`           | **Done**                       | `basetool-sc-extractor`: `fullScopeAllowed: false`                                                                               |
 | 9     | Audience scopes off defaults and `grafana`    | **Done**                       | neither scope in `defaultDefaultClientScopes`; `grafana` carries neither; `basetool-ingest-gateway` keeps both                   |
-| 10    | `offline_access` off `default-roles-iri`      | **Done**                       | composites: `uma_authorization`, `KRT Member`, `account` `view-profile`/`manage-account`                                         |
+| 10    | `offline_access` off `default-roles-iri`      | **Reversed 2026-09-28** (owner decision, ADR-0202 amendment 5) | done by 2026-09-09; the composite is back since the owner's hand fix of 2026-09-28, and the provisioner keeps it — do **not** re-run this step |
 | 12    | Decide the session windows                    | **Open**                       | still 30 d / 180 d, with and without remember-me                                                                                 |
 | 11    | OTP for `Admin`, browser **and** Discord      | **Open** — not started         | `browserFlow: "browser"` (the built-in flow); the `discord` IdP has no `postBrokerLoginFlowAlias`                                 |
 | 13th  | Extractor's unused authorization-code flow    | **Decided 2026-09-22 — off**; pending production apply | `standardFlowEnabled: true`, loopback redirect wildcards, no PKCE (see step 6); the provisioner's target is flow off, no redirect URI |
@@ -55,8 +55,10 @@ service-account lists, the frontend's PKCE `S256` and redirect list, the extract
 `fullScopeAllowed: false`, and the audience scopes only where production has them — along with the
 rest of the Basetool's clients
 ([`INGEST_KEYCLOAK_SETUP.md` → *New or out-of-date realm*](INGEST_KEYCLOAK_SETUP.md#new-or-out-of-date-realm-run-the-provisioner)).
-The realm-wide steps (1–4, 10–12) are **not** in it, and neither is 9a: it reports an audience scope
-that is a realm default instead of removing it.
+The realm-wide steps (1–4, 11–12) are **not** in it, and neither is 9a: it reports an audience scope
+that is a realm default instead of removing it. Step 10 is the provisioner's in reverse since
+2026-09-28: it adds `offline_access` to `default-roles-iri` and maps it on the `offline_access`
+client scope (ADR-0202 amendment 5).
 
 **The thirteenth finding is decided (owner, 2026-09-22): the extractor's code flow goes.** So do two
 other entries the provisioner first reproduced as `PROD-AS-IS` — both ingest scopes on
@@ -829,6 +831,15 @@ like an expired token**. If Grafana logins break right after this step, this ste
 ## Step 10 — Drop `offline_access` from `default-roles-iri`
 
 > **Status:** done — applied by 2026-09-09 (realm export of that day; see *Status* above).
+> **Reversed 2026-09-28 — do not run this step.** SC Extractor 2.10.0 requests `offline_access` with
+> `fullScopeAllowed` off, and without the role in the default role its device login was refused
+> `400 not_allowed` („Offline tokens not allowed for the user or client"). The owner put
+> `offline_access` back into `default-roles-iri` by hand the same day, and
+> `scripts/provision-keycloak-realm.py` converges to that and never removes it (ADR-0202 amendment
+> 5). An offline token goes only to a client that offers the scope and requests it; of the realm's
+> clients those are the extractor and the approved third-party clients, with offline sessions of 30
+> days idle and 90 days in total (`basetool-frontend` and `grafana` offer it but do not request it,
+> `basetool-android` is not offered it). The text below is the step as it was applied.
 
 Every account can currently mint an offline token, which outlives every session policy in the realm.
 The composite holds `offline_access`, `uma_authorization`, `KRT Member` and two `account` client

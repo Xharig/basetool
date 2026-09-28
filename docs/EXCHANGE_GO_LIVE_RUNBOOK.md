@@ -685,6 +685,12 @@ files under `/root/kc-realm/`, and a kcadm session file on the Keycloak tmpfs.
     copied script predates it — stop.
   No line may touch `basetool-frontend`'s type or secret, `basetool-android`, `backend-service` or
   `basetool-ingest-gateway`. `[only on this realm]` may list `basetool-provisioner` and `grafana`.
+  `[manual]` lists the two service accounts' roles as „could not be read" — expected with this
+  identity (S15).
+  *Added 2026-09-28:* a provisioner from after the go-live (ADR-0202 amendment 5) also has a section
+  `offline_access for every member`. Production has been in its shape since the owner's hand fix of
+  2026-09-28 (gap 12), so it reads *in shape*; on a realm without the fix it plans
+  `+ default role 'default-roles-iri': composite realm role 'offline_access' …`.
 - **Watch:** nothing moves — a dry run only reads.
 - **Rollback:** nothing to roll back in the realm; if S15 will not follow the same day, run S16's
   clean-up block now.
@@ -801,11 +807,18 @@ every extractor token is; the approval must name it.
   echo "exit=$?"
   unset KEYCLOAK_FRONTEND_CLIENT_SECRET
   ```
-- **Expected:** `[apply]`, `[verify] re-planning …`, `Applied. A second run reports no changes.`,
-  `exit=0`; the second (dry) run: `The realm is in the production shape. Nothing to do.`, `exit=0`.
-  A clean verify also means no client-level mapper is left on the extractor: one that stayed would
-  fail it as `STILL PLANNED`.
-  `exit=3` with `[manual]` means a service-account role to assign by hand — none is expected.
+- **Expected:** `[apply]`, `[verify] re-planning …`, then `[manual]` with „`backend-service`:
+  service-account roles could not be read …" and the same for `basetool-ingest-gateway`, `Applied,
+  except the service-account roles above.`, **`exit=3`**; the second (dry) run: `The realm is in the
+  production shape. Nothing to do.`, the same `[manual]` lines, **`exit=3`**. No `STILL PLANNED`
+  line. A clean verify also means no client-level mapper is left on the extractor: one that stayed
+  would fail it as `STILL PLANNED`.
+  *Corrected 2026-09-28:* this said `Applied. A second run reports no changes.` and `exit=0` for
+  both runs, and that `exit=3` with `[manual]` means a role to assign by hand, none expected.
+  `basetool-provisioner` holds `manage-clients` + `manage-realm` but not `manage-users`, so the
+  provisioner cannot even read the service accounts' roles and ends every run with those lines and
+  `exit=3` — which is what happened on production. Both service accounts already hold the listed
+  roles; nothing is to be assigned. `exit=0` appears only with an identity holding `manage-users`.
 - **Keep the session open** for S16; the clean-up is at S16's end.
 - **Verify:**
   - R12 again: `client|basetool-sc-extractor|…|consent=t…`,
@@ -818,6 +831,7 @@ every extractor token is; the approval must name it.
     warns and shows the code, the **consent page lists the five capabilities and the user code**
     (ADR-0228), the extractor asks for the installation's name, a blueprint send lands as a draft;
     „Verbundene Anwendungen" (member page) lists „SC Extractor – „‹label›"" with its capabilities.
+    *Added 2026-09-28:* on production this login was first refused `400 not_allowed` — gap 12.
 - **Watch** (first hours): Exchange dashboard — *Relayed requests/min per client* shows
   `basetool-sc-extractor`, *Gateway refusals/hour by reason* without `scope_missing`,
   `client_version_unsupported` beyond stragglers, *Installations created/day* rising with the
@@ -1047,3 +1061,24 @@ In German, in the forum (vault *Announcing a release*), in three posts:
     variable the new code reads is missing from the `env.d` templates: the ones not in a template
     (`APP_EXCHANGE_MIRROR_RECONCILE_INTERVAL`, `APP_EXCHANGE_CONNECTED_APPS_WEB_CLIENT_IDS`,
     `APP_INGEST_MAX_HANDOFF_BYTES`, `APP_INGEST_MAX_HANDOFFS_PER_SUBJECT`) all have defaults.
+12. **S15 left the members without `offline_access`** — *found and fixed by hand 2026-09-28.*
+    SC Extractor 2.10.0's device login on production was refused `400 not_allowed` („Offline tokens
+    not allowed for the user or client") at the token poll. The client has `fullScopeAllowed` off
+    and requests `offline_access` (#2179), so a member must hold the `offline_access` realm role, and
+    production's `default-roles-iri` held only `KRT Member`, `uma_authorization` and the `account`
+    roles: hardening step 10 had removed it. The `offline_access` client scope already mapped the
+    role — the reference export omits `scopeMappings`, so no reading of it showed that. The
+    sandbox and E2E realms carry both, so no test caught it, and S15's provisioner did not touch
+    default roles. **Fix:** the owner added `offline_access` to the composites of
+    `default-roles-iri` with `kcadm` on 2026-09-28 (owner decision the same day: grant the role on
+    the server, as in the sandbox). The provisioner now converges both pieces and never removes
+    them (ADR-0202 amendment 5, `REQ-OPS-033`, self-test section 18), so a later run confirms the fix
+    instead of undoing it. Side effect: every member can be issued an offline token again, but only
+    by a client that offers `offline_access` and requests it — the extractor and approved
+    third-party clients (30/90-day offline sessions); `basetool-frontend` requests
+    `openid, profile, email, roles`, `grafana` `openid email profile`, and `basetool-android` is not
+    offered the scope and omits it.
+13. **S15's expected `exit=0` was wrong** — *corrected 2026-09-28.* With `basetool-provisioner`
+    (`manage-clients` + `manage-realm`, no `manage-users`) the provisioner cannot read the service
+    accounts' roles, so the apply and the dry run after it end with `[manual]` „service-account roles
+    could not be read" and `exit=3`, as they did on production. S15's *Expected* now says so.

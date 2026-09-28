@@ -304,7 +304,12 @@ logout would otherwise disconnect every client (owner decision 2026-09-26). Ever
 client, offline or online, ends after 30 days without use and 90 days at the latest: the provisioner
 pins `client.offline.session.*` and `client.session.*` on the client, so a client that omits
 `offline_access` does not inherit the realm's 180-day SSO session (owner decision 2026-09-28,
-ADR-0217 amendment). Consent is shown in German, per capability. The consent and device
+ADR-0217 amendment). An offline token needs the member to hold the `offline_access` realm role
+within the client's scope, and these clients have `fullScopeAllowed` off: the realm's default role
+`default-roles-iri` therefore carries `offline_access` as a composite, and the `offline_access`
+client scope maps the role, both converged by the provisioner (owner decision 2026-09-28, ADR-0202
+amendment 5). Without the composite the device grant's token request answers `400 not_allowed`.
+Consent is shown in German, per capability. The consent and device
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
 A `verification_uri_complete` link skips the device page, so for a device login the consent page
 carries the same warning and shows the user code for the member to compare with the one on their PC,
@@ -327,6 +332,12 @@ accepted. The provisioner applies this on production only **after** the legacy s
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
   (owner decision 2026-09-27). Both clients' online sessions are pinned at 30/90 days as well, and
   section 13 fails without the pin (owner decision 2026-09-28).
+- [x] Every member can be issued an offline token by these clients: the provisioner plans, applies
+  and verifies `offline_access` as a composite of `default-roles-iri` and as the role mapped on the
+  `offline_access` client scope, and sends neither write to a realm holding both (self-test section
+  18, which fails without it; owner decision 2026-09-28, ADR-0202 amendment 5). *Production lacked
+  the composite until the owner added it by hand on 2026-09-28, after SC Extractor 2.10.0's sign-in
+  was refused `400 not_allowed`; the scope mapping was already there.*
 - [x] Neither `basetool-sc-extractor` nor a third-party client keeps a client-level protocol mapper:
   the provisioner plans and applies the removal of any it finds, so the verify pass cannot pass with
   a hand-added `basetool-backend` audience mapper in place (owner decision 2026-09-28, G5-L4 of

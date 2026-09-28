@@ -166,3 +166,49 @@ change: the dry run lists it and exits `2`, the apply deletes it, and the verify
 keep every identity- or audience-carrying scope off these clients. Decision 4 holds for every other
 client, whose extra mappers are still reported and left alone. Requirements: `REQ-OPS-033`,
 `REQ-XCH-005`; pinned by case 17 of `scripts/provision-keycloak-realm.test.sh`.
+
+## Amendment 5 — 2026-09-28: every member may hold an offline session
+
+- **Deciders:** @greluc (owner decision in chat, 2026-09-28, on the production go-live defect of
+  SC Extractor 2.10.0)
+
+SC Extractor 2.10.0 could not sign in on production: its device-token poll was answered `400
+not_allowed` — „Offline tokens not allowed for the user or client". Keycloak issues an offline token
+only when the member holds the `offline_access` realm role within the client's scope.
+`basetool-sc-extractor` has `fullScopeAllowed` off and requests `offline_access` (#2179,
+`REQ-XCH-005`), and production's `default-roles-iri` held `KRT Member`, `uma_authorization` and the
+`account` roles but not `offline_access`: hardening step 10 (`KEYCLOAK_HARDENING_RUNBOOK.md`, done by
+2026-09-09) had removed it so that no account could mint an offline token. The `offline_access`
+client scope already mapped the role; the sanitized reference does not show it because the
+sanitizer drops `scopeMappings`. The sandbox and E2E realms carried both, so no test saw the gap, and
+the go-live's provisioner apply (S15) left it, because decision 8 put the default roles out of scope.
+
+**Decision: grant the role on the server, as the sandbox does, and let the provisioner converge
+it.** The owner added the composite on production by hand on 2026-09-28. The provisioner now plans
+two additive writes in a section of its own after the application realm roles: `offline_access` as a
+composite of the realm's default role, and the `offline_access` realm role mapped on the
+`offline_access` client scope. It never removes either, resolves the role by name when the write
+runs, and treats a realm without the role, the default role or the scope as a problem rather than a
+write. This narrows decision 8 by exactly these two built-in objects and reverses hardening step 10.
+
+**What it opens.** Every member can be issued an offline token again, by any client that offers the
+`offline_access` scope and requests it:
+
+- `basetool-sc-extractor` and every approved third-party client request it, and their offline
+  sessions are pinned at 30 days idle and 90 days in total (ADR-0217 amendments);
+- `basetool-frontend` offers it but requests `openid, profile, email, roles`; `grafana` offers it but
+  requests `openid email profile`; `backend-service` and `basetool-ingest-gateway` authenticate as
+  service accounts and request it nowhere;
+- `basetool-android` is not offered it (decision 4, ADR-0131) and omits it from its request.
+
+Tokens of a client with full scope now also list `offline_access` in `realm_access.roles`, beside
+`uma_authorization` and `default-roles-iri`. The frontend maps it to an authority at login and its
+sync with the backend drops it again, as it drops every realm role without a catalog entry
+(`REQ-SEC-013`); nothing is gated on it.
+
+**Considered and not taken** (the owner chose the sandbox's shape): a role or group of its own that only the extractor's members hold (every member uses
+the extractor, so it would be the default role under another name); `offline_access` as a composite
+of `KRT Member` (the same reach, hidden in an application role the roster sync mirrors); giving up
+`offline_access` for the exchange clients (reverses the owner decision of 2026-09-26 that a web
+logout must not disconnect them). Requirements: `REQ-OPS-033`, `REQ-XCH-005`; pinned by case 18 of
+`scripts/provision-keycloak-realm.test.sh`.
