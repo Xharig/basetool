@@ -342,6 +342,10 @@
 
 ### Fixed
 
+- **Datenaustausch: keine Deadlocks mehr bei gleichzeitigen Bestandsänderungen.** Sendeten zwei
+  Installationen eines Mitglieds gleichzeitig Änderungen an denselben Lots in anderer Reihenfolge,
+  brach PostgreSQL eine davon mit einem Deadlock ab; das Backend sperrt die Lots jetzt in fester
+  Reihenfolge (REQ-XCH-016).
 - **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
   auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
   90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede

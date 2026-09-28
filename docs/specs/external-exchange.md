@@ -844,6 +844,10 @@ client.
   *`ExchangeStockWriteControllerTest`: the lot's row locks serialise the two, and the second finds
   the quantity changed. An optimistic-lock failure a write meets anyway reaches the client as
   `409 VERSION_CONFLICT`, not as a relay failure.*
+- [x] Two installations of one member sending sets over the same lots in opposite orders both
+  finish; neither deadlocks. *`ExchangeStockWriteLockOrderIntegrationTest` (PostgreSQL). Corrected
+  2026-09-28 (load test, finding 1): the lots were locked in the order the ops arrived, and such
+  sets deadlocked (`40P01`).*
 - [x] A book-out below an offered amount lowers the offer and records the audit event.
   *`ExchangeStockWriteControllerTest`.*
 - [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
@@ -862,8 +866,10 @@ refused `400` (`ExchangeStockChangeSetValidationTest`, `ExchangeStockWriteContro
 The backend applies a change set at `POST /api/v1/exchange/me/stock/changes`
 (`exchange.stock.write`) in one transaction. Each op resolves its material — a material first, an
 item otherwise — and its place, the UEX link first, then the exact name of a non-hidden location
-(`LOCATION_UNKNOWN`), checks both units against the material's (`UNIT_MISMATCH`), locks the lot's
-rows and compares `expectedQuantity` (`VERSION_CONFLICT`). A trade good is stored at quality 0. A
+(`LOCATION_UNKNOWN`), checks both units against the material's (`UNIT_MISMATCH`); then the rows
+of every lot the batch names are locked in the order of the lots' keys, each lot's rows in id order,
+before any op compares `expectedQuantity` (`VERSION_CONFLICT`), so two sets of one member over the
+same lots never deadlock whatever order their ops come in. A trade good is stored at quality 0. A
 lot emptied by another channel or installation is refilled only with `override`
 (`REMOVED_ELSEWHERE`); stock reserved for a job order or mission is never taken (`STOCK_EARMARKED`,
 owner decision 2026-09-27 — personal rows carry no reservations, so this guards the invariant);
