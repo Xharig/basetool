@@ -62265,6 +62265,10 @@
               "$ref" : "#/components/schemas/ExchangeDemandMaterialDto"
             }
           },
+          "reason" : {
+            "type" : "string",
+            "enum" : [ "NOT_PERMITTED" ]
+          },
           "updatedAt" : {
             "type" : "string",
             "format" : "date-time"

@@ -241,8 +241,8 @@ refuses, writing nothing, when a variable is missing or the result lacks exactly
 | `admin` | `REDIS_PASSWORD` | everything — the operator's user for `ACL LOAD` and inspection; only the redis container's own environment carries it |
 | `monitoring` | `REDIS_EXPORTER_PASSWORD` | introspection for `redis-exporter`; no key, no `SCAN` (a key's name is a session id) |
 | `basetool-frontend` | `REDIS_FRONTEND_PASSWORD` | `basetool:session:*`, `GETDEL` of `ingest:handoff:*`, the session-event, keyspace-event and live-sync channels, `SCAN`, `INFO` |
-| `basetool-backend` | `REDIS_BACKEND_PASSWORD` | publish/subscribe on `basetool:livesync:changed` and `basetool:notify:published`, `INFO`; no key |
-| `basetool-ingest` | `REDIS_INGEST_PASSWORD` | strings, lists and sorted sets on `ingest:*` (`SET`/`INCR`/`RPUSH`/`LPOP`/`ZADD`/`ZREM`/`EXPIRE`/`DEL`, …) and `EVAL`/`EVALSHA` for the exchange's budget and idempotency-lock scripts, whose commands the same rules check; `GET` of `exchange:*`; `INFO`; no channel, no `SCAN` |
+| `basetool-backend` | `REDIS_BACKEND_PASSWORD` | `GET`/`SET` on `exchange:*` (the exchange registry mirror, ADR-0221), publish/subscribe on `basetool:livesync:changed` and `basetool:notify:published`, `INFO` |
+| `basetool-ingest` | `REDIS_INGEST_PASSWORD` | strings, lists and sorted sets on `ingest:*` (`GET`, `SET`, `SETEX`, `PSETEX`, `INCR`, `RPUSH`, `LPOP`, `ZADD`, `ZRANGE`, `ZRANGEBYSCORE`, `ZREMRANGEBYSCORE`, `ZREM`, `ZSCORE`, `EXPIRE`, `PEXPIRE`, `DEL`, `UNLINK`) and `EVAL`/`EVALSHA` for the exchange's budget and idempotency-lock scripts, whose commands the same rules check; read-only `GET` of `exchange:*`; `INFO`; no channel, no `SCAN` |
 
 An application reaches Redis as its own user only when its `REDIS_<SVC>_USERNAME` is set; with it
 empty it sends a password-only `AUTH` with the shared `REDIS_PASSWORD`, which is the `default` user —
@@ -1119,8 +1119,9 @@ ${UPOD} logs --since 2m keycloak | grep -iE 'error|exception|provider' | head
 ### Keycloak realm shape
 
 The realm lives in `db-keycloak`, not in any artifact: delivery never touches it, and
-`realm-export.json` only seeds an empty one. What the Basetool needs from it — its clients, the two
-ingest audience scopes, scope assignments, the DPoP policy, service-account roles, token settings —
+`realm-export.json` only seeds an empty one. What the Basetool needs from it — its clients (including
+the approved exchange clients from `scripts/keycloak/external-clients.json`), the two ingest
+audience scopes and the ten `exchange.*` capability scopes, scope assignments, the DPoP policy, service-account roles, token settings —
 is brought to production's shape by `scripts/provision-keycloak-realm.py` (`REQ-OPS-033`,
 [ADR-0202](adr/0202-a-realm-is-brought-to-the-production-shape-by-a-provisioner-that-never-deletes.md)):
 dry run by default, `--apply` to write, origins from `--public-origin`, nothing deleted that only
@@ -1400,12 +1401,13 @@ the internet-facing ingest container is therefore the backend's and Keycloak's k
 rollout each service holds a leaf of its own, signed by a CA whose key no longer exists, and clients
 trust only that CA and check the name.
 
-**What the release changes on its own: nothing.** Every new mount falls back to the shared keystore
-and every new switch defaults to today's behaviour:
+**What the release changed on its own: nothing.** Every new mount fell back to the shared keystore
+and every new switch defaulted to the old behaviour. The rollout has run; the table keeps both
+states so a rollback can be read off it:
 
-| Knob | Where | Default (= today) | After the rollout |
+| Knob | Where | Before the rollout | After the rollout (current) |
 |---|---|---|---|
-| `INTERNAL_TLS_VERIFY_HOSTNAME` | host `.env` → `env.d` (frontend, ingest) | `false` | `true` |
+| `INTERNAL_TLS_VERIFY_HOSTNAME` | host `.env` → `env.d` (frontend, ingest) | `false` | `true` (the compose and `env.d` default since #2036) |
 | `IRI_BACKEND_KEYSTORE_HOST_PATH` / `_FRONTEND_` / `_INGEST_` / `_KEYCLOAK_` | baked into the units by `generate-quadlet.py` (`PATH_VARS`) | `/var/iri/secrets/keystore.p12` | `/var/iri/secrets/tls/<service>.p12` |
 | `IRI_INTERNAL_TRUSTSTORE_HOST_PATH` → `/run/secrets/internal-truststore.p12` | baked, as above | `/var/iri/secrets/keystore.p12` | `/var/iri/secrets/tls/truststore.p12` |
 | `IRI_TRUSTSTORE_HOST_PATH` → `/run/secrets/truststore.p12` (REQ-OPS-022's JVM-truststore default; production's JVM truststore is the role's separate `jvm-truststore.p12` drop-in) | baked, as above | `/var/iri/secrets/keystore.p12` — the shared **private key**, mounted into all three apps | `/var/iri/secrets/tls/truststore.p12`, so no container holds the old key |
@@ -1413,8 +1415,9 @@ and every new switch defaults to today's behaviour:
 | `/var/iri/secrets/backend-truststore.p12` (Keycloak SPI precheck, if configured) | host file + a hand-installed keycloak drop-in | the backend's shared certificate (alias `backend`) | the internal CA only (alias `internal-ca`; both from step 2f to step 4) |
 
 The four `*_KEYSTORE_HOST_PATH` and the two truststore paths are **baked**: setting them in `.env` does
-nothing on the Podman host (`check-conformance.py` → `env-reaches-the-units` says so). They move with
-the follow-up release that flips `PATH_VARS`, and that release must not be promoted before step 2.
+nothing on the Podman host (`check-conformance.py` → `env-reaches-the-units` says so). They moved
+with #2036 (v1.12.0), which flipped `PATH_VARS`; a release carrying it must not be promoted onto a
+host that has not run step 2.
 
 **The transition trick.** Until step 4 the CA-only truststore and `basetool-ca.crt` carry **the old
 shared certificate as a second anchor**. Every client then accepts either certificate, so the order

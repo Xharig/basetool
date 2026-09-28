@@ -190,6 +190,12 @@ public final class E2eStackExtension implements BeforeAllCallback {
    */
   static final String FRONTEND_CLIENT_SECRET = "e2e-frontend-client-secret-do-not-use-in-prod";
 
+  /** The stack Keycloak's bootstrap administrator in the {@code master} realm. */
+  static final String KEYCLOAK_ADMIN_USER = "admin";
+
+  /** The throwaway password of {@link #KEYCLOAK_ADMIN_USER}; never a production value. */
+  static final String KEYCLOAK_ADMIN_PASSWORD = "admin-e2e-pw-do-not-use-in-prod";
+
   /** Guards one-time start across multiple test classes sharing this extension. */
   private static volatile boolean started = false;
 
@@ -574,8 +580,8 @@ public final class E2eStackExtension implements BeforeAllCallback {
     env.put("KC_POSTGRES_DB", "keycloak_e2e");
     env.put("KC_POSTGRES_USER", "keycloak_e2e");
     env.put("KC_POSTGRES_PASSWORD", "keycloak-e2e-pw-do-not-use-in-prod");
-    env.put("KC_BOOTSTRAP_ADMIN_USERNAME", "admin");
-    env.put("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin-e2e-pw-do-not-use-in-prod");
+    env.put("KC_BOOTSTRAP_ADMIN_USERNAME", KEYCLOAK_ADMIN_USER);
+    env.put("KC_BOOTSTRAP_ADMIN_PASSWORD", KEYCLOAK_ADMIN_PASSWORD);
     env.put("KEYCLOAK_ADMIN_CLIENT_SECRET", "e2e-client-secret-do-not-use-in-prod");
     env.put("KEYCLOAK_FRONTEND_CLIENT_SECRET", FRONTEND_CLIENT_SECRET);
     env.put("REDIS_PASSWORD", RedisAclTemplate.E2E_PASSWORDS.get("REDIS_PASSWORD"));
@@ -602,7 +608,7 @@ public final class E2eStackExtension implements BeforeAllCallback {
    *
    * @return the repository root path
    */
-  private static Path repoRoot() {
+  static Path repoRoot() {
     Path start = Paths.get("").toAbsolutePath();
     for (Path p = start; p != null; p = p.getParent()) {
       if (Files.exists(p.resolve("docker-compose.yml"))) {

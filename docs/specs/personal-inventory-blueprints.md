@@ -571,8 +571,9 @@ and search for it.
 
 Every change to blueprints writes exactly one event to the **Blueprints** audit area
 (`AuditDomain.BLUEPRINT`, REQ-AUDIT-001), whichever channel made it — the web, the app, an admin on
-another member's set, the import, the sharing opt-in, the default set and its provisioning — and
-later the exchange API (epic #2078). A run that changed nothing records nothing; provisioning writes
+another member's set, the import, the sharing opt-in, the default set and its provisioning, and a
+connected application's writes through the exchange API (REQ-XCH-015), attributed to that client
+(REQ-AUDIT-005). A run that changed nothing records nothing; provisioning writes
 one summary event per run, never one per granted row. The subject is the blueprint labelled by its
 catalogue product name; the details hold the product key, counts and changed field names, never the
 member's note.
@@ -582,8 +583,11 @@ member's note.
 - [x] Add, batch add, edit, remove, remove all, import, sharing change, global purge, default add and
   remove and provisioning each record one event, and only when they changed something.
 - [x] The Blueprints tab in the admin audit viewer lists, filters, exports and purges the area.
+- [x] An exchange add and remove each record one event carrying the client's id.
+  *`ExchangeBlueprintWriteControllerTest`.*
 
 **Enforced by:** `PersonalBlueprintServiceTest`, `BlueprintImportServiceTest`,
+`ExchangeBlueprintWriteControllerTest`,
 `DefaultBlueprintServiceTest`, `DefaultBlueprintProvisioningServiceTest`, `UserServiceTest`,
 `AuditReportServiceTest`, `AdminAuditLogPageControllerTest`, `AuditReportProxyControllerTest` ·
 **Code:** `PersonalBlueprintService`, `BlueprintImportService`, `DefaultBlueprintService`,

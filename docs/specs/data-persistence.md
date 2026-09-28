@@ -503,12 +503,14 @@ Concrete handling, in order:
   `*_user_id` or `*_sub` and requires a foreign key to `app_user(id)`, a recorded exemption, or —
   for `app_user.discord_user_id`, which holds a Discord snowflake — a recorded statement that it is
   not a user id at all.
-- **Purged by the database** (the exchange's member data, REQ-XCH-007/-008/-013/-017/-022): the
-  installations (a revoked one is the deny-list entry for its key), the client revocations, the
-  change sequence, the write journal and the ship links — `exchange_installation`,
-  `exchange_client_revocation`, `exchange_change`, `exchange_journal`, `exchange_ship_link`
-  (`V249`, `V252`–`V254`) — each reference `app_user(id)` with `ON DELETE CASCADE` and go with the
-  account; `UserIdentityColumnForeignKeyTest` holds them to it like every other `user_id` column.
+- **Purged by the database** (the exchange's member data, REQ-XCH-007/-008/-013/-017/-022/-034):
+  the installations (a revoked one is the deny-list entry for its key), the client revocations, the
+  change sequence, the write journal, the ship links and an admin bulk undo's per-member skips —
+  `exchange_installation`, `exchange_client_revocation`, `exchange_change`, `exchange_journal`,
+  `exchange_ship_link`, `exchange_bulk_undo_skip` (`V249`, `V252`–`V254`, `V256`) — each reference
+  `app_user(id)` with `ON DELETE CASCADE` and go with the account; `UserIdentityColumnForeignKeyTest`
+  holds them to it like every other `user_id` column. The bulk-undo run itself stays and keeps its
+  counts; its `requested_by` is `ON DELETE SET NULL` (`V256`).
   *Corrected 2026-09-27: the planned amendment named `UserDeletionForeignKeyIntegrityTest` as their
   guard; that test exercises named deletion scenarios, and the schema sweep is
   `UserIdentityColumnForeignKeyTest`.*

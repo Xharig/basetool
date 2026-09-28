@@ -1,7 +1,8 @@
 # ADR-0219 — The exchange contract grows additively under a path major version
 
 - **Status:** Accepted — owner gate G0 of epic [#2078](https://github.com/krt-profit/basetool/issues/2078),
-  taken with the merge of #2111 and #2112 (2026-09-26); implementation pending.
+  taken with the merge of #2111 and #2112 (2026-09-26); implemented on main by 2026-09-28 (epic #2078), production rollout with the go-live
+  ([#2092](https://github.com/krt-profit/basetool/issues/2092)).
 - **Date:** 2026-09-26
 - **Deciders:** @greluc
 - **Related:** spec [`external-exchange.md`](../specs/external-exchange.md) ·
