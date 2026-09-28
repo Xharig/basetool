@@ -422,7 +422,16 @@ CodeQL additionally runs weekly, and the OWASP
 [dependency check](.github/workflows/dependency-check.yml) runs weekly
 and on every PR that touches the build files, the version catalog or its
 suppression file; if your change introduces a new security finding,
-expect to address it before merge.
+expect to address it before merge. It loads the NVD from the NVD's official
+JSON 2.0 data feeds (`nvd.datafeedUrl` in the root `build.gradle.kts`,
+`https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz`), not from
+the paginated NVD API, so it needs no API key and runs locally as well:
+`./gradlew dependencyCheckAggregate --no-parallel` builds the dataset from
+nothing in about seven minutes into `~/.gradle/dependency-check-data/11.0`
+and re-uses it for a week (`nvd.validForHours = 168`). Setting
+`dependencyCheck { data { directory = … } }` has no effect in plugin 13.0.0 —
+the task pins its own default — so point a scratch run elsewhere on the
+task itself (`tasks.dependencyCheckAggregate { data.directory = … }`).
 
 ### Review and merge
 

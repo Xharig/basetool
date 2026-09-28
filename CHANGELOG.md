@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **Aufträge: „Items bearbeiten" speichert wieder ohne Umweg.** Die bearbeitende Einheit war im
+  Bearbeiten-Formular nicht vorausgewählt; weil das Feld Pflicht ist, verwarf der Browser das Speichern
+  ohne sichtbare Meldung, und z. B. ein entferntes Item blieb im Auftrag. Beide Einheiten sind jetzt
+  mit den gespeicherten Werten vorbelegt (REQ-ORDERS-032).
+
 - **Keycloak: SC Extractor 2.10.0 kann sich wieder anmelden.** Die Geräteanmeldung scheiterte in
   Produktion mit `400 not_allowed`, weil die Standardrolle `default-roles-iri` kein
   `offline_access` enthielt; der Realm-Provisioner ergänzt die Rolle dort und am Client-Scope
