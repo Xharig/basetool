@@ -959,6 +959,53 @@ assert_eq "$(grep -cE '^create (roles/[^/]+/composites|client-scopes/[^/]+/scope
   "0" "and the apply sends neither write"
 rm -rf "$state"
 
+echo "19. only the exchange clients are offered offline_access; the first-party clients lose it"
+WITHHELD_LINE="- optional scope 'offline_access' withheld (offline sessions are for the exchange clients only, ADR-0202 amendment 5)"
+NO_OFFLINE_CLIENTS="basetool-frontend backend-service basetool-ingest-gateway grafana"
+state="$(mktemp -d)"
+make_stub "$state" empty
+run_provisioner "$state" --apply --grafana-origin https://grafana.testing.example >/dev/null
+assert_eq "$(cat "${state}/rc")" "0" "a fresh realm is built and verifies clean"
+for cid in $NO_OFFLINE_CLIENTS; do
+  assert_eq "$(query "$state" "'offline_access' in scope_names('optional', '${cid}') + scope_names('default', '${cid}')")" \
+    "False" "a new ${cid} is not offered offline_access"
+done
+for cid in basetool-sc-extractor versekit; do
+  assert_eq "$(query "$state" "'offline_access' in scope_names('optional', '${cid}')")" \
+    "True" "${cid} keeps offline_access as an optional scope"
+done
+STUB_STATE="$state" CLIENTS="$NO_OFFLINE_CLIENTS" "$PYTHON" -c '
+import json, os, pathlib
+p = pathlib.Path(os.environ["STUB_STATE"]) / "state.json"
+d = json.loads(p.read_text(encoding="utf-8"))
+for cid in os.environ["CLIENTS"].split():
+    uuid = next(c["id"] for c in d["clients"] if c["clientId"] == cid)
+    d["client_optional_scopes"][uuid].append("s-offline_access")
+p.write_text(json.dumps(d), encoding="utf-8")
+'
+before="$(cat "${state}/state.json")"
+output="$(run_provisioner "$state" --grafana-origin https://grafana.testing.example)"
+assert_eq "$(cat "${state}/rc")" "2" "a realm in production's shape plans changes"
+assert_eq "$(printf '%s\n' "$output" | grep -cxF "  ${WITHHELD_LINE}" || true)" "4" \
+  "the dry run withholds offline_access from each of the four first-party clients"
+assert_eq "$(printf '%s\n' "$output" | sed '/^\[only on this realm/,$d' | grep -cE '^  [-+~=] ' || true)" "4" \
+  "and plans nothing else"
+assert_eq "$(cat "${state}/state.json")" "$before" "the dry run writes nothing"
+output="$(run_provisioner "$state" --apply --grafana-origin https://grafana.testing.example)"
+assert_eq "$(cat "${state}/rc")" "0" "the apply succeeds and verifies clean"
+for cid in $NO_OFFLINE_CLIENTS; do
+  assert_eq "$(query "$state" "'offline_access' in scope_names('optional', '${cid}')")" \
+    "False" "${cid} no longer offers offline_access"
+done
+assert_eq "$(query "$state" "'offline_access' in scope_names('optional', 'basetool-sc-extractor')")" \
+  "True" "the extractor still does"
+assert_eq "$(query "$state" "'r-offline' in d['role_composites']['r-default']")" "True" \
+  "the default role keeps offline_access"
+output="$(run_provisioner "$state" --apply --grafana-origin https://grafana.testing.example)"
+assert_contains "$output" "No changes" "a second apply is empty"
+assert_eq "$(writes_in "$state")" "0" "and sends no write"
+rm -rf "$state"
+
 echo
 if [[ $tests_failed -gt 0 ]]; then
   echo "FAILED: ${tests_failed} of ${tests_run} assertions"

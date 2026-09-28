@@ -146,7 +146,8 @@ class ClientSpec:
 
     `fields` are converged on every run; `create_only` is written only on creation. List fields
     are unions: missing entries are added, extra ones reported, and `withheld_*` entries removed
-    wherever found. With `exact_mappers`, every client-level protocol mapper not in `mappers` is
+    wherever found; `withheld_scope_reason`, when set, names why for the scopes instead of
+    `withheld_reason`. With `exact_mappers`, every client-level protocol mapper not in `mappers` is
     removed instead of reported. `value_env` names the environment variable that supplies a
     confidential client's credential; only that name is ever printed.
     """
@@ -164,6 +165,7 @@ class ClientSpec:
     withheld_redirect_uris: list[str] = field(default_factory=list)
     withheld_web_origins: list[str] = field(default_factory=list)
     withheld_reason: str = ""
+    withheld_scope_reason: str = ""
     mappers: list[dict] = field(default_factory=list)
     exact_mappers: bool = False
     client_roles: list[dict] = field(default_factory=list)
@@ -217,6 +219,8 @@ def _user_attribute_mapper(name: str, json_type: str, *, introspection: bool,
 
 _STANDARD_DEFAULT = ["acr", "basic", "email", "profile", "roles", "web-origins"]
 _STANDARD_OPTIONAL = ["address", "microprofile-jwt", "offline_access", "organization", "phone"]
+_OPTIONAL_WITHOUT_OFFLINE = [s for s in _STANDARD_OPTIONAL if s != OFFLINE_ACCESS]
+_NO_OFFLINE_SESSION = "offline sessions are for the exchange clients only, ADR-0202 amendment 5"
 
 _CONFIDENTIAL_ATTRIBUTES = {
     "backchannel.logout.revoke.offline.tokens": "false",
@@ -299,7 +303,9 @@ def client_specs(realm: str, public_origin: str, grafana_origin: str | None,
             withheld_web_origins=["http://frontend:18081"],
             withheld_reason="compose-internal origin retired 2026-09-22",
             default_scopes=["email", "extractor-ingest", "profile", "roles", "web-origins"],
-            optional_scopes=["address", "microprofile-jwt", "offline_access", "phone"],
+            optional_scopes=["address", "microprofile-jwt", "phone"],
+            withheld_scopes=[OFFLINE_ACCESS],
+            withheld_scope_reason=_NO_OFFLINE_SESSION,
             mappers=[
                 _user_attribute_mapper("description", "String", introspection=False,
                                        lightweight=False),
@@ -345,7 +351,9 @@ def client_specs(realm: str, public_origin: str, grafana_origin: str | None,
             redirect_uris=[],
             web_origins=[],
             default_scopes=[*_STANDARD_DEFAULT, "service_account"],
-            optional_scopes=list(_STANDARD_OPTIONAL),
+            optional_scopes=list(_OPTIONAL_WITHOUT_OFFLINE),
+            withheld_scopes=[OFFLINE_ACCESS],
+            withheld_scope_reason=_NO_OFFLINE_SESSION,
             service_account_roles={
                 "<realm>": [f"default-roles-{realm}"],
                 "realm-management": ["manage-users", "view-realm", "view-users"],
@@ -365,7 +373,9 @@ def client_specs(realm: str, public_origin: str, grafana_origin: str | None,
             web_origins=[],
             default_scopes=[*_STANDARD_DEFAULT, "extractor-ingest", "extractor-ingest-only",
                             "service_account"],
-            optional_scopes=list(_STANDARD_OPTIONAL),
+            optional_scopes=list(_OPTIONAL_WITHOUT_OFFLINE),
+            withheld_scopes=[OFFLINE_ACCESS],
+            withheld_scope_reason=_NO_OFFLINE_SESSION,
             service_account_roles={"<realm>": [f"default-roles-{realm}"]},
             env_vars_to_fill=["IRI_INGEST_SERVICE_ACCOUNT_CLIENT_SECRET"],
             env_doc_hint=(" together with the other four values of docs/INGEST_KEYCLOAK_SETUP.md "
@@ -435,7 +445,9 @@ def client_specs(realm: str, public_origin: str, grafana_origin: str | None,
             redirect_uris=[f"{grafana_origin}/login/generic_oauth"],
             web_origins=["+"],
             default_scopes=list(_STANDARD_DEFAULT),
-            optional_scopes=list(_STANDARD_OPTIONAL),
+            optional_scopes=list(_OPTIONAL_WITHOUT_OFFLINE),
+            withheld_scopes=[OFFLINE_ACCESS],
+            withheld_scope_reason=_NO_OFFLINE_SESSION,
             mappers=[{
                 "name": "realm roles",
                 "protocolMapper": "oidc-usermodel-realm-role-mapper",
@@ -1114,7 +1126,8 @@ class Planner:
             for kind, have in (("default", default), ("optional", optional)):
                 if name in have:
                     changes.append(Change(
-                        f"- {kind} scope '{name}' withheld ({spec.withheld_reason})",
+                        f"- {kind} scope '{name}' withheld "
+                        f"({spec.withheld_scope_reason or spec.withheld_reason})",
                         lambda n=name, k=kind, sid=have[name]: self._unlink_scope(
                             uuid, k, n, sid, "withheld"), frozen))
         wanted_all = set(spec.default_scopes) | set(spec.optional_scopes) | set(
