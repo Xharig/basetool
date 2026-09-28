@@ -69,7 +69,7 @@ two cannot disagree about it. It also keeps `offline_access` in `default-roles-i
 clients' offline sessions (ADR-0202 amendment 5; without the composite their device login is
 refused `400 not_allowed`), and it offers the scope to no other client: `offline_access` is
 withheld from `basetool-frontend`, `backend-service`, `basetool-ingest-gateway`, `grafana` and
-`basetool-android`. Procedure:
+`basetool-android`, and it is no realm default client scope. Procedure:
 [`INGEST_KEYCLOAK_SETUP.md` → *New or out-of-date realm*](../INGEST_KEYCLOAK_SETUP.md#new-or-out-of-date-realm-run-the-provisioner).
 The mobile provisioner stays the focused tool for that one client.
 

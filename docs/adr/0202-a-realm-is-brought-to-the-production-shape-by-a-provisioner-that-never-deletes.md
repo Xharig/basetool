@@ -220,8 +220,12 @@ to ask for. `basetool-frontend`, `backend-service`, `basetool-ingest-gateway` an
 `--grafana-origin` manages it) therefore have `offline_access` withheld: it is gone from their
 optional scopes and converges away wherever found, like the Android client's (decision 4). The
 dry-run line is `- optional scope 'offline_access' withheld (offline sessions are for the exchange
-clients only, ADR-0202 amendment 5)`. The extractor and the third-party template keep it. The
-realm's default optional scopes still list it, so a client created by hand inherits it; the
-provisioner reports nothing about that. Pinned by case 19; production gets it with a separate
+clients only, ADR-0202 amendment 5)`. The extractor and the third-party template keep it.
+**Nor is it a realm default client scope** (owner decision, the same day): a client created by hand
+would otherwise inherit it. The provisioner removes it from the realm's default and optional client
+scopes wherever it is listed — `- realm optional client scope 'offline_access' removed (a client
+created by hand no longer inherits it; the exchange clients name it themselves)`, or `default` —
+in the `offline_access` section; the exchange clients' specs name it, so they keep it. This is a
+second built-in object decision 8 no longer leaves alone. Pinned by cases 19 and 20; production gets it with a separate
 owner-approved dry run and apply (`INGEST_KEYCLOAK_SETUP.md` → *Withholding `offline_access` from
 the first-party clients*).

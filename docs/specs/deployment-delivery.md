@@ -2269,6 +2269,11 @@ there.
   have it withheld — a planned `- optional scope 'offline_access' withheld (offline sessions are
   for the exchange clients only, ADR-0202 amendment 5)` line wherever found, never offered to one
   the run creates — as `basetool-android` already had (ADR-0131); owner decision 2026-09-28.
+  **`offline_access` is no realm default client scope either** (a second exception to „built-in
+  objects are never touched", owner decision the same day): the provisioner removes it from the
+  realm's default and optional client scopes wherever it is listed —
+  `- realm optional client scope 'offline_access' removed (…)` — so a client created by hand does
+  not inherit it; the extractor and the third-party template name it themselves.
 - **Approved third-party clients come from one template** (2026-09-26, `REQ-XCH-005`,
   ADR-0217): every entry of `scripts/keycloak/external-clients.json` is created and converged as a
   public device-grant client with consent, DPoP-bound tokens, a 30/90-day offline session, `basic`
@@ -2304,6 +2309,9 @@ there.
   a realm in production's shape plans exactly the four withheld lines and nothing else, the apply
   removes them and verifies clean, the default role keeps `offline_access`, and a second apply is
   empty.
+- [x] Section 20: a realm listing `offline_access` as a realm optional — or default — client scope
+  gets it planned away and removed, the other realm optional scopes stay, the extractor and a
+  third-party client still carry it explicitly, and a dry run afterwards reads *in shape*.
 - [x] Sections 13–15: the exchange scopes and the third-party template are built, an existing
   third-party client loses what the template withholds, and a malformed client list is refused
   before the realm is read; the stub keeps Keycloak's own `backchannel.logout.session.required` on

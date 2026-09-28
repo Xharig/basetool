@@ -840,7 +840,7 @@ like an expired token**. If Grafana logins break right after this step, this ste
 > provisioner offers it only to the exchange clients — the extractor and the approved third-party
 > clients, with offline sessions of 30 days idle and 90 days in total — and withholds it from
 > `basetool-frontend`, `backend-service`, `basetool-ingest-gateway` and `grafana` as from
-> `basetool-android` (owner decision the same day; on production with the owner's apply,
+> `basetool-android`, and from the realm's default client scopes (owner decisions the same day; on production with the owner's apply,
 > [`INGEST_KEYCLOAK_SETUP.md`](INGEST_KEYCLOAK_SETUP.md#withholding-offline_access-from-the-first-party-clients)).
 > The text below is the step as it was applied.
 
