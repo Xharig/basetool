@@ -873,17 +873,41 @@ line sums `max(0, ordered − delivered − earmarked)` per game item, and `craf
 member's blueprints the way the order's blueprint coverage does (variant family when the order counts
 variants). Lines with nothing open are left out; `bt` is the material's or game item's id.
 
+Only a member who passes the web's job-order gate gets the demand: `ExchangeDemandService` asks
+`OwnerScopeService.canViewJobOrders()` — the same rule that opens the Aufträge area and the
+Materialbedarf (REQ-ORDERS-034) — before reading any order. Any other member gets `200` with two
+empty lists and `reason: "NOT_PERMITTED"`; a permitted member's answer carries no `reason`, even
+when nothing is open. The rule is evaluated with the exchange's reduced authorities (REQ-XCH-009),
+so it reduces to "a member, or a leadership seat above a member, of at least one profit-eligible
+unit" — an `ADMIN` role does not open it. It runs on every request, so a unit that loses its profit
+eligibility while its orders stay open stops showing its demand to members who have no other
+eligible unit. As on the web, the gate is per member: a permitted member sees the demand of every
+unit they belong to (owner decision 2026-09-28, #2095). `reason` is an optional field of
+`org-demand.schema.json` with the one value `NOT_PERMITTED`; the gateway refuses any other value as
+a relay failure. *Corrected 2026-09-28: #2095 promised this gate and the `reason`, but the feed was
+built without either, so a member of a unit that lost its profit eligibility kept seeing its open
+demand.*
+
 **Acceptance**
 
+- [x] A member who fails `canViewJobOrders` gets empty lists with `reason: NOT_PERMITTED` and no
+  order is read; a member who passes it gets the demand without a `reason`; a unit that loses its
+  profit eligibility stops showing its demand. *`ExchangeDemandServiceTest`,
+  `ExchangeDemandControllerTest` (against the real gate and database), `ExchangeDemandParityTest`
+  (the web's Materialbedarf is withheld by the same gate); `ExchangeOrgDemandRouteTest` relays the
+  withheld answer and refuses an unknown `reason`; fixtures for both shapes under
+  `docs/exchange/examples/v1/org-demand/`.*
 - [x] An overseer who is not a member of a unit does not see its demand.
   *`ExchangeDemandServiceTest` — only the member's own units are asked.*
 - [x] The feed's open quantities equal the Materialbedarf's gaps for the same orders.
   *`ExchangeDemandParityTest`.*
 - [x] The response schema admits no name or free-text field.
-  *`ExchangeOrgDemandRouteTest` pins the schema's field sets; the only names are catalogue names.*
+  *`ExchangeOrgDemandRouteTest` pins the schema's field sets and the `reason` enum; the only names
+  are catalogue names.*
 
 **Status:** the backend location list is built — WP 3.1 (#2083); the backend's demand and the
-gateway's demand route (`GET /exchange/v1/me/org-demand`) are built — WP 4.3 (#2095)
+gateway's demand route (`GET /exchange/v1/me/org-demand`) are built — WP 4.3 (#2095); the
+job-order gate with `reason: NOT_PERMITTED` is built (#2095 follow-up)
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 
