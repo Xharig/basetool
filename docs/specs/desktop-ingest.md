@@ -573,6 +573,11 @@ or an identity-provider round-trip — using four fixed, case-insensitive strate
 - **Known bot/scanner path prefix → 404** (`/wp-*`, `/.env`, `/phpmyadmin`, `/actuator/env`, …).
 - **Never-served file extension → 404** (`.php`, `.asp`, `.sql`, `.env`, …).
 
+On an `/exchange` path every refusal is instead a problem with a code from the exchange registry
+(REQ-XCH-025), written directly without an error dispatch: the query rule answers
+`400 SCHEMA_INVALID` with one error at `/`, the other three `404 NOT_FOUND`, as the exchange gate
+answers an unknown route or method.
+
 The filter runs after `CorrelationIdFilter` (a blocked request is still correlation-tagged) and
 before the size-cap, rate-limit and Spring Security filters. The gateway's real surface — `/v1/**`,
 the exchange routes under `/exchange/**` (REQ-XCH-001), `/actuator/health` (+ liveness/readiness),

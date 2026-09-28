@@ -6,8 +6,11 @@ schema is served, unchanged and without sign-in, at its permanent `$id`:
 under [schemas](schemas/), and every schema has valid and invalid
 [conformance fixtures](examples/README.md).
 
-The gateway checks each request body against its schema before it does anything else. A violation
-is `400 SCHEMA_INVALID` with `errors[]`, each a JSON Pointer and the violated keyword, at most 50.
+Every request body is a JSON document sent with `Content-Type: application/json`; another media
+type is `415 UNSUPPORTED_MEDIA_TYPE`, and a body that is not a JSON document is `400 SCHEMA_INVALID`
+with one error at the pointer `""`. Neither answer is cached for its `Idempotency-Key`. The gateway
+checks each body against its schema before it relays the request. A violation is
+`400 SCHEMA_INVALID` with `errors[]`, each a JSON Pointer and the violated keyword, at most 50.
 
 ## Item reference — `item-ref`
 
@@ -30,8 +33,9 @@ even a single one, because they are never taken without the member. Store the `b
 and send it from then on.
 
 `POST /exchange/v1/catalog/resolve` resolves up to 500 references of one `kind` (`BLUEPRINT`,
-`ITEM`, `MATERIAL`, `SHIP_TYPE`) at a time. A `locKey` that resolved to nothing falls through to the
-name and adds a `LOC_KEY_UNRESOLVED` warning at `/refs/<i>/locKey`.
+`ITEM`, `MATERIAL`, `SHIP_TYPE`) at a time. A reference with a `locKey` whose key fields, the
+`locKey` included, did not resolve to exactly one entry falls through to the name and adds a
+`LOC_KEY_UNRESOLVED` warning at `/refs/<i>/locKey`.
 
 ## Quantity — `quantity`
 

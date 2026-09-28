@@ -315,14 +315,22 @@ A request to an exchange route without a valid DPoP proof bound to the token's `
 (`401 DPOP_REQUIRED` / `401 DPOP_INVALID`). The legacy `/v1/*` routes keep today's behaviour
 (`REQ-INGEST-012`) until they end (REQ-XCH-033).
 
-Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and a
-replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
+Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and
+a replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
 proof without a current one is answered `401 DPOP_INVALID` with `WWW-Authenticate: DPoP …,
-error="use_dpop_nonce"` and a fresh `DPoP-Nonce`, and the client retries once with it. Every exchange
-response carries the current nonce. A nonce is stateless — a five-minute window and its HMAC under a
-key drawn at startup — and holds for its window and the next; a restart invalidates them all, which
-costs a client one retry. A bearer-scheme request, or a token without `cnf.jkt`, is `401
-DPOP_REQUIRED` with the DPoP challenge.
+error="use_dpop_nonce"` and a fresh `DPoP-Nonce`, and the client retries once with it. Every answer
+past the authentication filter carries the current nonce (`ExchangeTokenGateFilter`, and
+`SecurityProblemResponseHandler` for a refused token or proof); the answers written before it — the
+bot filter's, the per-IP `429 RATE_LIMITED`, `413 PAYLOAD_TOO_LARGE` and the identity provider's
+`503` — and the anonymous contract documents carry none. The nonce check runs after Spring's proof
+decoder has parsed the proof and verified its header and signature, and before every claim check: a
+proof with a wrong `typ`, an unsupported `alg`, a missing or private `jwk` or a bad signature is
+`invalid_dpop_proof` without a challenge. *Corrected 2026-09-28: this paragraph said every exchange
+response carried the nonce, and the developer docs said the challenge came before every proof check;
+the code has behaved as described here since the nonce was built.* A nonce is stateless — a
+five-minute window and its HMAC under a key drawn at startup — and holds for its window and the
+next; a restart invalidates them all, which costs a client one retry. A bearer-scheme request, or a
+token without `cnf.jkt`, is `401 DPOP_REQUIRED` with the DPoP challenge.
 
 **Which proofs need the nonce.** Only a proof whose target has a readable path outside `/exchange` —
 the legacy `/v1` routes — skips it; an unparseable target, a target without a path and `/exchange`
@@ -1007,7 +1015,8 @@ Every write carries an `Idempotency-Key` (`400 IDEMPOTENCY_KEY_MISSING`), kept 2
 (client, member, key). Authentication, gates and rate limits run before the lookup; only results
 produced after them are cached — never `401`, `403`, `429`, `503`,
 `MASS_CHANGE_CONFIRMATION_REQUIRED` or a `5xx`. A duplicate in flight gets
-`409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different body `422 IDEMPOTENCY_KEY_REUSED`.
+`409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different request — another method, path or
+body — `422 IDEMPOTENCY_KEY_REUSED`.
 These two and `400 IDEMPOTENCY_KEY_MISSING` are the filter's own answers about the key, written
 before anything is claimed, and are never cached; the cached statuses below are those of the route
 behind the filter (`ExchangeIdempotencyFilter.cacheable`). An answer above
@@ -1018,16 +1027,20 @@ The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash
 `ingest:xch:idem:<client>:<member>:<sha256>`; a request's fingerprint is the SHA-256 of method, path
 and body. The same request under a known key is answered from the cache with `Idempotency-Replayed:
 true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and never a staged mass
-change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
-the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write. That
-holds on every exchange route and for every kind of Redis failure — a lost connection, a timeout, a
-refused command while staging a draft or a mass change, or a store failure escaping a route — each
-answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`. Two Redis reads answer
-otherwise: an unreadable registry or revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003)
-and a write quota that cannot be counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with
-`Retry-After: 30`; a full byte budget is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`.
-*Corrected 2026-09-27: this paragraph said every Redis failure answered `Retry-After: 60`; the
-registry and quota reads have answered 30 since they were built.*
+change or the `400 SCHEMA_INVALID` for a body that is not a JSON document: `GlobalExceptionHandler`
+marks that request `ExchangeIdempotencyFilter.NOT_REPLAYABLE`, since a truncated body retried whole
+under its key must run, not meet `422`. A body of another media type is `415
+UNSUPPORTED_MEDIA_TYPE`, which is not cached either. The lock of a key in flight lives two minutes,
+so a crashed request cannot block a key for the day. A store Redis cannot reach is `503
+SERVICE_UNAVAILABLE`, never an unguarded write. That holds on every exchange route and for every
+kind of Redis failure — a lost connection, a timeout, a refused command while staging a draft or a
+mass change, or a store failure escaping a route — each answers `503 SERVICE_UNAVAILABLE` with
+`Retry-After: 60`, never a `500`. Two Redis reads answer otherwise: an unreadable registry or
+revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003) and a write quota that cannot be
+counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with `Retry-After: 30`; a full byte budget
+is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. *Corrected 2026-09-27: this paragraph
+said every Redis failure answered `Retry-After: 60`; the registry and quota reads have answered 30
+since they were built.*
 
 The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
 per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
@@ -1048,8 +1061,9 @@ outlived the two minutes never frees the lock of the request that took the key a
   between its lookup and its lock replays instead of writing again, sixteen parallel duplicates run
   the write once per key, and an expired holder's token does not release the next holder's lock.*
 
-**Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest` · **Status:**
-built — WP 3.2 (#2082)
+**Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest`,
+`ExchangeChangeRouteTest` (a body that is no JSON and one of another media type are never cached) ·
+**Status:** built — WP 3.2 (#2082)
 
 ### REQ-XCH-021 — Mass changes are confirmed by the member in the browser
 
@@ -1203,6 +1217,13 @@ SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted a
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
+**In front of them**, before the token is read, the ingest-wide per-IP bucket
+(`RateLimitingFilter`, REQ-INGEST-005; `app.rate-limit.ip-capacity` / `ip-refill-tokens`, 120 a
+minute) covers every `/v1` and `/exchange` request, the anonymous schema reads included. Its
+`429 RATE_LIMITED` carries `Retry-After` but no `RateLimit` headers and no `DPoP-Nonce`, and every
+member and client behind one address shares it, so the per-client 1200 a minute cannot be reached
+from a single address.
+
 **Per instance, not per deployment.** The three in-process buckets — requests per client and member,
 per client, and the ten account checks an hour — and Spring's DPoP `jti` replay cache (REQ-XCH-006)
 are held in each gateway process's memory. A second gateway instance behind the edge would therefore
@@ -1283,8 +1304,20 @@ A missing or unparseable `User-Agent` counts as older, and a pre-release of the 
 ### REQ-XCH-025 — Errors are problem+json with a stable code
 
 Every error is RFC 9457 problem+json with a `code` from the registry in `docs/exchange/errors.md`,
-each with its HTTP status and the client action it requires. Codes are never reused or repurposed;
-the gateway-side codes are the `reason` labels of the exchange metrics.
+each with its HTTP status and the client action it requires. Codes are never reused or repurposed.
+The gateway's gates count their refusals on `basetool_ingest_exchange_refused_total` with the code
+as the `reason` label (`ExchangeRefusals.CODES`); the routes' own answers (`SCHEMA_INVALID`,
+`BATCH_TOO_LARGE`, `PAYLOAD_TOO_LARGE`, `CURSOR_EXPIRED`, `BACKEND_RELAY_FAILED`, a staging store's
+`503`) and those written before the token is read are not counted there. *Corrected 2026-09-28: this
+said every gateway-side code was such a label.*
+
+No answer on an exchange route falls outside the registry. A body that is not a JSON document is
+`400 SCHEMA_INVALID` with one error at the pointer `""` (on the legacy `/v1` routes it stays
+`BAD_REQUEST`); a body of another media type is `415 UNSUPPORTED_MEDIA_TYPE`; the bot filter
+answers an exchange path it blocks with `404 NOT_FOUND`, as the gate answers an unknown route or
+method, and a query parameter without a name with `400 SCHEMA_INVALID` at `/`; an unexpected
+failure is the generic `500 INTERNAL_ERROR`. *Changed 2026-09-28: the first two answered
+`400 BAD_REQUEST` and a `415` without `code`, and the bot filter a bare `405`, `404` or `400`.*
 
 A backend refusal reaches a client with its registry code and a **fixed English detail per code**
 (`ExchangeRelay.DETAILS`); the backend's own `detail` is never relayed. The security review of
@@ -1311,10 +1344,12 @@ reserves the latter, and `Retry-After` is the header. The schema allowed a `corr
 64 characters while the gateway echoes one of up to 128; the schema was widened to 128 on
 2026-09-27 (widening is compatible within v1, REQ-XCH-026).
 
-**Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error
-statuses), `ExchangeRelayTest` (no backend detail reaches a client) · **Status:** registry published
-— WP 0.2 (#2080); the gateway's refusal metrics carry the codes as `reason` labels
-(`ExchangeRefusals`) — WP 3.2 (#2082)
+**Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error statuses,
+and every code the gateway answers on its own is registered), `ExchangeRelayTest` (no backend detail
+reaches a client), `ExchangeChangeRouteTest` and `BotProtectionFilterTest` (the unreadable body, the
+media type and the bot filter's answers on exchange paths) · **Status:** registry published — WP 0.2
+(#2080); the gateway's refusal metrics carry the codes as `reason` labels (`ExchangeRefusals`) — WP
+3.2 (#2082)
 
 ### REQ-XCH-026 — The contract grows additively under `/exchange/v1`
 
