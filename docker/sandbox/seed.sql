@@ -103,7 +103,23 @@ VALUES ('5a4d0000-0000-4000-8000-000000001601', '5a4d0000-0000-4000-8000-0000000
         'BP_CRAFT_SBXM_HELMET_01', '5a4d0000-0000-4000-8000-000000001502', 'Sandbox Helmet', 90,
         false, 1),
        ('5a4d0000-0000-4000-8000-000000001603', '5a4d0000-0000-4000-8000-000000001613',
-        'BP_CRAFT_SBXM_KNIFE_01', NULL, 'Sandbox Knife', 30, true, 0)
+        'BP_CRAFT_SBXM_KNIFE_01', NULL, 'Sandbox Knife', 30, true, 0),
+       ('5a4d0000-0000-4000-8000-000000001631', '5a4d0000-0000-4000-8000-000000001641', NULL, NULL,
+        'S-38 Magazine (20 cap)', 20, true, 0),
+       ('5a4d0000-0000-4000-8000-000000001632', '5a4d0000-0000-4000-8000-000000001642', NULL, NULL,
+        'P4-AR Magazine (40 cap)', 20, true, 0),
+       ('5a4d0000-0000-4000-8000-000000001633', '5a4d0000-0000-4000-8000-000000001643', NULL, NULL,
+        'Field Recon Suit Arms', 60, true, 0),
+       ('5a4d0000-0000-4000-8000-000000001634', '5a4d0000-0000-4000-8000-000000001644', NULL, NULL,
+        'Field Recon Suit Core', 60, true, 0),
+       ('5a4d0000-0000-4000-8000-000000001635', '5a4d0000-0000-4000-8000-000000001645', NULL, NULL,
+        'Field Recon Suit Helmet', 60, true, 0),
+       ('5a4d0000-0000-4000-8000-000000001636', '5a4d0000-0000-4000-8000-000000001646', NULL, NULL,
+        'Field Recon Suit Legs', 60, true, 0),
+       ('5a4d0000-0000-4000-8000-000000001637', '5a4d0000-0000-4000-8000-000000001647', NULL, NULL,
+        'S-38 Pistol', 60, true, 0),
+       ('5a4d0000-0000-4000-8000-000000001638', '5a4d0000-0000-4000-8000-000000001648', NULL, NULL,
+        'P4-AR Rifle', 90, true, 0)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO blueprint_ingredient (id, blueprint_id, order_index, kind, material_id, quantity_scu,

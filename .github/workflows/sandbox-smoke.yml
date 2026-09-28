@@ -44,13 +44,13 @@ jobs:
       - name: Start the sandbox from the public images
         run: bash scripts/sandbox.sh up
 
-      - name: Device login, DPoP, every resource and the conformance fixtures
-        run: python3 scripts/sandbox-smoke.py --conformance
+      - name: Device login, DPoP, every resource, the conformance fixtures and the proof cap
+        run: python3 scripts/sandbox-smoke.py --conformance --proof-limit
 
-      - name: A second member sees only their own data
+      - name: A second member sees only their own data and no org demand
         run: >-
           python3 scripts/sandbox-smoke.py --user sandbox-member-2
-          --password sandbox-member-2-pw-do-not-use-in-prod
+          --password sandbox-member-2-pw-do-not-use-in-prod --demand withheld
 
       - name: Logs of a failed run
         if: ${{ failure() }}

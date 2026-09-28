@@ -3,10 +3,12 @@
 It signs in `sandbox-member` through the device grant of `sandbox-client` exactly as a member would
 in a browser, takes the DPoP-bound token, and then calls the service document, labels the
 installation, reads every resource, resolves a blueprint, a ship type and a material, and syncs one
-blueprint, one stock lot and one ship. The gateway checks every answer against its v1 schema, so a
-passing run also proves the answers keep the contract. With `--conformance` it also sends every
-change-set conformance fixture of `docs/exchange/examples/v1`: each valid one as a dry run, which
-must be accepted, and each invalid one, which must be refused. It signs with the DPoP reference in
+blueprint, one stock lot and one ship, and checks that removing a default blueprint is refused. The
+gateway checks every answer against its v1 schema, so a passing run also proves the answers keep the
+contract. With `--conformance` it also sends every change-set conformance fixture of
+`docs/exchange/examples/v1`: each valid one as a dry run, which must be accepted, and each invalid
+one, which must be refused. With `--proof-limit` it finally sends fresh proofs until the member's
+cap answers `429 DPOP_PROOF_LIMIT`. It signs with the DPoP reference in
 `docs/exchange/dpop-reference`, standard library only.
 """
 
@@ -254,9 +256,12 @@ class Smoke:
             self.step(label, status in (200, 201), f"{status} {json.dumps(answer)[:300]}")
             if path == "/exchange/v1/me/stock":
                 stock = answer
-            if path == "/exchange/v1/me/org-demand":
+            if path == "/exchange/v1/me/org-demand" and self.args.demand == "shown":
                 self.step("the org demand is not withheld", "reason" not in answer,
                           json.dumps(answer)[:300])
+            if path == "/exchange/v1/me/org-demand" and self.args.demand == "withheld":
+                self.step("the org demand is withheld as NOT_PERMITTED",
+                          answer.get("reason") == "NOT_PERMITTED", json.dumps(answer)[:300])
         refs = {}
         for kind, ref in [("BLUEPRINT", {"scRecord": "BP_CRAFT_SBXM_HELMET_01"}),
                           ("SHIP_TYPE", {"name": "Sandbox Miner"}),
@@ -288,9 +293,58 @@ class Smoke:
             taken = answer.get("applied", 0) + answer.get("unchanged", 0)
             applied = status == 200 and taken >= 1 and answer.get("notApplied", 0) == 0
             self.step(label, applied, f"{status} {json.dumps(answer)[:300]}")
+        self.default_blueprint()
         if self.args.conformance:
             self.conformance()
+        if self.args.proof_limit:
+            self.proof_limit()
         print(f"all {self.count} steps passed")
+
+    def default_blueprint(self, limit: float = 120.0) -> None:
+        """Removes a default blueprint as a dry run, which must be refused `DEFAULT_NOT_REMOVABLE`.
+
+        The backend grants the defaults to every member once a minute, so a run right after the
+        start waits while the removal is still answered `unchanged`.
+        """
+        body = {"dryRun": True,
+                "ops": [{"op": "remove", "ref": {"name": "S-38 Pistol"}}]}
+        deadline = time.monotonic() + limit
+        while True:
+            status, answer = self.call("POST", "/exchange/v1/me/blueprints/changes", body,
+                                       write=True)
+            result = (answer.get("results") or [{}])[0]
+            if status != 200 or result.get("result") != "unchanged":
+                break
+            if time.monotonic() >= deadline:
+                break
+            print("waiting for the default blueprints to be granted")
+            time.sleep(10)
+        self.step("a default blueprint cannot be removed",
+                  status == 200 and result.get("result") == "rejected"
+                  and result.get("reason") == "DEFAULT_NOT_REMOVABLE",
+                  f"{status} {json.dumps(answer)[:300]}")
+
+    def proof_limit(self, requests: int = 800) -> None:
+        """Sends one fresh proof per request until the member's cap answers `429 DPOP_PROOF_LIMIT`.
+
+        A proof counts for about 30 s and the member may hold 600, so the requests are sent as
+        fast as one connection at a time allows; the member's client limit refuses most of them
+        `RATE_LIMITED` first, which still counts their proofs.
+        """
+        seen: dict[str, int] = {}
+        started = time.monotonic()
+        for _ in range(requests):
+            status, answer = self.call("GET", "/exchange/v1")
+            key = f"{status} {answer.get('code', '')}".strip()
+            seen[key] = seen.get(key, 0) + 1
+            if answer.get("code") == "DPOP_PROOF_LIMIT":
+                break
+        elapsed = time.monotonic() - started
+        self.step("the member's proof cap answers 429 DPOP_PROOF_LIMIT",
+                  seen.get("429 DPOP_PROOF_LIMIT", 0) == 1,
+                  f"{sum(seen.values())} requests in {elapsed:.1f} s: {json.dumps(seen)}")
+        print(f"proof cap reached after {sum(seen.values())} requests in {elapsed:.1f} s: "
+              f"{json.dumps(seen)}")
 
     def conformance(self) -> None:
         """Sends the change-set fixtures: valid ones as dry runs, invalid ones to be refused."""
@@ -329,6 +383,13 @@ def main() -> int:
     parser.add_argument("--password", default="sandbox-member-pw-do-not-use-in-prod")
     parser.add_argument("--conformance", action="store_true",
                         help="also send the change-set conformance fixtures")
+    parser.add_argument("--demand", choices=("shown", "withheld"), default="shown",
+                        help="what the member's org demand must be: shown for sandbox-member, "
+                             "withheld for sandbox-member-2, whose only squadron takes no part in "
+                             "the profit sharing")
+    parser.add_argument("--proof-limit", action="store_true",
+                        help="finally flood the gateway until the member's proof cap answers "
+                             "429 DPOP_PROOF_LIMIT; the member is refused for about 30 s after")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory() as tmp:
         key_file = pathlib.Path(tmp) / "smoke-dpop.pem"
