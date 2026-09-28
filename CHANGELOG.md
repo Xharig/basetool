@@ -2,16 +2,20 @@
 
 ## [Unreleased]
 
+## [v1.13.0](https://github.com/krt-profit/basetool/releases/tag/v1.13.0) - 2026-09-28
+
 ### Added
 
 - **Datenaustausch: getrennte Verbindungen werden nach 90 Tagen gelöscht.** Ein nächtlicher Job
   löscht getrennte Installationen (samt ihrer Bezeichnung) und die Trennung ganzer Anwendungen 90 Tage
   nach der Trennung, statt sie bis zum Löschen des Kontos aufzubewahren; jeder Lauf mit Löschungen
   steht mit den Anzahlen im Audit „Verbundene Anwendungen" (REQ-XCH-035).
+
 - **Verbundene Anwendungen: Link auf die Liste der zugelassenen Anwendungen.** Die Seite
   *Persönlich → Verbundene Anwendungen* verlinkt die öffentliche Liste
   (`docs/legal/approved-clients.md` auf GitHub), damit Mitglieder prüfen können, welche Anwendungen
   zugelassen sind.
+
 - **Datenaustausch: Zurücknehmen für alle Mitglieder.** Unter *Administration → Verbundene
   Anwendungen* nimmt ein Admin die Änderungen einer Anwendung seit einem Zeitpunkt bei allen
   Mitgliedern zurück (optional nur eine Installation oder ein Bereich); die Anwendung wird vorher
@@ -231,6 +235,7 @@
   registrierten Namen der verbundenen Anwendung statt ihrer Client-ID; ist sie nicht mehr
   registriert, bleibt die ID. Die Blueprint-Antworten (auch die Admin-Ansicht) tragen dafür
   `sourceClientName` (REQ-INV-054, #2231).
+
 - **Datenaustausch: eigener Code für die DPoP-Obergrenze.** Hält ein Mitglied schon 600 lebende
   DPoP-Nachweise, antwortet das Gateway mit `429 DPOP_PROOF_LIMIT` und `Retry-After` statt mit dem
   `401 DPOP_INVALID` eines wiederholten Nachweises (REQ-XCH-006).
@@ -367,6 +372,7 @@
   Installationen eines Mitglieds gleichzeitig Änderungen an denselben Lots in anderer Reihenfolge,
   brach PostgreSQL eine davon mit einem Deadlock ab; das Backend sperrt die Lots jetzt in fester
   Reihenfolge (REQ-XCH-016).
+
 - **Datenaustausch: gleichzeitige Bestandsänderungen desselben Lots wirken nur einmal.** Schickten
   zwei Installationen dieselbe Erhöhung gleichzeitig, wurden beide gebucht (aus 5 → 6 wurde 7), auch
   bei leeren Lots; ein Zurücknehmen konnte eine gleichzeitige Änderung überschreiben. Jetzt sperrt das
@@ -377,6 +383,7 @@
   und zählt nicht mehr gegen das Tageskontingent von 500 Schreibzugriffen. Neue Metrik
   `basetool_ingest_exchange_client_budget_used_ratio` mit Alarm `ExchangeClientBudgetHigh`, der das
   volle Budget einer einzelnen Anwendung meldet (REQ-XCH-023).
+
 - **Monitoring: DPoP-Nonce-Abfrage ist keine Ablehnung mehr.** Der normale Nonce-Roundtrip zählt
   nicht mehr als `dpop_invalid` in `basetool_ingest_exchange_refused_total` (REQ-XCH-028).
 
@@ -404,10 +411,12 @@
   Registry-Dokument in Redis ab, sodass das Gateway jede Austausch-Anfrage mit
   `503 EXCHANGE_DISABLED` ablehnt. Die Backend-Prüfung erkennt das Trennen einer Anwendung jetzt
   auch aus der Datenbank, nicht nur aus dem Redis-Spiegel.
+
 - **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
   auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
   90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede
   Sitzung einer getrennten Installation (ADR-0217, REQ-XCH-008).
+
 - **Datenschutzerklärung: durchgehend „Sie“.** Die Sätze zu Datenkopie und Löschantrag sprachen als
   einzige Stelle mit „du“ an.
 
@@ -419,6 +428,7 @@
   Bedarf nur noch Mitgliedern, die auch im Basetool Aufträge sehen dürfen (`canViewJobOrders`);
   alle anderen erhalten leere Listen mit `reason: NOT_PERMITTED`. Verliert eine Einheit die
   Profit-Berechtigung, verschwindet ihr Bedarf sofort (REQ-XCH-018).
+
 - **Blueprint-Import: der Grund steht in der Fehlermeldung.** Lehnt der Import eine Datei ab (leer,
   zu groß, kein JSON, keine Blueprint-Liste, falsche Formatversion …), zeigt die Seite – auch die
   Admin-Ansicht – den konkreten Grund in der eigenen Sprache statt „Import fehlgeschlagen."
