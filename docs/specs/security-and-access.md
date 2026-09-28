@@ -1328,13 +1328,6 @@ minted when absent) · **Code:** `RedisSessionConfig#sessionRepositoryCustomizer
 
 ### REQ-SEC-027 — Approved client software is a contractual obligation, not only a gate
 
-> [!note] Planned — the terms change at the go-live (epic #2078, WP 6, #2092)
-> Built: the versioned list `docs/legal/approved-clients.md` exists (WP 4.6, #2090, REQ-XCH-002),
-> still without a client. Still to come: at the go-live the clause `terms.list_4_1_5` in all three
-> backend bundles changes once — it links that list and no longer says the operator does not
-> support third-party software for an approved client. Until then the clause below is in force
-> unchanged.
-
 (REQ-SEC-026 — linking a pending Discord registration onto an existing account — is carried by
 [`discord-integration.md`](discord-integration.md); this requirement continues the series at the
 next free number.)
@@ -1357,9 +1350,35 @@ terms amendment. Three properties are load-bearing and must survive any rewordin
 - **Own credentials are no defence.** Section 3(2) prohibits handing credentials to third parties
   and therefore does not reach the actual case: a member running a foreign tool under their *own*
   account. The bullet says so explicitly.
-- **Approval is operator-granted, in text form, and revocable.** Approval by conduct (a tolerated
-  client) or by a third party would hollow out the allowlist that
+- **Approval is operator-granted, in text form — the entry in the public list — and revocable.**
+  Approval by conduct (a tolerated client) or by a third party would hollow out the allowlist that
   [`desktop-ingest.md`](desktop-ingest.md) REQ-INGEST-011 enforces technically.
+- **What needs approval is defined, not excepted.** Client software is every program that reaches
+  the interfaces and is not part of the platform; the web interface and the Android app are part of
+  it. An exception for „the operator's own applications" was drafted and rejected (owner decision
+  2026-09-28, #2092): it would let a program of the operator's reach the interfaces with nothing on
+  the public record, so the SC Extractor is listed like any other client.
+
+**Since the exchange go-live on 2026-09-29 (epic #2078, #2092) the clause says what client software
+is, how approval is given, and what an approved client may do.** `terms.list_4_1_5` defines client
+software as any software that reaches the interfaces and is not part of the platform — the web
+interface and the Android app belong to the platform and need no approval, while the SC Extractor,
+a separate program even though the operator publishes it, is the first entry of the list. It states
+that the operator approves in text form by entering a client with its approved capabilities in the
+public list [`docs/legal/approved-clients.md`](../legal/approved-clients.md), whose GitHub address it
+spells out as plain text (the terms are rendered with `th:text` on the web and as plain text in the
+app, owner decision 2026-09-28). The sentence that the operator does not support third-party
+software is gone, because approving third-party clients contradicts it. A paragraph of its own,
+`terms.p_4_2` with `terms.list_4_2_1`–`_5`, states what a connected application may do: only the
+capabilities approved for it and consented to by the member (REQ-XCH-004/-005), only the member's
+own data and anonymised org data (REQ-XCH-009/-018), disconnect on „Verbundene Anwendungen" from the
+next request (REQ-XCH-008/-032), the 90-day journal and undo with its exceptions and the
+confirmation of mass deletions (REQ-XCH-021/-022), and that the provider answers for the software
+and for the processing on the member's device, with no warranty and no support for third-party
+software implied by the approval. It is a paragraph after the obligation list, not a bullet in it,
+because it describes the software, not the member's duties. The list itself is outside the
+`terms.*` keys, so approving, widening or revoking a client asks no member to consent again
+(REQ-SEC-028, REQ-XCH-002).
 
 The technical gate and the contractual clause are **independent layers with different reach**: the
 gate stops any unapproved client for everyone and is the operative control (REQ-INGEST-011); the
@@ -1374,15 +1393,21 @@ exists.
   the German shape), `MessageBundleConsistencyTest`.*
 - [x] The obligation names interfaces generally, not the ingest path alone. *`terms.list_4_1_5` in
   the three backend bundles: "in particular the ingest interface and the HTTP APIs".*
-- [x] `terms.last_updated` moved when the obligation took effect (2026-08-03); it has moved with
-  every later wording change since. *Checked against the bundles' git history on 2026-09-28; no test
-  gates it.*
+- [x] The clause defines client software as software outside the platform, links the public list of
+  approved clients and no longer says the operator does not support third-party software; section 4
+  states in a paragraph of its own what a connected application may do.
+  *`TermsDocumentStructureTest#sectionFourCarriesTheExchangeTerms` (both languages), and the shape
+  test above.*
+- [x] `terms.last_updated` moved when the obligation took effect (2026-08-03) and at the exchange
+  go-live (2026-09-29); it has moved with every wording change in between. *Checked against the
+  bundles' git history on 2026-09-28; no test gates it.*
 
 **Enforced by:** `TermsDocumentStructureTest` (every `terms.*` clause is reachable by the numbering
 walk of `TermsDocumentService` and every translation has the German shape — a renumbered section
 cannot silently drop a bullet; it replaced the frontend's `TermsTemplateBundleParityTest` when the
 wording moved server-side, ADR-0138), `MessageBundleConsistencyTest` (DE/EN key parity, so the clause
-cannot exist in one locale only) · **Text:** `terms.list_4_1_5` in the **backend's**
+cannot exist in one locale only) · **Text:** `terms.list_4_1_5`, `terms.p_4_2` and
+`terms.list_4_2_1`–`_5` in the **backend's**
 `messages_de.properties` / `messages.properties` / `messages_en.properties`, served by `GET
 /api/v1/terms/document` (REQ-SEC-028) and rendered by the frontend's `templates/terms.html` via
 `fragments/terms-body.html` · **Technical counterpart:** REQ-INGEST-011
@@ -1390,16 +1415,19 @@ cannot exist in one locale only) · **Text:** `terms.list_4_1_5` in the **backen
 
 ### REQ-SEC-028 — Terms-of-Use consent is recorded, versioned and enforced
 
-> [!note] Planned — the consent round at the go-live (epic #2078, WP 6, #2092)
-> The clause change of REQ-SEC-027 moves the terms hash (`generateTermsVersion` over the German
-> bundle's `terms.*` keys) once, re-prompts every member and pauses every extractor until the member
-> has accepted. The approved-client list sits outside those keys, so later list changes need no
-> consent (REQ-XCH-002).
+> [!note] The go-live consent round — 2026-09-29 (epic #2078, #2092)
+> The wording change of REQ-SEC-027 (section 4) and of section 12 moves the version from
+> `df1f9b31581b0d0d` to `1430e61126f269f4` (`generateTermsVersion` over the German bundle's
+> `terms.*` keys) once: every member re-consents, and every SC Extractor and connected application is
+> refused `TERMS_NOT_ACCEPTED` until its member has. The approved-client list sits outside those
+> keys, so later list changes need no consent (REQ-XCH-002).
 
 Using the platform requires **recorded consent** to the Terms-of-Use wording currently in force.
 Before this, the terms took effect merely on access (section intro) and section 12 treated
 continued use as acceptance — which leaves no evidence of who agreed to which wording, the thing
-actually needed when a clause is enforced against someone (REQ-SEC-027).
+actually needed when a clause is enforced against someone (REQ-SEC-027). Since 2026-09-29 section 12
+states the model the platform enforces: amended terms apply to a member only once they have agreed,
+and until then the platform cannot be used (`terms.p_12_2`, owner decision 2026-09-28).
 
 **The version is derived from the wording, never declared.** The root Gradle task
 `generateTermsVersion` hashes every `terms.*` entry of the **backend's** German bundle into the
@@ -1580,6 +1608,8 @@ from this response blanks a legal document on a build nobody can redeploy.
 - [x] A wording change re-prompts every user, without anyone editing a version number.
   *`TermsVersionParityTest` (the committed version is the hash of the wording),
   `TermsAcceptanceQueryDataTest#existsIsScopedToTheExactVersion`.*
+- [x] The terms themselves say that amended terms need recorded consent, not that continued use
+  counts as it. *`TermsDocumentStructureTest#amendedTermsNeedRecordedConsent` (both languages).*
 - [x] Consent history survives re-consent; a double submit adds no second row.
   *`TermsAcceptanceQueryDataTest#historyKeepsEveryAcceptedVersionNewestFirst`,
   `TermsAcceptanceServiceTest#repeatedConsentIsANoOp`,

@@ -85,10 +85,12 @@ need no new consent (REQ-SEC-028).
 
 **Acceptance**
 
-- [ ] `docs/legal/approved-clients.md` exists, is linked from the terms clause (REQ-SEC-027) and
+- [x] `docs/legal/approved-clients.md` exists, is linked from the terms clause (REQ-SEC-027) and
   lists client id, product, maintainer contact, capabilities and the approval issue and PR.
-  *The list exists with these columns and no client yet; the terms clause links it at the go-live
-  (WP 6). It records the approved capabilities, not the registry's runtime state.*
+  *The terms clause links it since the go-live (2026-09-29, #2092), and its first entry is the SC
+  Extractor, `basetool-sc-extractor`, from 2.10.0 with `connect`, `drafts.*` and `blueprints.*`
+  (owner decision 2026-09-28: the web interface and the Android app are part of the platform, every
+  other program is listed). It records the approved capabilities, not the registry's runtime state.*
 - [x] `docs/exchange/onboarding.md` states the criteria, the issue template and the fix deadline.
   *The template is `.github/ISSUE_TEMPLATE/exchange-client-application.yml`.*
 - [ ] The privacy notice (the frontend's `privacy.*` keys, DE and EN) states which data flows to an

@@ -202,6 +202,12 @@
 
 ### Changed
 
+- **Nutzungsbedingungen: neue Fassung vom 29.09.2026.** Abschnitt 4 verweist auf die öffentliche Liste
+  zugelassener Anwendungen (erster Eintrag: der SC Extractor ab 2.10.0) und regelt, was eine verbundene
+  Anwendung darf; Abschnitt 12 verlangt für geänderte Bedingungen eine Zustimmung statt „fortgesetzter
+  Nutzung“. Jedes Mitglied stimmt einmal neu zu; bis dahin pausieren SC Extractor und verbundene
+  Anwendungen.
+
 - **Sandbox: aktuelle Images für amd64 und arm64.** `edge` wird nach jeder Änderung auf `main`
   neu gebaut, die den Inhalt der Images betrifft, für `linux/amd64` und `linux/arm64`; jedes Image
   trägt seinen Commit (`org.opencontainers.image.revision`). In der Sandbox sind
