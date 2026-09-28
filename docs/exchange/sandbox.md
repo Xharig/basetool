@@ -478,10 +478,6 @@ agreed.
    frontend, reviews the batch and confirms it.
 5. Your next pull shows the six ships removed.
 
-The sandbox's `confirmationUrl` and a draft's `frontendUrl` currently start with
-`http://localhost:18081`, where the web frontend serves only HTTPS; change the scheme to `https`
-when you open them. That is a defect of the sandbox, not the contract.
-
 ### Disconnecting
 
 **One installation.** On *Connected applications*, disconnect one installation of the client. Its
