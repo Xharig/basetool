@@ -322,4 +322,54 @@ class ActingMemberFilterChainTest {
 
     assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID)).isEqualTo(before + 2);
   }
+
+  /** An exchange call with a valid client must also name a well-formed installation key. */
+  @Test
+  void refusesAnExchangeCallWithoutAValidInstallationKey() throws Exception {
+    double before = refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID);
+
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value(ActingMemberFilter.CODE_ACTING_MEMBER_REFUSED));
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit")
+                .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "not a thumbprint"))
+        .andExpect(status().isForbidden());
+
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID))
+        .isEqualTo(before + 2);
+  }
+
+  /** With both relay headers malformed the client is checked, and counted, first. */
+  @Test
+  void countsAnInvalidClientBeforeAnInvalidInstallationKey() throws Exception {
+    double clientBefore = refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID);
+    double installationBefore = refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID);
+
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "Verse Kit")
+                .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "not a thumbprint"))
+        .andExpect(status().isForbidden());
+
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID))
+        .isEqualTo(clientBefore + 1);
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID))
+        .isEqualTo(installationBefore);
+  }
 }

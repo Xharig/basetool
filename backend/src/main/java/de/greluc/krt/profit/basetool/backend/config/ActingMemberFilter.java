@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -194,20 +195,9 @@ public class ActingMemberFilter extends OncePerRequestFilter {
           MetricNames.ON_BEHALF_OF_NOT_A_GATEWAY);
       return;
     }
-    if (exchangeClient == null || !EXCHANGE_CLIENT_ID.matcher(exchangeClient).matches()) {
-      refuse(
-          request,
-          response,
-          "exchange request without a valid client",
-          MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID);
-      return;
-    }
-    if (installationKey == null || !KEY_THUMBPRINT.matcher(installationKey).matches()) {
-      refuse(
-          request,
-          response,
-          "exchange request without a valid installation key",
-          MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID);
+    RelayRefusal relayRefusal = relayRefusal(exchangeClient, installationKey);
+    if (relayRefusal != null) {
+      refuse(request, response, relayRefusal.getDetail(), relayRefusal.getMetricReason());
       return;
     }
 
@@ -243,6 +233,25 @@ public class ActingMemberFilter extends OncePerRequestFilter {
     } finally {
       SecurityContextHolder.setContext(original);
     }
+  }
+
+  /**
+   * Checks the relay headers every exchange call must carry, in the order the refusals are counted:
+   * a well-formed client first, then a well-formed installation key.
+   *
+   * @param exchangeClient the {@code X-Exchange-Client} value, or {@code null}
+   * @param installationKey the {@code X-Exchange-Installation} value, or {@code null}
+   * @return the first refusal, or {@code null} when both headers are well-formed
+   */
+  private static @Nullable RelayRefusal relayRefusal(
+      @Nullable String exchangeClient, @Nullable String installationKey) {
+    if (exchangeClient == null || !EXCHANGE_CLIENT_ID.matcher(exchangeClient).matches()) {
+      return RelayRefusal.CLIENT_INVALID;
+    }
+    if (installationKey == null || !KEY_THUMBPRINT.matcher(installationKey).matches()) {
+      return RelayRefusal.INSTALLATION_INVALID;
+    }
+    return null;
   }
 
   /**
@@ -375,6 +384,30 @@ public class ActingMemberFilter extends OncePerRequestFilter {
             CODE_ACTING_MEMBER_REFUSED,
             correlationId);
     response.getOutputStream().write(objectMapper.writeValueAsBytes(problem));
+  }
+
+  /**
+   * A refusal of a malformed exchange relay header: the developer-facing detail and the bounded
+   * metric reason.
+   */
+  @Getter
+  @RequiredArgsConstructor
+  private enum RelayRefusal {
+    /** The client header is missing or not a registry client id. */
+    CLIENT_INVALID(
+        "exchange request without a valid client",
+        MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID),
+
+    /** The installation header is missing or not a DPoP key thumbprint. */
+    INSTALLATION_INVALID(
+        "exchange request without a valid installation key",
+        MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID);
+
+    /** The developer-facing reason, free of caller-supplied text. */
+    private final String detail;
+
+    /** The bounded {@code MetricNames.ON_BEHALF_OF_*} reason. */
+    private final String metricReason;
   }
 
   /**
