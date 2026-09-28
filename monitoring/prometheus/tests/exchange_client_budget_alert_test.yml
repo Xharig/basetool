@@ -1,0 +1,48 @@
+rule_files:
+  - ../alerts/business.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - one client's budget stays above 80 % while the total is low
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_client_budget_used_ratio{application="basetool-ingest", client_id="versekit"}'
+        values: "0.85x30"
+      - series: 'basetool_ingest_exchange_client_budget_used_ratio{application="basetool-ingest", client_id="other"}'
+        values: "0.10x30"
+      - series: 'basetool_ingest_exchange_budget_used_ratio{application="basetool-ingest"}'
+        values: "0.24x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeClientBudgetHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              client_id: versekit
+            exp_annotations:
+              summary: "Exchange client versekit uses more than 80 % of its Redis budget"
+              description: "The exchange data the ingest gateway keeps in Redis for client versekit (cached answers, quota counters, staged drafts) uses more than 80 % of the client's 16 MiB budget. When it is full every write of every member of that client is refused 503 EXCHANGE_BUDGET_EXHAUSTED, long before ExchangeBudgetHigh can fire, because one client's budget is a quarter of the total (REQ-XCH-023). The budget frees only as the cached answers expire, up to 24 hours. Check on the Exchange dashboard whether the client pushes its whole list every sync or keeps re-sending conflicting change sets, and contact its author; members of other clients are not affected."
+      - eval_time: 20m
+        alertname: ExchangeBudgetHigh
+        exp_alerts: []
+
+  - name: silent - a client below 80 %
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_client_budget_used_ratio{application="basetool-ingest", client_id="versekit"}'
+        values: "0.79x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeClientBudgetHigh
+        exp_alerts: []
+
+  - name: silent - a burst shorter than ten minutes
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_exchange_client_budget_used_ratio{application="basetool-ingest", client_id="versekit"}'
+        values: "0.5x5 0.95x5 0.5x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExchangeClientBudgetHigh
+        exp_alerts: []

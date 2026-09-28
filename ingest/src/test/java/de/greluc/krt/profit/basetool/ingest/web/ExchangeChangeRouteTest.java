@@ -102,6 +102,8 @@ class ExchangeChangeRouteTest {
 
   @BeforeEach
   void setUp() throws Exception {
+    when(quotas.countWrite(anyString(), anyString()))
+        .thenReturn(new ExchangeQuotas.Counted("ingest:xch:quota:test", 1L));
     mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
     key = ExchangeTestSupport.newKey();
     member = UUID.randomUUID().toString();
@@ -198,6 +200,16 @@ class ExchangeChangeRouteTest {
         .andExpect(jsonPath("$.code").value("RELAY_BUSY"));
 
     verify(idempotency, never()).store(anyString(), any());
+    verify(quotas).refundCounted(any());
+  }
+
+  @Test
+  void aRelayedChangeSetKeepsItsQuotaCount() throws Exception {
+    when(relay.forwardLarge(any(), anyString(), any(), any(), any())).thenReturn(ok(RESULT));
+
+    post("/exchange/v1/me/blueprints/changes", removals(101)).andExpect(status().isOk());
+
+    verify(quotas, never()).refundCounted(any());
   }
 
   @Test
@@ -338,14 +350,16 @@ class ExchangeChangeRouteTest {
         .thenReturn(new ExchangeRelay.Result(409, null, "MASS_CHANGE_CONFIRMATION_REQUIRED", ""));
     when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any()))
         .thenReturn(true, false);
+    when(budget.retryAfterSeconds(anyString(), anyString(), anyLong())).thenReturn(777L);
 
     post("/exchange/v1/me/blueprints/changes", ADD)
         .andExpect(status().isServiceUnavailable())
-        .andExpect(header().exists("Retry-After"))
+        .andExpect(header().string("Retry-After", "777"))
         .andExpect(jsonPath("$.code").value("EXCHANGE_BUDGET_EXHAUSTED"));
 
     verify(stagingService, never())
         .stageMassChange(anyString(), anyString(), anyString(), anyLong());
+    verify(quotas).refundCounted(any());
   }
 
   @Test

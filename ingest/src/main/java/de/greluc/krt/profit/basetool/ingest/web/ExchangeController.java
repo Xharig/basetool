@@ -24,6 +24,7 @@ import de.greluc.krt.profit.basetool.ingest.config.ExchangeStoreProperties;
 import de.greluc.krt.profit.basetool.ingest.config.IngestProperties;
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeBudget;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeQuotas;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRefusals;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRelay;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeRequestContext;
@@ -125,8 +126,12 @@ public class ExchangeController {
   /** The violation message of an envelope of another major version. */
   static final String UNSUPPORTED_MAJOR = "unsupported major version";
 
-  /** Seconds a client waits after the budget or the staging store refused. */
-  private static final String RETRY_AFTER_SECONDS = "60";
+  /** Seconds a client waits after the staging store failed. */
+  private static final long RETRY_AFTER_SECONDS = 60;
+
+  /** The detail of a staging the byte budget refused. */
+  private static final String BUDGET_EXHAUSTED_DETAIL =
+      "The exchange's storage budget is full; try again later.";
 
   private static final String BACKEND = "/api/v1/exchange";
 
@@ -141,6 +146,7 @@ public class ExchangeController {
   private final LoggingProperties loggingProperties;
   private final HandoffStagingService stagingService;
   private final ExchangeBudget budget;
+  private final ExchangeQuotas quotas;
   private final ExchangeStoreProperties storeProperties;
   private final IngestProperties ingestProperties;
   private final MeterRegistry meterRegistry;
@@ -556,14 +562,14 @@ public class ExchangeController {
                       json,
                       storeProperties.maxDraftsPerClientMember()));
       if (staged == null) {
-        return unavailable(
-            ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
-            "The exchange's storage budget is full; try again later.");
+        return budgetExhausted(context, request, bytes);
       }
     } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A draft could not be staged: {}", e.getClass().getSimpleName());
       return unavailable(
-          ExchangeRefusals.SERVICE_UNAVAILABLE, "The draft cannot be staged; try again later.");
+          ExchangeRefusals.SERVICE_UNAVAILABLE,
+          "The draft cannot be staged; try again later.",
+          RETRY_AFTER_SECONDS);
     }
     meterRegistry
         .counter(MetricNames.INGEST_HANDOFF, MetricNames.TAG_KIND, kind.name())
@@ -579,8 +585,9 @@ public class ExchangeController {
 
   /**
    * Checks a change set, relays it and checks the answer; a change set of more than {@value
-   * #LARGE_CHANGE_SET_OPS} ops is relayed within the large-set bulkhead, and one the backend's
-   * mass-change guard held back is staged for the member's confirmation.
+   * #LARGE_CHANGE_SET_OPS} ops is relayed within the large-set bulkhead, whose {@code RELAY_BUSY}
+   * refusal gives the write's quota count back, and one the backend's mass-change guard held back
+   * is staged for the member's confirmation.
    *
    * @param resource the resource's path segment
    * @param definition the change set's schema definition
@@ -620,8 +627,11 @@ public class ExchangeController {
         body.get("ops") instanceof ArrayNode ops && ops.size() > LARGE_CHANGE_SET_OPS
             ? relay.forwardLarge(HttpMethod.POST, target, body, context, acceptLanguage)
             : relay.forward(HttpMethod.POST, target, body, context, acceptLanguage);
+    if (ExchangeRefusals.RELAY_BUSY.equals(result.code())) {
+      quotas.refundCounted(request);
+    }
     if (!result.isOk() && MASS_CHANGE_CONFIRMATION_REQUIRED.equals(result.code())) {
-      return staged(context, resource, body, result);
+      return staged(context, request, resource, body, result);
     }
     return relayed(result, "change-result.schema.json", unknown);
   }
@@ -631,6 +641,7 @@ public class ExchangeController {
    * answers where the member confirms it.
    *
    * @param context the admitted request
+   * @param request the write, whose quota count a budget refusal gives back
    * @param resource the resource's path segment
    * @param body the change set
    * @param result the backend's refusal
@@ -639,6 +650,7 @@ public class ExchangeController {
    */
   private @NotNull ResponseEntity<?> staged(
       @NotNull ExchangeRequestContext context,
+      @NotNull HttpServletRequest request,
       @NotNull String resource,
       @NotNull JsonNode body,
       @NotNull ExchangeRelay.Result result) {
@@ -670,15 +682,14 @@ public class ExchangeController {
                       json,
                       storeProperties.maxMassChangeBytes()));
       if (staged == null) {
-        return unavailable(
-            ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
-            "The exchange's storage budget is full; try again later.");
+        return budgetExhausted(context, request, bytes);
       }
     } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A mass change could not be staged: {}", e.getClass().getSimpleName());
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE,
-          "The confirmation cannot be prepared; try again later.");
+          "The confirmation cannot be prepared; try again later.",
+          RETRY_AFTER_SECONDS);
     }
     meterRegistry
         .counter(
@@ -739,13 +750,33 @@ public class ExchangeController {
   }
 
   /**
+   * Answers a staging the byte budget refused: gives the write's quota count back and tells the
+   * client to retry once enough of the budget has expired to hold the staged bytes.
+   *
+   * @param context the admitted request
+   * @param request the write
+   * @param bytes the size the handoff would have been staged with
+   * @return {@code 503 EXCHANGE_BUDGET_EXHAUSTED} with {@code Retry-After}
+   */
+  private @NotNull ResponseEntity<?> budgetExhausted(
+      @NotNull ExchangeRequestContext context, @NotNull HttpServletRequest request, long bytes) {
+    quotas.refundCounted(request);
+    return unavailable(
+        ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
+        BUDGET_EXHAUSTED_DETAIL,
+        budget.retryAfterSeconds(context.clientId(), context.member(), bytes));
+  }
+
+  /**
    * Answers that a store the exchange needs is full or unreachable.
    *
    * @param code the code
    * @param detail the detail
+   * @param retryAfterSeconds the {@code Retry-After}
    * @return {@code 503} with {@code Retry-After}
    */
-  private @NotNull ResponseEntity<?> unavailable(@NotNull String code, @NotNull String detail) {
+  private @NotNull ResponseEntity<?> unavailable(
+      @NotNull String code, @NotNull String detail, long retryAfterSeconds) {
     ProblemDetail problem =
         Problems.of(
             loggingProperties,
@@ -754,7 +785,7 @@ public class ExchangeController {
             code,
             detail);
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-        .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS)
+        .header(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSeconds))
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)
         .body(problem);
   }

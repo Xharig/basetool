@@ -195,9 +195,10 @@ public class SecurityProblemResponseHandler
   /**
    * Answers an unauthenticated exchange request with the DPoP challenge and the current nonce
    * (REQ-XCH-006): a bearer token, a DPoP-scheme request without a proof and a token without a key
-   * binding are {@code DPOP_REQUIRED}, a missing nonce gets the nonce to retry with, a proof of a
-   * member at its proof cap is {@code 429 DPOP_PROOF_LIMIT} and a proof refused by a full replay
-   * store {@code 503 SERVICE_UNAVAILABLE}, both with {@code Retry-After}, a bad proof is {@code
+   * binding are {@code DPOP_REQUIRED}, a missing nonce gets the nonce to retry with and, as the
+   * protocol's normal first round trip, is not counted as an exchange refusal, a proof of a member
+   * at its proof cap is {@code 429 DPOP_PROOF_LIMIT} and a proof refused by a full replay store
+   * {@code 503 SERVICE_UNAVAILABLE}, both with {@code Retry-After}, a bad proof is {@code
    * DPOP_INVALID}, anything else {@code UNAUTHENTICATED}.
    *
    * @param request the request
@@ -227,8 +228,13 @@ public class SecurityProblemResponseHandler
       response.setHeader(
           HttpHeaders.WWW_AUTHENTICATE,
           ExchangeChallenge.header(ExchangeDpopProofValidation.USE_DPOP_NONCE));
-      code = ExchangeRefusals.DPOP_INVALID;
-      detail = "Retry with the server nonce from the DPoP-Nonce header.";
+      write(
+          response,
+          HttpStatus.UNAUTHORIZED,
+          "Unauthenticated",
+          ExchangeRefusals.DPOP_INVALID,
+          "Retry with the server nonce from the DPoP-Nonce header.");
+      return;
     } else if (MetricNames.AUTH_DPOP_PROOF_LIMIT.equals(reason)) {
       Long retryAfter = proofLimitRetryAfter(authException);
       response.setHeader(

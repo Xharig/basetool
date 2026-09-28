@@ -358,6 +358,14 @@
 
 ### Fixed
 
+- **Datenaustausch: volles Speicherbudget ehrlich melden.** `503 EXCHANGE_BUDGET_EXHAUSTED` nennt im
+  `Retry-After` die Sekunden, bis genug Budget abläuft (höchstens eine Stunde), statt pauschal 60,
+  und zählt nicht mehr gegen das Tageskontingent von 500 Schreibzugriffen. Neue Metrik
+  `basetool_ingest_exchange_client_budget_used_ratio` mit Alarm `ExchangeClientBudgetHigh`, der das
+  volle Budget einer einzelnen Anwendung meldet (REQ-XCH-023).
+- **Monitoring: DPoP-Nonce-Abfrage ist keine Ablehnung mehr.** Der normale Nonce-Roundtrip zählt
+  nicht mehr als `dpop_invalid` in `basetool_ingest_exchange_refused_total` (REQ-XCH-028).
+
 - **Datenaustausch: große Änderungspakete legen den Extractor-Import nicht mehr lahm.** Das Gateway
   leitet Datenaustausch-Anfragen über einen eigenen Circuit Breaker, eigene Verbindungen und 30 s
   statt 15 s Timeout weiter und höchstens vier Pakete mit mehr als 100 Operationen gleichzeitig;

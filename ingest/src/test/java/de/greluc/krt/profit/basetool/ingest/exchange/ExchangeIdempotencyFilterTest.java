@@ -93,6 +93,8 @@ class ExchangeIdempotencyFilterTest {
 
   @BeforeEach
   void setUp() throws Exception {
+    when(quotas.countWrite(anyString(), anyString()))
+        .thenReturn(new ExchangeQuotas.Counted("ingest:xch:quota:test", 1L));
     mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
     key = ExchangeTestSupport.newKey();
     member = UUID.randomUUID().toString();
@@ -261,11 +263,13 @@ class ExchangeIdempotencyFilterTest {
   @Test
   void aFullBudgetRefusesBeforeTheWrite() throws Exception {
     when(budget.reserve(anyString(), anyString(), anyString(), anyLong(), any())).thenReturn(false);
+    when(budget.retryAfterSeconds(anyString(), anyString(), anyLong())).thenReturn(1234L);
 
     write(KEY, null)
         .andExpect(status().isServiceUnavailable())
-        .andExpect(header().exists(HttpHeaders.RETRY_AFTER))
+        .andExpect(header().string(HttpHeaders.RETRY_AFTER, "1234"))
         .andExpect(jsonPath("$.code").value("EXCHANGE_BUDGET_EXHAUSTED"));
+    verify(quotas).refundCounted(any());
     verify(idempotency, never()).store(anyString(), any());
     verify(budget, never())
         .settle(anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any());
