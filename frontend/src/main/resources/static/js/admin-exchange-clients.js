@@ -664,6 +664,12 @@ const EXCHANGE_CLIENTS_SECTIONS = {
                         broadcastUndoStart();
                         return Promise.all([refreshRegistry(), refreshRuns()]);
                     },
+                    onError() {
+                        broadcastUndoStart();
+                        refreshRegistry();
+                        refreshRuns();
+                        return false;
+                    },
                 });
             };
             if (typeof window.showKrtConfirm !== 'function') {

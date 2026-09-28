@@ -126,7 +126,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: "An admin's bulk undo of an exchange client failed"
-              description: "A bulk undo under Administration - Verbundene Anwendungen ended FAILED: at least one member could not be processed, or the run broke off. The members it did process are undone; the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed - it only touches what is not undone yet (REQ-XCH-034)."
+              description: "A bulk undo under Administration - Verbundene Anwendungen ended FAILED: at least one member could not be processed, the run broke off, or the queue of ten runs was full and refused it (the client then stays suspended). The members it did process are undone; the others still carry the client's changes. Open the run's details on the admin page for the members marked as failed, check the backend log for the run id, and start the undo again once the cause is fixed - it only touches what is not undone yet (REQ-XCH-034)."
 
   - name: silent - bulk undo runs that completed
     interval: 1m

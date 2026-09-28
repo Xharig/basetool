@@ -338,6 +338,11 @@
 
 ### Fixed
 
+- **Datenaustausch: abgewiesenes Zurücknehmen blockiert nichts mehr.** Ist die Warteschlange für
+  das Zurücknehmen bei allen Mitgliedern voll (zehn Läufe), wird der neue Lauf sofort als
+  fehlgeschlagen vermerkt und der Admin bekommt eine Meldung; bisher blieb er bis zum nächsten
+  Neustart „laufend“ und sperrte jeden weiteren Lauf der Anwendung. Die Anwendung bleibt gesperrt.
+
 - **Datenaustausch: abgeschaltete Registry-Spiegelung lässt keine Anwendung mehr durch.** Startet
   das Backend mit `APP_EXCHANGE_MIRROR_ENABLED=false`, schaltet es ein zurückgebliebenes
   Registry-Dokument in Redis ab, sodass das Gateway jede Austausch-Anfrage mit

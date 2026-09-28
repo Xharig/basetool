@@ -1743,6 +1743,8 @@ it changed, and is audited and instrumented. Re-activating the client stays a se
   `exchange_write_alerts_test.yml`.*
 - [x] One run per client at a time (`409`); a run a restart cut short is marked `FAILED` at the next
   start. *`ExchangeBulkUndoControllerTest`.*
+- [x] A run the executor refuses is ended `FAILED` at once and counted as a failed run, the start
+  answers `409`, and the client stays suspended. *`ExchangeBulkUndoRejectionTest`.*
 - [x] Each member whose data the run changed gets one notification per run; the admin page lists the
   runs, refreshes while one runs and shows a run's skipped entries.
   *`ExchangeBulkUndoControllerTest`, `AdminExchangeClientsPageControllerMvcTest`.*
@@ -1772,7 +1774,14 @@ the run with one atomic update, and publishes `EXCHANGE_BULK_UNDO_APPLIED` when 
 A member whose undo throws is rolled back alone and recorded as `FAILED`. At the end the run is
 `COMPLETED`, or `FAILED` when a member failed, and `EXCHANGE_BULK_UNDO_FINISHED` records the status
 and the totals. A run left `RUNNING` by a restart is marked `FAILED` (`interrupted=true`) at the next
-start; the admin starts it again, which touches only what is not undone yet.
+start; the admin starts it again, which touches only what is not undone yet. A run the executor
+refuses because its queue of ten is full is ended `FAILED` at once (`EXCHANGE_BULK_UNDO_FINISHED`,
+`interrupted=false`), counted as a failed `exchange_bulk_undo` run (`ExchangeBulkUndoFailed`) and
+answered `409` with a localized detail; the client stays suspended until an admin activates it, and
+the page reloads the registry and the run list in place. There is no admin notification for bulk
+undo runs, so the answer and the alert are the signal (owner decision 2026-09-28; security review
+G5, I2 — until then such a run stayed `RUNNING` and blocked every new run of the client until a
+restart).
 
 **Notification.** The rule-engine event `EXCHANGE_BULK_UNDO_APPLIED` (seed `V257`, selector
 `EVENT_RECIPIENT`) tells each member once per run how many entries the administration took back and
