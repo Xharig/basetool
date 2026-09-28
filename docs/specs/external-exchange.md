@@ -332,6 +332,10 @@ accepted. The provisioner applies this on production only **after** the legacy s
   `user_code` as a member does, and asserts `#krt-device-phishing-warning` on the code page and
   `#krt-device-consent-warning` with exactly that code in `#krt-device-user-code` on the consent
   page, on every exchange E2E connection (G5-I5 of #2092).
+- [x] The consent page's intro claims only what the page lists („Die Anwendung erhält nur die unten
+  aufgeführten Rechte."), never that the application does not learn name, e-mail or roles, which
+  the template cannot know for every client (owner decision 2026-09-28, G5-L1 of #2092, ADR-0228
+  amendment 1).
 - [x] The client documentation tells clients to show the bare `verification_uri` with the
   `user_code` and never `verification_uri_complete` (`docs/exchange/authentication.md`,
   `client-security.md`, `quickstart.md`, the application template).

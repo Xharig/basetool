@@ -305,6 +305,11 @@
   statt nur gemeldet. Ein von Hand ergänzter Audience-Mapper kann so kein Token für die Backend-API
   mehr liefern; an allen anderen Clients bleibt es beim Melden.
 
+- **Keycloak: Zustimmungsseite verspricht nichts mehr, was sie nicht weiß.** Statt „Deinen Namen,
+  deine E-Mail-Adresse und deine Rollen erfährt sie nicht" steht dort jetzt „Die Anwendung erhält nur
+  die unten aufgeführten Rechte." Der alte Satz stimmte nicht für jede Anwendung, etwa für den SC
+  Extractor vor seiner Umstellung.
+
 - **Datenaustausch: Lager-Änderungen wie im Web.** Ein Umbuchen auf „gestohlen“ oder zurück markiert
   die Zeilen wie im Lager (Teilmengen werden abgespalten) statt aus- und neu einzubuchen;
   Stück-Einbuchungen werden mit der vorhandenen Zeile zusammengeführt. Als Verschiebung zählt ein
