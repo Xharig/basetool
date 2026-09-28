@@ -300,7 +300,7 @@ accepted. The provisioner applies this on production only **after** the legacy s
   the consent page on every login, also when consent exists; access and refresh tokens carry
   `cnf.jkt`, and a refresh without a DPoP proof is refused.
 
-**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1; the consent page's warning and user code — built (#2092, M1, ADR-0228)
+**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — provisioner and extractor built (#2201, basetool-sc-extractor #69–#71), production apply with WP 6 (#2092); the consent page's warning and user code — built (#2092, M1, ADR-0228)
 
 ### REQ-XCH-006 — DPoP is required on every exchange route
 
@@ -403,14 +403,21 @@ labels are letters and are accepted: the label is always shown after the registe
 - [x] Label validation tests, including control, bidi and homoglyph-only input
   (`ExchangeInstallationControllerTest`).
 - [x] Log-capture test: the label never appears in any log line (`ExchangeInstallationControllerTest`).
-- [ ] The installation response and the service document carry the same `installationId`, and a
+- [x] The installation response and the service document carry the same `installationId`, and a
   tombstone written by that installation names it. *The gateway half is in: `POST
   /exchange/v1/me/installation` checks the label against `installation.schema.json` before the relay
   (a rule-breaking label never reaches the backend), and the service document takes
   `installationId` from the backend's installation of the relayed key (`ExchangeControllerTest`).*
+  *The backend keeps the id across first sight and labelling
+  (`ExchangeInstallationControllerTest.theInstallationIsCreatedOnFirstSightAndKeepsItsIdWhenLabelled`),
+  the service document names it
+  (`ExchangeControllerTest.theServiceDocumentNamesTheGrantsLimitsAndInstallation`), and a tombstone's
+  `removedBy.installationId` is the removing installation's id
+  (`ExchangeBlueprintControllerTest.theFeedAnswersAnAdditionAndATombstoneNamingTheRemovingInstallation`).
+  Ticked 2026-09-28.*
 
-**Status:** gateway routes built — WP 3.2 (#2082); the backend's installations with WP 3.1 (#2083),
-tombstones with WP 3.3
+**Status:** built — gateway routes WP 3.2 (#2082), the backend's installations WP 3.1 (#2083),
+tombstones WP 3.3 (#2083)
 
 ### REQ-XCH-008 — Revocation takes effect on the next request
 
@@ -892,7 +899,10 @@ REQ-INGEST-004 requires today; nothing is written until the member confirms.
 
 **Acceptance**
 
-- [ ] The SC Extractor's draft flows pass unchanged through the exchange routes.
+- [ ] The SC Extractor's draft flows pass unchanged through the exchange routes. *As of 2026-09-28
+  both sides are merged — the server routes (#2175) and the extractor's exchange client
+  (basetool-sc-extractor #69–#71); the box closes with the extractor's 2.10.0 release at the go-live
+  (#2088, #2092).*
 - [x] A draft is checked against its schema, relayed, staged and answered with its handoff; a
   refused one stages nothing. *`ExchangeDraftRouteTest`.*
 - [x] A client's drafts evict only its own oldest drafts for that member, never the extractor's
@@ -999,7 +1009,16 @@ within one batch is not a removal. Only the member's browser session can confirm
 
 **Acceptance**
 
-- [ ] One test per counting rule, including repeated 89 % cuts and a move.
+- [x] One test per counting rule, including repeated 89 % cuts and a move. *The thresholds
+  (`ExchangeMassChangeGuardTest.theWindowTripsAbove25OrAboveAFifthWithAtLeastFive`), the 24 h window
+  (`…theWindowIsTheLast24HoursOfTheClientsRemovals`), `remove`
+  (`ExchangeBlueprintWriteControllerTest.aBatchThatRemovesTooMuchIsHeldBackWholly`), a quantity set to 0
+  and the exempt move (`ExchangeStockWriteControllerTest.emptyingEveryLotIsHeldBackButAMoveIsNot`),
+  repeated cuts — 100 → 50 → 11 passes, → 10 trips
+  (`…repeatedCutsCountOnlyOnceTheyReachNinetyPercentOfTheWindowStart`) — and a ship's name-and-type
+  change (`ExchangeShipWriteControllerTest.anUpdateThatChangesNameAndTypeCountsAsARemoval`). A ship's
+  `remove` has no test of its own; it shares `ExchangeShipWriteService.isRemoval` with the name-and-type
+  case. Ticked 2026-09-28.*
 - [x] A batch is not confirmed after the client or installation was disconnected, or the client
   suspended, since its staging, nor past its 30-minute staging lifetime, and a kept session entry
   expires with it. *`ExchangeMassChangeControllerTest`, `ConnectedAppsConfirmControllerMvcTest`.*
