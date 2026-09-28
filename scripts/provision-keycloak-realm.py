@@ -731,9 +731,15 @@ class Planner:
 
         `offline_access` becomes a composite of the default role, and the `offline_access` client
         scope maps it, so a client with `fullScopeAllowed` off that requests the scope gets an
-        offline token. Both are added, never taken away.
+        offline token. Both are added, never taken away. The scope leaves the realm's default
+        client scopes, so only a client whose spec names it is offered it.
         """
         changes = self.section(f"{OFFLINE_ACCESS} for every member — default role and client scope")
+        self._plan_offline_grants(changes)
+        changes += self._plan_offline_realm_defaults()
+
+    def _plan_offline_grants(self, changes: list[Change]) -> None:
+        """Plan the default-role composite and the client-scope mapping of `offline_access`."""
         roles = {role.get("name") for role in (self.kc.get("roles") or [])}
         default_role = self.default_role_name()
         for name in (OFFLINE_ACCESS, default_role):
@@ -768,6 +774,21 @@ class Planner:
                 lambda: self._add_offline_access(
                     f"client-scopes/{self.scope_id(OFFLINE_ACCESS)}/scope-mappings/realm",
                     f"'{OFFLINE_ACCESS}' mapped on client scope '{OFFLINE_ACCESS}'")))
+
+    def _plan_offline_realm_defaults(self) -> list[Change]:
+        """Plan the removal of `offline_access` from the realm's default and optional client scopes."""
+        changes: list[Change] = []
+        for kind in ("default", "optional"):
+            for scope in self.kc.get(f"default-{kind}-client-scopes") or []:
+                if scope.get("name") != OFFLINE_ACCESS:
+                    continue
+                changes.append(Change(
+                    f"- realm {kind} client scope '{OFFLINE_ACCESS}' removed (a client created by "
+                    f"hand no longer inherits it; the exchange clients name it themselves)",
+                    lambda k=kind, sid=scope["id"]: self.kc.delete(
+                        f"default-{k}-client-scopes/{sid}",
+                        f"'{OFFLINE_ACCESS}' removed from the realm's {k} client scopes")))
+        return changes
 
     def _add_offline_access(self, path: str, what: str) -> None:
         """Post the `offline_access` realm role, resolved by name when the write runs, to `path`."""

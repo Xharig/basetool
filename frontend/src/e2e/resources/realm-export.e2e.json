@@ -1116,7 +1116,6 @@
   "defaultOptionalClientScopes": [
     "address",
     "microprofile-jwt",
-    "offline_access",
     "organization",
     "phone"
   ],
