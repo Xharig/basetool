@@ -15,9 +15,9 @@
 > S1–S16** — the release and the extractor switch, H1 closed without creating the `versekit` client
 > (S15 runs with an empty client list) and the extractor client's not-before (S16). VerseKit (S17,
 > S18) follows only after its approval, with a separately approved provisioner run first. The terms of use
-> and privacy texts (branch `claude/golive-terms-privacy`) and the 90-day retention sweep for
-> disconnected installations and revocations (branch `claude/exchange-retention-sweep`) are built in
-> parallel and ship in the same release; neither needs a host step. The Flyway and configuration
+> and privacy texts (#2245), the 90-day retention sweep for disconnected installations and
+> revocations (#2247), the session cap (#2246), the G5 fixes (#2250, #2252, #2253) and the load-test
+> fixes (#2256–#2259) are merged and ship in this release; none needs a host step. The Flyway and configuration
 > analysis of 2026-09-28 (the coordinator's `golive-flyway.md` / `golive-flyway-config.md`) is folded
 > in below.
 >
@@ -102,21 +102,21 @@ so the comparison afterwards is against a baseline.
 
 | Piece | State |
 |---|---|
-| Exchange code (gateway, backend layer, registry, audit domains, admin and member pages, admin bulk undo) | on `main`; E2E incl. the exchange flows green (run 36400316929 at `26ff2b6c7`) |
+| Exchange code (gateway, backend layer, registry, audit domains, admin and member pages, admin bulk undo) | on `main`; E2E incl. the exchange flows green at `26ff2b6c7` (run 36400316929); re-run on the release candidate after the G5 and load-test merges (run 36422673027) — green before S5 |
 | Redis 768 MB / 1024 MB (ADR-0221, #2115) | in the units on `main` — `quadlet/systemd/redis.container`: `--maxmemory 768mb`, `Memory=1024M` |
 | Redis ACL rows (`exchange:*`, `ingest:xch:*`, `+eval +evalsha +zrem +zscore`) | in `scripts/redis-users.acl.tmpl` on `main`; **not rendered on production** |
 | Flyway `V246`–`V258` | on `main`; the latest release, **v1.12.0, ends at `V245`**; proven forward-compatible with v1.12.0 up to `V257` (§8, step 3); `V258` only adds an index on `exchange_change` (load test, finding 2) |
 | Keycloak: `exchange.*` scopes, `versekit`, the extractor's H1 shape, #2179 | in `scripts/provision-keycloak-realm.py` on `main`; **not applied on production** |
 | keycloak-spi (ADR-0226 admin extension `basetool-exchange`, ADR-0228 login forms `krt-freemarker`) | on `main`; reaches production with the next release's provider JAR |
-| Terms change (`terms.list_4_1_5`, REQ-SEC-027/-028) | being built on `claude/golive-terms-privacy`; ships in this release — every member re-consents once at S6; no host step |
-| Privacy notice for approved clients (REQ-XCH-002, third box) | the same branch; ships in this release; no host step |
-| 90-day retention sweep for disconnected installations and revocations | being built on `claude/exchange-retention-sweep`; ships in this release; no host step |
-| SC Extractor 2.10.0 | on the extractor's `main`, **unreleased**; latest release v2.9.1 |
-| Android app with #190–#196 | on the app's `main` at `versionCode` 16, **unreleased**; latest release v0.3.1 (`versionCode` 16) |
-| VerseKit | **not approved**: `docs/legal/approved-clients.md` lists no client, while `scripts/keycloak/external-clients.json` already lists `versekit` |
-| Production host (read 2026-09-28, §3) | v1.12.0; installed scripts differ from `main` → S1 needed; both new ingest guards pass; 10 587 of 15 345 MiB available; Alloy 1.19.2; last backup success |
-| Load test of the feed/changes routes | **open** (#2092 pre-flight) |
-| Final security review (G5) | **open** |
+| Terms change (`terms.list_4_1_5`, `terms.intro`, `terms.p_12_2`, REQ-SEC-027/-028) | on `main` (#2245, hash `a25b108cc1fe8b41`, dated 29.09.2026); every member re-consents once at S6; no host step |
+| Privacy notice for approved clients (REQ-XCH-002, third box) | on `main` (#2245); no host step |
+| 90-day retention sweep for disconnected installations and revocations | on `main` (#2247, REQ-XCH-035), resting on the 90-day session cap (#2246, applied at S15); no host step |
+| SC Extractor 2.10.0 | on the extractor's `main`, **unreleased**; latest release v2.9.1; its PRs #76 (sign-in refusal message) and #77 (release notes) merge before the tag (S13) |
+| Android app with #190–#200 | release PR basetool-android#201 prepared: `versionCode` 17, `versionName` 0.4.0 (owner, 2026-09-28); latest release v0.3.1 (`versionCode` 16) |
+| VerseKit | **not approved**: `docs/legal/approved-clients.md` lists only the SC Extractor (#2245), while `scripts/keycloak/external-clients.json` already lists `versekit` — hence S15's empty client list |
+| Production host (read 2026-09-28, §3) | v1.12.0; installed scripts differ from `main` → S1 needed; the first two of the three new ingest guards pass (R8 reads the third); 10 587 of 15 345 MiB available; Alloy 1.19.2; last backup success |
+| Load test of the feed/changes routes | done on the sandbox (#2251); all seven findings fixed and merged (#2256–#2259) |
+| Final security review (G5) | done — GO; every finding fixed and merged (#2250, #2252, #2253); the owner's `v*` tag ruleset is a GitHub setting outside this runbook |
 
 The next release cut from `main` therefore carries **everything** at once: the stolen-marker server
 half, the Redis units, the migrations, the SPI jar and the dormant exchange. Sections 5 and 6 treat
@@ -228,22 +228,18 @@ R12 — `scripts/keycloak-config-snapshot.sql` (read-only by its first statement
 
 ## 4. Before the first host step (no host write)
 
-1. **Merge the two parallel PRs before S5** — `claude/golive-terms-privacy` (the terms change
-   `terms.list_4_1_5` in `messages.properties`, `_de`, `_en`, linking
-   `docs/legal/approved-clients.md`; the privacy notice's approved-client paragraph; the wiki page
-   „Nutzungsbedingungen") and `claude/exchange-retention-sweep` (the 90-day sweep of disconnected
-   installations and revocations). Neither needs a host step. If either adds a migration, it joins
-   `V246`–`V257` in S6 and in R16's reading; re-check it against §8, step 3.
-2. **Open boxes of #2092** the owner decides on before S5: the load test of the feed/changes routes
-   on the testing host or the sandbox (never production), the final security review (G5), and the
-   CHANGELOG line on the audit/metric attribution (`none` → real client ids; old rows stay „Ohne
-   Client (System)"). The forward-compatibility box is settled: v1.12.0's backend suite (76 tests,
+1. **Everything this release needs is merged** — the terms and privacy texts (#2245, #2249), the
+   session cap and the retention sweep (#2246, #2247), the G5 fixes (#2250, #2252, #2253) and the
+   load-test fixes (#2256–#2259, with `V258`). The wiki page „Nutzungsbedingungen" is published.
+   None needs a host step. Cut S5 only from a `main` whose E2E run is green.
+2. **The pre-flight boxes of #2092 are settled**: the load test (#2251) and the final security
+   review (G5) are done and their findings merged; the CHANGELOG and runbook note on the
+   audit/metric attribution came with #2232. The forward-compatibility box is settled: v1.12.0's backend suite (76 tests,
    15 classes) ran green against a schema `main`'s Flyway had migrated to `V257`, with v1.12.0's
    Flyway validating („Successfully validated 255 migrations", tip 257, `*:future` ignored) and
    Hibernate `validate` passing; the row caveats are in §8, step 3.
-3. **Have the artefacts ready**: the extractor's 2.10.0 tag commit (TO BE DECIDED — the
-   extractor's `main` is at `28a815d`, #75), the Android release PR bumping `versionCode` to **17**
-   (TO BE DECIDED: its `versionName`), and — for S17 — the VerseKit approval (public issue plus the
+3. **Have the artefacts ready**: the extractor's 2.10.0 tag commit (its `main` after #76 and #77),
+   the Android release PR basetool-android#201 (`versionCode` **17**, `versionName` 0.4.0), and — for S17 — the VerseKit approval (public issue plus the
    merged PR to `docs/legal/approved-clients.md`) with its first sync-capable version.
 4. **Draft the announcements** (§9) and schedule the two short outages (S6, S8/S9).
 
@@ -1011,8 +1007,7 @@ In German, in the forum (vault *Announcing a release*), in three posts:
 ## 10. Gaps and contradictions found while writing this (2026-09-28)
 
 1. **The terms change and the privacy notice were not built** when this was first written; *resolved
-   2026-09-28*: both are being built on `claude/golive-terms-privacy` and ship in this release (§4.1).
-   No longer a blocker.
+   2026-09-28*: both are merged (#2245) and ship in this release (§4.1). No longer a blocker.
 2. **„Enlarge Redis before the release" cannot be a separate step.** ADR-0221 and REQ-OPS-018 placed
    the resize before the first exchange release, but it lives in the unit, and the next release is
    both the resize and the exchange release. Handled here by landing it in S6 with the exchange
