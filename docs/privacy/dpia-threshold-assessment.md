@@ -1,6 +1,6 @@
 # DPIA threshold assessment (Art. 35) and DPO assessment (Art. 37)
 
-> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-22.
+> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-28.
 
 Two obligations that turn out **not** to apply. Both are written down anyway, because "we considered
 it and concluded no" is a defensible position and "nobody ever asked" is not. A supervisory authority
@@ -48,6 +48,13 @@ always required, and the supervisory authorities publish a list of further ones.
 
 **Re-run this assessment when any of those becomes true**, and record the new result here rather than
 overwriting the old one.
+
+### Re-checked 2026-09-28 — connected applications (A11)
+
+Connecting approved clients to the exchange API, going live on 2026-09-29, meets none of the
+triggers above: no new data categories (the member's own game data, already processed under A2), no
+profiling or automated decision, no monitoring, the scale unchanged, and the transfer goes to
+software on the member's own device at the member's request. **Still no DPIA required.**
 
 ---
 

@@ -93,9 +93,13 @@ need no new consent (REQ-SEC-028).
   other program is listed). It records the approved capabilities, not the registry's runtime state.*
 - [x] `docs/exchange/onboarding.md` states the criteria, the issue template and the fix deadline.
   *The template is `.github/ISSUE_TEMPLATE/exchange-client-application.yml`.*
-- [ ] The privacy notice (the frontend's `privacy.*` keys, DE and EN) states which data flows to an
+- [x] The privacy notice (the frontend's `privacy.*` keys, DE and EN) states which data flows to an
   approved client on the member's own device, that the client's own privacy statement governs it
-  there, and how to disconnect and undo; it changes with the go-live.
+  there, and how to disconnect and undo. *Section „Verbundene Anwendungen" (`privacy.h2_3_10`,
+  `privacy.p_3_10_1`–`_5`) since 2026-09-29, with the retention of disconnected installations and
+  client revocations (90 days after the disconnection) and the extractor's direct sync in
+  `privacy.p_3_7_1`; `PrivacyControllerTest#rendersTheConnectedApplicationsSection`. The records
+  under `docs/privacy/` carry it as A11.*
 
 The third-party pages are `docs/exchange/`, published on GitHub Pages at
 `https://krt-profit.github.io/basetool/` for developers only, and entirely in English — no German at
@@ -133,8 +137,8 @@ reads a token the stylesheet does not define.
 its overview, formats, errors, versioning, changelog and authentication pages, and the MIT-licensed
 DPoP reference `docs/exchange/dpop-reference/` (stdlib Python, CNG and OpenSSL 3 through `ctypes`,
 its tests run by `exchange-docs.yml`), the resource pages, the sync guide, the sandbox page and the
-quick start are built — WP 4.6 (#2090), WP 2.3 (#2099); the terms link and the privacy notice change
-with the go-live — WP 6 (#2092)
+quick start are built — WP 4.6 (#2090), WP 2.3 (#2099); the terms link, the SC Extractor's list
+entry and the privacy notice — WP 6 (#2092), in force from 2026-09-29
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 

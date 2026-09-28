@@ -202,6 +202,11 @@
 
 ### Changed
 
+- **Datenschutzerklärung: Abschnitt „Verbundene Anwendungen“.** Er nennt, welche Daten eine verbundene
+  Anwendung erhält, was zu Verbindungen gespeichert wird und wie lange (getrennte Installationen und
+  Trennungen 90 Tage nach der Trennung, Änderungsprotokoll 90 Tage) und wie man trennt und zurücknimmt;
+  der Abschnitt zum SC Extractor nennt den direkten Blueprint-Abgleich.
+
 - **Nutzungsbedingungen: neue Fassung vom 29.09.2026.** Abschnitt 4 verweist auf die öffentliche Liste
   zugelassener Anwendungen (erster Eintrag: der SC Extractor ab 2.10.0) und regelt, was eine verbundene
   Anwendung darf; Abschnitt 12 verlangt für geänderte Bedingungen eine Zustimmung statt „fortgesetzter
