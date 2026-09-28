@@ -1,7 +1,8 @@
 # ADR-0216 — The exchange API is a separate, capability-scoped contract on the ingest gateway
 
 - **Status:** Accepted — owner gate G0 of epic [#2078](https://github.com/krt-profit/basetool/issues/2078),
-  taken with the merge of #2111 and #2112 (2026-09-26); implementation pending. Amends [ADR-0018](0018-desktop-ingest-gateway-device-grant.md) and
+  taken with the merge of #2111 and #2112 (2026-09-26); implemented on main by 2026-09-28 (epic #2078), production rollout with the go-live
+  ([#2092](https://github.com/krt-profit/basetool/issues/2092)). Amends [ADR-0018](0018-desktop-ingest-gateway-device-grant.md) and
   [ADR-0129](0129-ingest-gateway-is-a-trusted-subsystem-not-a-token-relay.md) (the relay route
   list and two new trusted headers) and narrows
   [ADR-0135](0135-public-api-vhost-not-a-gateway.md) (exchange paths never join its allowlist).
@@ -84,3 +85,14 @@ We will open the Basetool to approved external client software only through a se
   under `Documents` is exactly the failure this design guards against.
 - **A second gateway just for the exchange.** Rejected: the ingest gateway already has the edge
   host, the token validation, the DPoP code and the relay; a second one would duplicate all of it.
+
+## Amendment — 2026-09-28: the routes beside the member's data
+
+Decision 1 lists the member data the API exposes; "nothing else" holds for data, not for routes.
+The contract as built (REQ-XCH-001) also serves routes that carry no further member data: the
+service document (`GET /exchange/v1`), the anonymous `openapi.json` and `schemas/<name>.schema.json`,
+`POST me/installation` (the installation label, REQ-XCH-007), `POST me/account-check` (a match,
+mismatch or unknown answer that never returns the handle, REQ-XCH-031), `POST catalog/resolve` (item
+references resolved by the web import's matching, REQ-XCH-012) and `GET catalog/locations` (the
+Lager's location list, ADR-0220). Any further route is added the same way: through the spec and the
+exhaustive route lists of decision 4.

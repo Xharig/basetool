@@ -1746,9 +1746,9 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   backend's `ExchangeGate` refused (`not_relayed` / `switch_off` / `client_unknown` /
   `client_suspended` / `scope_missing` / `installation_revoked`), registered at zero. The gateway checks first, so a
   sustained rate means the two disagree: `ExchangeGateRefusing` (warning, 15 m). The relay's
-  own refusals join `basetool_on_behalf_of_refused_total` as `forged_exchange_header` and
-  `exchange_client_invalid`; the first backs `ExchangeRelayHeaderForged` (warning, 15 m). Relayed
-  exchange requests count under the external client in `basetool_api_client_requests_total`
+  own refusals join `basetool_on_behalf_of_refused_total` as `forged_exchange_header`,
+  `exchange_client_invalid` and `exchange_installation_invalid`; the first backs
+  `ExchangeRelayHeaderForged` (warning, 15 m). Relayed exchange requests count under the external client in `basetool_api_client_requests_total`
   (REQ-XCH-010, REQ-XCH-028).
 - `basetool_exchange_resolve_refs_total{kind,status}` counter, one per reference `catalog/resolve`
   answered (`kind` = `blueprint` / `item` / `material` / `ship_type`, `status` = `resolved` /
@@ -2382,7 +2382,9 @@ endpoint cannot be used to enumerate which subjects exist. Three of the five are
 `OnBehalfOfWithoutAuthenticatedCaller`) and all five are on the `Basetool operations` dashboard.
 `endpoint_not_bound` is deliberately unalerted: the filter sees every path, so that reason absorbs
 the ambient internet traffic that carries the header, which is also why the endpoint bound is
-checked before the caller.
+checked before the caller. The exchange relay headers (REQ-XCH-010) add three more reasons, eight in
+all: `forged_exchange_header` (alerted by `ExchangeRelayHeaderForged`), `exchange_client_invalid`
+and `exchange_installation_invalid`.
 
 **Deliberately excluded** (documented so the gap is intentional, not an oversight): notifications
 (no org-wide queue — only per-recipient unread, which is PII-adjacent), org units (no lifecycle
@@ -3277,10 +3279,14 @@ rather than to a browser — the denominator of any per-client budget, and the o
 kill switch could ever act on. The label is **bounded** and never taken from the token unfiltered
 (REQ-OBS-006): an `azp` is used verbatim only while it names a client the deployment knows —
 `app.monitoring.api-clients.known-client-ids` or a configured ingest gateway
-(`app.security.ingest-gateway.client-ids`, so the two lists cannot drift) — collapsing to `other`
-otherwise and to `none` when the token carries no `azp` at all. The two literals mean opposite
-things: `other` is a client nobody registered here, `none` is a Keycloak mapper regression that
-blinds the attribution for every client at once. `ApiUnknownClient` (warning) fires on a sustained
+(`app.security.ingest-gateway.client-ids`, so the two lists cannot drift) or a client of the exchange
+registry (REQ-XCH-003) — collapsing to `other` otherwise and to `none` when the token carries no
+`azp` at all. The two literals mean opposite things: `other` is a client nobody registered here,
+`none` is a Keycloak mapper regression that blinds the attribution for every client at once. A call
+the ingest gateway relays for a connected application counts under that application instead: when
+the caller is a configured gateway and names a client in `X-Exchange-Client`, the label is that
+client if the exchange registry holds it and `other` if not (`ClientAttribution.relayedLabelOf`,
+REQ-XCH-010, REQ-XCH-028). `ApiUnknownClient` (warning) fires on a sustained
 `other`; the `none` rule ships staged (below).
 
 That mapping is **not private to this counter**. It lives in `support.ClientAttribution` and is
@@ -3392,6 +3398,9 @@ loosening the frontend's `http_2xx_hsts` assertion.
 - [x] The filter sits strictly between `BearerTokenAuthenticationFilter` and `ActingMemberFilter` in
   the chain as built, so an authenticated request is counted at all and a gateway call keeps its own
   client identity (`ApiClientMetricsChainTest`, both edges asserted).
+- [x] A relayed exchange call counts under the registered client the gateway names, `other` for an
+  unregistered one, and a non-gateway caller naming a client keeps its own label
+  (`ClientAttributionTest#relayedLabelOf_namesARegisteredClientOnlyFromTheGateway`).
 - [x] An encoded path spelling cannot drop a request out of the attribution (REQ-SEC-029).
 - [x] Every 401 is counted under its RFC 6750 code, an unknown code collapses to `other`, and a 403
   is not counted as an authentication failure (`SecurityProblemResponseHandlerTest`).

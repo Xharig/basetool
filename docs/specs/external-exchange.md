@@ -307,7 +307,7 @@ accepted. The provisioner applies this on production only **after** the legacy s
   the consent page on every login, also when consent exists; access and refresh tokens carry
   `cnf.jkt`, and a refresh without a DPoP proof is refused.
 
-**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1; the consent page's warning and user code — built (#2092, M1, ADR-0228)
+**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — provisioner and extractor built (#2201, basetool-sc-extractor #69–#71), production apply with WP 6 (#2092); the consent page's warning and user code — built (#2092, M1, ADR-0228)
 
 ### REQ-XCH-006 — DPoP is required on every exchange route
 
@@ -410,14 +410,21 @@ labels are letters and are accepted: the label is always shown after the registe
 - [x] Label validation tests, including control, bidi and homoglyph-only input
   (`ExchangeInstallationControllerTest`).
 - [x] Log-capture test: the label never appears in any log line (`ExchangeInstallationControllerTest`).
-- [ ] The installation response and the service document carry the same `installationId`, and a
+- [x] The installation response and the service document carry the same `installationId`, and a
   tombstone written by that installation names it. *The gateway half is in: `POST
   /exchange/v1/me/installation` checks the label against `installation.schema.json` before the relay
   (a rule-breaking label never reaches the backend), and the service document takes
   `installationId` from the backend's installation of the relayed key (`ExchangeControllerTest`).*
+  *The backend keeps the id across first sight and labelling
+  (`ExchangeInstallationControllerTest.theInstallationIsCreatedOnFirstSightAndKeepsItsIdWhenLabelled`),
+  the service document names it
+  (`ExchangeControllerTest.theServiceDocumentNamesTheGrantsLimitsAndInstallation`), and a tombstone's
+  `removedBy.installationId` is the removing installation's id
+  (`ExchangeBlueprintControllerTest.theFeedAnswersAnAdditionAndATombstoneNamingTheRemovingInstallation`).
+  Ticked 2026-09-28.*
 
-**Status:** gateway routes built — WP 3.2 (#2082); the backend's installations with WP 3.1 (#2083),
-tombstones with WP 3.3
+**Status:** built — gateway routes WP 3.2 (#2082), the backend's installations WP 3.1 (#2083),
+tombstones WP 3.3 (#2083)
 
 ### REQ-XCH-008 — Revocation takes effect on the next request
 
@@ -896,17 +903,41 @@ line sums `max(0, ordered − delivered − earmarked)` per game item, and `craf
 member's blueprints the way the order's blueprint coverage does (variant family when the order counts
 variants). Lines with nothing open are left out; `bt` is the material's or game item's id.
 
+Only a member who passes the web's job-order gate gets the demand: `ExchangeDemandService` asks
+`OwnerScopeService.canViewJobOrders()` — the same rule that opens the Aufträge area and the
+Materialbedarf (REQ-ORDERS-034) — before reading any order. Any other member gets `200` with two
+empty lists and `reason: "NOT_PERMITTED"`; a permitted member's answer carries no `reason`, even
+when nothing is open. The rule is evaluated with the exchange's reduced authorities (REQ-XCH-009),
+so it reduces to "a member, or a leadership seat above a member, of at least one profit-eligible
+unit" — an `ADMIN` role does not open it. It runs on every request, so a unit that loses its profit
+eligibility while its orders stay open stops showing its demand to members who have no other
+eligible unit. As on the web, the gate is per member: a permitted member sees the demand of every
+unit they belong to (owner decision 2026-09-28, #2095). `reason` is an optional field of
+`org-demand.schema.json` with the one value `NOT_PERMITTED`; the gateway refuses any other value as
+a relay failure. *Corrected 2026-09-28: #2095 promised this gate and the `reason`, but the feed was
+built without either, so a member of a unit that lost its profit eligibility kept seeing its open
+demand.*
+
 **Acceptance**
 
+- [x] A member who fails `canViewJobOrders` gets empty lists with `reason: NOT_PERMITTED` and no
+  order is read; a member who passes it gets the demand without a `reason`; a unit that loses its
+  profit eligibility stops showing its demand. *`ExchangeDemandServiceTest`,
+  `ExchangeDemandControllerTest` (against the real gate and database), `ExchangeDemandParityTest`
+  (the web's Materialbedarf is withheld by the same gate); `ExchangeOrgDemandRouteTest` relays the
+  withheld answer and refuses an unknown `reason`; fixtures for both shapes under
+  `docs/exchange/examples/v1/org-demand/`.*
 - [x] An overseer who is not a member of a unit does not see its demand.
   *`ExchangeDemandServiceTest` — only the member's own units are asked.*
 - [x] The feed's open quantities equal the Materialbedarf's gaps for the same orders.
   *`ExchangeDemandParityTest`.*
 - [x] The response schema admits no name or free-text field.
-  *`ExchangeOrgDemandRouteTest` pins the schema's field sets; the only names are catalogue names.*
+  *`ExchangeOrgDemandRouteTest` pins the schema's field sets and the `reason` enum; the only names
+  are catalogue names.*
 
 **Status:** the backend location list is built — WP 3.1 (#2083); the backend's demand and the
-gateway's demand route (`GET /exchange/v1/me/org-demand`) are built — WP 4.3 (#2095)
+gateway's demand route (`GET /exchange/v1/me/org-demand`) are built — WP 4.3 (#2095); the
+job-order gate with `reason: NOT_PERMITTED` is built (#2095 follow-up)
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 
@@ -915,7 +946,10 @@ REQ-INGEST-004 requires today; nothing is written until the member confirms.
 
 **Acceptance**
 
-- [ ] The SC Extractor's draft flows pass unchanged through the exchange routes.
+- [ ] The SC Extractor's draft flows pass unchanged through the exchange routes. *As of 2026-09-28
+  both sides are merged — the server routes (#2175) and the extractor's exchange client
+  (basetool-sc-extractor #69–#71); the box closes with the extractor's 2.10.0 release at the go-live
+  (#2088, #2092).*
 - [x] A draft is checked against its schema, relayed, staged and answered with its handoff; a
   refused one stages nothing. *`ExchangeDraftRouteTest`.*
 - [x] A client's drafts evict only its own oldest drafts for that member, never the extractor's
@@ -1022,7 +1056,16 @@ within one batch is not a removal. Only the member's browser session can confirm
 
 **Acceptance**
 
-- [ ] One test per counting rule, including repeated 89 % cuts and a move.
+- [x] One test per counting rule, including repeated 89 % cuts and a move. *The thresholds
+  (`ExchangeMassChangeGuardTest.theWindowTripsAbove25OrAboveAFifthWithAtLeastFive`), the 24 h window
+  (`…theWindowIsTheLast24HoursOfTheClientsRemovals`), `remove`
+  (`ExchangeBlueprintWriteControllerTest.aBatchThatRemovesTooMuchIsHeldBackWholly`), a quantity set to 0
+  and the exempt move (`ExchangeStockWriteControllerTest.emptyingEveryLotIsHeldBackButAMoveIsNot`),
+  repeated cuts — 100 → 50 → 11 passes, → 10 trips
+  (`…repeatedCutsCountOnlyOnceTheyReachNinetyPercentOfTheWindowStart`) — and a ship's name-and-type
+  change (`ExchangeShipWriteControllerTest.anUpdateThatChangesNameAndTypeCountsAsARemoval`). A ship's
+  `remove` has no test of its own; it shares `ExchangeShipWriteService.isRemoval` with the name-and-type
+  case. Ticked 2026-09-28.*
 - [x] A batch is not confirmed after the client or installation was disconnected, or the client
   suspended, since its staging, nor past its 30-minute staging lifetime, and a kept session entry
   expires with it. *`ExchangeMassChangeControllerTest`, `ConnectedAppsConfirmControllerMvcTest`.*

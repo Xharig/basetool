@@ -31,7 +31,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO org_unit (id, version, created_at, updated_at, kind, name, shorthand, description,
                       active, is_promotion_enabled, is_profit_eligible)
 VALUES ('5a4d0000-0000-4000-8000-000000000101', 0, now(), now(), 'SQUADRON', 'Sandbox Squadron',
-        'SBX', 'The second squadron of the local exchange sandbox', true, false, false)
+        'SBX', 'The second squadron of the local exchange sandbox', true, false, true)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO org_unit_membership (user_id, org_unit_id, kind)
