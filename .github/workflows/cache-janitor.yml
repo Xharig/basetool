@@ -53,6 +53,35 @@ jobs:
           done < <(jq -r '.[] | [.id, .sizeInBytes, .ref, .key] | @tsv' <<<"$caches")
           echo "Deleted $count CodeQL dependency caches, $((freed / 1048576)) MiB." | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Delete superseded Gradle dependency caches on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          caches="$(gh cache list --key gradle-dependencies- --ref refs/heads/main --limit 100 \
+            --sort created_at --order desc --json id,key,sizeInBytes,lastAccessedAt)"
+          cutoff="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+          freed=0
+          count=0
+          first=1
+          while IFS=$'\t' read -r id size accessed key; do
+            [ -n "$id" ] || continue
+            if [ "$first" = 1 ] || [[ "$accessed" > "$cutoff" ]]; then
+              first=0
+              echo "keep   $key  (last used $accessed)"
+              continue
+            fi
+            if gh cache delete "$id"; then
+              echo "delete $key  ($((size / 1048576)) MiB, last used $accessed)"
+              freed=$((freed + size))
+              count=$((count + 1))
+            else
+              echo "::warning::could not delete cache $id ($key)"
+            fi
+          done < <(jq -r '.[] | [.id, .sizeInBytes, .lastAccessedAt, .key] | @tsv' <<<"$caches")
+          echo "Deleted $count superseded Gradle dependency caches on main, $((freed / 1048576)) MiB." | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Delete the closed pull request's caches
         if: github.event_name == 'pull_request'
         env:

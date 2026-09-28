@@ -374,9 +374,11 @@ change takes effect from the next PR on),
 [`deploy-script.yml`](.github/workflows/deploy-script.yml) and
 [`keycloak-provisioner.yml`](.github/workflows/keycloak-provisioner.yml).
 [`cache-janitor.yml`](.github/workflows/cache-janitor.yml) is housekeeping,
-not a check: after each CodeQL run and when a PR closes it deletes Actions
-caches nothing will read again, so the repository stays under GitHub's 10 GB
-cache cap. [`dependency-submission.yml`](.github/workflows/dependency-submission.yml)
+not a check: after each CodeQL run, daily and when a PR closes it deletes
+Actions caches nothing will read again — superseded CodeQL dependency caches,
+Gradle dependency caches on `main` unused for a day (the newest always stays)
+and a closed PR's caches — so the repository stays under GitHub's 10 GB cache
+cap and the NVD dataset the dependency scan needs is not evicted. [`dependency-submission.yml`](.github/workflows/dependency-submission.yml)
 is housekeeping too: on every push to `main` it submits the resolved Gradle
 dependency graph, so GitHub's dependency graph and Dependabot alerts see the
 Java dependencies at all.
