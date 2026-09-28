@@ -198,7 +198,8 @@ class ExchangeRoundTripE2eTest {
     }
 
     ExchangeTestClient.Answer refused =
-        awaitAnswer(client, "GET", "/exchange/v1/me/blueprints", a -> a.status() == 401);
+        awaitAnswer(client, "GET", "/exchange/v1/me/blueprints", a -> a.status() != 200);
+    assertEquals(401, refused.status(), "the first refusal is the disconnect: " + refused);
     assertEquals(
         "CLIENT_REVOKED", refused.code(), "the disconnected client is refused: " + refused);
   }
