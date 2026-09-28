@@ -1,4 +1,4 @@
-> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-22.
+> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-28.
 > **Owner area:** API · **Related:** [`security-and-access.md`](security-and-access.md), [`observability.md`](observability.md)
 
 # API conventions
@@ -205,9 +205,12 @@ The frontend serves HTML, not an API, and therefore has no document of its own.
 
 Both modules depend on springdoc **`-api`** (not `-ui`): the document is generated at
 `/v3/api-docs`, no Swagger UI webjar is bundled, and `springdoc.api-docs.enabled=false` in each
-module's `application-prod.yml` keeps the endpoint unreachable from a deployed environment. Both
-root documents declare the `bearer-jwt` security scheme, so a generated client — for ingest, the
-desktop extractor of epic #639 — knows every endpoint expects a Keycloak JWT.
+module's `application-prod.yml` keeps the endpoint unreachable from a deployed environment. The
+backend's root document declares the `bearer-jwt` security scheme, so a generated client knows every
+endpoint expects a Keycloak JWT. *Amended 2026-09-28 (#2092 step 9):* the ingest document described
+the desktop extractor's two `/v1` endpoints, which are removed; it now lists no operation and points
+at the exchange's own committed contract (`exchange-v1.openapi.json`, REQ-XCH-011), so it declares no
+security scheme either.
 
 That regeneration MUST be **atomic** — serialize to a temporary sibling file and move it into place,
 never write the document in place. `org.gradle.parallel=true` runs `:backend:test` alongside
@@ -217,8 +220,9 @@ never write the document in place. `org.gradle.parallel=true` runs `:backend:tes
 parses a cut-off document and fails with `UnexpectedEndOfInputException` — an intermittent red build
 whose cause is nowhere near the test that reports it. The ingest generator carries the same guard.
 
-Both generators also **assert** the document's load-bearing parts (title, `bearer-jwt` scheme, the
-expected paths and request/response schemas) before writing, so a controller that silently stops
+Both generators also **assert** the document's load-bearing parts (title, the backend's
+`bearer-jwt` scheme and expected paths and request/response schemas, the ingest document's empty
+path list and its pointer to the exchange contract) before writing, so a controller that silently stops
 being scanned fails the build instead of quietly shrinking the committed spec.
 
 Regeneration MUST also be **reproducible**: the same tree must produce the same bytes, so a

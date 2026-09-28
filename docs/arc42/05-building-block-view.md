@@ -48,7 +48,7 @@ base's Topology note.
 | **acme** (lego) | Issue and renew the certificates the edge serves | Serve traffic |
 | **frontend** | Render the UI, hold session state, drive live update | Talk to PostgreSQL or the Keycloak Admin API; contain business rules |
 | **backend** | The whole domain: REST API, persistence, authorisation, scheduled work | Serve HTML; be reachable from the internet except through the `api` vhost |
-| **ingest** | Authenticate and relay approved desktop-extractor payloads; stage the returned draft in Redis for a one-time browser pickup; gate, limit and relay the exchange API for approved clients (§5.5) | Own a database or save anything itself |
+| **ingest** | Gate, limit and relay the exchange API for approved clients, the SC Extractor included (§5.5); stage a returned draft in Redis for a one-time browser pickup | Own a database or save anything itself |
 | **keycloak** | Identity, OIDC tokens, the Discord provider and guild/role gate, the KRT theme, the device-grant consent for exchange clients and the `basetool-exchange` admin extension | Store domain data |
 | **db-backend / db-keycloak** | Two separate PostgreSQL instances | Share a cluster — a Keycloak upgrade must not be able to touch domain data |
 | **redis** | Spring Session store, the live-sync and notification pub/sub fanout, the ingest handoffs, the exchange registry mirror and the gateway's byte-bounded exchange partition (ADR-0221) — one instance on three separate networks | Be a cache of record for anything that matters |
@@ -92,11 +92,11 @@ that has to cross that boundary — the active-OrgUnit pin, the correlation id �
 
 ## 5.4 Level 2 — the other modules
 
-- **`ingest`** — a gateway: authentication (DPoP accepted, `REQ-INGEST-012`), the approved-client
-  check, rate limiting, payload size limits, a relay to the backend under the gateway's own service
-  identity, and the single-use Redis handoff; in front of the exchange API also the DPoP token
-gate, the registry gate, limits and idempotency (§5.5). Ships two committed contracts,
-`openapi.json` (legacy `/v1`) and `exchange-v1.openapi.json`. Its two
+- **`ingest`** — a gateway in front of the exchange API: DPoP authentication (`REQ-INGEST-012`,
+  REQ-XCH-006), the registry gate, per-IP and per-client limits, payload size limits, idempotency,
+  a relay to the backend under the gateway's own service identity, and the single-use Redis handoff
+  (§5.5). Its contract is the committed `exchange-v1.openapi.json`; the generated `openapi.json`
+  lists no operation since the extractor's `/v1` routes were removed on 2026-09-28. Its two
   outbound calls — the relay and its own token grant — are blocking `RestClient`s on the JDK HTTP
   client (`config.RestClientConfig`, ADR-0204); the module has no WebFlux and no Reactor Netty, so
   the worker-thread trap of §5.3 does not exist there. Specification:
@@ -119,8 +119,8 @@ gate, the registry gate, limits and idempotency (§5.5). Ships two committed con
   frontend/backend split deliberately avoids.
 - **`test-support`** — a test-only library, never shipped: endpoint enumeration and the frontend
   page-route inventory behind the backend and frontend anonymous-surface sweeps, and behind ingest's
-  `IngestEndpointSurfaceTest`, which pins the gateway's routed surface to its two legacy `/v1`
-  endpoints and the exchange route table.
+  `IngestEndpointSurfaceTest`, which pins the gateway's routed surface to the exchange route table
+  and fails on any mapping under `/v1`.
 
 ## 5.5 Level 2 — the external client exchange
 

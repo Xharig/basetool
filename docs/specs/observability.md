@@ -1,4 +1,4 @@
-> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-25.
+> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-28.
 > **Owner area:** OBS · **Related:** [`security-and-access.md`](security-and-access.md), [ADR-0204](../adr/0204-backend-and-ingest-call-http-through-restclient-without-webflux.md) (outbound clients of backend and ingest), [`org-unit-tenancy.md`](org-unit-tenancy.md), [ADR-0072](../adr/0072-monitoring-stack-prometheus-grafana.md), [ADR-0095](../adr/0095-ship-app-container-stdout-to-loki.md), [ADR-0162](../adr/0162-edge-is-native-nginx-with-a-separate-acme-client.md) (native edge, NPM retired), [ADR-0163](../adr/0163-the-container-runtime-becomes-rootless-podman-on-debian-13.md) (rootless Podman), monitoring epic [#936](https://github.com/krt-profit/basetool/issues/936) · **Operator doc:** [`monitoring/README.md`](../../monitoring/README.md)
 >
 > **Runtime.** Since the 2026-09-22 cutover production runs rootless Podman under Quadlet on Rocky
@@ -27,7 +27,7 @@ The backend and frontend emit one access-log line per request and enrich every l
 fields `correlationId`, `userId`, and `orgUnitId` (the last per
 [`org-unit-tenancy.md`](org-unit-tenancy.md) REQ-ORG-007). Logback patterns must include
 `%X{orgUnitId}` to keep audit trails intact. The ingest gateway emits the same
-one-line-per-request access log (`RequestLoggingFilter`, scoped to `/v1` and `/exchange`) and carries
+one-line-per-request access log (`RequestLoggingFilter`, scoped to `/exchange`) and carries
 `correlationId` **and `userId`**, but no `orgUnitId` — it relays drafts and owns no
 squadron-scoped data, so that field would be permanently empty.
 
@@ -209,16 +209,18 @@ gateway log alone:
 - **413** — `DEBUG` with both the declared body size and the configured cap, so a cap set below what
   a legitimate extract needs is distinguishable from a hostile body (a chunked reject reports
   `declared=-1`, which is itself the diagnostic).
-- **429** — the *per-subject* limiter (the enforceable one) logs `WARN` with the budget and the
-  advertised `Retry-After`; the *per-IP* pre-auth limiter logs the same at `DEBUG`, because an
-  attacker decides how often it fires and a higher level would be a log-flood vector. Absence of the
-  `WARN` on a 429 therefore identifies the per-IP limiter, and the `bucket`-tagged counter
-  distinguishes them in the metrics either way. Neither line repeats the subject (it is the `userId`
-  MDC field) or the client IP (app logs stay PII-free — REQ-OBS-004).
+- **429** — the *per-IP* pre-auth limiter logs the budget and the advertised `Retry-After` at
+  `DEBUG`, because an attacker decides how often it fires and a higher level would be a log-flood
+  vector; the exchange's per-client and per-member limits answer their own `RATE_LIMITED` and count
+  it on `basetool_ingest_exchange_refused_total` (REQ-XCH-023). The line repeats neither the subject
+  (it is the `userId` MDC field) nor the client IP (app logs stay PII-free — REQ-OBS-004). *(Until
+  2026-09-28 a per-subject limiter on the `/v1` routes logged `WARN`; it went with them.)*
 - **401 / 403** — `DEBUG` and `WARN` respectively, per the same expected-noise reasoning the backend
   applies; see REQ-API-004 for the response shape.
-- **Backend 4xx** — `DEBUG`, so the gateway log distinguishes "the backend rejected it" from "our own
-  validation rejected it" without duplicating the `WARN` the backend already emitted.
+- **Backend refusal** — the exchange relay logs an answer it cannot pass on at `WARN` with the backend
+  path and status (`ExchangeRelay`); a refusal with a registry code reaches the client without a
+  gateway line, since the backend already logged it. *(The `/v1` relay's `DEBUG` line for a backend
+  4xx went with the routes on 2026-09-28.)*
 
 **The accepted payload's shape is logged, its content never is.** Before relaying, the gateway
 records `schemaVersion`, the producing tool/version and the order / goods-row / source-image counts
@@ -1682,8 +1684,9 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   finding 6). *Changed 2026-09-28: it was counted as `dpop_invalid`, a few hundred refusals per
   five minutes at production scale.* `ExchangeRegistryUnreadableAtGateway` (warning,
   5 m) fires while the gateway fails closed on `registry_unavailable`.
-- `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`legacy`, `exchange`,
-  `other`) so a third-party client's failures stay apart from the extractor's, and four reasons:
+- `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`exchange`, `other`;
+  `legacy` too until the extractor's `/v1` routes were removed on 2026-09-28) so the exchange's
+  failures stay apart from scanner noise elsewhere, and four reasons:
   `invalid_dpop_proof`, `use_dpop_nonce` (the normal first round trip, never alerted),
   `dpop_proof_limit` for an exchange proof over its member's cap, answered `429 DPOP_PROOF_LIMIT`,
   and `dpop_store_full` for an exchange proof refused by a full replay store, answered
@@ -1696,7 +1699,8 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   that ignores `Retry-After` or keeps a member at its cap can (owner decision 2026-09-28;
   `exchange_dpop_proof_limit_alert_test.yml`).
 - `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` counter — DPoP proofs the gateway's
-  `jti` replay cache refused, per path scope (`exchange` / `legacy`) and reason: `replayed` (the
+  `jti` replay cache refused, per path scope (`exchange` / `other`; `legacy` until 2026-09-28) and
+  reason: `replayed` (the
   `jti` was used before), `member_cap` (the member already holds its live-proof cap) or `full` (the
   scope's cache holds its total cap), registered at zero. On the exchange scope a `member_cap`
   refusal counts as `dpop_proof_limit` on the auth-failure counter and a `full` one as
@@ -1720,16 +1724,15 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `exchangeLargeChangeSets` (four change sets of more than 100 ops at once, REQ-XCH-023) report
   through `resilience4j_circuitbreaker_state{application="basetool-ingest",name}` and
   `resilience4j_bulkhead_{available,max_allowed}_concurrent_calls`, which the gateway binds itself
-  (`Resilience4jMetricsConfig`, as the frontend does); the extractor relay's `backend` breaker
-  reports beside it. `CircuitBreakerOpen` covers both breakers by their `name` label;
+  (`Resilience4jMetricsConfig`, as the frontend does). `CircuitBreakerOpen` covers it by its `name`
+  label *(the extractor relay's `backend` breaker is removed since 2026-09-28)*;
   `BulkheadNearSaturation` leaves the four-slot bulkhead out, and `ExchangeLargeChangeSetsBusy`
   (warning) fires instead when more than 30 sets are refused `relay_busy` in 15 minutes for
   15 minutes (`exchange_relay_capacity_alerts_test.yml`). The Exchange dashboard's *Relay
   capacity* row shows the slots in use, the busy refusals and any breaker that is not closed.
-- `basetool_ingest_legacy_endpoints_enabled` gauge (`1` while the legacy extractor endpoints answer,
-  `0` once switched off) and `basetool_ingest_legacy_gone_total` counter (legacy requests refused
-  with `410 LEGACY_ENDPOINT_GONE`, registered at zero). No alert: after the go-live a trickle of
-  refusals is outdated extractors, which the hint tells to update (REQ-XCH-033).
+- *Removed 2026-09-28 (#2092 step 9):* `basetool_ingest_legacy_endpoints_enabled` and
+  `basetool_ingest_legacy_gone_total`, which reported the legacy switch and its `410` refusals, went
+  with the `/v1` routes (REQ-XCH-033), and so did the operations dashboard's panel 71.
 - `basetool_exchange_departures_total{outcome}` counter — a departed member's exchange access
   ended in full (`done`) or in part (`failed`), registered at zero; `ExchangeDepartureIncomplete`
   (warning) fires on any failed one, since the step is not retried (REQ-XCH-008).
@@ -2331,18 +2334,19 @@ the same `basetool_bot_blocked_total{rule}` series, distinguished by the `applic
 (`basetool-ingest` vs `basetool-frontend`); the "Bot-blocked/hour by rule" panel groups by
 `application` + `rule` so both modules are visible. Panels only, all labels fixed literals.
 
-**Ingest.** `basetool_ingest_handoff_total{kind}` (accepted+staged handoffs per `HandoffKind`),
-`basetool_ingest_handoff_errors_total{reason}` (relay failures: `backend_reject` /
-`backend_unavailable` / `backend_auth` — the backend refused the gateway's **own** identity with a
-`401`/`403`, answered `502` and the cached token invalidated (2026-09-22) — / `staging_unavailable` /
-`internal`; pre-relay rejections are not counted
-here — `staging_unavailable` is kept apart from `internal` because at that point the backend relay
-already **succeeded** and only Redis is at fault, a different operator action, which is why it also
-has its own `IngestStagingUnavailable` alert — REQ-INGEST-003), and
-`basetool_ratelimit_rejections_total{bucket}` (`bucket` = `ip` / `subject`; shares the metric name
-with the backend counter, the `application` common tag separating the modules) — paired since #1041
-item 19 with `basetool_ratelimit_requests_total{bucket}` on the per-IP filter and the per-subject
-limiter, feeding the same `RateLimitRejectionRatioHigh` ratio alert.
+**Ingest.** `basetool_ingest_handoff_total{kind}` (staged handoffs per `HandoffKind`: an exchange
+client's draft or a held-back change set), `basetool_ingest_handoff_errors_total{reason}`
+(`staging_unavailable` / `internal`; `staging_unavailable` is kept apart from `internal` because at
+that point the backend relay already **succeeded** and only Redis is at fault, a different operator
+action, which is why it also has its own `IngestStagingUnavailable` alert — REQ-INGEST-003; the
+exchange's draft and mass-change routes count it since 2026-09-28), and
+`basetool_ratelimit_rejections_total{bucket}` (`bucket` = `ip`; shares the metric name with the
+backend counter, the `application` common tag separating the modules) — paired since #1041 item 19
+with `basetool_ratelimit_requests_total{bucket}` on the per-IP filter, feeding the same
+`RateLimitRejectionRatioHigh` ratio alert. *Amended 2026-09-28 (#2092 step 9):* the relay-failure
+reasons `backend_reject` / `backend_unavailable` / `backend_auth` and the `subject` bucket belonged to
+the removed `/v1` relay and its per-member limiter; exchange relay failures are
+`basetool_ingest_exchange_relay_total{outcome="failed"}`.
 `basetool_ingest_auth_failures_total{reason}` counts every `401` under its RFC 6750 bearer error
 code (`invalid_token` / `invalid_request` / `insufficient_scope`, anything else collapsing to
 `other`). It exists because a `401` was otherwise **undiagnosable in production**: it is logged at
@@ -2356,33 +2360,19 @@ must never reach an appender or a label (REQ-OBS-004). **Deliberately not alerte
 probes against a public surface are constant background noise, so a threshold here would be a pager
 generator; it is a dashboard panel you consult when a specific client is failing, the same treatment
 `basetool_bot_blocked_total` gets.
-`basetool_ingest_client_total{client_id}` and `basetool_ingest_client_rejected_total{reason}`
-(REQ-INGEST-011) cover the client-identity gate: the first answers "which software is actually
-driving the gateway", which no other signal carried — the handoff counter is tagged by draft kind and
-the access log by path, so a second producer appearing alongside the extractor used to be invisible.
-The `client_id` value is bounded **by construction**: it is the matched allowlist entry or the literal
-`other`, never the raw `azp`, because deriving a label from a token claim is the shape of an
-unbounded-cardinality bug (REQ-OBS-011). The reject counter's `reason` (`unknown_client` /
-`missing_azp` / `missing_scope` / `bad_provenance` / `exchange_client` — a client of the exchange
-registry the allowlist does not name, since 2026-09-27 / `non_jwt_principal` — an authenticated principal
-that is not a JWT, refused fail-closed since 2026-09-22; corrected the same day: the `dpop_required`
-this list used to name was never implemented, REQ-INGEST-011) is kept as a label because it
-splits into two operationally **opposite** causes: `unknown_client` / `bad_provenance` mean a foreign
-tool is calling the restricted interface, while `missing_azp` / `missing_scope` mean a Keycloak mapper
-or scope assignment regressed and the legitimate extractor is being locked out. It is also bumped
-while `app.ingest.client-identity.audit-only` is set — counting what the gate *would* have rejected is
-precisely how the operator measures the blast radius before enforcing — and it backs the
-`IngestUnknownClient` alert, deliberately not baseline-tuned away: reaching that counter required a
-valid realm token, so it cannot be produced by an anonymous scanner and a single occurrence is signal.
-`basetool_ingest_gate_enforcing{gate}` (gauge, 2026-09-22, ING-SEC-03) reports the configured
-posture of the four client gates — `gate` is one of the four literals `azp` / `scope` / `tool` /
-`audience`, never a configured value; `1` while that gate refuses callers, `0` while it is
-unconfigured or (for the first three) only counting under `audit-only`. Registered once at startup
-with constant values, exactly like `basetool_tracing_enabled`, because every input is bound at
-startup. It backs `IngestAudienceGateOff` (the audience at `0` for 30 minutes; the monitoring plane
-scrapes production only, so no environment matcher is needed) and the "Ingest client gates
-enforcing" panel. `basetool_ingest_service_account_token_total{outcome}` gained `backoff` beside
-`minted` / `cached` / `failed`: an upload refused without a Keycloak call because a grant failed
+*Removed 2026-09-28 (#2092 step 9):* `basetool_ingest_client_total{client_id}` and
+`basetool_ingest_client_rejected_total{reason}` covered the client-identity gate of the `/v1` routes
+(REQ-INGEST-011) and went with it, together with the `IngestUnknownClient` alert and the operations
+dashboard's panels 45 and 46; which client calls the gateway is now the exchange counters'
+`client_id` label, bounded by the registry (REQ-XCH-028).
+`basetool_ingest_gate_enforcing{gate="audience"}` (gauge, 2026-09-22, ING-SEC-03) reports whether the
+gateway's audience check refuses tokens: `1` while an expected audience is configured, `0` while not.
+Until 2026-09-28 it also carried `azp` / `scope` / `tool` for the client-identity gate. Registered
+once at startup with a constant value, exactly like `basetool_tracing_enabled`, because every input
+is bound at startup. It backs `IngestAudienceGateOff` (the audience at `0` for 30 minutes; the
+monitoring plane scrapes production only, so no environment matcher is needed) and the "Ingest
+audience gate enforcing" panel. `basetool_ingest_service_account_token_total{outcome}` gained `backoff` beside
+`minted` / `cached` / `failed`: a relay refused without a Keycloak call because a grant failed
 within the last 5 s, so `failed` keeps counting real grant attempts.
 `basetool_ingest_payload_rejected_total` (untagged, `PayloadSizeLimitFilter`) counts each
 oversized-body 413 the INGEST-DOS-1 guard refuses — previously silent (no log, no metric) unlike the
@@ -2391,7 +2381,7 @@ backend twin `basetool_request_body_rejected_total` (untagged, `RequestBodySizeL
 each oversized non-multipart JSON body the backend refuses with 413 on a capped import path (the
 refinery `import-extract`, before Jackson binds it — security review, memory-DoS) and backs
 `RequestBodyRejectedSpike`. The
-gateway also now emits one INFO access-log line per `/v1` request (`RequestLoggingFilter`; method /
+gateway also now emits one INFO access-log line per `/exchange` request (`RequestLoggingFilter`; method /
 path / status / duration), matching the backend/frontend one-line-per-request contract
 (REQ-OBS-001). Its `basetool_http_error_total{code}` carries `SERVICE_UNAVAILABLE` (unreachable
 identity provider *or* unreachable handoff staging), plus `UNAUTHENTICATED` / `ACCESS_DENIED` from
@@ -2425,7 +2415,8 @@ incomplete (epic [#936](https://github.com/krt-profit/basetool/issues/936); the 
 
 **Alert coverage of these signals.** Previously-unalerted `basetool_*` signals now back named alerts
 so an exported metric cannot silently regress unnoticed: the ingest handoff metrics feed
-`IngestHandoffErrors` / `IngestBackendUnavailable`; the `basetool_http_error_total`
+`IngestHandoffErrors` / `IngestStagingUnavailable` (`IngestBackendUnavailable` went with the `/v1`
+relay on 2026-09-28); the `basetool_http_error_total`
 `SERVICE_UNAVAILABLE`, `ACCESS_DENIED` and `PENDING_APPROVAL` codes feed `IdentityProviderUnavailable`
 / `AccessDeniedSpike` / `PendingApprovalBlockSpike` (and the all-codes HTTP-error panel on dashboard
 `07`); the `basetool_keycloak_sync_fetch_failures_total` and `basetool_scheduled_job_step_failures_total`

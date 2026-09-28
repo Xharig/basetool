@@ -1,6 +1,6 @@
 > **Doc type:** Living spec — requirements accepted by the owner, built except where a status line
 > says otherwise (epic [#2078](https://github.com/krt-profit/basetool/issues/2078)). Last reviewed:
-> 2026-09-27.
+> 2026-09-28.
 > **Owner area:** XCH · **Related ADRs:** [ADR-0216](../adr/0216-the-exchange-api-is-a-separate-contract-on-the-ingest-gateway.md),
 > [ADR-0217](../adr/0217-third-party-clients-are-public-device-grant-clients-in-a-db-registry.md),
 > [ADR-0218](../adr/0218-exchange-sync-semantics.md),
@@ -321,8 +321,9 @@ owner decision 2026-09-27): its client `basetool-sc-extractor` requires consent,
 refresh tokens to DPoP, carries only `basic` by default and offers only its exchange scopes and
 `offline_access`. It loses both ingest scopes, so no extractor token carries `aud=basetool-backend`
 any more; before, a phished device code yielded an unbound, refreshable bearer token the backend API
-accepted. The provisioner applies this on production only **after** the legacy switch-off
-(REQ-XCH-033), because released extractors up to 2.9.1 still need `extractor-ingest-only` on `/v1/*`.
+accepted. The provisioner applied this on production only **after** the legacy switch-off
+(REQ-XCH-033), because released extractors up to 2.9.1 still needed `extractor-ingest-only` on
+`/v1/*`; the go-live did it at S15, and the `/v1` routes are removed since (2026-09-28).
 
 **Acceptance**
 
@@ -342,11 +343,11 @@ accepted. The provisioner applies this on production only **after** the legacy s
   the provisioner plans and applies the removal of any it finds, so the verify pass cannot pass with
   a hand-added `basetool-backend` audience mapper in place (owner decision 2026-09-28, G5-L4 of
   #2092, ADR-0202 amendment 4; self-test section 17).
-- [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
-  *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
-  only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
-  the self-test converges a client in today's production shape to it. The box closes with the
-  production apply after the legacy switch-off (WP 6, #2092).*
+- [x] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
+  *`basetool-sc-extractor` requires consent, has DPoP-bound tokens, only `basic` by default and
+  withholds both ingest scopes and every non-exchange scope; section 16 of the self-test converges a
+  client in the former production shape to it. Applied on production with the go-live's provisioner
+  run after the legacy switch-off (S15, #2092, 2026-09-28).*
 - [x] The theme renders the device page with the phishing warning
   (`login-oauth2-device-verify-user-code.ftl`). *Corrected 2026-09-27:* this item said „both pages",
   but `login-oauth-grant.ftl` carries no warning, and a `verification_uri_complete` link goes
@@ -382,8 +383,8 @@ accepted. The provisioner applies this on production only **after** the legacy s
 ### REQ-XCH-006 — DPoP is required on every exchange route
 
 A request to an exchange route without a valid DPoP proof bound to the token's `cnf.jkt` is refused
-(`401 DPOP_REQUIRED` / `401 DPOP_INVALID`). The legacy `/v1/*` routes keep today's behaviour
-(`REQ-INGEST-012`) until they end (REQ-XCH-033).
+(`401 DPOP_REQUIRED` / `401 DPOP_INVALID`). *(The legacy `/v1/*` routes, which accepted a bearer
+token too, are removed since 2026-09-28, REQ-XCH-033.)*
 
 Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and
 a replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
@@ -403,7 +404,7 @@ next; a restart invalidates them all, which costs a client one retry. A bearer-s
 token without `cnf.jkt`, is `401 DPOP_REQUIRED` with the DPoP challenge.
 
 **Which proofs need the nonce.** Only a proof whose target has a readable path outside `/exchange` —
-the legacy `/v1` routes — skips it; an unparseable target, a target without a path and `/exchange`
+since 2026-09-28 a path the gateway does not serve — skips it; an unparseable target, a target without a path and `/exchange`
 itself count as exchange routes (fail closed). A proof without the nonce is refused before the replay
 check, so it takes no room in the `jti` cache.
 
@@ -411,7 +412,7 @@ check, so it takes no room in the `jti` cache.
 100 000 entries, shared with the legacy routes, which a hundred member tokens proofing a thousand
 times a minute could fill so that every DPoP request was refused (security review 2, L10). The
 gateway instead keeps one `DpopProofReplayStore` for the exchange routes and one for every other
-route, and inside each counts the live proofs per member (the access token's `sub`; a token without
+path (`path_scope="other"`; `legacy` until the `/v1` routes were removed on 2026-09-28), and inside each counts the live proofs per member (the access token's `sub`; a token without
 one by its proof key). A member holds at most `app.exchange.limits.dpop-proofs-per-member` (**600**)
 live proofs, a store at most `app.exchange.limits.dpop-proofs-total` (**100 000**). A proof is kept
 until its `iat` plus 30 s, so a client at the default 120 requests a minute holds about 60 at once
@@ -432,8 +433,8 @@ refused because the store holds its total cap gets `503 SERVICE_UNAVAILABLE` wit
 the whole seconds until the store's earliest live proof no longer counts, rounded up and at least 1,
 read after a sweep of the expired proofs. The refused proof takes no room. It travels the same seam
 as a `DpopProofStoreFullError`. A replayed proof stays `401 DPOP_INVALID` with
-`error="invalid_dpop_proof"`; the legacy routes, which the exchange error registry does not govern,
-keep that answer for both caps. Refusals are counted as
+`error="invalid_dpop_proof"`; every other path, which the exchange error registry does not govern,
+keeps that answer for both caps. Refusals are counted as
 `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`, `full`)
 and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on any
 `full`. The auth-failure counter records the exchange cap as `dpop_proof_limit` and the full store
@@ -1103,9 +1104,11 @@ measured as the staged value with its handoff wrapper; a larger one is `413 PAYL
 checked before staging and never cached), counts it against the exchange's byte budget and answers
 `draft-result` with the `frontendUrl` of the blueprint import review or the refinery create form.
 The handoffs sit in slots of their own per client and member — at most
-`app.exchange.store.max-drafts-per-client-member` (10) live drafts, the oldest evicted — apart from
-the legacy extractor uploads' per-member slots, so a client with a drafts scope can never evict the
-member's pending extractor handoffs or another client's drafts (security review 2026-09-27). As
+`app.exchange.store.max-drafts-per-client-member` (10) live drafts, the oldest evicted — so a client
+with a drafts scope can never evict another client's drafts (security review 2026-09-27). *(The
+legacy extractor uploads' per-member slots they were kept apart from are removed since
+2026-09-28.)* A draft that cannot be staged is `503 SERVICE_UNAVAILABLE` and counted as
+`basetool_ingest_handoff_errors_total{reason="staging_unavailable"}` (`IngestStagingUnavailable`). As
 write routes they take an `Idempotency-Key` and count against the daily quota.
 
 The web blueprint import reads the same `basetool.blueprints` envelope as an upload, so a client's
@@ -1338,13 +1341,13 @@ about eight hours of refusals (load test of 2026-09-28, finding 5). Every admitt
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
 **The relay's capacity** (load test of 2026-09-28, finding 3). The exchange relay has its own JDK
-client, circuit breaker (`exchange`) and bulkhead, none shared with the extractor's handoff relay
-(`BackendImportClient`, breaker `backend`), so a burst of exchange writes cannot open the
-extractor's breaker. A change set of more than 100 ops takes one of four slots while it is
+client, circuit breaker (`exchange`) and bulkhead. *(They were kept apart from the extractor's
+handoff relay — `BackendImportClient`, breaker `backend` — which is removed since 2026-09-28.)* A change set of more than 100 ops takes one of four slots while it is
 relayed; without a free slot it is not relayed but answered `503 RELAY_BUSY` with
 `Retry-After: 10`, counted as `relay_busy`, and — a `5xx` — never cached for its key; like a
 budget refusal it gives its daily write-quota count back (owner decision 2026-09-28). A set of at
-most 100 ops needs no slot. The relay's read timeout is **30 s**, the extractor relay's 15 s: a
+most 100 ops needs no slot. The relay's read timeout is **30 s** (the removed extractor relay's was
+15 s): a
 500-op stock set took up to 10.6 s at p99 with four in flight on a member with about 15 000
 journal rows (4.2 s on fresh data), and past the timeout the gateway answered `502` while the
 backend still committed, so the client's retry met `VERSION_CONFLICT` on its own write. The
@@ -1480,8 +1483,7 @@ refusal of a large change set without a free slot (REQ-XCH-023), is, as `relay_b
 said every gateway-side code was such a label.*
 
 No answer on an exchange route falls outside the registry. A body that is not a JSON document is
-`400 SCHEMA_INVALID` with one error at the pointer `""` (on the legacy `/v1` routes it stays
-`BAD_REQUEST`); a body of another media type is `415 UNSUPPORTED_MEDIA_TYPE`; the bot filter
+`400 SCHEMA_INVALID` with one error at the pointer `""` (on any other path it stays `BAD_REQUEST`); a body of another media type is `415 UNSUPPORTED_MEDIA_TYPE`; the bot filter
 answers an exchange path it blocks with `404 NOT_FOUND`, as the gate answers an unknown route or
 method, and a query parameter without a name with `400 SCHEMA_INVALID` at `/`; an unexpected
 failure is the generic `500 INTERNAL_ERROR`. *Changed 2026-09-28: the first two answered
@@ -1822,6 +1824,19 @@ catalogue) and whether it was undone.
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 
+> **Amended 2026-09-28 — removed (#2092 step 9, owner decision of the same day).** Production ran
+> with the switch off from the go-live (S14), and extractor 2.10.0 uses only `/exchange/v1`. The
+> routes are now removed entirely, **without** a `410` stub: `LegacyEndpointGoneFilter`, the flag
+> `app.ingest.legacy-endpoints.enabled` (`IRI_INGEST_LEGACY_ENDPOINTS_ENABLED`),
+> `LegacyClientGateGuard`, the client-identity gate of REQ-INGEST-011 and the two metrics are gone.
+> A request under `/v1` gets what any unknown path of the gateway gets — `404` with a token the
+> decoder accepts, `401` with one it refuses, `403` from the CSRF filter without a token
+> (`RemovedExtractorRoutesTest`) — so a 2.9.1 extractor shows its generic send error, not the German
+> update hint. `LEGACY_ENDPOINT_GONE` stays in the error registry as retired, never to be reused. The
+> go-live runbook's S14 rollback („Legacy flag back") is impossible from this release on; going
+> back to `/v1` means rolling the gateway back to a release before it. The text below is the
+> record.
+
 Behind `app.ingest.legacy-endpoints.enabled` (default `true`), `/v1/refinery-extract` and
 `/v1/blueprint-preview` answer `410 LEGACY_ENDPOINT_GONE` with a German update hint once the flag is
 `false` at the go-live. While it is `true` their behaviour is unchanged, and under `prod` the gateway
@@ -1839,12 +1854,14 @@ accepted. `basetool_ingest_legacy_endpoints_enabled` reports the switch and
 
 **Acceptance**
 
-- [x] With the flag off both legacy routes answer `410 LEGACY_ENDPOINT_GONE` with the German hint,
-  before authentication; with it on they reach the security chain as before
-  (`LegacyEndpointGoneFilterTest`).
-- [ ] The flag is switched off on production at the go-live (a gated write, WP 6).
+- [x] With the flag off both legacy routes answered `410 LEGACY_ENDPOINT_GONE` with the German
+  hint, before authentication (`LegacyEndpointGoneFilterTest`, removed with the routes).
+- [x] The flag was switched off on production at the go-live (S14, 2026-09-28).
+- [x] The routes, the flag and the stub are removed; nothing under `/v1` is routed
+  (`IngestEndpointSurfaceTest`, `RemovedExtractorRoutesTest`).
 
-**Status:** switch built — WP 3.2 (#2082); switched off with WP 6 (#2092)
+**Status:** switch built — WP 3.2 (#2082); switched off with WP 6 (#2092, S14); removed with #2092
+step 9 (2026-09-28)
 
 ### REQ-XCH-034 — An admin can undo one client's writes for every member
 

@@ -169,3 +169,14 @@ a role marking it as the ingest gateway. That is applied by @greluc; production 
 - *Trust an on-behalf-of header from anyone on the internal network.* The header is only as good as
   the authentication behind it; without pinning it to the gateway's service account it is an
   impersonation primitive.
+
+## Amendment — 2026-09-28: the gateway acts for a member on the exchange routes only
+
+The relay this ADR decided served two extractor endpoints, `POST /api/v1/refinery-orders/import-extract`
+and `POST /api/v1/personal-blueprints/import/preview`, on which the acting member kept every stored
+authority. The SC Extractor moved to the exchange (ADR-0216), and its `/v1` routes are removed
+(#2092 step 9). `ActingMemberFilter` therefore honours `X-Ingest-On-Behalf-Of` on the backend's
+exchange routes alone, where the member holds the reduced exchange authentication (REQ-XCH-009); the
+two import endpoints stay for the web's own uploads and refuse the header (`endpoint_not_bound`,
+REQ-SEC-029). The trusted-subsystem shape — the gateway's own token, the named member, the four
+guards — is unchanged. `BackendImportClient` is gone; the header constant lives in `ExchangeRelay`.

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **Ingest-Gateway: die alten SC-Extractor-Endpunkte sind entfernt.** `/v1/refinery-extract` und
+  `/v1/blueprint-preview` gibt es nicht mehr, auch ohne `410`-Hinweis; der SC Extractor sendet seit
+  2.10.0 über den Datenaustausch. Mit ihnen entfallen `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED`,
+  `IRI_INGEST_ALLOWED_CLIENT_IDS`, `IRI_INGEST_CLIENT_AUDIT_ONLY`, `IRI_INGEST_REQUIRED_SCOPE` und
+  `IRI_INGEST_ALLOWED_TOOLS` samt Alarm `IngestUnknownClient` (#2092).
+
 ### Fixed
 
 - **Aufträge: „Items bearbeiten" speichert wieder ohne Umweg.** Die bearbeitende Einheit war im

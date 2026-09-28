@@ -1,43 +1,44 @@
-> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-22.
+> **Doc type:** Living spec — kept in sync with `main`. Last reviewed: 2026-09-28.
 > **Owner area:** INGEST · **Related ADRs:** [ADR-0018](../adr/0018-desktop-ingest-gateway-device-grant.md), [ADR-0110](../adr/0110-ingest-handoff-consume-off-navigational-get.md), [ADR-0129](../adr/0129-ingest-gateway-is-a-trusted-subsystem-not-a-token-relay.md), [ADR-0204](../adr/0204-backend-and-ingest-call-http-through-restclient-without-webflux.md) · **Related:** epic [#639](https://github.com/krt-profit/basetool/issues/639), runbook [`INGEST_KEYCLOAK_SETUP.md`](../INGEST_KEYCLOAK_SETUP.md), [`refinery-screenshot-import.md`](refinery-screenshot-import.md) (`REQ-REFINERY-018`), [`security-and-access.md`](security-and-access.md), [`api-conventions.md`](api-conventions.md), [ADR-0007](../adr/0007-client-side-vlm-screenshot-extraction.md), [ADR-0008](../adr/0008-refinery-extract-json-contract.md)
 
 # Desktop one-click ingest (send-to-basetool)
 
-> ## ⚠️ Restricted interface — approved clients only
+> ## Removed 2026-09-28 — the SC Extractor's `/v1` routes (#2092 step 9)
 >
-> **The ingest interface may be used exclusively by client software that the basetool developer
-> (@greluc) has explicitly approved.** It is published (`REQ-INGEST-010`) so that the official
-> desktop extractor can be developed against a stable contract — it is **not** an open integration
-> API.
+> `POST /v1/refinery-extract` and `POST /v1/blueprint-preview` are gone, without a stub: by owner
+> decision of 2026-09-28 a request there gets what any unknown path of the gateway gets — `404` with
+> a token the decoder accepts, `401` with one it refuses (a 2.9.1 token lost `aud=basetool-ingest`
+> with the go-live's provisioner run), `403` from the CSRF filter without any token. The SC
+> Extractor sends its drafts through the exchange's draft routes since release 2.10.0
+> (REQ-XCH-019), and the gateway serves nothing but the exchange (REQ-XCH-001,
+> [`external-exchange.md`](external-exchange.md)). The routes' switch
+> (`app.ingest.legacy-endpoints.enabled`, REQ-XCH-033), the client-identity gate of REQ-INGEST-011,
+> the per-member rate limiter of REQ-INGEST-005 and the backend's acceptance of an acting member on
+> its two import endpoints (REQ-SEC-029) went with them.
 >
-> Approval means two independent things, and both are required: a dedicated **Keycloak client
-> registration**, and an entry on the gateway's **client allowlist**
-> (`APP_INGEST_CLIENT_IDENTITY_ALLOWED_CLIENT_IDS`). Neither a stray Keycloak registration nor a
-> configuration slip grants access on its own, and removing the allowlist entry revokes a client
-> immediately, without a release.
+> What this spec still binds is said per requirement: the handoff staging and the browser pre-fill
+> (REQ-INGEST-003/-004) carry the exchange's drafts; the gateway's shape, the audience check, the
+> payload cap, the per-IP limit, the bot filter and the DPoP rules
+> (REQ-INGEST-001/-002/-005/-008/-009/-012) apply to the exchange routes; REQ-INGEST-006/-007 stay
+> obligations of the extractor. REQ-INGEST-010 is superseded and REQ-INGEST-011 keeps only the
+> audience check. Paragraphs that describe the `/v1` design are kept as its record where they
+> explain a rule that still holds, and marked where they no longer do.
 >
-> Any other tool is rejected with `403 CLIENT_NOT_ALLOWED` (`REQ-INGEST-011`), is unsupported, and
-> may break without notice. **Building or distributing an unapproved client is not permitted.** If
-> you want to integrate, ask first.
->
-> This gate covers the extractor's legacy `/v1/*` routes. The **exchange API** on the same gateway
-> (`/exchange/v1`, [`external-exchange.md`](external-exchange.md)) approves clients publicly per
-> capability and gates them through the backend's client registry instead (REQ-XCH-002/-003).
->
-> Be precise about what enforcement can and cannot achieve — see the honesty note in
-> `REQ-INGEST-011`: these controls segment *registered* clients from one another and make a foreign
-> caller *visible*; they are not native-client attestation, which is not achievable on Windows.
+> **Approved clients only.** The gateway may be used only by client software the repository owner
+> has approved — publicly, per capability, in the backend's client registry, which the gateway
+> enforces fail-closed (REQ-XCH-002/-003). Any other client is refused `403 CLIENT_NOT_ALLOWED`.
+> These controls segment registered clients from one another and make a foreign caller visible;
+> they are not native-client attestation, which is not achievable on Windows.
 >
 > **A second gate applies to the person, not the client.** Since `REQ-SEC-028`, a user who has not
 > accepted the Terms of Use is refused with `403 TERMS_NOT_ACCEPTED`, and that applies here too —
-> but no longer because the bearer is relayed. Since ADR-0129 the gateway calls under its own
-> identity and `ActingMemberFilter` makes the **sending member** the security identity of that call
-> *before* the consent filter runs, so that filter still sees the person. When the identity swap
-> shipped without that, the gate silently stopped applying to this path. The gateway needs no rule
-> of its own — it already relays a backend 4xx together with the backend's localized `detail`, so the
-> extractor tells the user to sign in to the Basetool in a browser once and accept. Sending resumes
-> on its own afterwards; no re-install and no token refresh. **Operator consequence: any change to
-> the terms wording stops every extractor** until each user has accepted once (ADR-0127).
+> but not because the bearer is relayed. Since ADR-0129 the gateway calls under its own identity and
+> `ActingMemberFilter` makes the **member** the security identity of that call *before* the consent
+> filter runs, so that filter still sees the person. When the identity swap shipped without that, the
+> gate silently stopped applying to this path. The gateway needs no rule of its own: the relay passes
+> the backend's `TERMS_NOT_ACCEPTED` on with the exchange's fixed detail (REQ-XCH-025), and the client
+> asks the member to open the Basetool once and accept. **Operator consequence: any change to the
+> terms wording pauses every connected application** until each member has accepted once (ADR-0127).
 
 ## Context & goal
 
@@ -64,34 +65,38 @@ not a new write path.
 
 ### REQ-INGEST-001 — Dedicated gateway, minimal forward-only surface
 
-A new standalone service (the `ingest` gateway) is the only new internet-reachable
-surface. For the extractor it exposes **exactly two** endpoints, one per existing import draft:
-refinery-extract and blueprint-preview; beside them it serves the exchange API's routes under
-`/exchange/v1` (REQ-XCH-001), whose own rules are [`external-exchange.md`](external-exchange.md).
-The two legacy `/v1/*` routes end at the go-live (REQ-XCH-033). Each extractor endpoint validates
-the caller's JWT and calls the corresponding internal backend import endpoint **under the
-gateway's own service-account identity**, naming the member it acts for in `X-Ingest-On-Behalf-Of`
-(ADR-0129)
-(`POST /api/v1/refinery-orders/import-extract`, `POST /api/v1/personal-blueprints/import/preview`),
-stages the returned draft for browser pickup, and returns a handoff id.
+A standalone service (the `ingest` gateway) is the only internet-reachable surface besides the web
+frontend. It serves the exchange API's routes under `/exchange/v1` (REQ-XCH-001), whose own rules
+are [`external-exchange.md`](external-exchange.md), and nothing else. Each exchange route validates
+the caller's DPoP-bound JWT and calls the backend's exchange layer **under the gateway's own
+service-account identity**, naming the member it acts for in `X-Ingest-On-Behalf-Of` (ADR-0129); a
+draft route stages the returned draft for browser pickup and answers where the member opens it
+(REQ-XCH-019).
+
+> **Amended 2026-09-28 (#2092 step 9, owner decision of the same day).** Until then the gateway
+> also exposed exactly two extractor endpoints, `POST /v1/refinery-extract` and
+> `POST /v1/blueprint-preview`, which relayed to `POST /api/v1/refinery-orders/import-extract` and
+> `POST /api/v1/personal-blueprints/import/preview` with the member's full stored authorities. Both
+> are removed without a stub. The backend keeps the two import endpoints for the web's own uploads,
+> but they no longer accept an acting member (REQ-SEC-029).
 
 The gateway **used to relay the caller's own bearer**. That made sender-constrained tokens
 impossible: a DPoP-bound token is rejected outright by a resource server presented with it as a
 bearer, so binding and relaying were mutually exclusive, and attempting both broke every send from
 2026-08-03. The caller's token now stops at the gateway and does not travel through its service
 layer at all. The backend honours the on-behalf-of header only for a caller whose `azp` is on its
-configured gateway allowlist, and only on these two endpoints, enforced as parsed `PathPattern`s on
-the decoded path (REQ-SEC-029) rather than by convention. `ActingMemberFilter` keeps the backend's
-exchange routes (`/api/v1/exchange/**`) as a second explicit list beside these two, one pattern per
-route and never a prefix (ADR-0216); on them the member holds the reduced exchange authentication
-of REQ-XCH-009 instead of their own authorities.
+configured gateway allowlist, and only on the backend's exchange routes (`/api/v1/exchange/**`),
+one parsed `PathPattern` per route matched on the decoded path and never a prefix (REQ-SEC-029,
+ADR-0216); there the member holds the reduced exchange authentication of REQ-XCH-009, never their
+own stored authorities.
 
 **The header selects the security identity, not merely the owner field** (amended 2026-08-04,
 ADR-0129). `ActingMemberFilter` replaces the request's `SecurityContext` with the acting member
 before either person-gate runs, so approval (REQ-SEC-017), consent (REQ-SEC-028), `@PreAuthorize`,
 the org-unit scope and the audit trail all judge the person sending — as they did while the gateway
-still relayed that person's token. The member's authorities are assembled from the database by the
-same assembler the login path uses, so they are exact rather than approximate.
+still relayed that person's token. The reduced exchange authorities are derived from the member's
+stored ones, assembled by the same assembler the login path uses, so a member the approval or role
+gate refuses stays refused.
 
 **Four guards bound it, and every one fails closed** (the same four ADR-0129 records, listed here
 in the order the filter applies them):
@@ -128,35 +133,34 @@ internet-unreachable — the gateway reaches it over the internal network only.
 
 **Acceptance**
 
-- [x] The gateway exposes only the two documented ingest endpoints and the exchange routes of
-  REQ-XCH-001, plus the actuator health endpoint; every other path is 404/401. (Since **ADR-0090**,
-  in prod the actuator endpoints move to a dedicated internal-only `management.server.port` — port
-  `11272`, reachable only from the scrape network and the container-local healthcheck — so the
-  **public** connector exposes only the two `/v1` ingest endpoints and the exchange routes;
+- [x] The gateway exposes only the exchange routes of REQ-XCH-001, plus the actuator health
+  endpoint; every other path — `/v1/**` included since 2026-09-28 — is 404, 401 or 403. (Since
+  **ADR-0090**, in prod the actuator endpoints move to a dedicated internal-only
+  `management.server.port` — port `11272`, reachable only from the scrape network and the
+  container-local healthcheck — so the **public** connector exposes only the exchange routes;
   `/actuator/**` there answers 404.)
-- [x] An ingest call results in exactly one forwarded call to the matching backend import
-  endpoint, carrying the gateway's own service-account bearer and the `X-Ingest-On-Behalf-Of`
-  header naming the caller (ADR-0129), and no backend write.
+- [x] An admitted exchange call results in at most one forwarded call to the backend's exchange
+  layer, carrying the gateway's own service-account bearer and the `X-Ingest-On-Behalf-Of` header
+  naming the member (ADR-0129).
 - [x] The gateway declares no `DataSource`/JPA and runs no schema migration (architecture
   test / startup assertion).
-- [x] The routed surface is **exactly** `POST /v1/refinery-extract`, `POST /v1/blueprint-preview`
-  and the exchange routes of REQ-XCH-001 — the service document, the two anonymous documents
-  `GET /exchange/v1/openapi.json` and `GET /exchange/v1/schemas/{name}`, and the member, catalogue,
-  change and draft routes (plus springdoc's non-prod `/v3/api-docs` tree and Boot's `/error`
-  dispatch target). `IngestPathScope` splits the scope in two: the **protected** surface
-  (`/v1/**` and `/exchange/**`) gets the payload cap, the per-IP rate limit and the access log; only
-  the **legacy** surface (`/v1/**`) gets the extractor client gate, because exchange clients are
-  gated by the registry instead and would otherwise be refused as unknown extractors. A controller
-  mapped anywhere else would be served with none of them; `IngestEndpointSurfaceTest` asks the
-  dispatcher for every mapping through the shared `test-support` enumeration engine and fails on
-  any other one (ING-SEC-05, 2026-09-22).
+- [x] The routed surface is **exactly** the exchange routes of REQ-XCH-001 — the service
+  document, the two anonymous documents `GET /exchange/v1/openapi.json` and
+  `GET /exchange/v1/schemas/{name}`, and the member, catalogue, change and draft routes (plus
+  springdoc's non-prod `/v3/api-docs` tree and Boot's `/error` dispatch target). `IngestPathScope`
+  names the **protected** surface, `/exchange/**`, which gets the payload cap, the per-IP rate
+  limit and the access log. A controller mapped anywhere else would be served with none of them;
+  `IngestEndpointSurfaceTest` asks the dispatcher for every mapping through the shared
+  `test-support` enumeration engine and fails on any other one (ING-SEC-05, 2026-09-22) and on any
+  mapping under `/v1` (2026-09-28).
 - [x] A backend `401`/`403` on the relay refuses the **gateway's own** service-account identity, not
-  the member's (ADR-0129), so it is answered `502 BACKEND_RELAY_FAILED` (logged at `WARN`, counted
-  under `basetool_ingest_handoff_errors_total{reason="backend_auth"}`) and the cached gateway token is
-  invalidated so the next upload mints a fresh one — never relayed as the member's own auth failure,
-  which told the extractor to sign in again for a server-side fault (ING-SEC-02, 2026-09-22). The
-  token cache holds token and expiry as one atomic value, and a failed grant backs off for 5 s before
-  Keycloak is asked again (`outcome="backoff"` on `basetool_ingest_service_account_token_total`).
+  the member's (ADR-0129), so an exchange client gets `502 BACKEND_RELAY_FAILED` (REQ-XCH-023),
+  never the member's own auth failure. The token cache holds token and expiry as one atomic value,
+  and a failed grant backs off for 5 s before Keycloak is asked again (`outcome="backoff"` on
+  `basetool_ingest_service_account_token_total`). *Amended 2026-09-28:* the `/v1` error handler that
+  also dropped the cached token on such an answer (`reason="backend_auth"`, ING-SEC-02) went with
+  the routes; the exchange relay never did, and `ServiceAccountTokenProvider#invalidate` has no
+  caller now.
 - [x] The servlet filters run in five distinct slots, outermost first: `CorrelationIdFilter` (+10),
   `BotProtectionFilter` (+12), `RequestLoggingFilter` (+15), `RateLimitingFilter` (+20),
   `PayloadSizeLimitFilter` (+30) — all ahead of Spring Security. Bot and access log used to tie at
@@ -174,11 +178,11 @@ internet-unreachable — the gateway reaches it over the internal network only.
   makes the proxy return a bare 400.
 - [x] The relay and the gateway's token grant are blocking `RestClient` calls on the JDK HTTP client
   (`RestClientConfig`, ADR-0204, 2026-09-22) — the module carries no WebFlux, no Reactor Netty and
-  no `resilience4j-reactor`. Relay: 5 s connect, 15 s read, response body capped at
-  `app.ingest.max-payload-bytes`, HTTP/1.1, the `backend` circuit breaker applied with
-  `executeSupplier` and ignoring `RestClientResponseException`. The exchange relay has its own JDK
-  client with a 30 s read, its own `exchange` breaker and a bulkhead for large change sets, so it
-  never opens the extractor relay's breaker (REQ-XCH-023). Token grant: 5 s connect, read bounded
+  no `resilience4j-reactor`. The exchange relay: 5 s connect, 30 s read, response body capped at
+  `app.ingest.max-payload-bytes`, HTTP/1.1, the `exchange` circuit breaker applied with
+  `executeSupplier` and a bulkhead for large change sets (REQ-XCH-023). *(Until 2026-09-28 the `/v1`
+  relay had a client of its own with a 15 s read and a `backend` breaker; both are removed.)*
+  Token grant: 5 s connect, read bounded
   by the smaller of 10 s and `app.ingest.service-account.timeout-millis`. TLS trust: outside
   `dev`/`test` the `backend-trust` bundle (`INTERNAL_TLS_TRUSTSTORE`) is the relay's only anchor,
   **without** a hostname check by default and **with** one when
@@ -195,18 +199,17 @@ internet-unreachable — the gateway reaches it over the internal network only.
   already dropped is never reused (ING-PERF-01).
 
 **Enforced by:** `ArchitectureTest` (no JPA / no relational persistence; every controller +
-`@PostMapping` is `@PreAuthorize`-annotated), `IngestControllerTest` (exactly the two endpoints,
-forward-only relay, backend 4xx relayed verbatim, 502 on backend-unreachable), `IngestEndpointSurfaceTest`
-(the dispatcher routes exactly the two `/v1` endpoints and the exchange routes),
-`FilterOrderTest` (the registered filter order),
-`GlobalExceptionHandlerTest` (backend 401/403 → 502 + token invalidation), `ServiceAccountTokenProviderTest`
-(atomic cache under concurrency, `invalidate()`, failure backoff), `BackendImportClientTest`
-(the backend is called as the gateway, naming the caller; a refused token is replaced on the next relay),
-`RestClientConfigTest` (the TLS trust matrix against a real HTTPS server with a misnamed certificate,
-the token-grant timeout, the body cap, HTTP/1.1), `RelayIdleConnectionBoundTest` (the client's idle
-bound against Tomcat's keep-alive, read off the classpath) · **Code:** `IngestController`, `IngestService`, `BackendImportClient`,
-`RestClientConfig`, `ResponseSizeLimitInterceptor`, `BackendCallLoggingInterceptor`,
-`IngestApplication`, `application.yml` (`server.port: 11262`, `server.ssl.enabled: true`) · **Issues:** #642
+`@PostMapping` is `@PreAuthorize`-annotated), `IngestEndpointSurfaceTest` (the dispatcher routes
+exactly the exchange routes, nothing under `/v1`), `RemovedExtractorRoutesTest` (the former `/v1`
+routes answer like any unknown path and stage nothing), `FilterOrderTest` (the registered filter
+order), `ServiceAccountTokenProviderTest` (atomic cache under concurrency, `invalidate()`, failure
+backoff), `ExchangeRelayTest` (the backend is called as the gateway, naming the member; a relay
+failure is `502 BACKEND_RELAY_FAILED`), `RestClientConfigTest` (the TLS trust matrix against a real
+HTTPS server with a misnamed certificate, the token-grant timeout, the body cap, HTTP/1.1),
+`RelayIdleConnectionBoundTest` (the client's idle bound against Tomcat's keep-alive, read off the
+classpath) · **Code:** `ExchangeController`, `ExchangeRelay`, `RestClientConfig`,
+`ResponseSizeLimitInterceptor`, `BackendCallLoggingInterceptor`, `IngestApplication`,
+`application.yml` (`server.port: 11262`, `server.ssl.enabled: true`) · **Issues:** #642, #2092
 
 ### REQ-INGEST-002 — Authentication & authorization
 
@@ -245,6 +248,11 @@ never acts for a user other than the one it authenticated.
 > extractors up to 2.9.1 still need the ingest audience on `/v1/*`; until then the paragraphs above
 > describe production.
 
+> **Amended 2026-09-28 (#2092 step 9).** The go-live applied that shape to production (S15), and the
+> `/v1` routes are removed. The paragraphs above describe history: the extractor's token now carries
+> `aud=basetool-ingest` from its exchange scopes, is DPoP-bound, and passes the exchange gates of
+> REQ-XCH-006…-008 like any approved client's.
+
 **Acceptance**
 
 - [x] A request without a valid signed realm token is rejected 401/403; no forward happens. With
@@ -253,15 +261,16 @@ never acts for a user other than the one it authenticated.
   the amendment above).
 - [x] The device-grant client is public (no secret) and the secret is never embedded in the
   desktop binary or in any committed config.
-- [x] The handoff staged by an ingest call is readable only under the same `sub`.
+- [x] The handoff staged by a draft route is readable only under the same `sub`.
 
 **Enforced by:** `SecurityConfigTest` (audience validator accepts a token carrying `basetool-ingest`,
 rejects a frontend session token that carries only `basetool-backend` — corrected 2026-09-22, the test
 used to assert the backend's value), `scripts/check-ingest-audience.py` (repo-lint `ingest-audience`:
 no ingest config, env template or runbook pairs `expected-audiences` / `IRI_INGEST_EXPECTED_AUDIENCES`
-with `basetool-backend`), `IngestControllerTest` (an unauthenticated caller is 401, no forward),
-`ArchitectureTest` (every REST surface is authorization-annotated) · **Code:** `SecurityConfig`,
-`IngestController`, `HandoffStagingService` (per-`sub` Redis key); the public `basetool-sc-extractor`
+with `basetool-backend`), `ExchangeDpopGateTest` (an unauthenticated or unbound caller is refused,
+nothing relayed), `ArchitectureTest` (every REST surface is authorization-annotated) · **Code:**
+`SecurityConfig`, `ExchangeController`, `HandoffStagingService` (per-`sub` Redis key); the public
+`basetool-sc-extractor`
 device-grant client per [`INGEST_KEYCLOAK_SETUP.md`](../INGEST_KEYCLOAK_SETUP.md) · **Issues:** #641, #642
 
 ### REQ-INGEST-003 — Short-lived single-use Redis handoff
@@ -286,13 +295,17 @@ slow import but a login outage for everybody. The single-use consume is triggere
 navigational pre-fill GET, so a browser prefetch or a duplicate page load cannot burn the token
 before the real pickup (REQ-INGEST-004, ADR-0110).
 
+> **Amended 2026-09-28 (#2092 step 9).** The per-subject index `ingest:handoff-index:<sub>` and
+> `app.ingest.max-handoffs-per-subject` bounded the removed `/v1` uploads and are gone. Every staged
+> entry now sits in a slot per client and member (below), under `app.ingest.max-handoff-bytes` and
+> the exchange's Redis byte budget (REQ-XCH-023).
+
 The same staging serves the exchange. Its drafts (`HandoffKind.BLUEPRINT` / `REFINERY`,
 REQ-XCH-019) land in slots of their own per client and member (`app.exchange.store.max-drafts-per-client-member`,
-default 10, the oldest evicted), so a client's drafts never evict the extractor's uploads above or
-another client's drafts. A change set the mass-change guard holds back
+default 10, the oldest evicted), so a client's drafts never evict another client's drafts. A change set the mass-change guard holds back
 is staged as `HandoffKind.MASS_CHANGE` (REQ-XCH-021) under its own size cap
 (`app.exchange.store.max-mass-change-bytes`, 512 KiB) in a slot of one per client and member: it
-never evicts a pending extractor draft or another client's held change set, and the same client's
+never evicts a pending draft or another client's held change set, and the same client's
 newer one replaces it. The member confirms or discards it
 on „Verbundene Anwendungen" (`/connected-apps/confirm`), which consumes it with an explicit request
 as above.
@@ -325,7 +338,10 @@ defect, and enough to trip `LogbackErrorSpike` (REQ-OBS-013). The separate `reas
 operationally: the backend relay has already **succeeded** at that point, so the fix is Redis, not the
 backend — which is why it gets its own `IngestStagingUnavailable` alert rather than only the
 by-reason `IngestHandoffErrors` threshold. This mirrors the treatment
-`IdentityProviderUnavailableFilter` gives an unreachable Keycloak (REQ-SEC-024).
+`IdentityProviderUnavailableFilter` gives an unreachable Keycloak (REQ-SEC-024). *Amended
+2026-09-28:* the exchange's draft and mass-change routes catch the failure themselves and answer
+`503 SERVICE_UNAVAILABLE` with the registry's detail; they count it under the same
+`staging_unavailable` reason, which only the removed `/v1` path used to reach.
 
 **Acceptance**
 
@@ -337,10 +353,10 @@ by-reason `IngestHandoffErrors` threshold. This mirrors the treatment
   existence.
 - [x] A Redis outage during staging yields a `503` with `Retry-After` and a `WARN`, not a `500` with
   an `ERROR` stack trace, and is counted under its own `staging_unavailable` reason.
-- [x] An exchange client's drafts evict only its own oldest drafts for that member, never the
-  extractor's uploads or another client's drafts; a held-back mass change takes one slot per client
-  and member, replaces only that client's older one, evicts no draft, and is refused above its size
-  cap. *`HandoffStagingServiceTest#shouldKeepExchangeDraftsApartFromTheExtractorAndFromOtherClients`,
+- [x] An exchange client's drafts evict only its own oldest drafts for that member, never another
+  client's drafts; a held-back mass change takes one slot per client and member, replaces only that
+  client's older one, evicts no draft, and is refused above its size cap.
+  *`HandoffStagingServiceTest#shouldKeepOneClientsDraftsApartFromOtherClients`,
   `#shouldKeepOneMassChangePerClientAndMemberWithoutEvictingDrafts`,
   `#shouldKeepOneMassChangePerClientApartFromOtherClients`, `#shouldRefuseAMassChangeAboveItsCap`,
   `ExchangeChangeRouteTest#aHeldBackMassChangeIsStagedForTheMembersConfirmation` (REQ-XCH-019,
@@ -349,17 +365,20 @@ by-reason `IngestHandoffErrors` threshold. This mirrors the treatment
 **Enforced by:** `HandoffStagingServiceTest` (Testcontainers Redis: stage + consume-once through a
 test-side consume that reads the frontend's literal `ingest:handoff:<sub>:<id>` key schema — the
 gateway itself only writes; a foreign-`sub` read returns empty without deleting, an unknown id returns
-empty, the per-subject index stays at exactly the cap using the `RPUSH` answer instead of a separate
+empty, a client's index stays at exactly the cap using the `RPUSH` answer instead of a separate
 `LLEN`, the log line carries `draftLen` but neither the draft nor the raw ids), `GlobalExceptionHandlerTest`
-(`DataAccessException` → 503 + `Retry-After` + both counters, `WARN` without the endpoint), frontend
+(`DataAccessException` → 503 + `Retry-After` + both counters, `WARN` without the endpoint),
+`ExchangeDraftRouteTest` (a staging failure is a `503` counted as `staging_unavailable`), frontend
 `IngestHandoffServiceTest` (single-use consume, per-`sub` scoping, kind match) · **Code:**
 `HandoffStagingService`, `StagedHandoff`, `IngestProperties#handoffTtl`,
 `GlobalExceptionHandler#handleStagingUnavailable`, `IngestStagingUnavailable` alert · **Issues:** #642
 
 ### REQ-INGEST-004 — Browser pre-fill, review-before-commit preserved
 
-The extractor opens the matching basetool page with `?handoff=<id>`
-(`/refinery-orders/create?handoff=<id>` and the blueprint equivalent). If the user has no
+The client opens the matching basetool page with `?handoff=<id>`
+(`/refinery-orders/create?handoff=<id>` and the blueprint equivalent) — the `frontendUrl` of the
+exchange's `draft-result` since 2026-09-28, when the extractor's `/v1` routes that answered it
+before were removed. If the user has no
 frontend session, the existing OAuth2 login + saved-request replay returns them to that URL
 after authenticating. The frontend reads the staged draft for `(session sub, handoffId)`
 exactly once and pre-fills the **existing** review form (REQ-REFINERY-014/-015 for
@@ -418,11 +437,17 @@ never consumes) + `#importHandoff` (the `POST` consume + swap), `refinery-orders
 
 ### REQ-INGEST-005 — Size and rate limits
 
-The gateway caps each ingest payload at the same ceiling the existing frontend proxy uses
+The gateway caps each exchange payload at the same ceiling the existing frontend proxy uses
 (2 MB — a real extract is a few KB) and rejects larger bodies before forwarding. The cap is
 enforced on the **real** body size, not just a declared `Content-Length`: a chunked request
 (no `Content-Length`) is counted while reading and rejected the moment it crosses the cap, so
 it cannot be used to slip an oversized body past the guard (`PayloadSizeLimitFilter`).
+
+> **Amended 2026-09-28 (#2092 step 9).** The per-`sub` limiter described next (`SubjectRateLimiter`,
+> `app.rate-limit.capacity` / `refill-tokens`) guarded the removed `/v1` routes and is gone with them.
+> The exchange limits each client and member itself, per minute and per day (REQ-XCH-023,
+> `ExchangeLimitFilter`, `ExchangeQuotas`); the per-IP front line and the payload cap below stay and
+> now cover `/exchange/**`.
 
 Ingest calls are rate-limited **per `sub` and per source IP** so the new ingress cannot be
 used to hammer the backend import endpoints. The per-`sub` limit (`SubjectRateLimiter`,
@@ -447,22 +472,23 @@ them.
 
 - [x] A body over the size cap is rejected by the gateway with a localized problem response
   and is never forwarded — including a chunked body with no `Content-Length`.
-- [x] A burst of ingest calls from one `sub` is throttled with a `Retry-After`, not passed
-  straight through; rotating the source IP does not defeat the per-`sub` limit.
+- [x] A burst of calls from one source IP is throttled with a `Retry-After`; the per-member limit
+  is the exchange's own (REQ-XCH-023). *(Amended 2026-09-28: this said a per-`sub` limit throttled
+  the `/v1` routes.)*
 
-**Enforced by:** `FiltersTest`, `SubjectRateLimiterTest`, `IngestPropertiesTest` (the IP budget's own
-defaults and property names), `FilterOrderTest` (rate limit before the payload cap) · **Code:**
-`PayloadSizeLimitFilter`, `SubjectRateLimiter`, `RateLimitingFilter`, `RateLimitBuckets`,
-`RateLimitProperties` · **Issues:** #642, security audit INGEST-DOS-1 / INGEST-RATELIMIT-1
+**Enforced by:** `FiltersTest`, `IngestPropertiesTest` (the IP budget's own defaults and property
+names), `FilterOrderTest` (rate limit before the payload cap), `ExchangeLimitFilterTest` (the
+per-client and per-member limits) · **Code:** `PayloadSizeLimitFilter`, `RateLimitingFilter`,
+`RateLimitBuckets`, `RateLimitProperties` · **Issues:** #642, #2092, security audit INGEST-DOS-1 /
+INGEST-RATELIMIT-1
 
 ### REQ-INGEST-006 — Egress is opt-in; the CLI stays offline
 
-> [!note] Planned — the SC Extractor's migration (epic #2078, WP 5.1, #2088)
-> The Basetool side is built: the blueprint sync route (REQ-XCH-015) and the scopes the provisioner
-> offers the extractor's client — `exchange.connect`, `exchange.blueprints.read` / `.write` and both
-> draft scopes (REQ-XCH-005). Still to come: the extractor release that uses them. From it on the
-> SC Extractor may sync blueprints directly, opt-in, through `exchange.blueprints.write`; until then
-> the text below describes all of its egress.
+> [!note] Amended 2026-09-28 — the SC Extractor's migration (epic #2078, WP 5.1, #2088)
+> Since release 2.10.0 the SC Extractor talks only to the exchange: its explicit Send goes through
+> the draft routes (REQ-XCH-019), and it may sync blueprints directly, opt-in, through
+> `exchange.blueprints.write` (REQ-XCH-015). The `/v1` routes it used before are removed. The rule
+> below — nothing leaves the machine without the member's explicit action — binds both paths.
 
 Data leaves the user's machine **only** when the user explicitly clicks Send in the
 extractor GUI. There is no background sync, no auto-send, and no telemetry. Saving the JSON
@@ -525,7 +551,9 @@ Basetool trennen" revoke action (#648), in the extractor repo · **Issues:** #64
 ### REQ-INGEST-008 — No new role; backend stays internal; audience sequencing
 
 Direct ingest introduces **no new Keycloak role or Spring authority** — it is
-`isAuthenticated()` end to end (ROLES_AND_PERMISSIONS.md unchanged). The backend remains
+`isAuthenticated()` end to end (ROLES_AND_PERMISSIONS.md unchanged). *(Since the exchange, a relayed
+member holds the reduced `ROLE_EXCHANGE_MEMBER` authentication of REQ-XCH-009, and since
+2026-09-28 no other; ROLES_AND_PERMISSIONS.md records it.)* The backend remains
 internet-unreachable; only the gateway is published. If/when the backend's opt-in audience
 check (`app.security.jwt.expected-audiences`) is enabled, the `aud=basetool-backend` audience
 mapper must already be emitting on **both** token sets — the new client's `extractor-ingest`
@@ -568,7 +596,7 @@ or an identity-provider round-trip — using four fixed, case-insensitive strate
   narrow — Tomcat's other two parameter-parse rejects (a percent-escape that fails to decode, the
   `maxParameterCount` cap) are left to the exception handler rather than re-implemented here.
 - **Disallowed HTTP method → 405.** The gateway only ever uses `GET` (actuator / api-docs and the
-  exchange reads), `POST` (the two `/v1` ingest endpoints and the exchange writes), `HEAD` (health
+  exchange reads), `POST` (the exchange writes and drafts), `HEAD` (health
   probes) and `OPTIONS` (CORS preflight). Every other method — `PUT`/`DELETE`/`PATCH`
   verb-tampering, `TRACE`/`CONNECT`, WebDAV `PROPFIND`/`MKCOL`/… — is refused. This method set is
   deliberately narrower than the frontend's.
@@ -581,8 +609,8 @@ On an `/exchange` path every refusal is instead a problem with a code from the e
 answers an unknown route or method.
 
 The filter runs after `CorrelationIdFilter` (a blocked request is still correlation-tagged) and
-before the size-cap, rate-limit and Spring Security filters. The gateway's real surface — `/v1/**`,
-the exchange routes under `/exchange/**` (REQ-XCH-001), `/actuator/health` (+ liveness/readiness),
+before the size-cap, rate-limit and Spring Security filters. The gateway's real surface — the
+exchange routes under `/exchange/**` (REQ-XCH-001), `/actuator/health` (+ liveness/readiness),
 `/actuator/prometheus` (exact match → the fail-closed scrape chain still runs) and `/v3/api-docs`
 (non-prod) — is never blocked. Each reject bumps `basetool_bot_blocked_total{rule}` (bounded `rule` ∈ {`method`, `path_prefix`, `file_extension`,
 `query_string`}; never the URI or method — `REQ-OBS-006/-011`), shared with the frontend counter
@@ -596,7 +624,7 @@ self-inflicted false positive if a future legit route matches a blocked prefix.
   answered 405.
 - [x] A query string with an empty-named chunk (`/?=phpinfo()`) is answered with a bare 400 — no
   body, no error dispatch — and wins over the path/extension/method rules when several apply.
-- [x] The gateway's real surface (`/v1/**`, `/exchange/**`, `/actuator/health*`,
+- [x] The gateway's real surface (`/exchange/**`, `/actuator/health*`,
   `/actuator/prometheus`, `/v3/api-docs*`) passes the filter unchanged; every route of the
   committed exchange OpenAPI document and every schema URL is checked against the method, prefix and
   suffix lists (`ExchangeRouteBotCompatibilityTest`).
@@ -610,7 +638,13 @@ counter) · **Code:** `BotProtectionFilter`, `MetricNames` (`BOT_BLOCKED` + `rul
 [`07-basetool-operations.json`](../../monitoring/grafana/dashboards/07-basetool-operations.json) ·
 **Issues:** #1202
 
-### REQ-INGEST-010 — Published API contract for the extractor
+### REQ-INGEST-010 — Published API contract for the extractor *(superseded)*
+
+> **Superseded 2026-09-28 (#2092 step 9).** The two endpoints this contract described are removed.
+> The exchange's committed contract, `ingest/src/main/resources/api/exchange-v1.openapi.json`, served
+> at `/exchange/v1/openapi.json` (REQ-XCH-001, REQ-XCH-011), is the gateway's only published API. The
+> springdoc document `ingest/src/main/resources/api/openapi.json` stays generated and committed, and
+> lists no operation; it points at the exchange's document. The text below is the record.
 
 The gateway's two endpoints are the contract a **separately developed, separately released** client
 (the `basetool-sc-extractor` desktop app) codes against, so that contract is published as a
@@ -636,17 +670,28 @@ serves it statically and anonymously at `/exchange/v1/openapi.json` with the JSO
 **Acceptance**
 
 - [x] `ingest/src/main/resources/api/openapi.json` is committed and matches the live SpringDoc
-  output for the current controllers.
-- [x] The document carries the `bearer-jwt` scheme, both `/v1` paths, and the request/response
-  schemas; a controller that stops being scanned fails the generator rather than shrinking the spec.
+  output; since 2026-09-28 it lists no path and names the exchange's document.
 - [x] `/v3/api-docs` is reachable without authentication in non-prod and 404s in prod.
 
-**Enforced by:** `OpenApiGeneratorTest` (regeneration + structural assertions), `IngestControllerTest`
-(`/v3/api-docs` is permitted and titled) · **Code:** `ingest/.../config/OpenApiConfig`,
-`IngestController` (`@Operation`/`@ApiResponses`/`@Tag`), `IngestResponseDto` (`@Schema`),
-`application-prod.yml`
+**Enforced by:** `OpenApiGeneratorTest` (regeneration; no path is published, the description points at
+the exchange's document) · **Code:** `ingest/.../config/OpenApiConfig`, `application-prod.yml`
 
-### REQ-INGEST-011 — Client-identity gate: approved clients only
+### REQ-INGEST-011 — Client-identity gate: approved clients only *(superseded, except the audience check)*
+
+> **Superseded 2026-09-28 (#2092 step 9).** The client-identity gate below guarded only the removed
+> `/v1` routes, and it is removed with them: `ClientIdentityFilter`, `ClientIdentityProperties`
+> (`app.ingest.client-identity.*` — `allowed-client-ids`, `required-scope`, `allowed-tools`,
+> `audit-only`; `IRI_INGEST_ALLOWED_CLIENT_IDS`, `IRI_INGEST_REQUIRED_SCOPE`,
+> `IRI_INGEST_ALLOWED_TOOLS`, `IRI_INGEST_CLIENT_AUDIT_ONLY`), `LegacyClientGateGuard`,
+> `ProvenanceGuard`, `basetool_ingest_client_total`, `basetool_ingest_client_rejected_total`, the
+> `azp`/`scope`/`tool` series of `basetool_ingest_gate_enforcing` and the `IngestUnknownClient`
+> alert. Which client software may call the gateway is now decided by the exchange registry alone
+> (REQ-XCH-002/-003). **What still holds is the audience check**: the gateway's decoder requires
+> `aud=basetool-ingest` (`app.security.jwt.expected-audiences`, `IRI_INGEST_EXPECTED_AUDIENCES`),
+> which the `exchange.*` client scopes stamp, so a frontend session token still cannot drive it;
+> `basetool_ingest_gate_enforcing{gate="audience"}` reports it, the startup banner logs it as the
+> `Audience gate` line, and `IngestAudienceGateOff` fires while it is off. The text below is the
+> record of the `/v1` gate.
 
 The ingest interface is restricted to client software the basetool developer (@greluc) has
 explicitly approved. This is a control over **which program** calls the gateway; it does **not**
@@ -813,25 +858,22 @@ authentication: the field is client-supplied and the contract that documents it 
   resource server's own `authenticated()` matcher was never affected: it is evaluated on the decoded
   path, so an encoded call still required a valid realm token.
 
-**Enforced by:** `ClientIdentityFilterTest` (all four checks, fail-closed on absent claims, audit-only,
-bounded label, unauthenticated pass-through, non-JWT principal refused, percent-encoded path,
-exchange-registry clients refused), `LegacyClientGateGuardTest` (the production start refused with an empty allowlist),
-`IngestEndpointSurfaceTest` (the routed surface is exactly the two `/v1` endpoints and the exchange
-routes), `IngestGatePostureMetricTest` and `StartupBannerListenerTest` (the posture gauge and log line),
-the promtool test `ingest_audience_gate_off_test.yml`, `IngestPathScopeTest` (decoded
-scope matching), `FiltersTest` / `RequestLoggingFilterTest` (payload cap, rate limit and access log
-on an encoded path), `ProvenanceGuardTest` (allowlist, absent producer,
-audit-only, log sanitisation, no echo-back) · **Code:** `ClientIdentityFilter`,
-`ClientIdentityProperties`, `LegacyClientGateGuard`, `IngestPathScope`, `ProvenanceGuard`, `Provenance`,
-`ClientNotAllowedException`, `MetricNames` · **Monitoring:** `basetool_ingest_client_total{client_id}`,
-`basetool_ingest_client_rejected_total{reason}`, `basetool_ingest_gate_enforcing{gate}`, alerts
-`IngestUnknownClient` and `IngestAudienceGateOff`
+**Enforced by (what still holds):** `SecurityConfigTest` (the audience validator),
+`IngestGatePostureMetricTest` and `StartupBannerListenerTest` (the audience gauge and log line), the
+promtool test `ingest_audience_gate_off_test.yml`, `IngestPathScopeTest` (decoded scope matching),
+`FiltersTest` / `RequestLoggingFilterTest` (payload cap, rate limit and access log on an encoded
+path), `IngestEndpointSurfaceTest` (every routed endpoint lies inside the protected scope) ·
+**Code:** `SecurityConfig`, `IngestGatePostureMetric`, `IngestPathScope`, `MetricNames` ·
+**Monitoring:** `basetool_ingest_gate_enforcing{gate="audience"}`, alert `IngestAudienceGateOff`
 
 ### REQ-INGEST-012 — DPoP is validated at the gateway, and never relayed
 
-This requirement governs the legacy `/v1/*` routes until they end (REQ-XCH-033). On the exchange
-routes DPoP is **required**, not only accepted: a bearer-scheme request or an unbound token is
-refused, and the gateway also demands a server nonce (REQ-XCH-006, `ExchangeDpopGateTest`).
+> **Amended 2026-09-28 (#2092 step 9).** This requirement governed the legacy `/v1/*` routes, which
+> are removed. What it says about validating the proof at the gateway, pinning `htu` and never
+> relaying the token holds for the exchange routes, where DPoP is **required**, not only accepted: a
+> bearer-scheme request or an unbound token is refused, and the gateway also demands a server nonce
+> (REQ-XCH-006, `ExchangeDpopGateTest`). The unbound-token canary (`ClientIdentityFilter`) and the
+> "both schemes accepted" rollout note below applied to `/v1` only.
 
 The extractor presents its access token to the gateway under the **`DPoP` scheme with a proof**, and
 the gateway validates that proof itself (Spring Security `.dPoP()`). Sender-constraining pays here
@@ -904,20 +946,19 @@ authentication with no obvious cause, which is why the extractor names clock dri
   `basetool_ingest_auth_failures_total`. (Earlier drafts of this list said the gateway does *not*
   configure `dPoP(...)`; the requirement body above and the ingest `SecurityConfig` both show it
   does — the extractor still presents its token under the `DPoP` scheme.)
-- [x] An access token arriving **without** `cnf.jkt` is logged at `WARN` as a lapsed-protection
-  regression (`ClientIdentityFilter#warnOnUnboundAccessToken`) and still served — the direction
-  flipped with ADR-0129; the old "bound token about to fail the relay" canary is gone.
+- [x] An access token arriving **without** `cnf.jkt` is refused on the exchange routes
+  (REQ-XCH-006). *(Amended 2026-09-28: on `/v1` it was logged at `WARN` by
+  `ClientIdentityFilter#warnOnUnboundAccessToken` and still served; both are removed.)*
 - [ ] The refresh token is bound; a replayed refresh token without the key is refused by Keycloak.
 - [x] The backend is called with the gateway's own service-account bearer, never the caller's token
-  (`BackendImportClientTest`).
+  (`ExchangeRelayTest`).
 
-**Enforced by:** `ClientIdentityFilterTest` (the `cnf.jkt` canary), `IngestControllerTest` (the
-bearer path through the real filter chain) · **Code:** ingest `SecurityConfig` (configures
-`.dPoP(...)` beside `.jwt(...)`, with the reasoning inline), `PublicUriDpopAuthenticationConverter`,
-`ClientIdentityFilter#warnOnUnboundAccessToken` · **Operator:**
-`INGEST_KEYCLOAK_SETUP.md` step 8 (nothing to configure) · **Client:** the extractor keeps its DPoP
-key, sends token-endpoint proofs, and presents a bound token to the gateway as
-`Authorization: DPoP` with a proof (`BasetoolIngestClient`; `Bearer` only for an unbound token).
+**Enforced by:** `ExchangeDpopGateTest` (bearer and unbound tokens refused, the nonce),
+`PublicUriDpopAuthenticationConverterTest` (the pinned `htu`) · **Code:** ingest `SecurityConfig`
+(configures `.dPoP(...)` beside `.jwt(...)`), `PublicUriDpopAuthenticationConverter`,
+`ExchangeTokenGateFilter` · **Operator:** `INGEST_KEYCLOAK_SETUP.md` step 8 (nothing to configure) ·
+**Client:** the extractor keeps its DPoP key, sends token-endpoint proofs, and presents its bound
+token to the gateway as `Authorization: DPoP` with a proof.
 
 ## Out of scope
 
