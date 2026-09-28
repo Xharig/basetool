@@ -1253,6 +1253,7 @@ Responses carry `RateLimit` and `Retry-After` headers. The account check has its
 | write requests per client and member | 500 per UTC day — `writesPerDay` overrides it, at most 5000 | Redis, `ingest:xch:quota:<client>:<member>:<day>`, created with its expiry by `SET NX EX`, then `INCR`; kept until the end of the following UTC day |
 | live DPoP proofs per member (`dpop-proofs-per-member`) | 600, per path scope | in-process `jti` replay cache (REQ-XCH-006) |
 | live DPoP proofs in total (`dpop-proofs-total`) | 100 000, per path scope | in-process `jti` replay cache (REQ-XCH-006) |
+| change sets of more than 100 ops relayed at once, over all clients and members | 4 | in-process bulkhead `exchangeLargeChangeSets` (`resilience4j.bulkhead.instances.…max-concurrent-calls`) |
 
 The write routes are the five `…/changes` and `…/drafts/…` routes (`ExchangeRoutes`). A request over
 a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, each with
@@ -1260,6 +1261,22 @@ a per-period limit is `429 RATE_LIMITED`, over the quota `429 QUOTA_EXCEEDED`, e
 SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted answer carries
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
+
+**The relay's capacity** (load test of 2026-09-28, finding 3). The exchange relay has its own JDK
+client, circuit breaker (`exchange`) and bulkhead, none shared with the extractor's handoff relay
+(`BackendImportClient`, breaker `backend`), so a burst of exchange writes cannot open the
+extractor's breaker. A change set of more than 100 ops takes one of four slots while it is
+relayed; without a free slot it is not relayed but answered `503 RELAY_BUSY` with
+`Retry-After: 10`, counted as `relay_busy`, and — a `5xx` — never cached for its key. A set of at
+most 100 ops needs no slot. The relay's read timeout is **30 s**, the extractor relay's 15 s: a
+500-op stock set took up to 10.6 s at p99 with four in flight on a member with about 15 000
+journal rows (4.2 s on fresh data), and past the timeout the gateway answered `502` while the
+backend still committed, so the client's retry met `VERSION_CONFLICT` on its own write. The
+timeout stays below the idempotency claim's two minutes and the edge proxy's 90 s. Why four:
+one to four concurrent 500-op sets kept the p50 at 2.1 s, eight rose to 2.9 s (and on a member
+with history reached the old 15 s timeout), sixteen collapsed to 12.4 s with the backend at its
+3-CPU limit. The breaker's and the bulkhead's meters, `ExchangeLargeChangeSetsBusy` and the
+Exchange dashboard's *Relay capacity* row watch it (REQ-XCH-028).
 
 **In front of them**, before the token is read, the ingest-wide per-IP bucket
 (`RateLimitingFilter`, REQ-INGEST-005; `app.rate-limit.ip-capacity` / `ip-refill-tokens`, 120 a
@@ -1324,6 +1341,13 @@ issues against the same user's key patterns and commands (REQ-SEC-068).
   working. *`ExchangeStoreRedisIntegrationTest` fills one member's and then one client's budget in a
   real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
   free their bytes. Sessions live under keys the ingest user cannot reach at all.*
+- [x] The exchange relay does not share the extractor relay's breaker, and more than four large
+  change sets at once are refused before the backend. *`ExchangeRelayTest` (an open `backend`
+  breaker leaves the relay working; a busy bulkhead refuses `RELAY_BUSY` without calling the
+  backend; a failed set frees its slot), `ExchangeChangeRouteTest` (101 ops take a slot, 100 do
+  not; `RELAY_BUSY` carries `Retry-After: 10` and is not cached), `RestClientConfigTest` (the
+  exchange client waits past 15 s; its timeout ends within the claim),
+  `Resilience4jMetricsConfigTest`, `exchange_relay_capacity_alerts_test.yml`.*
 - [x] Parallel writes never overshoot a budget. *`ExchangeStoreRedisIntegrationTest`: sixteen
   parallel reservations on one member admit exactly what fits, and across two clients exactly what
   the total holds; a reservation settles on its value or stays when the value does not fit; a missing
@@ -1352,7 +1376,8 @@ each with its HTTP status and the client action it requires. Codes are never reu
 The gateway's gates count their refusals on `basetool_ingest_exchange_refused_total` with the code
 as the `reason` label (`ExchangeRefusals.CODES`); the routes' own answers (`SCHEMA_INVALID`,
 `BATCH_TOO_LARGE`, `PAYLOAD_TOO_LARGE`, `CURSOR_EXPIRED`, `BACKEND_RELAY_FAILED`, a staging store's
-`503`) and those written before the token is read are not counted there. *Corrected 2026-09-28: this
+`503`) and those written before the token is read are not counted there; `RELAY_BUSY`, the relay's
+refusal of a large change set without a free slot (REQ-XCH-023), is, as `relay_busy`. *Corrected 2026-09-28: this
 said every gateway-side code was such a label.*
 
 No answer on an exchange route falls outside the registry. A body that is not a JSON document is

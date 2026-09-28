@@ -342,6 +342,11 @@
 
 ### Fixed
 
+- **Datenaustausch: große Änderungspakete legen den Extractor-Import nicht mehr lahm.** Das Gateway
+  leitet Datenaustausch-Anfragen über einen eigenen Circuit Breaker, eigene Verbindungen und 30 s
+  statt 15 s Timeout weiter und höchstens vier Pakete mit mehr als 100 Operationen gleichzeitig;
+  weitere erhalten `503 RELAY_BUSY` mit `Retry-After: 10`. Neuer Alarm `ExchangeLargeChangeSetsBusy`
+  (REQ-XCH-023).
 - **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
   auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
   90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede
