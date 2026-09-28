@@ -216,7 +216,7 @@
   Trennungen 90 Tage nach der Trennung, Änderungsprotokoll 90 Tage) und wie man trennt und zurücknimmt;
   der Abschnitt zum SC Extractor nennt den direkten Blueprint-Abgleich.
 
-- **Nutzungsbedingungen: neue Fassung vom 29.09.2026.** Abschnitt 4 verweist auf die öffentliche Liste
+- **Nutzungsbedingungen: neue Fassung vom 28.09.2026.** Abschnitt 4 verweist auf die öffentliche Liste
   zugelassener Anwendungen (erster Eintrag: der SC Extractor ab 2.10.0) und regelt, was eine verbundene
   Anwendung darf; Einleitung und Abschnitt 12 verlangen eine Zustimmung statt „Zugriff“ oder
   „fortgesetzter Nutzung“. Jedes Mitglied stimmt einmal neu zu; bis dahin pausieren SC Extractor und verbundene

@@ -51,7 +51,7 @@ overwriting the old one.
 
 ### Re-checked 2026-09-28 — connected applications (A11)
 
-Connecting approved clients to the exchange API, going live on 2026-09-29, meets none of the
+Connecting approved clients to the exchange API, going live on 2026-09-28, meets none of the
 triggers above: no new data categories (the member's own game data, already processed under A2), no
 profiling or automated decision, no monitoring, the scale unchanged, and the transfer goes to
 software on the member's own device at the member's request. **Still no DPIA required.**

@@ -89,7 +89,7 @@ need no new consent (REQ-SEC-028).
 
 - [x] `docs/legal/approved-clients.md` exists, is linked from the terms clause (REQ-SEC-027) and
   lists client id, product, maintainer contact, capabilities and the approval issue and PR.
-  *The terms clause links it since the go-live (2026-09-29, #2092), and its first entry is the SC
+  *The terms clause links it since the go-live (2026-09-28, #2092), and its first entry is the SC
   Extractor, `basetool-sc-extractor`, from 2.10.0 with `connect`, `drafts.*` and `blueprints.*`
   (owner decision 2026-09-28: the web interface and the Android app are part of the platform, every
   other program is listed). It records the approved capabilities, not the registry's runtime state.*
@@ -98,7 +98,7 @@ need no new consent (REQ-SEC-028).
 - [x] The privacy notice (the frontend's `privacy.*` keys, DE and EN) states which data flows to an
   approved client on the member's own device, that the client's own privacy statement governs it
   there, and how to disconnect and undo. *Section „Verbundene Anwendungen" (`privacy.h2_3_10`,
-  `privacy.p_3_10_1`–`_5`) since 2026-09-29, with the retention of disconnected installations and
+  `privacy.p_3_10_1`–`_5`) since 2026-09-28, with the retention of disconnected installations and
   client revocations (90 days after the disconnection) and the extractor's direct sync in
   `privacy.p_3_7_1`; `PrivacyControllerTest#rendersTheConnectedApplicationsSection`. The records
   under `docs/privacy/` carry it as A11.*
@@ -140,7 +140,7 @@ its overview, formats, errors, versioning, changelog and authentication pages, a
 DPoP reference `docs/exchange/dpop-reference/` (stdlib Python, CNG and OpenSSL 3 through `ctypes`,
 its tests run by `exchange-docs.yml`), the resource pages, the sync guide, the sandbox page and the
 quick start are built — WP 4.6 (#2090), WP 2.3 (#2099); the terms link, the SC Extractor's list
-entry and the privacy notice — WP 6 (#2092), in force from 2026-09-29
+entry and the privacy notice — WP 6 (#2092), in force from 2026-09-28
 
 ### REQ-XCH-003 — The client registry lives in the backend database and is mirrored fail-closed
 
