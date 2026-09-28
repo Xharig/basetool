@@ -116,7 +116,9 @@ non-admins see the union of their memberships unless they pin one.
   REQ-XCH-018, ADR-0220) sums the open and in-progress `JobOrder`s whose responsible unit is one of
   the member's **direct memberships** — never a unit the member merely oversees through the
   REQ-ORG-015 cascade or reaches as an admin, and without the SK-public escape above. It names no
-  requester, assignee, order or free text (`ExchangeDemandService`).
+  requester, assignee, order or free text (`ExchangeDemandService`). The member must first pass
+  the viewer-side profit gate (`canViewJobOrders`); otherwise the feed is empty with
+  `reason: NOT_PERMITTED`.
 
 > **Amended by epic #692 (REQ-ORG-016):** `owning_org_unit_id` (and `responsible_org_unit_id`) may now
 > reference a `BEREICH` or `ORGANISATIONSLEITUNG` org_unit. Such rows participate in **these same** scope
