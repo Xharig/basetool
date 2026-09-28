@@ -5337,4 +5337,8 @@
             min-height: var(--touch-target-dense);
         }
     }
+
+    .terms-body {
+        overflow-wrap: anywhere;
+    }
 }

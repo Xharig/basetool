@@ -69,7 +69,9 @@ is ever on the `api.*` allowlist (ADR-0135), and nothing of the exchange lives u
   are refused; `ExchangeCatalogControllerTest`: an `ADMIN` browser session is refused, and so is the
   gateway without an acting member).
 - [x] The `api.*` allowlist test fails if an exchange or connected-apps path is added
-  (`ExternalContractTest.theExchangeStaysOffTheApiVhost`).
+  (`ExternalContractTest.theExchangeStaysOffTheApiVhost`). A line that touches `krt_api_allowed` in a
+  form the test cannot evaluate — another variable, a negation, an unquoted or multi-line rule —
+  fails it instead of being skipped; `~*` counts as case-insensitive (security review G5, I6).
 
 **Status:** built — WP 3.2 (#2082), WP 3.1 (#2083)
 
@@ -1344,7 +1346,10 @@ issues against the same user's key patterns and commands (REQ-SEC-068).
 - [x] A load test fills one member's budget, then one client's; sessions and other members keep
   working. *`ExchangeStoreRedisIntegrationTest` fills one member's and then one client's budget in a
   real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
-  free their bytes. Sessions live under keys the ingest user cannot reach at all.*
+  free their bytes. Sessions live under keys the ingest user cannot reach at all. End to end through
+  the gateway, `scripts/sandbox-load.py budget` fills the member budget at its 1 MiB default and the
+  client and total budgets lowered to 2.5 MiB, checking every admission against the live sets
+  (REQ-XCH-029).*
 - [x] Parallel writes never overshoot a budget. *`ExchangeStoreRedisIntegrationTest`: sixteen
   parallel reservations on one member admit exactly what fits, and across two clients exactly what
   the total holds; a reservation settles on its value or stays when the value does not fit; a missing
@@ -1559,7 +1564,9 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       commit. It publishes `edge` on every push to `main` that changes what the images contain
       (a newer run cancels an older one), the version and `latest` on a release tag, and by hand
       from either; the production packages stay private and untouched. The packages' public
-      visibility is set once by the owner.*
+      visibility is set once by the owner. Its `ref-guard` job, which every build waits for,
+      refuses to publish from a tag that is not `vMAJOR.MINOR.PATCH` or whose commit is not on
+      `main`, the same gate as `release-images.yml` (security review G5, L3).*
 - [x] An image built from a checkout (`--build`) is built like the published one and refuses
       `prod` too. *`docker-compose.sandbox-build.yml` builds each application image from
       `docker/sandbox/app.Dockerfile` on top of a build-only `<module>-base` service
@@ -1594,6 +1601,16 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       it. *`E2eStackExtension`, `docker-compose.e2e.yml`, `ExchangeRoundTripE2eTest`, the
       `build-stack` job of `e2e.yml`; `E2ePrebuiltImageParityTest`, `build-sandbox-realm.py
       --selftest` / `--check` (ADR-0225).*
+- [x] A load test of the gateway and its Redis budget runs against the sandbox, never production
+      (#2092). *The realm and the seed carry sixteen synthetic members `sandbox-load-01` …
+      `sandbox-load-16` without data. `scripts/sandbox-load.py throughput` signs them in and drives
+      snapshots in cursor pages, feed pages and change sets up to the 500-op cap and near the 32 KiB
+      result cap at a set rate, and reports latency percentiles, status and code counts, the
+      exchange metrics, Redis memory and the budget totals; `budget --scope member|client|total`
+      fills one budget and checks every admission against the live budget sets. The device login
+      and the DPoP-signed call it shares with the smoke test live in `scripts/sandbox_client.py`.
+      `docker-compose.sandbox-load.yml` adds the management ports, which the metrics need, and
+      makes the budget and the answers' lifetime settable.*
 
 **Status:** built — local sandbox, the image pipeline, its smoke job and the E2E stack with the
 gateway, WP 2.3 (#2099)
@@ -1883,7 +1900,7 @@ succeeding, never succeeded).
 | Guard evasion by batching, near-zero cuts or overwriting stock updates | window counting rules against each lot's state at window start (REQ-XCH-021) |
 | Guard evasion by overwriting ship updates (retyping every ship, clearing names and locations) | counted only when one `upsert` changes both name and type, with no comparison to the window start; journal and undo restore the ships (REQ-XCH-021/-022) — accepted risk (owner decision 2026-09-27) |
 | A malicious release changing many members' data at once | journal and each member's own undo, suspension, and the admin's audited undo of the client for every member at once, which suspends it first (REQ-XCH-022/-034); Materialbörse offers and mission units it removed stay reported, not undone (rows below). *Changed 2026-09-27: the admin bulk undo is built; the row still said it was being addressed.* |
-| A single open order recognisable in the org demand feed | membership-only scope, catalogue fields only, no requester, title or free text; no low-count suppression, 7-day client cache (REQ-XCH-018) — accepted risk (ADR-0220) |
+| A single open order recognisable in the org demand feed | withheld unless the member passes the web's job-order gate (`canViewJobOrders`, under the reduced authorities); membership-only scope, catalogue fields only, no requester, title or free text; no low-count suppression, 7-day client cache (REQ-XCH-018) — accepted risk (ADR-0220 and its 2026-09-28 amendment) |
 | Silent removal of Materialbörse offers by a sync book-out | reported and audited, not undoable — accepted (REQ-XCH-016/-022) |
 | A ship removal through the exchange detaching the ship from its mission units, which are org data | reported (`detachedFromMissions`) and audited (`MISSION_UNIT_UPDATED`), not undoable: undo recreates the ship under a new id without its mission units — accepted (REQ-XCH-017/-022) |
 | The version gate bypassed by a manipulated client | cooperative by design — accepted (REQ-XCH-024) |

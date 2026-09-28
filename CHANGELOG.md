@@ -26,9 +26,14 @@
   wenn Mitglieder 15 Minuten lang immer wieder an ihre Obergrenze lebender DPoP-Nachweise stoßen;
   ein einzelner Ausreißer löst ihn nicht aus (REQ-XCH-006).
 
+- **Datenaustausch: Lasttest gegen die Sandbox.** `scripts/sandbox-load.py` misst Feed-, Snapshot-
+  und Änderungs-Routen des Gateways samt Redis-Byte-Budget an der lokalen Sandbox, nie an
+  Produktion; dafür hat die Sandbox 16 synthetische Mitglieder `sandbox-load-01` … `-16` (#2092).
+
 - **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
   `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
-  das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Die
+  das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Eine Version
+  und `latest` erscheinen nur zu einem Release-Tag `vX.Y.Z` auf `main`. Die
   Produktions-Images bleiben privat. Ein Smoke-Test (`scripts/sandbox-smoke.py`) zieht sie danach
   ohne Anmeldung und prüft Geräte-Login, DPoP, alle Ressourcen und die Konformitäts-Beispiele.
 
