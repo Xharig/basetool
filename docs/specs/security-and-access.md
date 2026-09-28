@@ -1359,7 +1359,7 @@ terms amendment. Three properties are load-bearing and must survive any rewordin
   2026-09-28, #2092): it would let a program of the operator's reach the interfaces with nothing on
   the public record, so the SC Extractor is listed like any other client.
 
-**Since the exchange go-live on 2026-09-29 (epic #2078, #2092) the clause says what client software
+**Since the exchange go-live on 2026-09-28 (epic #2078, #2092) the clause says what client software
 is, how approval is given, and what an approved client may do.** `terms.list_4_1_5` defines client
 software as any software that reaches the interfaces and is not part of the platform — the web
 interface and the Android app belong to the platform and need no approval, while the SC Extractor,
@@ -1399,7 +1399,7 @@ exists.
   *`TermsDocumentStructureTest#sectionFourCarriesTheExchangeTerms` (both languages), and the shape
   test above.*
 - [x] `terms.last_updated` moved when the obligation took effect (2026-08-03) and at the exchange
-  go-live (2026-09-29); it has moved with every wording change in between. *Checked against the
+  go-live (2026-09-28); it has moved with every wording change in between. *Checked against the
   bundles' git history on 2026-09-28; no test gates it.*
 
 **Enforced by:** `TermsDocumentStructureTest` (every `terms.*` clause is reachable by the numbering
@@ -1415,9 +1415,9 @@ cannot exist in one locale only) · **Text:** `terms.list_4_1_5`, `terms.p_4_2` 
 
 ### REQ-SEC-028 — Terms-of-Use consent is recorded, versioned and enforced
 
-> [!note] The go-live consent round — 2026-09-29 (epic #2078, #2092)
+> [!note] The go-live consent round — 2026-09-28 (epic #2078, #2092)
 > The wording change of REQ-SEC-027 (section 4), of the intro and of section 12 moves the version
-> from `df1f9b31581b0d0d` to `a25b108cc1fe8b41` (`generateTermsVersion` over the German bundle's
+> from `df1f9b31581b0d0d` to `355bfed7e78bd936` (`generateTermsVersion` over the German bundle's
 > `terms.*` keys) once: every member re-consents, and every SC Extractor and connected application is
 > refused `TERMS_NOT_ACCEPTED` until its member has. The approved-client list sits outside those
 > keys, so later list changes need no consent (REQ-XCH-002).
@@ -1425,7 +1425,7 @@ cannot exist in one locale only) · **Text:** `terms.list_4_1_5`, `terms.p_4_2` 
 Using the platform requires **recorded consent** to the Terms-of-Use wording currently in force.
 Before this, the terms took effect merely on access (section intro) and section 12 treated
 continued use as acceptance — which leaves no evidence of who agreed to which wording, the thing
-actually needed when a clause is enforced against someone (REQ-SEC-027). Since 2026-09-29 the terms
+actually needed when a clause is enforced against someone (REQ-SEC-027). Since 2026-09-28 the terms
 state the model the platform enforces: the intro says they apply to every user who has agreed to
 them and that the platform cannot be used without that agreement (`terms.intro`), and section 12
 says amended terms apply to a member only once they have agreed (`terms.p_12_2`); both are owner
@@ -4789,7 +4789,7 @@ template is the reference) · **Code:** `keycloak-theme/krt-theme/login/login.ft
 > [!note] Planned — rendering the exchange lines on production (epic #2078, WP 2.1, #2092)
 > The template below carries the exchange's key families (ADR-0221). Re-rendering and loading it on
 > production is a gated write that must precede the release carrying the exchange (1.13.0, planned
-> 2026-09-29): from that release on the gateway reads `exchange:registry` every 30 s as
+> 2026-09-28): from that release on the gateway reads `exchange:registry` every 30 s as
 > `basetool-ingest`, and the old rules refuse it (`RedisAclDenials`). Earlier releases run unchanged
 > on the new rules, so the ACL stays in place on an application rollback.
 

@@ -11,7 +11,7 @@
 > that establishes it. Freeze it as
 > a historical record once executed; [`deployment.md`](deployment.md) stays the living procedure.
 >
-> **Release date: 2026-09-29, version 1.13.0** (owner decisions, 2026-09-28). **Scope that day:
+> **Release date: 2026-09-28, version 1.13.0** (owner decisions, 2026-09-28; moved forward from 2026-09-29 the same day). **Scope that day:
 > S1–S16** — the release and the extractor switch, H1 closed without creating the `versekit` client
 > (S15 runs with an empty client list) and the extractor client's not-before (S16). VerseKit (S17,
 > S18) follows only after its approval, with a separately approved provisioner run first. The terms of use
@@ -108,7 +108,7 @@ so the comparison afterwards is against a baseline.
 | Flyway `V246`–`V258` | on `main`; the latest release, **v1.12.0, ends at `V245`**; proven forward-compatible with v1.12.0 up to `V257` (§8, step 3); `V258` only adds an index on `exchange_change` (load test, finding 2) |
 | Keycloak: `exchange.*` scopes, `versekit`, the extractor's H1 shape, #2179 | in `scripts/provision-keycloak-realm.py` on `main`; **not applied on production** |
 | keycloak-spi (ADR-0226 admin extension `basetool-exchange`, ADR-0228 login forms `krt-freemarker`) | on `main`; reaches production with the next release's provider JAR |
-| Terms change (`terms.list_4_1_5`, `terms.intro`, `terms.p_12_2`, REQ-SEC-027/-028) | on `main` (#2245, hash `a25b108cc1fe8b41`, dated 29.09.2026); every member re-consents once at S6; no host step |
+| Terms change (`terms.list_4_1_5`, `terms.intro`, `terms.p_12_2`, REQ-SEC-027/-028) | on `main` (#2245, hash `355bfed7e78bd936`, dated 28.09.2026); every member re-consents once at S6; no host step |
 | Privacy notice for approved clients (REQ-XCH-002, third box) | on `main` (#2245); no host step |
 | 90-day retention sweep for disconnected installations and revocations | on `main` (#2247, REQ-XCH-035), resting on the 90-day session cap (#2246, applied at S15); no host step |
 | SC Extractor 2.10.0 | on the extractor's `main`, **unreleased**; latest release v2.9.1; its PRs #76 (sign-in refusal message) and #77 (release notes) merge before the tag (S13) |
@@ -175,7 +175,7 @@ The constraints that fix it:
   before the registry entry and the switch-off; the owner follows the comment and corrects the body
   to match (2026-09-28).
 
-**When.** **2026-09-29: S1–S16** — S1–S4 in the morning, S5–S6 (release 1.13.0), then S7–S9 once
+**When.** **2026-09-28: S1–S16** — S1–S4, then S5–S6 (release 1.13.0), then S7–S9 once
 the app release is published, then S10–S16 in one sitting (S13–S15 back to back). **S17–S18** only
 after the VerseKit approval, on a later date. Until S11 the exchange stays dormant.
 
@@ -187,7 +187,7 @@ Each command changes nothing and prints no secret. The coordinator read everythi
 `podman exec` on **2026-09-28** (marked below); the `podman exec`-based reads are treated as gated.
 With the owner's yes the same day it also read R6's `INFO`, R16 and part of R12; R5, R9 and R12's full
 snapshot stay **TO BE READ on the day**, with the owner's yes. Re-run the
-others on 2026-09-29 before S1; any answer other than the expected one stops the step that depends
+others on 2026-09-28 before S1; any answer other than the expected one stops the step that depends
 on it.
 
 | # | What | Command (host, root, from `/`, prelude loaded) | Expected |
@@ -992,7 +992,7 @@ Fastest first; each is its own production write with its own yes.
 
 In German, in the forum (vault *Announcing a release*), in three posts:
 
-1. **Before S6 (2026-09-29)** — the outage window; **once**, every member confirms the changed terms
+1. **Before S6 (2026-09-28)** — the outage window; **once**, every member confirms the changed terms
    of use at the next sign-in; until a member has, their SC Extractor pauses; the Android app
    may show errors until restarted after confirming.
 2. **With S7–S9** — the new app version, then „Update erforderlich" for older builds after the

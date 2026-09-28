@@ -972,7 +972,7 @@ certificate rotation*, *Token rotation*
 > Built in the repository: both command lines below carry `--maxmemory 768mb` in a 1024M container
 > (ADR-0221), sized for the exchange's bounded 64 MB partition (REQ-XCH-023) plus headroom. Still
 > to come: no release tag carries it yet. It reaches production **with** the release that carries the
-> exchange (1.13.0, planned 2026-09-29): its Quadlet unit restarts Redis in that release's restart
+> exchange (1.13.0, planned 2026-09-28): its Quadlet unit restarts Redis in that release's restart
 > window, with the exchange still switched off. An application rollback to an earlier release
 > restores that release's unit, and with it `384mb` in 512 MB. *Corrected 2026-09-28:* this said the
 > resize was a production step that had to precede the first exchange release, which the unit makes
