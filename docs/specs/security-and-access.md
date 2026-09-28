@@ -4818,12 +4818,10 @@ its service does:
 - [x] The frontend's startup step under its own user leaves `acl_access_denied_cmd` unchanged and
   sends no `CONFIG`; under `default` it still sends `CONFIG GET`; switched off it sends nothing; a
   wrong password still fails it. *`RedisAclFrontendIntegrationTest`, `RedisSessionConfigTest`.*
-- [ ] `ACL DRYRUN` refuses, per user, every foreign key, foreign channel, `CONFIG`, `KEYS`,
+- [x] `ACL DRYRUN` refuses, per user, every foreign key, foreign channel, `CONFIG`, `KEYS`,
   `FLUSHALL`/`FLUSHDB`, `SCAN` for backend, ingest and monitoring, and `ACL` for every non-admin user.
-  *As of 2026-09-28 the matrix in `RedisAclFrontendIntegrationTest#theAclMatrixHoldsForEveryUser`
-  covers the frontend in full, but has no row for `CONFIG`, `FLUSHALL`/`FLUSHDB` or `ACL` under
-  `basetool-backend`, for `CONFIG`, `KEYS` or `ACL` under `basetool-ingest`, or for `KEYS`,
-  `FLUSHALL`/`FLUSHDB` or `ACL` under `monitoring`.*
+  *`RedisAclFrontendIntegrationTest#theAclMatrixHoldsForEveryUser`; `monitoring` keeps `CONFIG GET`
+  by design and is refused `CONFIG SET`.*
 - [x] A password-only `AUTH` works while `default` is on and fails once it is off.
   *`RedisAclFrontendIntegrationTest`.*
 - [x] The committed E2E ACL equals the template rendered with the E2E passwords, and the E2E stack
