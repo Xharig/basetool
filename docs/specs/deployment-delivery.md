@@ -2257,7 +2257,15 @@ there.
 - **No secret is printed, logged or sent back.** A confidential client the run creates is reported
   with the Admin Console path to its generated secret and the `.env` variables that need it.
 - **Built-in Keycloak objects are never touched**; realm-wide hardening stays in
-  `KEYCLOAK_HARDENING_RUNBOOK.md`.
+  `KEYCLOAK_HARDENING_RUNBOOK.md`. The one exception is additive: **every member may hold an
+  offline session** (owner decision 2026-09-28, ADR-0202 amendment 5). The provisioner adds the
+  `offline_access` realm role to the composites of the realm's default role and maps it on the
+  `offline_access` client scope, and never removes either; a realm without the role, the default
+  role or the scope is a problem, not a write. This reverses hardening step 10: any client that
+  offers `offline_access` and requests it can be issued an offline token for a member again. The
+  ones that request it are the SC Extractor and the approved third-party clients, whose offline
+  sessions are pinned at 30/90 days (`REQ-XCH-005`); `basetool-frontend` and `grafana` offer the
+  scope but do not request it, and `basetool-android` is not offered it (ADR-0131).
 - **Approved third-party clients come from one template** (2026-09-26, `REQ-XCH-005`,
   ADR-0217): every entry of `scripts/keycloak/external-clients.json` is created and converged as a
   public device-grant client with consent, DPoP-bound tokens, a 30/90-day offline session, `basic`
@@ -2285,6 +2293,10 @@ there.
 - [x] Section 17: a stray audience and claim mapper on the extractor and a role mapper on a
   third-party client are planned as removals and removed by the apply, which verifies clean; a stray
   mapper on `basetool-frontend` is still only reported and kept.
+- [x] Section 18: a realm without `offline_access` on the default role and on the client scope gets
+  both planned, applied and verified clean; production's state before the 2026-09-28 fix (scope
+  mapped, composite missing) plans only the composite; a realm holding both is in shape and gets
+  neither write.
 - [x] Sections 13–15: the exchange scopes and the third-party template are built, an existing
   third-party client loses what the template withholds, and a malformed client list is refused
   before the realm is read; the stub keeps Keycloak's own `backchannel.logout.session.required` on

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Keycloak: SC Extractor 2.10.0 kann sich wieder anmelden.** Die Geräteanmeldung scheiterte in
+  Produktion mit `400 not_allowed`, weil die Standardrolle `default-roles-iri` kein
+  `offline_access` enthielt; der Realm-Provisioner ergänzt die Rolle dort und am Client-Scope
+  `offline_access` und nimmt sie nie wieder weg (ADR-0202 Amendment 5, REQ-OPS-033).
+
 ## [v1.13.0](https://github.com/krt-profit/basetool/releases/tag/v1.13.0) - 2026-09-28
 
 ### Added

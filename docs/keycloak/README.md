@@ -64,7 +64,10 @@ withheld ones, and any client-level mapper on the extractor or a third-party cli
 printing a secret
 ([ADR-0202](../adr/0202-a-realm-is-brought-to-the-production-shape-by-a-provisioner-that-never-deletes.md),
 `REQ-OPS-033`). It imports the Android client's definition from the mobile provisioner below, so the
-two cannot disagree about it. Procedure:
+two cannot disagree about it. It also keeps `offline_access` in `default-roles-iri` and mapped on the
+`offline_access` client scope, so every member may hold the extractor's and the third-party
+clients' offline sessions (ADR-0202 amendment 5; without the composite their device login is
+refused `400 not_allowed`). Procedure:
 [`INGEST_KEYCLOAK_SETUP.md` → *New or out-of-date realm*](../INGEST_KEYCLOAK_SETUP.md#new-or-out-of-date-realm-run-the-provisioner).
 The mobile provisioner stays the focused tool for that one client.
 
@@ -126,6 +129,13 @@ the hardening runbook: **an authentication flow built by hand in the Console is 
 so the conditional-OTP sub-flow of WP-K2 step 11 exists in exactly one place. Keeping them would
 mean establishing first that `authenticatorConfig` carries nothing sensitive — this realm's
 `discord-guild-role-gate` has configuration of its own — which is a decision, not a flag flip.
+
+**One `scopeMappings` entry is in the file anyway, by hand (2026-09-28):** the `offline_access`
+client scope's mapping to the `offline_access` realm role. Production had it all along, but the
+sanitizer dropped it, so the reference could not show whether an offline token was possible at all
+when SC Extractor 2.10.0's sign-in was refused `400 not_allowed` on 2026-09-28 — what production
+lacked was the `offline_access` composite on `default-roles-iri`, now in the file too (ADR-0202
+amendment 5). **A regeneration drops the entry again; carry it forward by hand.**
 
 **Current snapshot: 2026-09-09**, still a sanitized reference and still **not** importable, taken
 mid-procedure during WP-K2. It therefore records an

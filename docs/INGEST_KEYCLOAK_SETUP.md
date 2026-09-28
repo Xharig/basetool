@@ -144,17 +144,31 @@ What to know before running it:
   [step 9b](#9b--five-values-in-the-prod-env).
 - **The identity** is the short-lived `basetool-provisioner` of
   [`docs/keycloak/README.md`](keycloak/README.md#why-a-service-account-and-not-the-admin-user)
-  (`manage-clients` + `manage-realm`). Granting service-account roles needs `manage-users`, which that
-  identity deliberately lacks: the script then exits `3` and prints the roles to assign by hand in
-  the Admin Console. Everything else is applied.
+  (`manage-clients` + `manage-realm`). Reading and granting service-account roles needs
+  `manage-users`, which that identity deliberately lacks: every run then prints the roles under
+  `[manual]` („service-account roles could not be read") and exits `3` instead of `0` — the apply
+  („Applied, except the service-account roles above.") and a dry run of a realm in shape alike; a
+  dry run with changes pending still exits `2`. Everything else is applied. With that identity,
+  exit `3` is therefore the clean result; the roles it lists only need assigning if the service
+  accounts do not already hold them (production's do). *Corrected 2026-09-28:* this said the
+  script exits `3` only when a grant is needed; production's go-live apply showed it on every run.
 - **It reproduces production as it is**, marking what looks unintended `PROD-AS-IS` — except three
   entries the owner retired on 2026-09-22 (ADR-0202 amendment 1): the extractor's unused
   authorization-code flow and its loopback redirect URIs, both ingest scopes on `basetool-android`,
   and the frontend's compose-internal `http://frontend:18081` pair. Those are **removed** wherever
   the script finds them, production included on its next apply. The gateway keeps both ingest
   scopes.
-- **It does not do** the realm-wide hardening (Require SSL, events, OTP, default roles —
-  [`KEYCLOAK_HARDENING_RUNBOOK.md`](KEYCLOAK_HARDENING_RUNBOOK.md)), the Discord identity provider
+- **Every member may hold an offline session** (owner decision 2026-09-28, ADR-0202 amendment 5).
+  The script adds the `offline_access` realm role to the composites of `default-roles-iri` and maps
+  it on the `offline_access` client scope — its own section, right after the application realm
+  roles, with the lines `+ default role 'default-roles-iri': composite realm role 'offline_access'`
+  and `+ client scope 'offline_access': realm role 'offline_access' mapped` — and never removes
+  either. Without the composite, the extractor's and every third-party client's device login is
+  refused `400 not_allowed`: they have `fullScopeAllowed` off and request `offline_access`.
+  Production has both since the owner's hand fix of 2026-09-28, so its section reads *in shape*.
+- **It does not do** the rest of the realm-wide hardening (Require SSL, events, OTP —
+  [`KEYCLOAK_HARDENING_RUNBOOK.md`](KEYCLOAK_HARDENING_RUNBOOK.md); its step 10 is reversed by the
+  bullet above), the Discord identity provider
   ([`DISCORD_KEYCLOAK_SETUP.md`](keycloak/DISCORD_KEYCLOAK_SETUP.md)), or the realm's default client
   scopes; an ingest scope that is a realm default is reported, because every client created later
   would inherit its audience.
@@ -178,6 +192,7 @@ kc get client-scopes -r iri             > /root/kc-realm/client-scopes.before.js
 kc get client-policies/profiles -r iri  > /root/kc-realm/profiles.before.json
 kc get client-policies/policies -r iri  > /root/kc-realm/policies.before.json
 kc get realms/iri                       > /root/kc-realm/realm.before.json
+kc get roles/default-roles-iri/composites/realm -r iri > /root/kc-realm/default-roles.before.json
 # 4. dry run, read it -- with the frontend's client type named and its secret passed, so a run can
 #    never leave production's confidential frontend client in any other state
 export KEYCLOAK_FRONTEND_CLIENT_SECRET="$(sed -n 's/^KEYCLOAK_FRONTEND_CLIENT_SECRET=//p' /var/iri/code/.env | tail -1)"
