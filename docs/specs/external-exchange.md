@@ -1308,7 +1308,10 @@ issues against the same user's key patterns and commands (REQ-SEC-068).
 - [x] A load test fills one member's budget, then one client's; sessions and other members keep
   working. *`ExchangeStoreRedisIntegrationTest` fills one member's and then one client's budget in a
   real Redis under the ingest ACL user; other members and clients keep fitting, and expired entries
-  free their bytes. Sessions live under keys the ingest user cannot reach at all.*
+  free their bytes. Sessions live under keys the ingest user cannot reach at all. End to end through
+  the gateway, `scripts/sandbox-load.py budget` fills the member budget at its 1 MiB default and the
+  client and total budgets lowered to 2.5 MiB, checking every admission against the live sets
+  (REQ-XCH-029).*
 - [x] Parallel writes never overshoot a budget. *`ExchangeStoreRedisIntegrationTest`: sixteen
   parallel reservations on one member admit exactly what fits, and across two clients exactly what
   the total holds; a reservation settles on its value or stays when the value does not fit; a missing
@@ -1558,6 +1561,16 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       it. *`E2eStackExtension`, `docker-compose.e2e.yml`, `ExchangeRoundTripE2eTest`, the
       `build-stack` job of `e2e.yml`; `E2ePrebuiltImageParityTest`, `build-sandbox-realm.py
       --selftest` / `--check` (ADR-0225).*
+- [x] A load test of the gateway and its Redis budget runs against the sandbox, never production
+      (#2092). *The realm and the seed carry sixteen synthetic members `sandbox-load-01` …
+      `sandbox-load-16` without data. `scripts/sandbox-load.py throughput` signs them in and drives
+      snapshots in cursor pages, feed pages and change sets up to the 500-op cap and near the 32 KiB
+      result cap at a set rate, and reports latency percentiles, status and code counts, the
+      exchange metrics, Redis memory and the budget totals; `budget --scope member|client|total`
+      fills one budget and checks every admission against the live budget sets. The device login
+      and the DPoP-signed call it shares with the smoke test live in `scripts/sandbox_client.py`.
+      `docker-compose.sandbox-load.yml` adds the management ports, which the metrics need, and
+      makes the budget and the answers' lifetime settable.*
 
 **Status:** built — local sandbox, the image pipeline, its smoke job and the E2E stack with the
 gateway, WP 2.3 (#2099)
