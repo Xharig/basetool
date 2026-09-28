@@ -8,8 +8,7 @@
 > `POST /v1/refinery-extract` and `POST /v1/blueprint-preview` are gone, without a stub: by owner
 > decision of 2026-09-28 a request there gets what any unknown path of the gateway gets — `404` with
 > a token the decoder accepts, `401` with one it refuses (a 2.9.1 token lost `aud=basetool-ingest`
-> with the go-live's provisioner run) and without any token. *(Until the gateway's CSRF protection
-> was switched off the same day, a token-less `POST` got `403` from the CSRF filter.)* The SC
+> with the go-live's provisioner run), `403` from the CSRF filter without any token. The SC
 > Extractor sends its drafts through the exchange's draft routes since release 2.10.0
 > (REQ-XCH-019), and the gateway serves nothing but the exchange (REQ-XCH-001,
 > [`external-exchange.md`](external-exchange.md)). The routes' switch

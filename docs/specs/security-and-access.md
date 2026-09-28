@@ -3664,10 +3664,7 @@ anonymous documents (`GET /exchange/v1/openapi.json`, `GET /exchange/v1/schemas/
 it has no springdoc document since 2026-09-28, and in prod Actuator lives on the internal management
 port `11272` (ADR-0090). Its
 exchange routes require a DPoP-bound token and the exchange gates (REQ-XCH-006…-008); the
-extractor's `/v1/**` endpoints were removed on 2026-09-28 (#2092 step 9). The gateway's main chain
-has **no CSRF protection** since the same day (owner decision): no request there is authenticated
-by a cookie, so a token-less write is answered `401` by the resource server instead of `403` by a
-CSRF check. The internal management-port chains keep theirs.
+extractor's `/v1/**` endpoints were removed on 2026-09-28 (#2092 step 9).
 
 The prod-only **management-port chain** (`ManagementPortSecurityConfig`,
 `@ConditionalOnProperty("management.server.port")`, port `11271`) is `permitAll` on
