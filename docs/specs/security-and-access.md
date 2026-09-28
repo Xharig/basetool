@@ -4807,7 +4807,7 @@ its service does:
 | --- | --- | --- | --- |
 | `basetool-frontend` | `basetool:session:*`, `ingest:handoff:*` | `basetool:session:*`, the created-event pattern, `__keyevent@0__:del` / `:expired`, `basetool:livesync:changed` / `:presence` | read, write, keyspace, hash, set, sorted set, string, pub/sub, transaction, `INFO`; no dangerous command, no `CONFIG` |
 | `basetool-backend` | `exchange:*` | `basetool:livesync:changed`, `basetool:notify:published` | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE`, `GET`, `SET`, `INFO` |
-| `basetool-ingest` | `ingest:*`, read-only `exchange:*` | none | `GET`, `SET`/`SETEX`/`PSETEX`, `INCR`, `ZADD`, `ZRANGE`/`ZRANGEBYSCORE`, `ZREMRANGEBYSCORE`, `ZREM`, `ZSCORE`, `RPUSH`, `LPOP`, `EXPIRE`/`PEXPIRE`, `DEL`/`UNLINK`, `EVAL`/`EVALSHA`, `INFO` |
+| `basetool-ingest` | `ingest:*`, read-only `exchange:*` | none | `GET`, `SET`/`SETEX`/`PSETEX`, `INCR`, `ZADD`, `ZRANGE`/`ZRANGEBYSCORE`, `ZREM`, `ZSCORE`, `RPUSH`, `LPOP`, `EXPIRE`/`PEXPIRE`, `DEL`, `EVAL`/`EVALSHA`, `INFO` |
 | `monitoring` | none | none | introspection; **not** `SCAN` or `RANDOMKEY`, which are not key-checked and would list every session id |
 | `admin` | all | all | all — the operator's, never in an application's environment |
 | `default` | — | — | switched **off** at the end of the rollout |
@@ -4817,7 +4817,7 @@ its service does:
   (`exchange:registry`, `exchange:revoked:*`, `exchange:deny:*`) with `GET` and `SET`; ingest may
   only read them (`%R~exchange:*`), so the mirror never sits under `ingest:*`. ingest keeps its own
   exchange state under `ingest:*`: `INCR` for the daily write quotas, `ZADD`, `ZRANGE` /
-  `ZRANGEBYSCORE`, `ZREMRANGEBYSCORE`, `ZREM` and `ZSCORE` for the byte budget, `SET … NX` for the
+  `ZRANGEBYSCORE`, `ZREM` and `ZSCORE` for the byte budget, `SET … NX` for the
   idempotency locks, and `EVAL` / `EVALSHA` for the scripts that check and record the budget and
   release an idempotency claim atomically (`ExchangeBudget`, `ExchangeIdempotency`, #2203). A script
   runs under the same user's rules, so it reaches no key the user could not.
@@ -4857,6 +4857,10 @@ its service does:
 - [x] The backend's notification fan-out and live-sync channel work under its user; the gateway's
   real staging, cap eviction included, works under its user. *`RedisAclBackendIntegrationTest`,
   `RedisAclIngestIntegrationTest#stagingAndTheCapEvictionRunUnderTheIngestUser`.*
+- [x] The gateway's user holds no command its code does not send: `ZREMRANGEBYSCORE` and `UNLINK`
+  are refused on its own keys. *`RedisAclIngestIntegrationTest#commandsNoCodePathSendsAreRefusedOnItsOwnKeys`
+  (security review G5, I4; the budget prunes with `ZRANGEBYSCORE` and `ZREM` in its script, keys
+  are deleted with `DEL`).*
 - [x] The frontend's startup step under its own user leaves `acl_access_denied_cmd` unchanged and
   sends no `CONFIG`; under `default` it still sends `CONFIG GET`; switched off it sends nothing; a
   wrong password still fails it. *`RedisAclFrontendIntegrationTest`, `RedisSessionConfigTest`.*

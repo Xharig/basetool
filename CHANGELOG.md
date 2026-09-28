@@ -338,6 +338,10 @@
 
 ### Fixed
 
+- **Redis: Ingest-Benutzer ohne ungenutzte Befehle.** Die ACL-Vorlage nimmt dem Benutzer
+  `basetool-ingest` `ZREMRANGEBYSCORE` und `UNLINK`, die das Gateway nie sendet; wirksam mit dem
+  nächsten Rendern der ACL.
+
 - **Ingest: Produktion startet nur mit eigenem Redis-Benutzer.** Unter `prod` verweigert das
   Gateway den Start, wenn `REDIS_INGEST_USERNAME` leer oder `default` ist; so kann es nie als
   `default` die Registry oder die Sperrlisten des Datenaustauschs verändern.

@@ -242,7 +242,7 @@ refuses, writing nothing, when a variable is missing or the result lacks exactly
 | `monitoring` | `REDIS_EXPORTER_PASSWORD` | introspection for `redis-exporter`; no key, no `SCAN` (a key's name is a session id) |
 | `basetool-frontend` | `REDIS_FRONTEND_PASSWORD` | `basetool:session:*`, `GETDEL` of `ingest:handoff:*`, the session-event, keyspace-event and live-sync channels, `SCAN`, `INFO` |
 | `basetool-backend` | `REDIS_BACKEND_PASSWORD` | `GET`/`SET` on `exchange:*` (the exchange registry mirror, ADR-0221), publish/subscribe on `basetool:livesync:changed` and `basetool:notify:published`, `INFO` |
-| `basetool-ingest` | `REDIS_INGEST_PASSWORD` | strings, lists and sorted sets on `ingest:*` (`GET`, `SET`, `SETEX`, `PSETEX`, `INCR`, `RPUSH`, `LPOP`, `ZADD`, `ZRANGE`, `ZRANGEBYSCORE`, `ZREMRANGEBYSCORE`, `ZREM`, `ZSCORE`, `EXPIRE`, `PEXPIRE`, `DEL`, `UNLINK`) and `EVAL`/`EVALSHA` for the exchange's budget and idempotency-lock scripts, whose commands the same rules check; read-only `GET` of `exchange:*`; `INFO`; no channel, no `SCAN` |
+| `basetool-ingest` | `REDIS_INGEST_PASSWORD` | strings, lists and sorted sets on `ingest:*` (`GET`, `SET`, `SETEX`, `PSETEX`, `INCR`, `RPUSH`, `LPOP`, `ZADD`, `ZRANGE`, `ZRANGEBYSCORE`, `ZREM`, `ZSCORE`, `EXPIRE`, `PEXPIRE`, `DEL`) and `EVAL`/`EVALSHA` for the exchange's budget and idempotency-lock scripts, whose commands the same rules check; read-only `GET` of `exchange:*`; `INFO`; no channel, no `SCAN` |
 
 An application reaches Redis as its own user only when its `REDIS_<SVC>_USERNAME` is set; with it
 empty it sends a password-only `AUTH` with the shared `REDIS_PASSWORD`, which is the `default` user —
