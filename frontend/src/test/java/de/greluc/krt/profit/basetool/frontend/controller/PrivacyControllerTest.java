@@ -19,13 +19,17 @@
 
 package de.greluc.krt.profit.basetool.frontend.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -35,6 +39,10 @@ import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest
 class PrivacyControllerTest {
+
+  /** The public list of approved clients the notice links. */
+  private static final String APPROVED_CLIENTS_URL =
+      "https://github.com/krt-profit/basetool/blob/main/docs/legal/approved-clients.md";
 
   @Autowired private WebApplicationContext context;
 
@@ -52,5 +60,23 @@ class PrivacyControllerTest {
   @Test
   void shouldReturnPrivacyView() throws Exception {
     mockMvc.perform(get("/privacy")).andExpect(status().isOk()).andExpect(view().name("privacy"));
+  }
+
+  /**
+   * The notice renders the connected-applications section with a working link to the public list of
+   * approved clients, in both languages (REQ-XCH-002).
+   *
+   * @param lang the language requested through the {@code lang} parameter
+   * @param heading the section heading expected in that language
+   * @throws Exception if the request fails
+   */
+  @ParameterizedTest
+  @CsvSource({"de,Verbundene Anwendungen", "en,Connected applications"})
+  void rendersTheConnectedApplicationsSection(String lang, String heading) throws Exception {
+    mockMvc
+        .perform(get("/privacy").param("lang", lang))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("<h3>" + heading + "</h3>")))
+        .andExpect(content().string(containsString("href=\"" + APPROVED_CLIENTS_URL + "\"")));
   }
 }

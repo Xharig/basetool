@@ -1,6 +1,6 @@
 # Technical and organisational measures (Art. 32 GDPR)
 
-> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-22.
+> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-28.
 
 Art. 32 requires measures appropriate to the risk. This document does not restate them in the
 abstract; each measure names **where it is enforced**, so a reader can check the claim rather than
@@ -42,6 +42,10 @@ measures below are accordingly proportionate rather than exhaustive.
   controller layer rather than merely hidden in the template (REQ-SEC-007).
 - **No direct security-context access** outside the auth-helper seam — ArchUnit-enforced, so the
   "who is the caller" answer has exactly one source.
+- **Connected applications** reach only the exchange routes on the ingest gateway, with
+  consent-gated, DPoP-bound tokens, the member's own data under a reduced authentication,
+  revocation per installation from the next request, and a 90-day journal with undo
+  (REQ-XCH-005/-006/-008/-009/-022).
 
 ### Encryption in transit
 

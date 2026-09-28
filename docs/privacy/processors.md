@@ -1,6 +1,6 @@
 # Processors and recipients (Art. 28 GDPR)
 
-> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-22.
+> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-28.
 
 Every third party that can reach personal data, what role it plays, and what has to be in place for
 it. A party is a **processor** when it processes on the controller's instructions (Art. 28 — a data
@@ -73,6 +73,27 @@ either a missing contract or a missing paragraph in the privacy policy.
   GitHub API directly from the member's device. The tool itself sends GitHub no personal data.
 - **Named in the privacy policy:** yes, in the Android-app section, with a link to GitHub's privacy
   statement.
+
+### Providers of approved exchange clients
+
+- **Role:** **not a processor**, and no joint controllership. The controller gives a client's
+  provider no instructions and the provider processes nothing on the controller's behalf: the
+  member chooses to connect the client, which runs on the member's own device and receives the
+  member's own data at the member's request (REQ-XCH-002, REQ-XCH-009). The controller defines the
+  interface and approves the client, but decides nothing about the client's own processing. If the
+  provider itself receives data — a cloud backup, a sync service of its own — it does so as an
+  **independent controller** under its own privacy statement, which the approval requires to be
+  published (owner decision 2026-09-28).
+- **Reaches:** within the capabilities the member consented to — the member's own blueprints with
+  their note, personal stock and ships, the anonymised org demand of the member's units, catalogue
+  data. Never another member's data, the e-mail address or the display name.
+- **Third country:** none through the tool; the data goes to the member's device. A provider's own
+  onward processing is disclosed in its privacy statement.
+- **Named in the privacy policy:** as a category, in the section „Verbundene Anwendungen", with the
+  public list [`docs/legal/approved-clients.md`](../legal/approved-clients.md) linked. The individual
+  clients are named on that list, so a new approval changes neither the policy nor the consent.
+- The SC Extractor, although listed there, is the controller's own software and not a third party;
+  its processing is the policy's section „Begleitende Desktop-Anwendung (Datenimport)".
 
 ---
 
