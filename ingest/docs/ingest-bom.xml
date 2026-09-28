@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bom serialNumber="urn:uuid:02b35737-1f97-46ac-a2cf-ca41b2ff9bd3" version="1" xmlns="http://cyclonedx.org/schema/bom/1.6">
+<bom serialNumber="urn:uuid:e6c8ec0a-7cb3-43e2-87ef-c5c94733d93e" version="1" xmlns="http://cyclonedx.org/schema/bom/1.6">
   <metadata>
-    <timestamp>2026-09-28T14:13:25Z</timestamp>
+    <timestamp>2026-09-28T19:23:21Z</timestamp>
     <tools>
       <components>
         <component type="application">
@@ -19,7 +19,7 @@
       <modified>false</modified>
       <externalReferences>
         <reference type="build-system">
-          <url>https://github.com/krt-profit/basetool/actions/runs/36433970183</url>
+          <url>https://github.com/krt-profit/basetool/actions/runs/36471793238</url>
         </reference>
         <reference type="vcs">
           <url>https://github.com/krt-profit/basetool</url>
@@ -183,145 +183,6 @@
       <externalReferences>
         <reference type="vcs">
           <url>https://github.com/FasterXML/jackson-annotations</url>
-        </reference>
-      </externalReferences>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.5?type=jar">
-      <group>com.fasterxml.jackson.core</group>
-      <name>jackson-core</name>
-      <version>2.21.5</version>
-      <description>Core Jackson processing abstractions (aka Streaming API), implementation for JSON</description>
-      <hashes>
-        <hash alg="MD5">76c6cb978edc2c67b79a89a4f7224c28</hash>
-        <hash alg="SHA-1">7ec0c8bf8402fa998f64b2009632d6566a42ceb7</hash>
-        <hash alg="SHA-256">b64b5874162b503a0e58a8f7758266e8dd9f91bf49e3a59ae0b5f47589a231b7</hash>
-        <hash alg="SHA-512">e38be02a800765e5841c321e972e83149634bee42de1fcb177a115f1e21fde828f9db1a5862e741f2bd440550517a365b75ee8f7640ff72bcaa73f356b10dc70</hash>
-        <hash alg="SHA3-256">64f93dbf5a725407dd7f7a193dde6c8fb34295cbc84208994cb35c2866e5889e</hash>
-        <hash alg="SHA3-512">3e95f930376250f4b6acfba4412e1470dba561ab83393da68632846337ec74b51606f8762065b619f43831484d9299550bb8e6042fde7dcf48ee4c573e035bb3</hash>
-        <hash alg="SHA-384">61caf9c116560e207437d4fbdc912de8211606cc6174140e4de06ad0347b0bed723e162d149afa6b0db172d04fd2313b</hash>
-        <hash alg="SHA3-384">8aab2349ba6f2cd916393be6f8edaf928fc5cbfbfa3089fc4eb284ad0fd8a02df496e939f455a936d6dcd0e244f8ba9c</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-        </license>
-      </licenses>
-      <purl>pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.5?type=jar</purl>
-      <modified>false</modified>
-      <externalReferences>
-        <reference type="vcs">
-          <url>https://github.com/FasterXML/jackson-core</url>
-        </reference>
-      </externalReferences>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.5?type=jar">
-      <group>com.fasterxml.jackson.core</group>
-      <name>jackson-databind</name>
-      <version>2.21.5</version>
-      <description>General data-binding functionality for Jackson: works on core streaming API</description>
-      <hashes>
-        <hash alg="MD5">f1cdb6f418d6d587c64d5dc44a2a24fc</hash>
-        <hash alg="SHA-1">84924990b468233a28214ae2c505a9ec24cd6ea6</hash>
-        <hash alg="SHA-256">507418c0fafd38b2b2cfb704521630da613a8e4cc8381195a6f418017883e2c0</hash>
-        <hash alg="SHA-512">d21422d843f48a5386a0c46ed8113e12c961adeb7e9af95b61757985c279e9b2ffab0a5df28766d0ff0522780d72b1ff91d30dbee1202453e5936068cf645531</hash>
-        <hash alg="SHA3-256">2047b325775793d29cbd64c7b2b5e94ea2da79788eb20c742a1cc67a7957b38d</hash>
-        <hash alg="SHA3-512">53ec901e930f789a98f65989ac8a96ad3c55ddbe68834de46f83de41bba229d8da8cf302b3e44e45dce8e7a2a6f3c38fb5a19926ed368a3bdb9d1360fc550e6d</hash>
-        <hash alg="SHA-384">e628c49d62ab7963084808a2aa5894b9bdcf067dd5378d01a92d25f08e282306555205fb5779e29199241e1c3e037ae0</hash>
-        <hash alg="SHA3-384">9eaee059eec1631ddaf7e49f56846e5880111dd156076443423944cb50e9349eb59180c317e4bc066b591f2815962053</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-        </license>
-      </licenses>
-      <purl>pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.5?type=jar</purl>
-      <modified>false</modified>
-      <externalReferences>
-        <reference type="vcs">
-          <url>https://github.com/FasterXML/jackson-databind</url>
-        </reference>
-      </externalReferences>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml@2.21.5?type=jar">
-      <group>com.fasterxml.jackson.dataformat</group>
-      <name>jackson-dataformat-yaml</name>
-      <version>2.21.5</version>
-      <description>Support for reading and writing YAML-encoded data via Jackson abstractions.</description>
-      <hashes>
-        <hash alg="MD5">90171d58d963d3d5f1204d0d5f7461a6</hash>
-        <hash alg="SHA-1">1fd64970533dd220f32c4a686a5c0f13243c740b</hash>
-        <hash alg="SHA-256">c26143ac5503fd545bd5e9063f45a2499be89971559875e47cc868ef9359d10b</hash>
-        <hash alg="SHA-512">d0615a9bbb5a83ee454ac3ad2d24cb86a9fd908cb712ec0ba26646b38a0b4f4b8e5c1cebaeeb72909554408d91fdf657d170794048ec02cbb92226c17857c2dd</hash>
-        <hash alg="SHA3-256">a3b07246f520d4b80de724f60a513bb7cd0ebc3d09e380ce4d9b15d672582317</hash>
-        <hash alg="SHA3-512">c3ae8bfb826c56464f23e50002568a73a974dfe64dc43f7251328491d85d34c1f6c63fb16c8ac10d14586bfeb595335c73979e4507463987be664bbc3e1f9726</hash>
-        <hash alg="SHA-384">94186c272e9d66a2d3019cbd619bce97fbe7f4f26c0b19238c63948c24445d90169d5dcd195aa20d15f6142e5cd75ede</hash>
-        <hash alg="SHA3-384">b675b4edab11632dc6c17b09c049fa6252de49caddcbdcd0223c448a2a2519d0f5249a8a78558ed2b71318a4a9c00bb9</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-        </license>
-      </licenses>
-      <purl>pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml@2.21.5?type=jar</purl>
-      <modified>false</modified>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310@2.21.5?type=jar">
-      <group>com.fasterxml.jackson.datatype</group>
-      <name>jackson-datatype-jsr310</name>
-      <version>2.21.5</version>
-      <description>Add-on module to support JSR-310 (Java 8 Date &amp; Time API) data types.</description>
-      <hashes>
-        <hash alg="MD5">6a1cfd9d7dace618bd512ad3647ebae6</hash>
-        <hash alg="SHA-1">2f8d061404266c0edbdd5674131ed689b6d84491</hash>
-        <hash alg="SHA-256">e941f9718d16a649614cb06711de06da34722afff9cee0b7725fc5318638304c</hash>
-        <hash alg="SHA-512">1704cfbcd21d6b5a51b86e4f4c7ac5c30383f01ad49e108b14850e8b248f964bd2aaa209f5e63b2f14b907d43eba91dbade9cff1983648717d126f4dbfede382</hash>
-        <hash alg="SHA3-256">a65145aadafeb40035282c42d9f0c532760940847ea0b458de549c0fae43ca1c</hash>
-        <hash alg="SHA3-512">8dc8391927336301f7f9d30fd53f7fe6f4c3f8c40970ce135e9d7f9544b6812afd636c7bf30b4307d57f73f2ab376cb394ec4e0b459352323499e6974e5251f1</hash>
-        <hash alg="SHA-384">7072d6b6694cde868cf0c329d9b5380b641c396553618d302b93294dedbbf750c4dbc0fafb8f3ad445a4e5bcf9200330</hash>
-        <hash alg="SHA3-384">235695963012014225cdaa2213d7f0ff88e8eba044bff9075d0ea32e845cfb5bdbf4982e3e05d5c6c6857f77ef7f350f</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-        </license>
-      </licenses>
-      <purl>pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310@2.21.5?type=jar</purl>
-      <modified>false</modified>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/com.fasterxml.jackson/jackson-bom@2.21.5?type=pom">
-      <publisher>FasterXML</publisher>
-      <group>com.fasterxml.jackson</group>
-      <name>jackson-bom</name>
-      <version>2.21.5</version>
-      <description>Bill of Materials pom for getting full, complete set of compatible versions of Jackson components maintained by FasterXML.com</description>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-        </license>
-      </licenses>
-      <purl>pkg:maven/com.fasterxml.jackson/jackson-bom@2.21.5?type=pom</purl>
-      <modified>false</modified>
-      <externalReferences>
-        <reference type="website">
-          <url>http://fasterxml.com/</url>
-        </reference>
-        <reference type="vcs">
-          <url>https://github.com/FasterXML/jackson-bom</url>
         </reference>
       </externalReferences>
       <properties>
@@ -2098,87 +1959,6 @@
         <property name="cdx:maven:package:test">false</property>
       </properties>
     </component>
-    <component type="library" bom-ref="pkg:maven/io.swagger.core.v3/swagger-annotations-jakarta@2.2.55?type=jar">
-      <group>io.swagger.core.v3</group>
-      <name>swagger-annotations-jakarta</name>
-      <version>2.2.55</version>
-      <description>swagger-annotations-jakarta</description>
-      <hashes>
-        <hash alg="MD5">576a29f3692ccc16ec3161faf1af6b47</hash>
-        <hash alg="SHA-1">a8af2e7fdca945d8871316e84a9b3154694e26ba</hash>
-        <hash alg="SHA-256">d464521aac0e9ae2cfead9d2f56e9e8c110ef4b15ad9c046408a087a4c58952b</hash>
-        <hash alg="SHA-512">bde4be280bc11a982555b907ad3eb94c92eec22352607cea936db7da77eba8b693a2a1b34a560946cb16501012e022295cdaf0225cb873b39b00eaabeaf6e62a</hash>
-        <hash alg="SHA3-256">2ca762aefe4eb8a7396f7299116249866ed539b3751c6124246deebe7bee5af9</hash>
-        <hash alg="SHA3-512">47213a991d5cc9ac3f0e1ed1bf10266238035b5b275f14fcf1b03f0233764ca353fa0a40641d655d9bb48e275e4fd03d4ddf6516aec7eb5c996d4ab88387e6f9</hash>
-        <hash alg="SHA-384">82e6121fc4c5a51e04b22da5051e296ad7d380ad5362ace077bac0214d2bd13d2fe41708ccd0f6adeb3273e27a6cc8e6</hash>
-        <hash alg="SHA3-384">5b6112434edb044cc0971f905fdecb168d9e6f3f166cfc7d73d062d88c8c0a3e897bf1936217590e0cae286e3dc6a0fd</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-          <url>https://www.apache.org/licenses/LICENSE-2.0</url>
-        </license>
-      </licenses>
-      <purl>pkg:maven/io.swagger.core.v3/swagger-annotations-jakarta@2.2.55?type=jar</purl>
-      <modified>false</modified>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/io.swagger.core.v3/swagger-core-jakarta@2.2.55?type=jar">
-      <group>io.swagger.core.v3</group>
-      <name>swagger-core-jakarta</name>
-      <version>2.2.55</version>
-      <description>swagger-core-jakarta</description>
-      <hashes>
-        <hash alg="MD5">12f5e4a252cc99db79a3f0af60f7158b</hash>
-        <hash alg="SHA-1">5fab7a2e1df29cfe3ae569f8b96a3534f5ca15a3</hash>
-        <hash alg="SHA-256">3d72786a7133dbf8569dda19549e0ef3e0d68d01d3b4dd221a96eb1b29263d5f</hash>
-        <hash alg="SHA-512">ba931ba95054dd97eedc25217ce818120c674e2c167b688ab272de92a6a8fb7aff457dbcc04760a3cef10f8ac0f8415e7c80b437ea7bcec47629d6c944fa0bff</hash>
-        <hash alg="SHA3-256">f5603fd12a6206f810a60f953acf41e972c62fe3ee9ab1f52213aaf6c295a9cc</hash>
-        <hash alg="SHA3-512">9b406a4898a7859e5b83956b07295fbfc5399e389a4368a5c35ce9532f7b40bf795eef38408ebd80eeb98525c01497bb2bc01a8ae54ce73ea39e48fb066d5da0</hash>
-        <hash alg="SHA-384">8bd9d886e58a4f166a60a3335ea29313c822ec2214bc6535946fe377c2d70568b2e69dffbcf6ecfbc13182e00d5b07cb</hash>
-        <hash alg="SHA3-384">056e24c4c25cd3f0a35a23a61fc21fd5eb2ab15d965c8f47ba1f49bcdfed8f9ad37ea8f5498d8387ce97f8c613bbc122</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-          <url>https://www.apache.org/licenses/LICENSE-2.0</url>
-        </license>
-      </licenses>
-      <purl>pkg:maven/io.swagger.core.v3/swagger-core-jakarta@2.2.55?type=jar</purl>
-      <modified>false</modified>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/io.swagger.core.v3/swagger-models-jakarta@2.2.55?type=jar">
-      <group>io.swagger.core.v3</group>
-      <name>swagger-models-jakarta</name>
-      <version>2.2.55</version>
-      <description>swagger-models-jakarta</description>
-      <hashes>
-        <hash alg="MD5">505e268edc57c851d9f636e3ab4f91fd</hash>
-        <hash alg="SHA-1">1c0f2d4ce28c69ad62a5e4de705aa67e1c55e935</hash>
-        <hash alg="SHA-256">f83577d4090301a49342dd73708ace743ea46fe382e922a9e892368c45cc6a8d</hash>
-        <hash alg="SHA-512">24fe8bc49edc38fc1646daf63acd4c2427fd9a7b87c4d0a0ced4ab5eb50c0c90ac9c3f6768008a525b532d10c2713e46a19c39c3a44e05ed1ec3b93227236e39</hash>
-        <hash alg="SHA3-256">a5215f3df1ce9a9d7464cf4978dee4b7b972ec7059e3efc6aa1fa7cec0ae494f</hash>
-        <hash alg="SHA3-512">f58176678a0b8cb3f444cf8c4778925c1b46b519c0bc4fff28d5e0a0ef7cfb560a519399875ac585c71b37f60e414702a00c4ae7e17a639aeffedfc57622f747</hash>
-        <hash alg="SHA-384">d9d44756794ca183126507c9770fda4f6f5ee6dbe6c4b952bd301458ca09180265c119af7e2dec3fd9c58b4771fb28cb</hash>
-        <hash alg="SHA3-384">822922b7f69efef39a05d4bdf8fdd28846f175c532e6f15d78f2702ee5067d44176f641ddb2fedc584d4157ba2c0ba57</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-          <url>https://www.apache.org/licenses/LICENSE-2.0</url>
-        </license>
-      </licenses>
-      <purl>pkg:maven/io.swagger.core.v3/swagger-models-jakarta@2.2.55?type=jar</purl>
-      <modified>false</modified>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
     <component type="library" bom-ref="pkg:maven/jakarta.activation/jakarta.activation-api@2.1.4?type=jar">
       <group>jakarta.activation</group>
       <name>jakarta.activation-api</name>
@@ -2342,44 +2122,6 @@
       <externalReferences>
         <reference type="vcs">
           <url>https://github.com/logfellow/logstash-logback-encoder</url>
-        </reference>
-      </externalReferences>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/org.apache.commons/commons-lang3@3.20.0?type=jar">
-      <group>org.apache.commons</group>
-      <name>commons-lang3</name>
-      <version>3.20.0</version>
-      <description>Apache Commons Lang, a package of Java utility classes for the classes that are in java.lang's hierarchy, or are considered to be so standard as to justify existence in java.lang. The code is tested using the latest revision of the JDK for supported LTS releases: 8, 11, 17, 21 and 25 currently. See https://github.com/apache/commons-lang/blob/master/.github/workflows/maven.yml Please ensure your build environment is up-to-date and kindly report any build issues.</description>
-      <hashes>
-        <hash alg="MD5">4b29562ded527aa074e1d44f8646dac5</hash>
-        <hash alg="SHA-1">65897b3e5731220962e659e001904af3c3cbeba9</hash>
-        <hash alg="SHA-256">69e5c9fa35da7a51a5fd2099dfe56a2d8d32cf233e2f6d770e796146440263f4</hash>
-        <hash alg="SHA-512">1c72db334ea44f932c35e602b78907865f5bab43e30c871c9be67c8184eaa778f32d7bc3ab525d5921cd28619d3f9babfd483f17de54f007ee07db2e074b0307</hash>
-        <hash alg="SHA3-256">36e3f71352fa14bc580db45a05b09b063392c6d39acf9e24ffa6a67bbc07a336</hash>
-        <hash alg="SHA3-512">6ecbc05bb5cd3f7537078b0cf51b0a5f7189dfa60c22e5ec0d6b9e2fd3f7fa7566770b5da87e0c9929f48769933c3e3a473fd5cc7231672fca36ab1fee1f8670</hash>
-        <hash alg="SHA-384">77dd27c4d5e9372c002bd6878d2cfaaec3cf46dd57d65de63d7f2e09351344531cfa81a537b56628ac6db18adee7e484</hash>
-        <hash alg="SHA3-384">3456de40eef224b3ad195d2f218dd28eacb0da07607aee7ead94bd8d54bd8311d51c28d4066db4bf8b69a2df48c415f5</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-          <url>https://www.apache.org/licenses/LICENSE-2.0</url>
-        </license>
-      </licenses>
-      <purl>pkg:maven/org.apache.commons/commons-lang3@3.20.0?type=jar</purl>
-      <modified>false</modified>
-      <externalReferences>
-        <reference type="build-system">
-          <url>https://github.com/apache/commons-lang/actions</url>
-        </reference>
-        <reference type="issue-tracker">
-          <url>https://issues.apache.org/jira/browse/LANG</url>
-        </reference>
-        <reference type="vcs">
-          <url>https://gitbox.apache.org/repos/asf/commons-lang.git</url>
         </reference>
       </externalReferences>
       <properties>
@@ -2793,56 +2535,6 @@
         </license>
       </licenses>
       <purl>pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar</purl>
-      <modified>false</modified>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/org.springdoc/springdoc-openapi-starter-common@3.1.1?type=jar">
-      <group>org.springdoc</group>
-      <name>springdoc-openapi-starter-common</name>
-      <version>3.1.1</version>
-      <hashes>
-        <hash alg="MD5">4eea04d6777b6f04b9e11f59c301170f</hash>
-        <hash alg="SHA-1">2c49a5ccecd3190f307f03a5bf20b724da244796</hash>
-        <hash alg="SHA-256">8765460695778bc383f12d9f96d62195ec8ddaef64277854891e9ff0f76e9b97</hash>
-        <hash alg="SHA-512">49d041019a3a9f54576c819e15ee7aa859229ab7b4249fc76812e76bf247b64fbef20d26e86d42a13ecab6ea5a75aa619c4f3e36a1f0220739b16a80a237c602</hash>
-        <hash alg="SHA3-256">617aefc53cdddc67cd2277536b00a19278a0ccc0222e708dad069002dccf22a4</hash>
-        <hash alg="SHA3-512">bfe2b46b7e7693dd03d7efe2ce931e9f58f43df8f91d8ddcab6fcaadfea9127b77ef716d3f3f9c9f2a4851f2b24aa8fbbf530a8a3b56e6045baba0fcc612bfa6</hash>
-        <hash alg="SHA-384">ee040b6e8bf933a41c94e7c45cfe1711f385a03827587f30cacb183d0940e4a6267c19f9f399f35ca11e2270d355bcb0</hash>
-        <hash alg="SHA3-384">84bca57fcb361de490a50ff704fea0520949263594150dd44df1e9d7a6e4d7b4743bc5cf198125d7b8989a9a084cf62f</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-        </license>
-      </licenses>
-      <purl>pkg:maven/org.springdoc/springdoc-openapi-starter-common@3.1.1?type=jar</purl>
-      <modified>false</modified>
-      <properties>
-        <property name="cdx:maven:package:test">false</property>
-      </properties>
-    </component>
-    <component type="library" bom-ref="pkg:maven/org.springdoc/springdoc-openapi-starter-webmvc-api@3.1.1?type=jar">
-      <group>org.springdoc</group>
-      <name>springdoc-openapi-starter-webmvc-api</name>
-      <version>3.1.1</version>
-      <hashes>
-        <hash alg="MD5">c42641cf244536c4922b5addbbad320b</hash>
-        <hash alg="SHA-1">bf3d2d80134ef02a3dcbac3af2e0d78873355a61</hash>
-        <hash alg="SHA-256">3b9aa208f93c3e6ff93ae505ea9b8467d00943ca9f6f0041ee0de8008d079a2d</hash>
-        <hash alg="SHA-512">bd08ab5153b0ae17fd25900f94a13d65af0f0bfb94e64bbf1f7cc326f865bd8082779a1a3ee173bbbca5865f3c9726ef00058e2fefe6c8600fde45f458c57855</hash>
-        <hash alg="SHA3-256">aea166abc8aedd8f071e442af56bf4b3a5e456cfecadba8412814591c1718d2b</hash>
-        <hash alg="SHA3-512">1587a90228413d4921a901f242d9d5bf591d3f56348cc7dbe495ab11aea9df37c104672c77a41b6b828dd248919a5aa5929b753a0269f1feb11f5f02f7f19ae8</hash>
-        <hash alg="SHA-384">5e85b4b20334200e31119d4d9571034dbc0d796bd6bd97f12905a3415330407f2744d744d8b06b754423f55d68761b63</hash>
-        <hash alg="SHA3-384">49524e990af1499e5e8a90d7882b212bd79eafc8b8ee51cf2cc854651ff8f006b8d5545e5888ae64e278c49c3bfecad1</hash>
-      </hashes>
-      <licenses>
-        <license>
-          <id>Apache-2.0</id>
-        </license>
-      </licenses>
-      <purl>pkg:maven/org.springdoc/springdoc-openapi-starter-webmvc-api@3.1.1?type=jar</purl>
       <modified>false</modified>
       <properties>
         <property name="cdx:maven:package:test">false</property>
@@ -5244,27 +4936,6 @@
     <dependency ref="pkg:maven/com.bucket4j/bucket4j_jdk17-core@8.20.0?type=jar"/>
     <dependency ref="pkg:maven/com.ethlo.time/itu@1.14.0?type=jar"/>
     <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.21?type=jar"/>
-    <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.5?type=jar">
-      <dependency ref="pkg:maven/com.fasterxml.jackson/jackson-bom@2.21.5?type=pom"/>
-    </dependency>
-    <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.5?type=jar">
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.21?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.5?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson/jackson-bom@2.21.5?type=pom"/>
-    </dependency>
-    <dependency ref="pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml@2.21.5?type=jar">
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.5?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.5?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson/jackson-bom@2.21.5?type=pom"/>
-      <dependency ref="pkg:maven/org.yaml/snakeyaml@2.6?type=jar"/>
-    </dependency>
-    <dependency ref="pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310@2.21.5?type=jar">
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.21?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-core@2.21.5?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.5?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson/jackson-bom@2.21.5?type=pom"/>
-    </dependency>
-    <dependency ref="pkg:maven/com.fasterxml.jackson/jackson-bom@2.21.5?type=pom"/>
     <dependency ref="pkg:maven/com.fasterxml/classmate@1.7.3?type=jar"/>
     <dependency ref="pkg:maven/com.networknt/json-schema-validator@3.0.7?type=jar">
       <dependency ref="pkg:maven/com.ethlo.time/itu@1.14.0?type=jar"/>
@@ -5293,7 +4964,6 @@
       <dependency ref="pkg:maven/io.github.resilience4j/resilience4j-spring-boot3@2.4.0?type=jar"/>
       <dependency ref="pkg:maven/io.micrometer/micrometer-registry-prometheus@1.17.1?type=jar"/>
       <dependency ref="pkg:maven/net.logstash.logback/logstash-logback-encoder@9.0?type=jar"/>
-      <dependency ref="pkg:maven/org.springdoc/springdoc-openapi-starter-webmvc-api@3.1.1?type=jar"/>
       <dependency ref="pkg:maven/org.springframework.boot/spring-boot-devtools@4.1.1?type=jar"/>
       <dependency ref="pkg:maven/org.springframework.boot/spring-boot-starter-actuator@4.1.1?type=jar"/>
       <dependency ref="pkg:maven/org.springframework.boot/spring-boot-starter-data-redis@4.1.1?type=jar"/>
@@ -5546,23 +5216,6 @@
       <dependency ref="pkg:maven/io.prometheus/prometheus-metrics-config@1.7.0?type=jar"/>
     </dependency>
     <dependency ref="pkg:maven/io.prometheus/prometheus-metrics-tracer-common@1.7.0?type=jar"/>
-    <dependency ref="pkg:maven/io.swagger.core.v3/swagger-annotations-jakarta@2.2.55?type=jar"/>
-    <dependency ref="pkg:maven/io.swagger.core.v3/swagger-core-jakarta@2.2.55?type=jar">
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.21?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.5?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml@2.21.5?type=jar"/>
-      <dependency ref="pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310@2.21.5?type=jar"/>
-      <dependency ref="pkg:maven/io.swagger.core.v3/swagger-annotations-jakarta@2.2.55?type=jar"/>
-      <dependency ref="pkg:maven/io.swagger.core.v3/swagger-models-jakarta@2.2.55?type=jar"/>
-      <dependency ref="pkg:maven/jakarta.validation/jakarta.validation-api@3.1.1?type=jar"/>
-      <dependency ref="pkg:maven/jakarta.xml.bind/jakarta.xml.bind-api@4.0.5?type=jar"/>
-      <dependency ref="pkg:maven/org.apache.commons/commons-lang3@3.20.0?type=jar"/>
-      <dependency ref="pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar"/>
-      <dependency ref="pkg:maven/org.yaml/snakeyaml@2.6?type=jar"/>
-    </dependency>
-    <dependency ref="pkg:maven/io.swagger.core.v3/swagger-models-jakarta@2.2.55?type=jar">
-      <dependency ref="pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.21?type=jar"/>
-    </dependency>
     <dependency ref="pkg:maven/jakarta.activation/jakarta.activation-api@2.1.4?type=jar"/>
     <dependency ref="pkg:maven/jakarta.annotation/jakarta.annotation-api@3.0.0?type=jar"/>
     <dependency ref="pkg:maven/jakarta.validation/jakarta.validation-api@3.1.1?type=jar"/>
@@ -5572,7 +5225,6 @@
     <dependency ref="pkg:maven/net.logstash.logback/logstash-logback-encoder@9.0?type=jar">
       <dependency ref="pkg:maven/tools.jackson.core/jackson-databind@3.1.5?type=jar"/>
     </dependency>
-    <dependency ref="pkg:maven/org.apache.commons/commons-lang3@3.20.0?type=jar"/>
     <dependency ref="pkg:maven/org.apache.logging.log4j/log4j-api@2.25.5?type=jar"/>
     <dependency ref="pkg:maven/org.apache.logging.log4j/log4j-to-slf4j@2.25.5?type=jar">
       <dependency ref="pkg:maven/org.apache.logging.log4j/log4j-api@2.25.5?type=jar"/>
@@ -5600,18 +5252,6 @@
       <dependency ref="pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar"/>
     </dependency>
     <dependency ref="pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar"/>
-    <dependency ref="pkg:maven/org.springdoc/springdoc-openapi-starter-common@3.1.1?type=jar">
-      <dependency ref="pkg:maven/io.swagger.core.v3/swagger-core-jakarta@2.2.55?type=jar"/>
-      <dependency ref="pkg:maven/org.springframework.boot/spring-boot-autoconfigure@4.1.1?type=jar"/>
-      <dependency ref="pkg:maven/org.springframework.boot/spring-boot-jackson@4.1.1?type=jar"/>
-      <dependency ref="pkg:maven/org.springframework.boot/spring-boot-starter@4.1.1?type=jar"/>
-      <dependency ref="pkg:maven/org.springframework.boot/spring-boot-validation@4.1.1?type=jar"/>
-    </dependency>
-    <dependency ref="pkg:maven/org.springdoc/springdoc-openapi-starter-webmvc-api@3.1.1?type=jar">
-      <dependency ref="pkg:maven/org.springdoc/springdoc-openapi-starter-common@3.1.1?type=jar"/>
-      <dependency ref="pkg:maven/org.springframework.boot/spring-boot-web-server@4.1.1?type=jar"/>
-      <dependency ref="pkg:maven/org.springframework.boot/spring-boot-webmvc@4.1.1?type=jar"/>
-    </dependency>
     <dependency ref="pkg:maven/org.springframework.boot/spring-boot-actuator-autoconfigure@4.1.1?type=jar">
       <dependency ref="pkg:maven/org.springframework.boot/spring-boot-actuator@4.1.1?type=jar"/>
       <dependency ref="pkg:maven/org.springframework.boot/spring-boot-autoconfigure@4.1.1?type=jar"/>
