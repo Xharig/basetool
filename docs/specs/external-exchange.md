@@ -176,8 +176,20 @@ transaction completes — committed or rolled back — the committed state is wr
 there is counted and left to the reconcile, which compares the content (not `revision` and
 `writtenAt`) at startup and every 60 s (`app.exchange.mirror.reconcile-interval`) and rewrites a
 differing, missing or unreadable document. The mirror is written only while
-`APP_EXCHANGE_MIRROR_ENABLED=true`; while it is off nothing is mirrored and the gateway, which then
-finds no document, refuses every exchange request.
+`APP_EXCHANGE_MIRROR_ENABLED=true`. While it is off nothing is mirrored, and a start switches off a
+document an earlier run left behind (`ExchangeRegistryMirrorClosure`, once when the application is
+ready): the document has no expiry, so it would otherwise keep admitting clients. It is rewritten
+with the same clients, `enabled: false` and a new revision, through the backend user's own `GET` and
+`SET`, so the gateway refuses every exchange request `503 EXCHANGE_DISABLED` — or `503
+REGISTRY_UNAVAILABLE` when there never was a document. A failed attempt is counted as
+`basetool_exchange_mirror_writes_total{phase="switched_off",outcome="failed"}`
+(`ExchangeMirrorWriteFailed`) and does not stop the start. A document's age is no signal here: the
+backend rewrites it only when the registry changes, so `writtenAt` can be days old on a healthy
+mirror, and the gateway's `basetool_exchange_registry_mirror_age_seconds` measures its last
+successful read instead. The backend's own gate needs none of this: it reads the switch, the
+client, the installation and the client revocations from the database (REQ-XCH-008). *Corrected
+2026-09-28 (security review G5, L2): this said the gateway refuses every exchange request while
+mirroring is off, which held only until a document had once been written.*
 
 **What a registry entry may hold** (security review 2, L6). The display name reaches Keycloak's
 consent page, the member page and the connection notification, so it is Latin letters, ASCII digits,
@@ -205,6 +217,10 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   `ExchangeRegistryReaderTest` — a missing document, an unknown `schemaVersion`, garbage and an
   unreachable Redis all fail closed, a failed read is not cached — and `ExchangeGateTest`, which
   answers them `503 REGISTRY_UNAVAILABLE` with `Retry-After` (WP 3.2).*
+- [x] A start with mirroring off switches off a document left behind, keeping its clients, under
+  the backend's ACL user; a missing or already switched-off document is left alone, and a refused
+  read is counted without failing the start. *`ExchangeRegistryMirrorClosureTest` (security review
+  G5, L2).*
 - [x] Every registry change writes an audit event in „Verbundene Anwendungen" and fires the
   `ExchangeRegistryChanged` alert.
 - [x] The admin page *Administration → Verbundene Anwendungen* (`/admin/exchange-clients`)
@@ -225,7 +241,8 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   (`APP_GRAFANA_OPERATIONS_DASHBOARD_URL`, owner decision 2026-09-27). *`AdminExchangeClientUsageTest`,
   `AdminExchangeClientsPageControllerMvcTest`.*
 
-**Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
+**Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistryMirrorClosureTest`,
+`ExchangeRegistrySnapshotTest`,
 `AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `ExchangeConnectionsE2eTest`,
 `RedisAclBackendIntegrationTest`,
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
@@ -513,10 +530,13 @@ itself (`installation_revoked`), and re-checks the client revocation the way the
 gateway that missed it is caught behind it (security review 2026-09-27): the gateway relays the
 connection time it compared — an offline token's `iat`, any other token's `auth_time`
 (`ExchangeGateFilter.connectionTime`) — as `X-Exchange-Connected-At` (honoured like the other relay
-headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from the mirror on every
-exchange request and refuses a connection made at or before that second (`client_revoked`); a request
-relayed without a connection time counts as connected before it, as a token without the claim does
-at the gateway. Both sides therefore compare the same time. A mirror the
+headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from the mirror **and**
+the member's row in `exchange_client_revocation` on every exchange request and refuses a connection
+made at or before the later of the two seconds (`client_revoked`); a request relayed without a
+connection time counts as connected before it, as a token without the claim does at the gateway.
+Both sides therefore compare the same time, and the stored row keeps the check working while the
+mirror is off or behind. *Corrected 2026-09-28 (security review G5, L2): the gate read only the
+mirror, so with mirroring switched off a whole-client disconnect went unseen by it.* A mirror the
 backend cannot read fails closed: the request is refused `503 REGISTRY_UNAVAILABLE`
 (`revocations_unreadable`), as the gateway refuses revocations it cannot read, with the gateway's
 `Retry-After: 30`. Every refusal of the backend's gate carries the gateway's code for the same
@@ -546,7 +566,8 @@ BACKEND_RELAY_FAILED`.* The backend's Redis user already holds `GET` on
   shared ones before it reads the time, and writes nothing when Keycloak fails
   (`ConnectedAppsServiceTest`, `KeycloakServiceTest`); the extension leaves the member's other
   clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).
-  The backend re-checks it from the relayed connection time and refuses an unreadable mirror
+  The backend re-checks it from the relayed connection time against the later of the stored row and
+  the mirror, so a disconnect the mirror lacks is still refused, and refuses an unreadable mirror
   (backend `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the compared time in the gateway's
   `ExchangeGateTest`, the relay header in `ExchangeRelayTest`). The disconnect answers only in a
   second after the revocation's, holding no transaction
@@ -1748,6 +1769,8 @@ it changed, and is audited and instrumented. Re-activating the client stays a se
   `exchange_write_alerts_test.yml`.*
 - [x] One run per client at a time (`409`); a run a restart cut short is marked `FAILED` at the next
   start. *`ExchangeBulkUndoControllerTest`.*
+- [x] A run the executor refuses is ended `FAILED` at once and counted as a failed run, the start
+  answers `409`, and the client stays suspended. *`ExchangeBulkUndoRejectionTest`.*
 - [x] Each member whose data the run changed gets one notification per run; the admin page lists the
   runs, refreshes while one runs and shows a run's skipped entries.
   *`ExchangeBulkUndoControllerTest`, `AdminExchangeClientsPageControllerMvcTest`.*
@@ -1777,7 +1800,14 @@ the run with one atomic update, and publishes `EXCHANGE_BULK_UNDO_APPLIED` when 
 A member whose undo throws is rolled back alone and recorded as `FAILED`. At the end the run is
 `COMPLETED`, or `FAILED` when a member failed, and `EXCHANGE_BULK_UNDO_FINISHED` records the status
 and the totals. A run left `RUNNING` by a restart is marked `FAILED` (`interrupted=true`) at the next
-start; the admin starts it again, which touches only what is not undone yet.
+start; the admin starts it again, which touches only what is not undone yet. A run the executor
+refuses because its queue of ten is full is ended `FAILED` at once (`EXCHANGE_BULK_UNDO_FINISHED`,
+`interrupted=false`), counted as a failed `exchange_bulk_undo` run (`ExchangeBulkUndoFailed`) and
+answered `409` with a localized detail; the client stays suspended until an admin activates it, and
+the page reloads the registry and the run list in place. There is no admin notification for bulk
+undo runs, so the answer and the alert are the signal (owner decision 2026-09-28; security review
+G5, I2 — until then such a run stayed `RUNNING` and blocked every new run of the client until a
+restart).
 
 **Notification.** The rule-engine event `EXCHANGE_BULK_UNDO_APPLIED` (seed `V257`, selector
 `EVENT_RECIPIENT`) tells each member once per run how many entries the administration took back and

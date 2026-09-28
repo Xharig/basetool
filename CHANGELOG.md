@@ -347,6 +347,25 @@
 
 ### Fixed
 
+- **Redis: Ingest-Benutzer ohne ungenutzte Befehle.** Die ACL-Vorlage nimmt dem Benutzer
+  `basetool-ingest` `ZREMRANGEBYSCORE` und `UNLINK`, die das Gateway nie sendet; wirksam mit dem
+  nächsten Rendern der ACL.
+
+- **Ingest: Produktion startet nur mit eigenem Redis-Benutzer.** Unter `prod` verweigert das
+  Gateway den Start, wenn `REDIS_INGEST_USERNAME` leer oder `default` ist; so kann es nie als
+  `default` die Registry oder die Sperrlisten des Datenaustauschs verändern.
+
+- **Datenaustausch: abgewiesenes Zurücknehmen blockiert nichts mehr.** Ist die Warteschlange für
+  das Zurücknehmen bei allen Mitgliedern voll (zehn Läufe), wird der neue Lauf sofort als
+  fehlgeschlagen vermerkt und der Admin bekommt eine Meldung; bisher blieb er bis zum nächsten
+  Neustart „laufend“ und sperrte jeden weiteren Lauf der Anwendung. Die Anwendung bleibt gesperrt.
+
+- **Datenaustausch: abgeschaltete Registry-Spiegelung lässt keine Anwendung mehr durch.** Startet
+  das Backend mit `APP_EXCHANGE_MIRROR_ENABLED=false`, schaltet es ein zurückgebliebenes
+  Registry-Dokument in Redis ab, sodass das Gateway jede Austausch-Anfrage mit
+  `503 EXCHANGE_DISABLED` ablehnt. Die Backend-Prüfung erkennt das Trennen einer Anwendung jetzt
+  auch aus der Datenbank, nicht nur aus dem Redis-Spiegel.
+
 - **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
   auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
   90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede

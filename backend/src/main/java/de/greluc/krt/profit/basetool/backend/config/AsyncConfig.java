@@ -151,8 +151,9 @@ public class AsyncConfig {
    * Single-thread executor for admins' bulk undo runs, so runs never overlap and their load on the
    * database stays one member's transaction at a time.
    *
-   * <p>Queues up to 10 runs and waits up to 60 s on shutdown; a run still going at exit is marked
-   * {@code FAILED} on the next startup. Propagates the starting request's MDC.
+   * <p>Queues up to 10 runs and waits up to 60 s on shutdown; a run refused by a full queue is
+   * marked {@code FAILED} at once, a run still going at exit on the next startup. Propagates the
+   * starting request's MDC.
    *
    * @return configured bulk undo executor
    */
