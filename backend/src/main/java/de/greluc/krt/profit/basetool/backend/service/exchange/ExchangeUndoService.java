@@ -60,6 +60,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -197,7 +198,7 @@ public class ExchangeUndoService {
       @Nullable ExchangeResource resource) {
     Instant floor = clock.instant().minus(retention.maxAge());
     Instant from = since.isBefore(floor) ? floor : since;
-    Map<String, List<ExchangeJournalEntry>> groups = new LinkedHashMap<>();
+    Map<String, List<ExchangeJournalEntry>> groups = new TreeMap<>();
     for (ExchangeJournalEntry entry : journalRepository.findUndoable(member, clientId, from)) {
       if ((installationKey != null && !installationKey.equals(entry.getInstallationKey()))
           || (resource != null && resource != entry.getResource())) {
@@ -208,6 +209,13 @@ public class ExchangeUndoService {
               entry.getResource().name() + ':' + entry.getEntityKey(), k -> new ArrayList<>())
           .add(entry);
     }
+    stockWriteService.lockLots(
+        member,
+        groups.values().stream()
+            .map(List::getFirst)
+            .filter(entry -> entry.getResource() == ExchangeResource.STOCK)
+            .map(ExchangeJournalEntry::getEntityKey)
+            .toList());
     int restored = 0;
     List<ExchangeJournalEntry> skippedEntries = new ArrayList<>();
     List<Skipped> skipped = new ArrayList<>();
