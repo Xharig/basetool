@@ -373,6 +373,7 @@ public class AdminAuditLogPageController {
                   "EXCHANGE_MASS_CHANGE_CONFIRMED",
                   "EXCHANGE_BULK_UNDO_STARTED",
                   "EXCHANGE_BULK_UNDO_FINISHED",
+                  "EXCHANGE_CONNECTIONS_PURGED",
                   "CONNECTED_APPS_AUDIT_EXPORTED",
                   "CONNECTED_APPS_AUDIT_PURGED")));
 

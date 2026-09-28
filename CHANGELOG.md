@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: getrennte Verbindungen werden nach 90 Tagen gelöscht.** Ein nächtlicher Job
+  löscht getrennte Installationen (samt ihrer Bezeichnung) und die Trennung ganzer Anwendungen 90 Tage
+  nach der Trennung, statt sie bis zum Löschen des Kontos aufzubewahren; jeder Lauf mit Löschungen
+  steht mit den Anzahlen im Audit „Verbundene Anwendungen" (REQ-XCH-035).
 - **Verbundene Anwendungen: Link auf die Liste der zugelassenen Anwendungen.** Die Seite
   *Persönlich → Verbundene Anwendungen* verlinkt die öffentliche Liste
   (`docs/legal/approved-clients.md` auf GitHub), damit Mitglieder prüfen können, welche Anwendungen
