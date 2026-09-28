@@ -38,6 +38,8 @@ import java.util.UUID;
  * @param updatedAt row last-update timestamp
  * @param source where the entry came from, or {@code null} when that was not recorded (REQ-INV-054)
  * @param sourceClientId the exchange client that added it, or {@code null}
+ * @param sourceClientName the registry display name of {@code sourceClientId}, or {@code null} when
+ *     there is no client or it is no longer registered; a reader then shows the id
  */
 public record PersonalBlueprintResponse(
     UUID id,
@@ -51,4 +53,5 @@ public record PersonalBlueprintResponse(
     Instant createdAt,
     Instant updatedAt,
     BlueprintSource source,
-    String sourceClientId) {}
+    String sourceClientId,
+    String sourceClientName) {}

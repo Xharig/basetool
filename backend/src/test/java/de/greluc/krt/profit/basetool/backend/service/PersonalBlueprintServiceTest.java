@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -48,6 +49,8 @@ import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintCreateRe
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintRecipeResponse;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintResponse;
 import de.greluc.krt.profit.basetool.backend.model.dto.PersonalBlueprintUpdateRequest;
+import de.greluc.krt.profit.basetool.backend.model.projection.ExchangeClientDisplayName;
+import de.greluc.krt.profit.basetool.backend.repository.ExchangeClientRepository;
 import de.greluc.krt.profit.basetool.backend.repository.GameItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.PersonalBlueprintRepository;
 import de.greluc.krt.profit.basetool.backend.service.BlueprintProductService.ResolvedProduct;
@@ -55,6 +58,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -84,6 +88,7 @@ class PersonalBlueprintServiceTest {
   @Mock private GameItemRepository gameItemRepository;
   @Mock private DefaultBlueprintKeyService defaultBlueprintKeyService;
   @Mock private AuditService auditService;
+  @Mock private ExchangeClientRepository exchangeClientRepository;
 
   private PersonalBlueprintService service;
 
@@ -96,13 +101,14 @@ class PersonalBlueprintServiceTest {
             blueprintProductService,
             gameItemRepository,
             defaultBlueprintKeyService,
-            auditService);
+            auditService,
+            exchangeClientRepository);
   }
 
   private static PersonalBlueprintResponse sampleResponse() {
     Instant now = Instant.parse("2026-01-01T00:00:00Z");
     return new PersonalBlueprintResponse(
-        UUID.randomUUID(), "k", "Name", null, null, null, true, 0L, now, now, null, null);
+        UUID.randomUUID(), "k", "Name", null, null, null, true, 0L, now, now, null, null, null);
   }
 
   @Test
@@ -110,7 +116,7 @@ class PersonalBlueprintServiceTest {
     PersonalBlueprint entity = PersonalBlueprint.builder().productKey("k").build();
     when(repository.findAllByOwnerUserId(eq(SUB), any()))
         .thenReturn(new PageImpl<>(List.of(entity)));
-    when(mapper.toResponse(eq(entity), anyBoolean())).thenReturn(sampleResponse());
+    when(mapper.toResponse(eq(entity), anyBoolean(), any())).thenReturn(sampleResponse());
 
     var page = service.listOwn(SUB, "  ", PageRequest.of(0, 10));
 
@@ -131,12 +137,72 @@ class PersonalBlueprintServiceTest {
   }
 
   @Test
+  void listOwn_namesEverySourceClientWithOneRegistryLookup() {
+    PersonalBlueprint first = PersonalBlueprint.builder().productKey("a").build();
+    first.setSourceClientId("versekit");
+    PersonalBlueprint second = PersonalBlueprint.builder().productKey("b").build();
+    second.setSourceClientId("versekit");
+    PersonalBlueprint gone = PersonalBlueprint.builder().productKey("c").build();
+    gone.setSourceClientId("retired-tool");
+    PersonalBlueprint none = PersonalBlueprint.builder().productKey("d").build();
+    when(repository.findAllByOwnerUserId(eq(SUB), any()))
+        .thenReturn(new PageImpl<>(List.of(first, second, gone, none)));
+    when(exchangeClientRepository.findDisplayNamesByClientIdIn(Set.of("versekit", "retired-tool")))
+        .thenReturn(List.of(new ExchangeClientDisplayName("versekit", "VerseKit")));
+    when(mapper.toResponse(any(), anyBoolean(), any())).thenReturn(sampleResponse());
+
+    service.listOwn(SUB, null, PageRequest.of(0, 10));
+
+    verify(exchangeClientRepository, times(1)).findDisplayNamesByClientIdIn(any());
+    verify(mapper).toResponse(first, true, "VerseKit");
+    verify(mapper).toResponse(second, true, "VerseKit");
+    verify(mapper).toResponse(gone, true, null);
+    verify(mapper).toResponse(none, true, null);
+  }
+
+  @Test
+  void listOwn_withoutAnySourceClient_skipsTheRegistry() {
+    PersonalBlueprint entity = PersonalBlueprint.builder().productKey("k").build();
+    when(repository.findAllByOwnerUserId(eq(SUB), any()))
+        .thenReturn(new PageImpl<>(List.of(entity)));
+    when(mapper.toResponse(eq(entity), anyBoolean(), any())).thenReturn(sampleResponse());
+
+    service.listOwn(SUB, null, PageRequest.of(0, 10));
+
+    verifyNoInteractions(exchangeClientRepository);
+    verify(mapper).toResponse(entity, true, null);
+  }
+
+  @Test
+  void update_namesTheSourceClientInItsResponse() {
+    UUID id = UUID.randomUUID();
+    PersonalBlueprint entity =
+        PersonalBlueprint.builder()
+            .id(id)
+            .ownerUserId(SUB)
+            .productKey("k")
+            .productName("N")
+            .build();
+    entity.setSourceClientId("versekit");
+    entity.setVersion(1L);
+    when(repository.findByIdAndOwnerUserId(id, SUB)).thenReturn(Optional.of(entity));
+    when(repository.save(entity)).thenReturn(entity);
+    when(exchangeClientRepository.findDisplayNamesByClientIdIn(Set.of("versekit")))
+        .thenReturn(List.of(new ExchangeClientDisplayName("versekit", "VerseKit")));
+    when(mapper.toResponse(eq(entity), anyBoolean(), any())).thenReturn(sampleResponse());
+
+    service.update(SUB, id, new PersonalBlueprintUpdateRequest(null, "n", 1L));
+
+    verify(mapper).toResponse(entity, true, "VerseKit");
+  }
+
+  @Test
   void add_stampsResolvedProductAndSaves_whenNotOwned() {
     when(blueprintProductService.resolveByProductKey("k"))
         .thenReturn(Optional.of(new ResolvedProduct("k", "Arclight Pistol", null)));
     when(repository.existsByOwnerUserIdAndProductKey(SUB, "k")).thenReturn(false);
     when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-    when(mapper.toResponse(any(), anyBoolean())).thenReturn(sampleResponse());
+    when(mapper.toResponse(any(), anyBoolean(), any())).thenReturn(sampleResponse());
 
     Instant acquired = Instant.parse("2026-02-03T00:00:00Z");
     service.add(SUB, new PersonalBlueprintCreateRequest("k", acquired, "note"));
@@ -162,7 +228,7 @@ class PersonalBlueprintServiceTest {
     when(repository.existsByOwnerUserIdAndProductKey(SUB, "k")).thenReturn(false);
     when(gameItemRepository.getReferenceById(itemId)).thenReturn(ref);
     when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-    when(mapper.toResponse(any(), anyBoolean())).thenReturn(sampleResponse());
+    when(mapper.toResponse(any(), anyBoolean(), any())).thenReturn(sampleResponse());
 
     service.add(SUB, new PersonalBlueprintCreateRequest("k", null, null));
 
@@ -183,7 +249,7 @@ class PersonalBlueprintServiceTest {
         .thenReturn(Optional.of(new ResolvedProduct("k", "Arclight Pistol", null)));
     when(repository.existsByOwnerUserIdAndProductKey(SUB, "k")).thenReturn(false);
     when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-    when(mapper.toResponse(any(), anyBoolean())).thenReturn(sampleResponse());
+    when(mapper.toResponse(any(), anyBoolean(), any())).thenReturn(sampleResponse());
 
     Logger logger = (Logger) LoggerFactory.getLogger(PersonalBlueprintService.class);
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -263,7 +329,7 @@ class PersonalBlueprintServiceTest {
     entity.setVersion(3L);
     when(repository.findByIdAndOwnerUserId(id, SUB)).thenReturn(Optional.of(entity));
     when(repository.save(entity)).thenReturn(entity);
-    when(mapper.toResponse(eq(entity), anyBoolean())).thenReturn(sampleResponse());
+    when(mapper.toResponse(eq(entity), anyBoolean(), any())).thenReturn(sampleResponse());
 
     Instant acquired = Instant.parse("2026-03-04T00:00:00Z");
     service.update(SUB, id, new PersonalBlueprintUpdateRequest(acquired, "edited", 3L));
@@ -291,7 +357,7 @@ class PersonalBlueprintServiceTest {
     entity.setVersion(3L);
     when(repository.findByIdAndOwnerUserId(id, SUB)).thenReturn(Optional.of(entity));
     when(repository.save(entity)).thenReturn(entity);
-    when(mapper.toResponse(eq(entity), anyBoolean())).thenReturn(sampleResponse());
+    when(mapper.toResponse(eq(entity), anyBoolean(), any())).thenReturn(sampleResponse());
 
     service.update(SUB, id, new PersonalBlueprintUpdateRequest(acquired, "same", 3L));
 
@@ -440,7 +506,7 @@ class PersonalBlueprintServiceTest {
     entity.setVersion(5L);
     when(repository.findById(id)).thenReturn(Optional.of(entity));
     when(repository.save(entity)).thenReturn(entity);
-    when(mapper.toResponse(eq(entity), anyBoolean())).thenReturn(sampleResponse());
+    when(mapper.toResponse(eq(entity), anyBoolean(), any())).thenReturn(sampleResponse());
 
     service.updateForUser(id, new PersonalBlueprintUpdateRequest(null, "edited", 5L));
 

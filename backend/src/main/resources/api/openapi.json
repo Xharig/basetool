@@ -69063,6 +69063,9 @@
           "sourceClientId" : {
             "type" : "string"
           },
+          "sourceClientName" : {
+            "type" : "string"
+          },
           "updatedAt" : {
             "type" : "string",
             "format" : "date-time"

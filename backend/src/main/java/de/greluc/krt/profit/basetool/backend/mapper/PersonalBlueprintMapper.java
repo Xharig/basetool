@@ -27,8 +27,8 @@ import org.mapstruct.Mapping;
 /**
  * Entity-to-DTO mapper for {@link PersonalBlueprint}.
  *
- * <p>The {@code ownerUserId} is never exposed; {@code removable} is computed by the service
- * (REQ-INV-016) and passed in.
+ * <p>The {@code ownerUserId} is never exposed; {@code removable} (REQ-INV-016) and the source
+ * client's display name (REQ-INV-054) are resolved by the service and passed in.
  */
 @Mapper(config = CentralMapperConfig.class)
 public interface PersonalBlueprintMapper {
@@ -38,9 +38,12 @@ public interface PersonalBlueprintMapper {
    *
    * @param entity the owned blueprint
    * @param removable whether the owner may delete the entry ({@code false} for a default blueprint)
+   * @param sourceClientName the registry display name of the entry's source client, or {@code null}
    * @return the response DTO
    */
   @Mapping(target = "outputItemId", source = "entity.outputItem.id")
   @Mapping(target = "removable", source = "removable")
-  PersonalBlueprintResponse toResponse(PersonalBlueprint entity, boolean removable);
+  @Mapping(target = "sourceClientName", source = "sourceClientName")
+  PersonalBlueprintResponse toResponse(
+      PersonalBlueprint entity, boolean removable, String sourceClientName);
 }

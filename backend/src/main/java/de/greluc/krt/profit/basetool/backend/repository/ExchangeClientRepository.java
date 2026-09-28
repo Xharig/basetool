@@ -20,6 +20,8 @@
 package de.greluc.krt.profit.basetool.backend.repository;
 
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
+import de.greluc.krt.profit.basetool.backend.model.projection.ExchangeClientDisplayName;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -75,4 +77,18 @@ public interface ExchangeClientRepository extends JpaRepository<ExchangeClient, 
    */
   @Query("SELECT c.clientId FROM ExchangeClient c")
   List<String> findAllClientIds();
+
+  /**
+   * Reads the display names of the registered clients among the given ids in one query; an id no
+   * registry row carries yields no row.
+   *
+   * @param clientIds the Keycloak client ids to look up
+   * @return one pair per registered id
+   */
+  @Query(
+      "SELECT new de.greluc.krt.profit.basetool.backend.model.projection"
+          + ".ExchangeClientDisplayName(c.clientId, c.displayName)"
+          + " FROM ExchangeClient c WHERE c.clientId IN :clientIds")
+  List<ExchangeClientDisplayName> findDisplayNamesByClientIdIn(
+      @Param("clientIds") Collection<String> clientIds);
 }
