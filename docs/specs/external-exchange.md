@@ -327,7 +327,11 @@ accepted. The provisioner applies this on production only **after** the legacy s
   forms provider `krt-freemarker` adds it as `krtDeviceUserCode` (ADR-0228,
   `DeviceConsentLoginFormsProviderTest`); `scripts/sandbox-smoke.py` asserts the warning on both
   pages and the code on the consent page against the sandbox Keycloak image, and the same run was
-  made through a `verification_uri_complete` link on 2026-09-27.*
+  made through a `verification_uri_complete` link on 2026-09-27.* The E2E device login
+  (`ExchangeE2eSupport.approveOnTheDevicePage`) opens the bare `verification_uri`, types the
+  `user_code` as a member does, and asserts `#krt-device-phishing-warning` on the code page and
+  `#krt-device-consent-warning` with exactly that code in `#krt-device-user-code` on the consent
+  page, on every exchange E2E connection (G5-I5 of #2092).
 - [x] The client documentation tells clients to show the bare `verification_uri` with the
   `user_code` and never `verification_uri_complete` (`docs/exchange/authentication.md`,
   `client-security.md`, `quickstart.md`, the application template).
