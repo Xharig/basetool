@@ -36,11 +36,11 @@ import org.springframework.security.oauth2.jwt.JwtClaimNames;
 
 /**
  * Builds the DPoP proof verifier: Spring's checks ({@code htm}, {@code htu}, {@code iat}, key
- * binding, {@code ath}, {@code jti} replay) everywhere, plus the server nonce and a {@link
- * DpopProofLimitError} for a member at its proof cap on exchange routes (REQ-XCH-006). The {@code
- * jti} replay cache is one {@link DpopProofReplayStore} per path scope, partitioned by the access
- * token's member, so neither one member nor the legacy {@code /v1} routes can fill the cache the
- * exchange relies on.
+ * binding, {@code ath}, {@code jti} replay) everywhere, plus, on exchange routes, the server nonce,
+ * a {@link DpopProofLimitError} for a member at its proof cap and a {@link DpopProofStoreFullError}
+ * for a full store (REQ-XCH-006). The {@code jti} replay cache is one {@link DpopProofReplayStore}
+ * per path scope, partitioned by the access token's member, so neither one member nor the legacy
+ * {@code /v1} routes can fill the cache the exchange relies on.
  */
 public final class ExchangeDpopProofValidation {
 
@@ -80,7 +80,7 @@ public final class ExchangeDpopProofValidation {
             return defaults;
           }
           DelegatingOAuth2TokenValidator<Jwt> withNonce =
-              new DelegatingOAuth2TokenValidator<>(nonce, proofLimit(defaults, view));
+              new DelegatingOAuth2TokenValidator<>(nonce, capRefusals(defaults, view));
           withNonce.setFailOnError(true);
           return withNonce;
         });
@@ -104,20 +104,28 @@ public final class ExchangeDpopProofValidation {
   }
 
   /**
-   * Reports a proof the replay check refused for the member cap as a {@link DpopProofLimitError}
-   * instead of Spring's generic replay error; every other result passes unchanged.
+   * Reports a proof the replay check refused for the member cap as a {@link DpopProofLimitError},
+   * and one it refused for a full store as a {@link DpopProofStoreFullError}, instead of Spring's
+   * generic replay error; every other result passes unchanged.
    *
    * @param defaults Spring's proof checks, the replay check last
    * @param view the member's view of the replay cache the replay check claims through
    * @return the validator
    */
-  static @NotNull OAuth2TokenValidator<Jwt> proofLimit(
+  static @NotNull OAuth2TokenValidator<Jwt> capRefusals(
       @NotNull OAuth2TokenValidator<Jwt> defaults, @NotNull DpopProofReplayStore.MemberView view) {
     return proof -> {
       OAuth2TokenValidatorResult result = defaults.validate(proof);
-      Long retryAfter = view.proofLimitRetryAfter();
-      return result.hasErrors() && retryAfter != null
-          ? OAuth2TokenValidatorResult.failure(new DpopProofLimitError(retryAfter))
+      if (!result.hasErrors()) {
+        return result;
+      }
+      Long memberCap = view.proofLimitRetryAfter();
+      if (memberCap != null) {
+        return OAuth2TokenValidatorResult.failure(new DpopProofLimitError(memberCap));
+      }
+      Long storeFull = view.storeFullRetryAfter();
+      return storeFull != null
+          ? OAuth2TokenValidatorResult.failure(new DpopProofStoreFullError(storeFull))
           : result;
     };
   }

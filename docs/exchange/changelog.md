@@ -3,6 +3,15 @@
 Changes to the Exchange API contract, newest first. Every change within `v1` is additive
 ([versioning](versioning.md)).
 
+## 2026-09-28
+
+- **A full proof store answers `503 SERVICE_UNAVAILABLE`.** When all members together hold the
+  gateway's 100 000 live DPoP proofs, a proof is no longer refused like a replayed one
+  (`401 DPOP_INVALID`) but with `503 SERVICE_UNAVAILABLE` and `Retry-After`, the seconds until the
+  earliest live proof no longer counts ([errors](errors.md),
+  [authentication](authentication.md#live-proofs-per-member)). A client already handles the code
+  by its status: wait `Retry-After`, then retry.
+
 ## 2026-09-27
 
 - **New code `429 DPOP_PROOF_LIMIT`.** A proof whose member already holds 600 live proofs is no

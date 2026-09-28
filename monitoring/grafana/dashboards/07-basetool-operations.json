@@ -2731,7 +2731,7 @@
       },
       "type": "timeseries",
       "title": "DPoP replay-cache refusals/hour by path scope and reason",
-      "description": "DPoP proofs the gateway's jti replay cache refused, per path scope (exchange / legacy) and reason: replayed (the jti was used before), member_cap (the member already holds its app.exchange.limits.dpop-proofs-per-member live proofs) or full (the scope's cache holds dpop-proofs-total and refuses every new proof; IngestDpopReplayCacheFull fires). On the exchange scope a member_cap refusal is answered 429 DPOP_PROOF_LIMIT and counts as dpop_proof_limit on the auth-failure counter; every other refusal counts as invalid_dpop_proof (REQ-XCH-006). The metric carries no client, so the client_id variable does not filter it.",
+      "description": "DPoP proofs the gateway's jti replay cache refused, per path scope (exchange / legacy) and reason: replayed (the jti was used before), member_cap (the member already holds its app.exchange.limits.dpop-proofs-per-member live proofs) or full (the scope's cache holds dpop-proofs-total and refuses every new proof; IngestDpopReplayCacheFull fires). On the exchange scope a member_cap refusal is answered 429 DPOP_PROOF_LIMIT and counts as dpop_proof_limit on the auth-failure counter, and a full refusal is answered 503 SERVICE_UNAVAILABLE and counts as dpop_store_full; every other refusal counts as invalid_dpop_proof (REQ-XCH-006). The metric carries no client, so the client_id variable does not filter it.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

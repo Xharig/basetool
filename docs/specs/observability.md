@@ -1673,10 +1673,11 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `dpop_invalid`, since the client sees that code. `ExchangeRegistryUnreadableAtGateway` (warning,
   5 m) fires while the gateway fails closed on `registry_unavailable`.
 - `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`legacy`, `exchange`,
-  `other`) so a third-party client's failures stay apart from the extractor's, and three reasons:
-  `invalid_dpop_proof`, `use_dpop_nonce` (the normal first round trip, never alerted) and
-  `dpop_proof_limit` for an exchange proof over its member's cap, answered `429 DPOP_PROOF_LIMIT`
-  and never alerted as a failing proof.
+  `other`) so a third-party client's failures stay apart from the extractor's, and four reasons:
+  `invalid_dpop_proof`, `use_dpop_nonce` (the normal first round trip, never alerted),
+  `dpop_proof_limit` for an exchange proof over its member's cap, answered `429 DPOP_PROOF_LIMIT`,
+  and `dpop_store_full` for an exchange proof refused by a full replay store, answered
+  `503 SERVICE_UNAVAILABLE`; neither of the last two is alerted as a failing proof.
   `IngestAuthFailureSpike` and `IngestUnauthenticatedFlood` alert per scope;
   `ExchangeDpopProofsFailing` (warning, 15 m) fires on sustained refused exchange proofs
   (REQ-XCH-006).
@@ -1684,9 +1685,11 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `jti` replay cache refused, per path scope (`exchange` / `legacy`) and reason: `replayed` (the
   `jti` was used before), `member_cap` (the member already holds its live-proof cap) or `full` (the
   scope's cache holds its total cap), registered at zero. On the exchange scope a `member_cap`
-  refusal counts as `dpop_proof_limit` on the auth-failure counter; every other refusal as
-  `invalid_dpop_proof`. `IngestDpopReplayCacheFull` (warning) fires on any `full`, because
-  then every proof of that scope is refused (REQ-XCH-006). Shown per hour by path scope and reason
+  refusal counts as `dpop_proof_limit` on the auth-failure counter and a `full` one as
+  `dpop_store_full` (also `service_unavailable` on the exchange refusal counter and
+  `SERVICE_UNAVAILABLE` on `basetool_http_error_total`, so `IdentityProviderUnavailable` can fire
+  alongside); every other refusal as `invalid_dpop_proof`. `IngestDpopReplayCacheFull` (warning)
+  fires on any `full`, because then every proof of that scope is refused (REQ-XCH-006). Shown per hour by path scope and reason
   on the Exchange dashboard (under the gateway refusals) and on the operations dashboard (under the
   ingest auth failures); the metric carries no client, so the Exchange dashboard's `client_id`
   variable does not filter it.

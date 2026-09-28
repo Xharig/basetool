@@ -157,7 +157,8 @@ public final class DpopProofReplayStore {
       cleanup();
       if (proofs.size() >= maxTotal) {
         full.increment();
-        return Claim.FULL;
+        Instant now = clock.instant();
+        return Claim.full(retryAfterSeconds(now, earliestExpiry(now)));
       }
     }
     Instant now = clock.instant();
@@ -199,6 +200,23 @@ public final class DpopProofReplayStore {
    */
   static long retryAfterSeconds(@NotNull Instant now, @NotNull Instant oldest) {
     return Math.max(0L, Duration.between(now, oldest).toMillis()) / 1000L + 1L;
+  }
+
+  /**
+   * Returns when the store's earliest live proof expires.
+   *
+   * @param now the current time, returned when the store holds no live proof
+   * @return the earliest expiry of a proof that still counts, or {@code now}
+   */
+  private @NotNull Instant earliestExpiry(@NotNull Instant now) {
+    Instant earliest = null;
+    for (Entry entry : proofs.values()) {
+      Instant expiresAt = entry.expiresAt();
+      if (!now.isAfter(expiresAt) && (earliest == null || expiresAt.isBefore(earliest))) {
+        earliest = expiresAt;
+      }
+    }
+    return earliest == null ? now : earliest;
   }
 
   /**
@@ -291,7 +309,8 @@ public final class DpopProofReplayStore {
    *
    * @param outcome why the claim ended as it did
    * @param retryAfterSeconds for {@link Outcome#MEMBER_CAP}, the whole seconds until the member's
-   *     earliest live proof no longer counts, at least one; otherwise zero
+   *     earliest live proof no longer counts, and for {@link Outcome#FULL} until the store's
+   *     earliest does, at least one; otherwise zero
    */
   record Claim(@NotNull Outcome outcome, long retryAfterSeconds) {
 
@@ -301,8 +320,15 @@ public final class DpopProofReplayStore {
     /** A replayed proof. */
     static final Claim REPLAYED = new Claim(Outcome.REPLAYED, 0L);
 
-    /** A proof refused because the store is full. */
-    static final Claim FULL = new Claim(Outcome.FULL, 0L);
+    /**
+     * A proof refused because the store is full.
+     *
+     * @param retryAfterSeconds the whole seconds until the store's earliest proof no longer counts
+     * @return the claim
+     */
+    static @NotNull Claim full(long retryAfterSeconds) {
+      return new Claim(Outcome.FULL, retryAfterSeconds);
+    }
 
     /**
      * A proof refused because its member is at the cap.
@@ -360,8 +386,29 @@ public final class DpopProofReplayStore {
      *     null} when the last proof was not refused for the cap
      */
     public @Nullable Long proofLimitRetryAfter() {
+      return retryAfter(Outcome.MEMBER_CAP);
+    }
+
+    /**
+     * Returns when a proof may be sent again, if this view's last proof was refused because the
+     * whole store was full.
+     *
+     * @return the whole seconds until the store's earliest live proof no longer counts, or {@code
+     *     null} when the last proof was not refused for a full store
+     */
+    public @Nullable Long storeFullRetryAfter() {
+      return retryAfter(Outcome.FULL);
+    }
+
+    /**
+     * Returns the seconds of the last refusal when it had the given outcome.
+     *
+     * @param outcome the refusal outcome asked about
+     * @return the refusal's seconds, or {@code null} when the last proof was not refused so
+     */
+    private @Nullable Long retryAfter(@NotNull Outcome outcome) {
       Claim last = refused;
-      return last != null && last.outcome() == Outcome.MEMBER_CAP ? last.retryAfterSeconds() : null;
+      return last != null && last.outcome() == outcome ? last.retryAfterSeconds() : null;
     }
 
     @Override

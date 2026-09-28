@@ -180,6 +180,7 @@ mass-change window of your client.
 | Account checks | 10 per hour | client and member |
 | Writes (change sets and drafts) | 500 per UTC day, or `limits.writesPerDay` | client and member |
 | Live DPoP proofs | 600 at a time, each live until just after 30 seconds past its `iat` (`429 DPOP_PROOF_LIMIT`, [details](authentication.md#live-proofs-per-member)) | member, over all clients |
+| Live DPoP proofs | 100 000 at a time (`503 SERVICE_UNAVAILABLE`) | gateway, over all members |
 
 Every attempt counts, retries and replays included. Admitted answers carry `RateLimit` and
 `RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out.
@@ -193,9 +194,10 @@ table, as the limit, and send a fresh DPoP proof with every request, retries inc
   seconds — for the quota, until the next UTC day. Wait at least that long.
 - Every `503` of the gateway carries `Retry-After` too: 30 seconds for `EXCHANGE_DISABLED` and
   `REGISTRY_UNAVAILABLE`, 60 for `EXCHANGE_BUDGET_EXHAUSTED`, and for `SERVICE_UNAVAILABLE` 60 when
-  a store cannot be reached, 30 when the daily write quota cannot be counted and 5 when the identity
-  provider cannot be reached. Wait at least that long and retry the same request under the same key;
-  read the header rather than these numbers.
+  a store cannot be reached, 30 when the daily write quota cannot be counted, 5 when the identity
+  provider cannot be reached, and the seconds until the earliest live proof no longer counts when
+  all members together hold the gateway's cap of live DPoP proofs. Wait at least that long and
+  retry the same request under the same key; read the header rather than these numbers.
 - `502 BACKEND_RELAY_FAILED` and a `503` without `Retry-After`: back off exponentially with jitter,
   starting at a few seconds, and retry under the same key.
 

@@ -338,15 +338,22 @@ cap gets `429 DPOP_PROOF_LIMIT` with `Retry-After`: the whole seconds until the 
 live proof no longer counts, rounded up and at least 1. Before checking the cap, the store drops
 that member's expired proofs, so the answer is exact and does not wait for the ten-second sweep.
 The refused proof takes no room. The seam: the store's member view remembers why it refused a
-proof, and `ExchangeDpopProofValidation.proofLimit` turns Spring's generic replay error into a
+proof, and `ExchangeDpopProofValidation.capRefusals` turns Spring's generic replay error into a
 `DpopProofLimitError` when that reason is the cap; `SecurityProblemResponseHandler` finds it in the
-cause chain. A replayed proof, and a proof refused because the whole store is full, stay `401
-DPOP_INVALID` with `error="invalid_dpop_proof"`; the legacy routes keep that answer for their cap as
-well. Refusals are counted as `basetool_ingest_dpop_replay_refused_total{path_scope,reason}`
-(`replayed`, `member_cap`, `full`) and shown on the Exchange and operations dashboards;
-`IngestDpopReplayCacheFull` fires on any `full`. The auth-failure counter records the exchange cap
-as `dpop_proof_limit`, apart from `invalid_dpop_proof`, so `ExchangeDpopProofsFailing` does not
-fire on a busy member.
+cause chain.
+
+**A full store has its own answer too** (owner decision 2026-09-28). On an exchange route a proof
+refused because the store holds its total cap gets `503 SERVICE_UNAVAILABLE` with `Retry-After`:
+the whole seconds until the store's earliest live proof no longer counts, rounded up and at least 1,
+read after a sweep of the expired proofs. The refused proof takes no room. It travels the same seam
+as a `DpopProofStoreFullError`. A replayed proof stays `401 DPOP_INVALID` with
+`error="invalid_dpop_proof"`; the legacy routes, which the exchange error registry does not govern,
+keep that answer for both caps. Refusals are counted as
+`basetool_ingest_dpop_replay_refused_total{path_scope,reason}` (`replayed`, `member_cap`, `full`)
+and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on any
+`full`. The auth-failure counter records the exchange cap as `dpop_proof_limit` and the full store
+as `dpop_store_full`, apart from `invalid_dpop_proof`, so `ExchangeDpopProofsFailing` fires on
+neither.
 
 **Acceptance**
 
@@ -361,8 +368,12 @@ fire on a busy member.
   (`ExchangeDpopMemberCapTest`); the store answers the seconds until the member's earliest proof
   expires, drops the member's expired proofs before the cap check and takes no room for a refused
   proof (`DpopProofReplayStoreTest`).
+- [x] A full store answers the seconds until its earliest proof expires and takes no room, the
+  verifier reports it as `DpopProofStoreFullError` while a replay stays `invalid_dpop_proof`
+  (`DpopProofReplayStoreTest`), and the entry point writes `503 SERVICE_UNAVAILABLE` with that
+  `Retry-After`, the nonce and no challenge (`SecurityProblemResponseHandlerTest`).
 
-**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest`, `ExchangeDpopMemberCapTest` · **Status:** built — WP 3.2
+**Enforced by:** `ExchangeDpopGateTest`, `DpopProofReplayStoreTest`, `ExchangeDpopMemberCapTest`, `SecurityProblemResponseHandlerTest` · **Status:** built — WP 3.2
 (#2082); the partitioned replay cache and the fail-closed nonce scope — security review 2 (#2092)
 
 ### REQ-XCH-007 — Installations are identified by their DPoP key and labelled by the client

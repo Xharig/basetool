@@ -48,7 +48,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `RATE_LIMITED` | 429 | gateway | A per-minute limit is exhausted. | Honour `Retry-After`. |
 | `QUOTA_EXCEEDED` | 429 | gateway | The daily write quota is exhausted. | Retry after `Retry-After`, the next day at the latest. |
 | `BACKEND_RELAY_FAILED` | 502 | gateway | The backend did not answer usably: an error, a refusal the contract does not name, or an answer that breaks the v1 schema. | Back off; retry with the same key. |
-| `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable: a store the exchange needs cannot be reached (`Retry-After: 60`), the daily write quota cannot be counted (`Retry-After: 30`), or the identity provider cannot be reached to check the token (`Retry-After: 5`). | Wait at least `Retry-After`, then retry the same request under the same key. |
+| `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable: a store the exchange needs cannot be reached (`Retry-After: 60`), the daily write quota cannot be counted (`Retry-After: 30`), the identity provider cannot be reached to check the token (`Retry-After: 5`), or all members together hold the gateway's cap of live DPoP proofs ([live proofs](authentication.md#live-proofs-per-member); `Retry-After` is the seconds until the earliest of them no longer counts). | Wait at least `Retry-After`, then retry the same request under the same key, with a new DPoP proof. |
 | `NOT_FOUND` | 404 | gateway | The requested document, such as a schema name, does not exist. | Check the name. |
 | `LEGACY_ENDPOINT_GONE` | 410 | gateway | A legacy `/v1/*` extractor endpoint after the go-live. | Update the client. |
 

@@ -194,6 +194,66 @@ class DpopProofReplayStoreTest {
   }
 
   @Test
+  void aFullStoreTellsWhenItsEarliestProofExpiresAndTakesNoRoom() {
+    MovableClock clock = new MovableClock();
+    DpopProofReplayStore store = store(1, 2, clock);
+    store.claim("a", clock.instant().plusSeconds(30), "member-a");
+    store.claim("b", clock.instant().plusSeconds(20), "member-b");
+
+    DpopProofReplayStore.Claim full = store.claim("c", clock.instant().plusSeconds(30), "member-c");
+
+    assertThat(full.outcome()).isEqualTo(Outcome.FULL);
+    assertThat(full.retryAfterSeconds()).isEqualTo(21L);
+    assertThat(store.size()).isEqualTo(2);
+
+    clock.advance(Duration.ofMillis(12_500));
+    assertThat(store.claim("d", clock.instant().plusSeconds(30), "member-c").retryAfterSeconds())
+        .isEqualTo(8L);
+
+    clock.advance(Duration.ofSeconds(8));
+    assertThat(store.claim("e", clock.instant().plusSeconds(30), "member-c").outcome())
+        .isEqualTo(Outcome.STORED);
+  }
+
+  @Test
+  void anExchangeProofRefusedByAFullStoreIsReportedAsStoreFull() throws Exception {
+    DpopProofReplayStore exchange =
+        new DpopProofReplayStore(
+            MetricNames.PATH_SCOPE_EXCHANGE, 1, 1, meterRegistry, Clock.systemUTC());
+    ExchangeDpopNonces nonces = new ExchangeDpopNonces();
+    DPoPProofJwtDecoderFactory factory =
+        ExchangeDpopProofValidation.factory(
+            nonces,
+            new DpopProofReplayStores(
+                exchange,
+                new DpopProofReplayStore(
+                    MetricNames.PATH_SCOPE_LEGACY, 1, 1, meterRegistry, Clock.systemUTC())));
+    ECKey keyA = ExchangeTestSupport.newKey();
+    ECKey keyB = ExchangeTestSupport.newKey();
+    Jwt tokenA = token("token-a", keyA);
+    Jwt tokenB = token("token-b", keyB);
+    String first =
+        ExchangeTestSupport.proof(
+            keyA, tokenA.getTokenValue(), "GET", ExchangeTestSupport.STOCK, nonces.current());
+    assertThat(refusal(factory, tokenA, first)).isNull();
+
+    String other =
+        ExchangeTestSupport.proof(
+            keyB, tokenB.getTokenValue(), "GET", ExchangeTestSupport.STOCK, nonces.current());
+    assertThat(refusal(factory, tokenB, other))
+        .isInstanceOfSatisfying(
+            DpopProofStoreFullError.class,
+            full -> assertThat(full.getRetryAfterSeconds()).isBetween(1L, 31L));
+    assertThat(exchange.size()).isEqualTo(1);
+
+    assertThat(refusal(factory, tokenA, first))
+        .isNotNull()
+        .isNotInstanceOf(DpopProofStoreFullError.class)
+        .extracting(OAuth2Error::getErrorCode)
+        .isEqualTo("invalid_dpop_proof");
+  }
+
+  @Test
   void aPerMemberCapAboveTheTotalIsRefused() {
     assertThatThrownBy(() -> store(10, 5, Clock.systemUTC()))
         .isInstanceOf(IllegalArgumentException.class);
