@@ -73,12 +73,15 @@ class RemovedExtractorRoutesTest {
     verifyNoInteractions(handoffStagingService);
   }
 
+  /**
+   * A token-less call is unauthenticated, not refused by a CSRF check the bearer API has not got.
+   */
   @ParameterizedTest
   @ValueSource(strings = {"/v1/refinery-extract", "/v1/blueprint-preview"})
-  void anAnonymousExtractorPostIsRefusedLikeAnyUnknownPath(String path) throws Exception {
+  void anAnonymousExtractorPostIsUnauthenticated(String path) throws Exception {
     mockMvc
         .perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{}"))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
   }
 }

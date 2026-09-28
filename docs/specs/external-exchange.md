@@ -1832,8 +1832,8 @@ catalogue) and whether it was undone.
 > `app.ingest.legacy-endpoints.enabled` (`IRI_INGEST_LEGACY_ENDPOINTS_ENABLED`),
 > `LegacyClientGateGuard`, the client-identity gate of REQ-INGEST-011 and the two metrics are gone.
 > A request under `/v1` gets what any unknown path of the gateway gets — `404` with a token the
-> decoder accepts, `401` with one it refuses, `403` from the CSRF filter without a token
-> (`RemovedExtractorRoutesTest`) — so a 2.9.1 extractor shows its generic send error, not the German
+> decoder accepts, `401` with one it refuses and without a token (`RemovedExtractorRoutesTest`; the
+> gateway has no CSRF protection since the same day, a pure bearer API) — so a 2.9.1 extractor shows its generic send error, not the German
 > update hint. `LEGACY_ENDPOINT_GONE` stays in the error registry as retired, never to be reused. The
 > go-live runbook's S14 rollback („Legacy flag back") is impossible from this release on; going
 > back to `/v1` means rolling the gateway back to a release before it. The text below is the

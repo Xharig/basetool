@@ -53,6 +53,7 @@ import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -66,8 +67,6 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.DPoPAuthenticationProvider;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.cors.CorsConfiguration;
@@ -76,9 +75,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Security configuration for the ingest gateway: a stateless JWT-bearer resource server with CSRF
- * ignored for {@code /exchange/**}, empty CORS and a {@code default-src 'none'} CSP
- * (REQ-INGEST-001).
+ * Security configuration for the ingest gateway: a stateless JWT-bearer resource server without
+ * CSRF protection, since no request is authenticated by a cookie, with empty CORS and a {@code
+ * default-src 'none'} CSP (REQ-INGEST-001).
  *
  * <p>Every exchange route requires an authenticated caller; the exchange filters decide the rest.
  */
@@ -177,9 +176,9 @@ public class SecurityConfig {
   }
 
   /**
-   * The single {@link SecurityFilterChain}: CSRF ignored for {@code /exchange/**}, empty CORS,
-   * locked-down headers, the authorization matrix, JWT resource server, the
-   * identity-provider-unavailable 503 and stateless sessions.
+   * The single {@link SecurityFilterChain}: CSRF off, empty CORS, locked-down headers, the
+   * authorization matrix, JWT resource server, the identity-provider-unavailable 503 and stateless
+   * sessions.
    *
    * @param http the Spring Security builder
    * @param objectMapper serializes the {@link IdentityProviderUnavailableFilter}'s 503 problem body
@@ -212,13 +211,7 @@ public class SecurityConfig {
             objectMapper, meterRegistry, loggingProperties, exchangeNonces, exchangeRefusals);
     DpopProofReplayStores proofReplay =
         DpopProofReplayStores.of(exchangeLimitProperties, meterRegistry);
-    CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
-    csrfRepo.setCookieCustomizer(cookie -> cookie.sameSite("Strict").secure(true));
-    http.csrf(
-            csrf ->
-                csrf.csrfTokenRepository(csrfRepo)
-                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                    .ignoringRequestMatchers("/exchange/**"))
+    http.csrf(AbstractHttpConfigurer::disable)
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .headers(
             headers -> {
