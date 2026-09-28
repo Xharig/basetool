@@ -322,6 +322,10 @@
 
 ### Fixed
 
+- **Datenaustausch: Org-Bedarf nur mit Auftragsrecht.** `GET /exchange/v1/me/org-demand` liefert den
+  Bedarf nur noch Mitgliedern, die auch im Basetool Aufträge sehen dürfen (`canViewJobOrders`);
+  alle anderen erhalten leere Listen mit `reason: NOT_PERMITTED`. Verliert eine Einheit die
+  Profit-Berechtigung, verschwindet ihr Bedarf sofort (REQ-XCH-018).
 - **Blueprint-Import: der Grund steht in der Fehlermeldung.** Lehnt der Import eine Datei ab (leer,
   zu groß, kein JSON, keine Blueprint-Liste, falsche Formatversion …), zeigt die Seite – auch die
   Admin-Ansicht – den konkreten Grund in der eigenen Sprache statt „Import fehlgeschlagen."

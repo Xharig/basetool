@@ -153,7 +153,10 @@ client, change its capabilities or set a minimum version; the gateway sees a cha
   offered on the Material Exchange.
 - **Ships.** Two for `sandbox-member`, one for `sandbox-member-2`.
 - **Open orders.** A material order and an item order for IRIDIUM and a material order for Sandbox
-  Squadron, with minimum qualities, so `GET /exchange/v1/me/org-demand` answers.
+  Squadron, with minimum qualities, so `GET /exchange/v1/me/org-demand` answers. Sandbox Squadron
+  takes part in the profit sharing and IRIDIUM does not, so `sandbox-member` gets the demand of
+  both squadrons and `sandbox-member-2` gets the withheld answer with `"reason": "NOT_PERMITTED"`
+  ([whose demand](resources/org-demand.md#whose-demand)).
 - **The exchange switch is on.** The seed sets it in the database; the backend copies it to the
   gateway's registry mirror within 60 s and the gateway reads the mirror every 30 s, so for up to
   about 90 s after `up` every call answers `503 EXCHANGE_DISABLED` with `Retry-After`. Honour it, as
