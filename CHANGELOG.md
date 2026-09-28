@@ -216,6 +216,9 @@
 - **Datenaustausch: volle Nachweis-Ablage antwortet 503.** Halten alle Mitglieder zusammen die
   100 000 lebenden DPoP-Nachweise des Gateways, antwortet es mit `503 SERVICE_UNAVAILABLE` und
   `Retry-After` statt mit `401 DPOP_INVALID` (REQ-XCH-006).
+- **Datenaustausch: feste Zahlen für Back-off und Sync-Takt.** Fremd-Anwendungen warten nach einem
+  Fehler ab 5 Sekunden, verdoppelt bis höchstens 5 Minuten, mit Jitter und nie kürzer als
+  `Retry-After`; zeitgesteuert synchronisieren sie höchstens alle 5 Minuten (REQ-XCH-027).
 - **Datenaustausch: Doku-Seite im KRT-Design.** Die öffentliche Entwickler-Doku
   (`krt-profit.github.io/basetool`) nutzt statt des Standard-Themes das DAS-KARTELL-Design mit
   Basetool-Logo, Seitennavigation, „Improve this page“-Link und einer eingefärbten API-Referenz;

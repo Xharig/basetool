@@ -1276,6 +1276,9 @@ and the account check before a new game account's first sync. Three more are app
 ship links and the cursors are kept per installation and idempotency keys are random; the member
 is shown `detachedFromMissions`, `offersReduced` and `offersRemoved` when a sync reports them; and
 every ship `upsert` sends the ship's current `name` and `location`, since an omitted one is cleared.
+Two numbers are binding too (owner decision 2026-09-27): a retry backs off from **5 s**, doubling up
+to at most **5 min**, with random jitter, and never waits less than the answer's `Retry-After`; a
+client syncs on start and after a local change, and a timed sync runs at most every **5 min**.
 A sandbox demonstration is recommended, not a criterion. The checklist is
 `docs/exchange/client-security.md`; the application template asks for each point.
 

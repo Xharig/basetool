@@ -11,6 +11,11 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   earliest live proof no longer counts ([errors](errors.md),
   [authentication](authentication.md#live-proofs-per-member)). A client already handles the code
   by its status: wait `Retry-After`, then retry.
+- **New approval criteria: back-off and sync cadence numbers.** "A few seconds" and "every few
+  minutes" are replaced by binding numbers: retries back off from 5 seconds, doubling up to at most
+  5 minutes, with random jitter and never less than `Retry-After`; a client syncs on start and after
+  a local change, and a timed sync runs at most every 5 minutes
+  ([sync guide](sync-guide.md#back-off-and-sync-cadence), [client security](client-security.md)).
 
 ## 2026-09-27
 

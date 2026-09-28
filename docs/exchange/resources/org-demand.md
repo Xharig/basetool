@@ -68,5 +68,6 @@ a single order. Treat the document as the member's organisation's internal data.
 
 The server computes the demand for each request. A client may keep a copy for **at most 7 days**,
 outside cloud-synced folders, never in a backup or a diagnostics bundle, and never forwards it
-([client security requirements](../client-security.md)). The demand changes slowly: refreshing it
-once when the member opens the view, and at most every few minutes after that, is plenty.
+([client security requirements](../client-security.md)). The demand changes slowly: refresh it
+once when the member opens the view, and after that at most every 5 minutes, like any timed sync
+([sync cadence](../sync-guide.md#back-off-and-sync-cadence)).

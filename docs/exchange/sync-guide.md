@@ -198,11 +198,24 @@ table, as the limit, and send a fresh DPoP proof with every request, retries inc
   provider cannot be reached, and the seconds until the earliest live proof no longer counts when
   all members together hold the gateway's cap of live DPoP proofs. Wait at least that long and
   retry the same request under the same key; read the header rather than these numbers.
-- `502 BACKEND_RELAY_FAILED` and a `503` without `Retry-After`: back off exponentially with jitter,
-  starting at a few seconds, and retry under the same key.
+- `502 BACKEND_RELAY_FAILED`, a `503` without `Retry-After` and a network error: back off as below
+  and retry under the same key.
 
-Never retry in a tight loop, and never sync more often than the member's use needs: a sync on start,
-on a local change and every few minutes while the client is open is plenty.
+### Back-off and sync cadence
+
+These numbers are binding; an application is checked against them
+([client security](client-security.md#sync-behaviour)).
+
+- **Back-off.** After a refused or failed request, the first wait is **5 seconds**, and each
+  further failure of the same request doubles it, up to at most **5 minutes**. Add random jitter to
+  every wait, so that installations do not retry in step. Every wait is **at least the
+  `Retry-After`** of the answer, when it carries one, even where that is longer than 5 minutes (the
+  daily quota). A success ends the back-off; the next failure starts again at 5 seconds.
+- **Sync cadence.** Sync on start and after a local change; beyond that, a timed sync runs **at
+  most every 5 minutes** while the client is open. Coalescing local changes that arrive close
+  together into one sync is recommended.
+
+Never retry in a tight loop, and never sync more often than the member's use needs.
 
 ## Undo
 
