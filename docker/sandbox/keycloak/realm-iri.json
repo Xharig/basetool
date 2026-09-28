@@ -1340,6 +1340,294 @@
       "username": "sandbox-admin"
     },
     {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-01-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-01@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000201",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-01"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-02-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-02@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000202",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-02"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-03-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-03@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000203",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-03"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-04-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-04@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000204",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-04"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-05-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-05@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000205",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-05"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-06-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-06@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000206",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-06"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-07-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-07@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000207",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-07"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-08-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-08@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000208",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-08"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-09-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-09@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000209",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-09"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-10-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-10@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000210",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-10"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-11-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-11@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000211",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-11"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-12-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-12@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000212",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-12"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-13-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-13@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000213",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-13"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-14-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-14@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000214",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-14"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-15-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-15@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000215",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-15"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "sandbox-load-16-pw-do-not-use-in-prod"
+        }
+      ],
+      "email": "sandbox-load-16@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "id": "5a4d0000-0000-4000-8000-000000000216",
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "sandbox-load-16"
+    },
+    {
       "clientRoles": {
         "realm-management": [
           "manage-users",
