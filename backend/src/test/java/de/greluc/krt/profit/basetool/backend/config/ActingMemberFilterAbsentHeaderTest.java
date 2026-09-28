@@ -58,7 +58,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 class ActingMemberFilterAbsentHeaderTest {
 
-  private static final String ACTING_PATH = "/api/v1/refinery-orders/import-extract";
+  private static final String ACTING_PATH = "/api/v1/exchange/me/stock";
   private static final String OTHER_PATH = "/api/v1/missions";
 
   private final ActingMemberAuthorities authorities = mock(ActingMemberAuthorities.class);

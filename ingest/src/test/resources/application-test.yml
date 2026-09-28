@@ -18,6 +18,3 @@ app:
     max-payload-bytes: 1048576
   rate-limit:
     enabled: false
-
-springdoc:
-  writer-with-order-by-keys: true

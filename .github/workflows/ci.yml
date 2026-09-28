@@ -65,7 +65,7 @@ jobs:
       - name: Fail if a committed openapi.json is stale
         run: |
           if ! git diff --exit-code --stat -- '*/src/main/resources/api/openapi.json'; then
-            echo "::error::openapi.json is stale -- run ./gradlew :backend:test --tests '*.OpenApiGeneratorTest' (and :ingest:test for the ingest document) and commit the result"
+            echo "::error::openapi.json is stale -- run ./gradlew :backend:test --tests '*.OpenApiGeneratorTest' and commit the result"
             exit 1
           fi
 

@@ -41,7 +41,6 @@ import com.nimbusds.jose.jwk.ECKey;
 import de.greluc.krt.profit.basetool.ingest.filter.CorrelationIdFilter;
 import de.greluc.krt.profit.basetool.ingest.filter.RequestLoggingFilter;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import de.greluc.krt.profit.basetool.ingest.support.LogCapture;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -85,7 +84,6 @@ class ExchangeGateTest {
   @Autowired private MeterRegistry meterRegistry;
 
   @MockitoBean private JwtDecoder jwtDecoder;
-  @MockitoBean private BackendImportClient backendImportClient;
   @MockitoBean private HandoffStagingService handoffStagingService;
   @MockitoBean private ExchangeRegistryReader registryReader;
   @MockitoBean private ExchangeRevocationReader revocationReader;

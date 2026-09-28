@@ -25,9 +25,7 @@ package de.greluc.krt.profit.basetool.ingest.model.dto;
  * draft in Redis.
  */
 public enum HandoffKind {
-  /**
-   * A refinery-order draft built from a {@code RefineryExtract}; opens the refinery create form.
-   */
+  /** A refinery-order draft; opens the refinery create form. */
   REFINERY,
 
   /** A personal-blueprint import preview; opens the blueprint import review surface. */

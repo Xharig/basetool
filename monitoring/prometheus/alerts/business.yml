@@ -692,17 +692,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Ingest handoff errors ({{ $labels.reason }})"
-          description: "The ingest gateway is failing to relay handoffs (reason: {{ $labels.reason }}) at an elevated rate — extractor imports are not reaching the backend, so members' uploads fail."
-
-      - alert: IngestBackendUnavailable
-        expr: rate(basetool_ingest_handoff_errors_total{reason="backend_unavailable"}[5m]) > 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Ingest cannot reach the backend (handoffs failing)"
-          description: "The ingest gateway could not reach the backend to relay handoffs in the last 5 minutes — staged identity data is not being applied. Check backend health and the ingest→backend path."
+          summary: "Ingest gateway errors ({{ $labels.reason }})"
+          description: "The ingest gateway is failing requests (reason: {{ $labels.reason }}) at an elevated rate — staging_unavailable: Redis refused a client's draft or held-back change set; internal: an unexpected gateway failure answered 500. Relay failures to the backend are ExchangeRelayFailing's, not this alert's."
 
       - alert: IngestStagingUnavailable
         expr: rate(basetool_ingest_handoff_errors_total{reason="staging_unavailable"}[5m]) > 0
@@ -711,7 +702,7 @@ groups:
           severity: warning
         annotations:
           summary: "Ingest cannot stage handoffs (Redis unreachable)"
-          description: "The ingest gateway relayed the import to the backend but could not stage the draft in Redis for browser pickup — every send ends in a 503 and no pre-filled form opens. Check the redis container and the ingest Redis configuration."
+          description: "The ingest gateway could not stage a client's draft or held-back change set in Redis for browser pickup — the client gets a 503 and no pre-filled form or confirmation page opens. Check the redis container and the ingest Redis configuration."
 
       - alert: IngestPayloadRejectedSpike
         expr: rate(basetool_ingest_payload_rejected_total[5m]) > 0.2
@@ -720,16 +711,7 @@ groups:
           severity: warning
         annotations:
           summary: "Ingest oversized-payload rejections spiking"
-          description: "The ingest gateway is refusing oversized /v1 request bodies (413) at an elevated rate — likely an oversized-body probing / DoS attempt against the public ingest surface, or a misconfigured client. Read the source addresses in the edge log ({app=\"edge\"}, the ingest vhost); the edge rate-limits per source address, and fail2ban on this host guards SSH only."
-
-      - alert: IngestUnknownClient
-        expr: sum by (reason) (rate(basetool_ingest_client_rejected_total[10m])) > 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Ingest client-identity gate rejecting callers ({{ $labels.reason }})"
-          description: "The ingest gateway refused a caller under reason '{{ $labels.reason }}'. unknown_client/bad_provenance means an unapproved tool is calling the restricted ingest interface; exchange_client means an approved exchange client is calling the legacy /v1 routes instead of the exchange API; missing_azp/missing_scope means a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Check the gateway log for the matching WARN and the allowlist in APP_INGEST_CLIENT_IDENTITY_ALLOWED_CLIENT_IDS."
+          description: "The ingest gateway is refusing oversized /exchange request bodies (413) at an elevated rate — likely an oversized-body probing / DoS attempt against the public ingest surface, or a misconfigured client. Read the source addresses in the edge log ({app=\"edge\"}, the ingest vhost); the edge rate-limits per source address, and fail2ban on this host guards SSH only."
 
       - alert: IngestAudienceGateOff
         expr: max by (application) (basetool_ingest_gate_enforcing{gate="audience", application="basetool-ingest"}) == 0
@@ -738,7 +720,7 @@ groups:
           severity: warning
         annotations:
           summary: "Ingest gateway runs without its JWT audience check"
-          description: "basetool_ingest_gate_enforcing{gate=\"audience\"} is 0: the ingest gateway accepts any valid realm token at the decoder, including frontend session tokens. Set IRI_INGEST_EXPECTED_AUDIENCES=basetool-ingest (never the backend's audience) once a live extractor token carries aud=basetool-ingest, after the client-identity gate has left audit-only — docs/INGEST_KEYCLOAK_SETUP.md step 7a — then re-render env.d and restart ingest."
+          description: "basetool_ingest_gate_enforcing{gate=\"audience\"} is 0: the ingest gateway accepts any valid realm token at the decoder, including frontend session tokens. Set IRI_INGEST_EXPECTED_AUDIENCES=basetool-ingest (never the backend's audience), the audience the exchange.* client scopes stamp — docs/INGEST_KEYCLOAK_SETUP.md step 7a — then re-render env.d and restart ingest."
 
       - alert: ApiUnknownClient
         expr: sum (rate(basetool_api_client_requests_total{client_id="other"}[10m])) > 0
@@ -757,7 +739,7 @@ groups:
           severity: warning
         annotations:
           summary: "Ingest gateway cannot obtain its own backend token"
-          description: "The ingest gateway's client-credentials grant against Keycloak has been failing for 10 minutes. Every upload from the desktop extractor is refused for as long as this lasts, and the extractor cannot tell the user why. Check the gateway's app.ingest.service-account.* configuration, the client secret, and whether Keycloak is reachable from the gateway."
+          description: "The ingest gateway's client-credentials grant against Keycloak has been failing for 10 minutes. Every exchange request that needs the backend fails with 502 BACKEND_RELAY_FAILED for as long as this lasts, and the client cannot tell the member why. Check the gateway's app.ingest.service-account.* configuration, the client secret, and whether Keycloak is reachable from the gateway."
 
       - alert: OnBehalfOfRefusedSpike
         expr: >-
@@ -767,7 +749,7 @@ groups:
           severity: warning
         annotations:
           summary: "Something other than the ingest gateway is sending an on-behalf-of header"
-          description: "The backend refused an X-Ingest-On-Behalf-Of header from a caller whose azp is not on the gateway allowlist, repeatedly. Either app.security.ingest-gateway.client-ids does not match the gateway's actual client id - in which case ingest uploads are also failing - or somebody is probing for an impersonation primitive. Check the gateway's own token first, then the access log for the source."
+          description: "The backend refused an X-Ingest-On-Behalf-Of header from a caller whose azp is not on the gateway allowlist, repeatedly. Either app.security.ingest-gateway.client-ids does not match the gateway's actual client id - in which case exchange relays are also failing - or somebody is probing for an impersonation primitive. Check the gateway's own token first, then the access log for the source."
 
       - alert: ActingMemberNotLiveRefused
         expr: >-
@@ -777,7 +759,7 @@ groups:
           severity: warning
         annotations:
           summary: "Ingest gateway is naming a member the backend will not act for"
-          description: "The backend has been refusing on-behalf-of requests for a member that is either unknown locally or that the last Keycloak roster sync no longer found. Most likely an offboarded member whose desktop extractor is still running - find them via the correlationId in the backend log and have it uninstalled. If the refused subjects VARY, this is somebody enumerating user ids instead, and the source belongs in the access log."
+          description: "The backend has been refusing on-behalf-of requests for a member that is either unknown locally or that the last Keycloak roster sync no longer found. Most likely an offboarded member whose connected application (the SC Extractor or another exchange client) is still running - find them via the correlationId in the backend log and have it disconnected. If the refused subjects VARY, this is somebody enumerating user ids instead, and the source belongs in the access log."
 
       - alert: ExchangeRelayHeaderForged
         expr: >-
@@ -787,7 +769,7 @@ groups:
           severity: warning
         annotations:
           summary: "Exchange relay headers from something other than the gateway"
-          description: "Something other than the ingest gateway acting for a member sent X-Exchange-Client or X-Exchange-Capabilities, or the gateway sent them on an ingest endpoint, repeatedly. A browser session or the app naming an external client is trying to borrow its attribution or capabilities (REQ-XCH-010). Find the source via the correlationId in the backend log."
+          description: "Something other than the ingest gateway acting for a member sent X-Exchange-Client or X-Exchange-Capabilities, repeatedly. A browser session or the app naming an external client is trying to borrow its attribution or capabilities (REQ-XCH-010). Find the source via the correlationId in the backend log."
 
       - alert: ExchangeGateRefusing
         expr: >-

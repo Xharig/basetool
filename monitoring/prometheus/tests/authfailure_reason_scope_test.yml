@@ -97,7 +97,7 @@ tests:
               path_scope: exchange
             exp_annotations:
               summary: "Rejected-token spike on ingest (possible JWT brute force)"
-              description: "The ingest gateway is rejecting presented tokens at an elevated rate on exchange (legacy = the extractor's /v1, exchange = third-party clients). Normally zero - a credential-less request counts as reason=no_credentials. Split with sum by (reason, path_scope) (rate(basetool_ingest_auth_failures_total[5m]))."
+              description: "The ingest gateway is rejecting presented tokens at an elevated rate on exchange (exchange = the exchange routes, other = every other path). Normally zero - a credential-less request counts as reason=no_credentials. Split with sum by (reason, path_scope) (rate(basetool_ingest_auth_failures_total[5m]))."
 
   - name: silent then firing - the gateway's own volume alert clears the probe floor
     interval: 1m
@@ -195,7 +195,7 @@ tests:
               path_scope: exchange
             exp_annotations:
               summary: "The ingest DPoP replay cache is full"
-              description: "The DPoP jti replay cache of exchange holds its total cap of live proofs and refuses every new proof there - on exchange with 503 SERVICE_UNAVAILABLE and Retry-After (not counted by IdentityProviderUnavailable), on legacy with 401 (REQ-XCH-006). Each member is capped on its own, so this takes many members at their cap: look at basetool_ingest_dpop_replay_refused_total{reason=\"member_cap\"} and the per-IP rate limiter, and raise app.exchange.limits.dpop-proofs-total only for real load."
+              description: "The DPoP jti replay cache of exchange holds its total cap of live proofs and refuses every new proof there - on exchange with 503 SERVICE_UNAVAILABLE and Retry-After (not counted by IdentityProviderUnavailable), on every other path with 401 (REQ-XCH-006). Each member is capped on its own, so this takes many members at their cap: look at basetool_ingest_dpop_replay_refused_total{reason=\"member_cap\"} and the per-IP rate limiter, and raise app.exchange.limits.dpop-proofs-total only for real load."
 
   - name: silent - one member at its cap does not fill the cache
     interval: 1m

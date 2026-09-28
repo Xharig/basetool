@@ -103,7 +103,7 @@ tasks.named<Test>("test") {
   inputs
     .files(
       rootProject.file(
-        "ingest/src/main/java/de/greluc/krt/profit/basetool/ingest/service/BackendImportClient.java"
+        "ingest/src/main/java/de/greluc/krt/profit/basetool/ingest/exchange/ExchangeRelay.java"
       ),
       rootProject.file(
         "ingest/src/main/java/de/greluc/krt/profit/basetool/ingest/config/ObservationPrivacyFilter.java"

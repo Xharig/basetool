@@ -214,7 +214,6 @@ class ExchangeContractTest {
             "PAYLOAD_TOO_LARGE",
             "CURSOR_EXPIRED",
             ExchangeRelay.RELAY_FAILED,
-            "LEGACY_ENDPOINT_GONE",
             "UNSUPPORTED_MEDIA_TYPE",
             "INTERNAL_ERROR"));
     assertThat(registered).containsAll(answered);

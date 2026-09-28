@@ -782,7 +782,8 @@ non-prerelease GitHub release (vault *SC Extractor Release Pipeline*).
   (`basetool_ingest_legacy_gone_total`); `IngestAuthFailureSpike` silent.
 - **Rollback:** `env_set IRI_INGEST_LEGACY_ENDPOINTS_ENABLED true`, render, `${UCTL} restart
   ingest.service`. Before S15 that is all; **after S15** 2.9.1 also needs its ingest audience back —
-  see §8, *Legacy flag back*.
+  see §8, *Legacy flag back*. **Only on 1.13.0:** the release after it removes the `/v1` routes and
+  the switch (#2092 step 9, *Follow-ups*), and from then on this rollback no longer exists.
 
 ### S15 — Provisioner apply
 
@@ -928,6 +929,17 @@ untick — a capability removal is written to Redis before the commit.
 `extractor-ingest-only` off the extractor client only — is **already done by S15** (H1 withholds
 both); `basetool-frontend` keeps `extractor-ingest` as a default scope, never touch it realm-wide.
 
+**Done 2026-09-28 (owner decision the same day: remove it entirely, no `410` stub; branch
+`claude/remove-legacy-ingest`).** The code half removes the two routes, `LegacyEndpointGoneFilter`,
+the switch `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED`, the client-identity gate and its variables
+(`IRI_INGEST_ALLOWED_CLIENT_IDS`, `IRI_INGEST_CLIENT_AUDIT_ONLY`, `IRI_INGEST_REQUIRED_SCOPE`,
+`IRI_INGEST_ALLOWED_TOOLS`), `LegacyClientGateGuard`, the backend's acting-member acceptance on the
+two import endpoints, and panel 71 with its two metrics (REQ-XCH-033, REQ-SEC-029). It ships with the
+release after 1.13.0 and needs **no host step**: the rendered `env.d/ingest.env` simply stops
+carrying the five variables, and lines left in `.env` are harmless (removing them is an optional
+tidy-up and a production write of its own). From that release on, **S14's rollback and §8 step 4 are
+impossible**; an old extractor gets `401` or `404` instead of the German update hint.
+
 ---
 
 ## 8. Rollback — the global sequence of #2092, with commands
@@ -977,7 +989,10 @@ Fastest first; each is its own production write with its own yes.
    stays 17 while the server lacks the app's new routes — lower it first (S8's rollback) and accept
    that v17's new screens fail. S3's ACL, S4's `.env` line and S9's marking flag are harmless to
    1.12.0.
-4. **Legacy flag back** (the extractor migration fails): `env_set IRI_INGEST_LEGACY_ENDPOINTS_ENABLED
+4. **Legacy flag back** (the extractor migration fails) — **only while 1.13.0 runs**: the next
+   release removes the `/v1` routes and the switch (#2092 step 9, *Follow-ups*); after it, the only
+   way back to `/v1` is step 3 to 1.13.0 (`gh workflow run promote.yml -f version=1.13.0`,
+   lock-step) and then this step. `env_set IRI_INGEST_LEGACY_ENDPOINTS_ENABLED
    true`, render, `${UCTL} restart ingest.service`. **After S15** 2.9.1 additionally needs
    `extractor-ingest-only` back as a default scope of `basetool-sc-extractor` — **never**
    `extractor-ingest`, which stamps `aud=basetool-backend` and is H1 itself. With a provisioner

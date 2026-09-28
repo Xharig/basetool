@@ -49,21 +49,16 @@ public class HandoffStagingService {
   public static final String KEY_PREFIX = "ingest:handoff:";
 
   /**
-   * Prefix of the per-subject index list, {@code ingest:handoff-index:<sub>}. Deliberately NOT
-   * under {@link #KEY_PREFIX}, so a wildcard sweep of staged handoffs cannot mistake an index for
-   * one.
-   */
-  static final String INDEX_PREFIX = "ingest:handoff-index:";
-
-  /**
    * Prefix of the index of a client's staged mass change, {@code
-   * ingest:handoff-index:mass:<client>:<sub>}, a slot apart from the drafts and from other clients.
+   * ingest:handoff-index:mass:<client>:<sub>}, a slot apart from the drafts and from other clients;
+   * deliberately not under {@link #KEY_PREFIX}, so a wildcard sweep of staged handoffs cannot
+   * mistake an index for one.
    */
   static final String MASS_CHANGE_INDEX_PREFIX = "ingest:handoff-index:mass:";
 
   /**
    * Prefix of the index of an exchange client's drafts, {@code
-   * ingest:handoff-index:drafts:<client>:<sub>}, apart from the extractor's uploads.
+   * ingest:handoff-index:drafts:<client>:<sub>}, apart from other clients' drafts.
    */
   static final String DRAFT_INDEX_PREFIX = "ingest:handoff-index:drafts:";
 
@@ -75,30 +70,9 @@ public class HandoffStagingService {
   private final IngestProperties ingestProperties;
 
   /**
-   * Stages a draft for one-time pickup and returns a fresh handoff id of 160 bits of {@link
-   * SecureRandom} entropy, URL-safe base64.
-   *
-   * @param sub the authenticated caller's subject; the entry is readable only under this subject
-   * @param kind which draft is being staged
-   * @param draftJson the backend draft response, stored verbatim
-   * @return the generated handoff id
-   */
-  public @NotNull String stage(
-      @NotNull String sub, @NotNull HandoffKind kind, @NotNull String draftJson) {
-    return store(
-            sub,
-            kind,
-            draftJson,
-            ingestProperties.maxHandoffBytes(),
-            INDEX_PREFIX + sub,
-            ingestProperties.maxHandoffsPerSubject())
-        .handoffId();
-  }
-
-  /**
    * Stages an exchange client's draft for one-time pickup in slots of its own per client and
-   * member, so no client evicts the extractor's uploads or another client's drafts, and says how
-   * large it is so the exchange's byte budget can count it (REQ-XCH-019).
+   * member, so no client evicts another client's drafts, and says how large it is so the exchange's
+   * byte budget can count it (REQ-XCH-019).
    *
    * @param clientId the registry client that sent the draft
    * @param sub the member's subject
@@ -125,8 +99,8 @@ public class HandoffStagingService {
 
   /**
    * Stages a client's change set the mass-change guard held back, in a slot of one per client and
-   * member, so it never evicts an extractor draft or another client's pending change set, and the
-   * same client's newer one replaces it (REQ-XCH-021).
+   * member, so it never evicts a draft or another client's pending change set, and the same
+   * client's newer one replaces it (REQ-XCH-021).
    *
    * @param clientId the registry client that sent the change set
    * @param sub the member's subject
@@ -171,7 +145,8 @@ public class HandoffStagingService {
   }
 
   /**
-   * Stores one handoff under a fresh id and keeps its index within the cap.
+   * Stores one handoff under a fresh id of 160 bits of {@link SecureRandom} entropy, URL-safe
+   * base64, and keeps its index within the cap.
    *
    * @param sub the subject
    * @param kind the handoff's kind

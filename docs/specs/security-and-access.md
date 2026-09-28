@@ -1457,13 +1457,13 @@ as the idempotence guard for a double submit.
 **Enforced in the backend, surfaced in the frontend.** `TermsAcceptanceAccessFilter` refuses
 `/api/**` with `403 TERMS_NOT_ACCEPTED`; `TermsAcceptanceGateFilter` redirects the web UI to
 `/terms/accept`. The backend is the boundary because it is the one place every caller passes
-through — the web UI and the desktop extractor. The extractor is covered because
-`ActingMemberFilter` makes the sending member the security identity of a gateway call before this
-filter runs (ADR-0129); it is **not** covered by bearer relaying, which that ADR removed. The
-distinction is not academic: the first cut of the identity swap left this filter testing for a
+through — the web UI and every connected application. A connected application is covered because
+`ActingMemberFilter` makes the member the security identity of a gateway call before this filter
+runs (ADR-0129); it is **not** covered by bearer relaying, which that ADR removed. The distinction
+is not academic: the first cut of the identity swap left this filter testing for a
 `JwtAuthenticationToken`, the acting member carries none, and the gate returned "no user" — which
-here means *let through*. The gateway needs no copy of the rule: it already relays a backend 4xx
-with the backend's own `detail`.
+here means *let through*. The gateway needs no copy of the rule: its exchange relay passes the
+code on with the registry's fixed detail (REQ-XCH-025).
 
 **The frontend gate answers in the caller's own idiom — four shapes, not one.** A browser
 navigation gets the `302`. An XHR gets `403` plus `X-Terms-Acceptance-Required`, because a redirect
@@ -1647,12 +1647,19 @@ ADR-0047), `support.TermsGateHandoff` (the leaf that does the same for the front
 
 ### REQ-SEC-029 — A path-scoped filter matches the DECODED path, never the raw request URI
 
-Any servlet filter whose scope is a path — "apply to `/api/**`", "skip unless `/v1/**`", "cap these
-configured paths" — MUST decide that on the **decoded** path, by matching a parsed `PathPattern`
+Any servlet filter whose scope is a path — "apply to `/api/**`", "skip unless `/exchange/**`", "cap
+these configured paths" — MUST decide that on the **decoded** path, by matching a parsed `PathPattern`
 against `PathContainer.parsePath(...)`. It MUST NOT use `HttpServletRequest#getRequestURI()` in a
 `startsWith` / `equals` / `List#contains` test. The exchange's route lists are held to it as well
 (REQ-XCH-001): the backend's `ActingMemberFilter` list of `/api/v1/exchange/**` routes and the
 gateway's `ExchangeRoutes` table are parsed `PathPattern`s matched against a parsed path.
+
+> **Amended 2026-09-28 (#2092 step 9).** The acting-member bound used to name two more endpoints,
+> `POST /api/v1/refinery-orders/import-extract` and `POST /api/v1/personal-blueprints/import/preview`,
+> which the SC Extractor's `/v1` relay called with the member's full stored authorities. That relay
+> is removed, so `ActingMemberFilter` accepts an acting member on the exchange routes alone; the two
+> import endpoints stay for the web and refuse the header as `endpoint_not_bound`. The gateway's
+> client-identity gate, one of the four ingest-scoped filters below, went with the relay.
 
 `getRequestURI()` is the **raw, still percent-encoded** URI per the servlet spec, while Spring MVC
 routes on the **decoded** path. The two therefore disagree, and the disagreement is exploitable in
@@ -1707,15 +1714,16 @@ filter runs, so such a test passes against the broken code.
 
 - [x] The two `/api/**` access gates refuse `/%61pi/…`: the pending-approval gate (REQ-SEC-017) and
   the consent gate (REQ-SEC-028).
-- [x] The four ingest-scoped filters — client identity (REQ-INGEST-011), payload cap, rate limit and
-  the access log — share one `IngestPathScope` decision made on the decoded path, so an encoded
-  spelling can neither shed a gate nor go unlogged.
+- [x] The ingest-scoped filters — payload cap, rate limit and the access log (the client-identity
+  gate until 2026-09-28) — share one `IngestPathScope` decision made on the decoded path, so an
+  encoded spelling can neither shed a gate nor go unlogged.
 - [x] The backend body-size cap matches its configured paths as patterns against the decoded path;
   the scope stays exact, so a path merely prefixed with a configured one is still uncapped.
 - [x] API GET responses keep their revalidation headers under an encoded spelling.
 - [x] The acting-member bound is matched on the decoded path: the ingest gateway may name another
-  member only on the two import endpoints, in both directions — an encoded spelling of an unbound
-  path stays refused, and an encoded spelling of a bound one still acts (ADR-0129).
+  member only on the exchange routes, in both directions — an encoded spelling of an unbound path
+  stays refused, and an encoded spelling of a bound one still acts (ADR-0129); the former ingest
+  import endpoints refuse the header since 2026-09-28.
 - [x] Every converted site has a direct filter regression test that fails against the raw idiom.
 - [x] The frontend's gate-exemption list decides on the decoded path, so `permitAll` and both
   session gates accept the same spellings of a public document (REQ-SEC-052). The exempt
@@ -1723,7 +1731,7 @@ filter runs, so such a test passes against the broken code.
   double-encoded spelling is not decoded a second time.
 
 **Enforced by:** `PendingApprovalAccessFilterTest`, `TermsAcceptanceAccessFilterTest`,
-`ActingMemberFilterPathMatchingTest`, `IngestPathScopeTest`, `ClientIdentityFilterTest`,
+`ActingMemberFilterPathMatchingTest`, `IngestPathScopeTest`,
 `FiltersTest`, `RequestLoggingFilterTest` (ingest), `RequestBodySizeLimitFilterTest`,
 `ApiCacheControlFilterTest`, `PublicPathsTest` · **Code:** `IngestPathScope`,
 `PendingApprovalAccessFilter`, `TermsAcceptanceAccessFilter`, `ActingMemberFilter`,
@@ -3651,10 +3659,12 @@ that spelling fell through to the catch-all and was merely authenticated, on a p
 whole surface. Corrected 2026-09-06; the sweep excluded it too, by prefix, and now excludes nothing
 of the kind.
 
-**Ingest** — the gateway's chain `permitAll`s only `/actuator/health(/**)` and `/v3/api-docs/**`;
-the springdoc document is disabled in prod (`springdoc.api-docs.enabled: false`, so it answers
-`404`), and in prod Actuator lives on the internal management port `11272` (ADR-0090). Its two
-`/v1/**` endpoints require a bearer token and the client-identity gate (REQ-INGEST-011, ADR-0129).
+**Ingest** — the gateway's chain `permitAll`s only `/actuator/health(/**)` and the exchange's two
+anonymous documents (`GET /exchange/v1/openapi.json`, `GET /exchange/v1/schemas/*`, REQ-XCH-011);
+it has no springdoc document since 2026-09-28, and in prod Actuator lives on the internal management
+port `11272` (ADR-0090). Its
+exchange routes require a DPoP-bound token and the exchange gates (REQ-XCH-006…-008); the
+extractor's `/v1/**` endpoints were removed on 2026-09-28 (#2092 step 9).
 
 The prod-only **management-port chain** (`ManagementPortSecurityConfig`,
 `@ConditionalOnProperty("management.server.port")`, port `11271`) is `permitAll` on

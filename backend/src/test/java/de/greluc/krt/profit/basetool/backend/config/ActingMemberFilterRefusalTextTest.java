@@ -44,8 +44,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Tests that a refusal on the exchange layer speaks of an exchange request and one on an ingest
- * route of an import, in both languages, with the shipped message bundles.
+ * Tests that a refusal on the exchange layer speaks of an exchange request and one elsewhere says
+ * that acting for a member is only possible through the exchange routes, in both languages, with
+ * the shipped message bundles.
  */
 class ActingMemberFilterRefusalTextTest {
 
@@ -141,16 +142,32 @@ class ActingMemberFilterRefusalTextTest {
     assertThat(problem.get("detail").asString()).contains("exchange request");
   }
 
-  /** A refusal on an ingest route keeps the import wording. */
+  /** A refusal outside the exchange layer says that acting for a member needs the exchange. */
   @Test
-  void anIngestRefusalKeepsTheImportWording() throws Exception {
+  void aRefusalOutsideTheExchangePointsToTheExchangeRoutes() throws Exception {
     MockHttpServletRequest request =
         gatewayRequest("/api/v1/refinery-orders/import-extract", Locale.ENGLISH);
     request.addHeader(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit");
 
     JsonNode problem = refuse(request);
 
-    assertThat(problem.get("title").asString()).isEqualTo("Import not attributed");
-    assertThat(problem.get("detail").asString()).contains("import");
+    assertThat(problem.get("title").asString()).isEqualTo("Only through the exchange routes");
+    assertThat(problem.get("detail").asString())
+        .isEqualTo(
+            "The request was refused. Acting for a member is only possible through the exchange"
+                + " routes.")
+        .doesNotContain("import");
+  }
+
+  /** The German refusal outside the exchange layer says the same. */
+  @Test
+  void theGermanRefusalOutsideTheExchangePointsToTheExchangeRoutes() throws Exception {
+    JsonNode problem =
+        refuse(gatewayRequest("/api/v1/refinery-orders/import-extract", Locale.GERMAN));
+
+    assertThat(problem.get("title").asString()).isEqualTo("Nur \u00fcber die Austausch-Routen");
+    assertThat(problem.get("detail").asString())
+        .contains("nur \u00fcber die Austausch-Routen m\u00f6glich")
+        .doesNotContain("Import");
   }
 }

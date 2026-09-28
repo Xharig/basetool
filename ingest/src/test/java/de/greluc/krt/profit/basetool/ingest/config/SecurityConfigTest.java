@@ -183,7 +183,8 @@ class SecurityConfigTest {
 
   @Test
   void corsSourceAllowsNoOriginAndNoCredentials() {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/refinery-extract");
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders");
     request.addHeader(HttpHeaders.ORIGIN, "https://evil.example");
 
     CorsConfiguration configuration =

@@ -32,8 +32,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * The gateway context publishes the Resilience4j meters its alerts and dashboards read: the state
- * of the extractor's and the exchange's circuit breakers, and the large-change-set bulkhead with
- * its configured four slots (REQ-XCH-023).
+ * of the exchange's circuit breaker, and the large-change-set bulkhead with its configured four
+ * slots (REQ-XCH-023).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class Resilience4jMetricsConfigTest {
@@ -43,18 +43,20 @@ class Resilience4jMetricsConfigTest {
   @MockitoBean private JwtDecoder jwtDecoder;
 
   @Test
-  void bothRelayBreakersPublishTheirState() {
-    for (String breaker : new String[] {"backend", ExchangeRelay.BREAKER}) {
-      Gauge closed =
-          meterRegistry
-              .find("resilience4j.circuitbreaker.state")
-              .tag("name", breaker)
-              .tag("state", "closed")
-              .gauge();
+  void theRelayBreakerPublishesItsState() {
+    Gauge closed =
+        meterRegistry
+            .find("resilience4j.circuitbreaker.state")
+            .tag("name", ExchangeRelay.BREAKER)
+            .tag("state", "closed")
+            .gauge();
 
-      assertThat(closed).as(breaker).isNotNull();
-      assertThat(closed.value()).as(breaker).isEqualTo(1.0d);
-    }
+    assertThat(closed).isNotNull();
+    assertThat(closed.value()).isEqualTo(1.0d);
+    assertThat(
+            meterRegistry.find("resilience4j.circuitbreaker.state").tag("name", "backend").gauges())
+        .as("the extractor relay's breaker is gone")
+        .isEmpty();
   }
 
   @Test

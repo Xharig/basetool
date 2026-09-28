@@ -51,11 +51,13 @@ import org.springframework.web.context.WebApplicationContext;
 @TestPropertySource(properties = "app.security.ingest-gateway.client-ids=test-ingest-gateway")
 class ActingMemberFilterChainTest {
 
-  private static final String INGEST_PATH = "/api/v1/refinery-orders/import-extract";
+  private static final String IMPORT_PATH = "/api/v1/refinery-orders/import-extract";
+  private static final String DRAFT_PATH = "/api/v1/exchange/me/drafts/refinery-orders";
   private static final String OTHER_PATH = "/api/v1/missions";
   private static final String EXCHANGE_PATH = "/api/v1/exchange/catalog/locations";
   private static final String MEMBER = "44444444-4444-4444-4444-444444444444";
   private static final String GATEWAY = "55555555-5555-5555-5555-555555555555";
+  private static final String INSTALLATION = "Kx9_" + "c".repeat(39);
 
   @Autowired private WebApplicationContext context;
   @Autowired private MeterRegistry meterRegistry;
@@ -98,7 +100,7 @@ class ActingMemberFilterChainTest {
 
     mockMvc
         .perform(
-            post(INGEST_PATH)
+            post(DRAFT_PATH)
                 .with(jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "basetool-frontend")))
                 .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -109,9 +111,7 @@ class ActingMemberFilterChainTest {
     assertThat(refusals(MetricNames.ON_BEHALF_OF_NOT_A_GATEWAY)).isEqualTo(before + 1);
   }
 
-  /**
-   * The gateway may not use the header on an endpoint outside the two it is bound to (ADR-0129).
-   */
+  /** The gateway may not use the header on an endpoint outside the exchange routes (ADR-0129). */
   @Test
   void refusesTheHeaderOnAnEndpointItIsNotBoundTo() throws Exception {
     double before = refusals(MetricNames.ON_BEHALF_OF_ENDPOINT_NOT_BOUND);
@@ -137,10 +137,12 @@ class ActingMemberFilterChainTest {
 
     mockMvc
         .perform(
-            post(INGEST_PATH)
+            post(DRAFT_PATH)
                 .with(
                     jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
                 .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit")
+                .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, INSTALLATION)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
         .andExpect(status().isForbidden())
@@ -178,7 +180,7 @@ class ActingMemberFilterChainTest {
 
     mockMvc
         .perform(
-            post(INGEST_PATH)
+            post(DRAFT_PATH)
                 .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
@@ -195,10 +197,12 @@ class ActingMemberFilterChainTest {
 
     mockMvc
         .perform(
-            post(INGEST_PATH)
+            post(DRAFT_PATH)
                 .with(
                     jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
                 .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, "not-a-uuid")
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit")
+                .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, INSTALLATION)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
         .andExpect(status().isForbidden())
@@ -217,7 +221,7 @@ class ActingMemberFilterChainTest {
   void leavesAnOrdinaryRequestAlone() throws Exception {
     mockMvc
         .perform(
-            post(INGEST_PATH)
+            post(IMPORT_PATH)
                 .with(jwt().jwt(token -> token.subject(MEMBER)))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
@@ -263,14 +267,27 @@ class ActingMemberFilterChainTest {
     assertThat(refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER)).isEqualTo(before + 1);
   }
 
-  /** Even the gateway may not send the exchange headers on an ingest endpoint. */
+  /**
+   * The web's import endpoint the removed extractor relay used no longer takes an acting member,
+   * not even from the gateway (REQ-SEC-029).
+   */
   @Test
-  void refusesExchangeHeadersFromTheGatewayOnAnIngestEndpoint() throws Exception {
-    double before = refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
+  void refusesTheGatewayOnTheFormerIngestEndpoint() throws Exception {
+    double before = refusals(MetricNames.ON_BEHALF_OF_ENDPOINT_NOT_BOUND);
 
     mockMvc
         .perform(
-            post(INGEST_PATH)
+            post(IMPORT_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value(ActingMemberFilter.CODE_ACTING_MEMBER_REFUSED));
+    mockMvc
+        .perform(
+            post(IMPORT_PATH)
                 .with(
                     jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
                 .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
@@ -279,7 +296,7 @@ class ActingMemberFilterChainTest {
                 .content("{}"))
         .andExpect(status().isForbidden());
 
-    assertThat(refusals(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER)).isEqualTo(before + 1);
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_ENDPOINT_NOT_BOUND)).isEqualTo(before + 2);
   }
 
   /** An exchange call from the gateway must name a well-formed client. */
@@ -304,5 +321,55 @@ class ActingMemberFilterChainTest {
         .andExpect(status().isForbidden());
 
     assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID)).isEqualTo(before + 2);
+  }
+
+  /** An exchange call with a valid client must also name a well-formed installation key. */
+  @Test
+  void refusesAnExchangeCallWithoutAValidInstallationKey() throws Exception {
+    double before = refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID);
+
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value(ActingMemberFilter.CODE_ACTING_MEMBER_REFUSED));
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "versekit")
+                .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "not a thumbprint"))
+        .andExpect(status().isForbidden());
+
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID))
+        .isEqualTo(before + 2);
+  }
+
+  /** With both relay headers malformed the client is checked, and counted, first. */
+  @Test
+  void countsAnInvalidClientBeforeAnInvalidInstallationKey() throws Exception {
+    double clientBefore = refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID);
+    double installationBefore = refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID);
+
+    mockMvc
+        .perform(
+            get(EXCHANGE_PATH)
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER)
+                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "Verse Kit")
+                .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "not a thumbprint"))
+        .andExpect(status().isForbidden());
+
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_CLIENT_INVALID))
+        .isEqualTo(clientBefore + 1);
+    assertThat(refusals(MetricNames.ON_BEHALF_OF_EXCHANGE_INSTALLATION_INVALID))
+        .isEqualTo(installationBefore);
   }
 }

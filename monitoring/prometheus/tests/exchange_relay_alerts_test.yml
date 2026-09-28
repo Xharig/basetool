@@ -17,7 +17,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: "Exchange relay headers from something other than the gateway"
-              description: "Something other than the ingest gateway acting for a member sent X-Exchange-Client or X-Exchange-Capabilities, or the gateway sent them on an ingest endpoint, repeatedly. A browser session or the app naming an external client is trying to borrow its attribution or capabilities (REQ-XCH-010). Find the source via the correlationId in the backend log."
+              description: "Something other than the ingest gateway acting for a member sent X-Exchange-Client or X-Exchange-Capabilities, repeatedly. A browser session or the app naming an external client is trying to borrow its attribution or capabilities (REQ-XCH-010). Find the source via the correlationId in the backend log."
 
   - name: silent - other refusal reasons do not count as forged headers
     interval: 1m
