@@ -28,7 +28,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.ExchangeDocuments;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import java.io.IOException;
@@ -51,7 +50,6 @@ class ExchangeDocumentsControllerTest {
   @Autowired private ExchangeDocuments documents;
 
   @MockitoBean private JwtDecoder jwtDecoder;
-  @MockitoBean private BackendImportClient backendImportClient;
   @MockitoBean private HandoffStagingService handoffStagingService;
 
   private MockMvc mockMvc;

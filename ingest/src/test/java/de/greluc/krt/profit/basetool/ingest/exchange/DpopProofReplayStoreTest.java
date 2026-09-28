@@ -42,12 +42,12 @@ import org.springframework.security.oauth2.jwt.JwtValidationException;
 
 /**
  * Tests the partitioned DPoP replay cache: one member at its cap cannot lock another out, the
- * exchange and legacy caches are apart, and the verifier fails closed on an unreadable target
- * (REQ-XCH-006, REQ-XCH-023).
+ * exchange cache and the one of every other path are apart, and the verifier fails closed on an
+ * unreadable target (REQ-XCH-006, REQ-XCH-023).
  */
 class DpopProofReplayStoreTest {
 
-  private static final String LEGACY = "/v1/refinery-extract";
+  private static final String OTHER = "/unrouted";
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
@@ -227,7 +227,7 @@ class DpopProofReplayStoreTest {
             new DpopProofReplayStores(
                 exchange,
                 new DpopProofReplayStore(
-                    MetricNames.PATH_SCOPE_LEGACY, 1, 1, meterRegistry, Clock.systemUTC())));
+                    MetricNames.PATH_SCOPE_OTHER, 1, 1, meterRegistry, Clock.systemUTC())));
     ECKey keyA = ExchangeTestSupport.newKey();
     ECKey keyB = ExchangeTestSupport.newKey();
     Jwt tokenA = token("token-a", keyA);
@@ -267,7 +267,7 @@ class DpopProofReplayStoreTest {
             new DpopProofReplayStore(
                 MetricNames.PATH_SCOPE_EXCHANGE, 2, 1000, meterRegistry, Clock.systemUTC()),
             new DpopProofReplayStore(
-                MetricNames.PATH_SCOPE_LEGACY, 2, 1000, meterRegistry, Clock.systemUTC()));
+                MetricNames.PATH_SCOPE_OTHER, 2, 1000, meterRegistry, Clock.systemUTC()));
     ExchangeDpopNonces nonces = new ExchangeDpopNonces();
     DPoPProofJwtDecoderFactory factory = ExchangeDpopProofValidation.factory(nonces, stores);
     ECKey keyA = ExchangeTestSupport.newKey();
@@ -275,14 +275,14 @@ class DpopProofReplayStoreTest {
     Jwt tokenA = token("token-a", keyA);
     Jwt tokenB = token("token-b", keyB);
 
-    assertThat(verifies(factory, keyA, tokenA, LEGACY, null)).isTrue();
-    assertThat(verifies(factory, keyA, tokenA, LEGACY, null)).isTrue();
-    assertThat(verifies(factory, keyA, tokenA, LEGACY, null)).isFalse();
+    assertThat(verifies(factory, keyA, tokenA, OTHER, null)).isTrue();
+    assertThat(verifies(factory, keyA, tokenA, OTHER, null)).isTrue();
+    assertThat(verifies(factory, keyA, tokenA, OTHER, null)).isFalse();
 
-    assertThat(verifies(factory, keyB, tokenB, LEGACY, null)).isTrue();
+    assertThat(verifies(factory, keyB, tokenB, OTHER, null)).isTrue();
     assertThat(verifies(factory, keyA, tokenA, ExchangeTestSupport.STOCK, nonces.current()))
         .isTrue();
-    assertThat(refused(MetricNames.PATH_SCOPE_LEGACY, MetricNames.DPOP_REPLAY_MEMBER_CAP))
+    assertThat(refused(MetricNames.PATH_SCOPE_OTHER, MetricNames.DPOP_REPLAY_MEMBER_CAP))
         .isEqualTo(1.0d);
     assertThat(refused(MetricNames.PATH_SCOPE_EXCHANGE, MetricNames.DPOP_REPLAY_MEMBER_CAP))
         .isZero();
@@ -300,7 +300,7 @@ class DpopProofReplayStoreTest {
             new DpopProofReplayStores(
                 exchange,
                 new DpopProofReplayStore(
-                    MetricNames.PATH_SCOPE_LEGACY, 1, 1000, meterRegistry, Clock.systemUTC())));
+                    MetricNames.PATH_SCOPE_OTHER, 1, 1000, meterRegistry, Clock.systemUTC())));
     ECKey key = ExchangeTestSupport.newKey();
     Jwt token = token("token", key);
 
@@ -323,7 +323,7 @@ class DpopProofReplayStoreTest {
             new DpopProofReplayStores(
                 exchange,
                 new DpopProofReplayStore(
-                    MetricNames.PATH_SCOPE_LEGACY, 1, 1000, meterRegistry, Clock.systemUTC())));
+                    MetricNames.PATH_SCOPE_OTHER, 1, 1000, meterRegistry, Clock.systemUTC())));
     ECKey key = ExchangeTestSupport.newKey();
     Jwt token = token("token", key);
     String first =
@@ -365,7 +365,7 @@ class DpopProofReplayStoreTest {
 
   @Test
   void onlyAReadablePathOutsideTheExchangeSkipsTheNonce() {
-    assertThat(ExchangeDpopProofValidation.isExchangeTarget("https://ingest.example" + LEGACY))
+    assertThat(ExchangeDpopProofValidation.isExchangeTarget("https://ingest.example" + OTHER))
         .isFalse();
     assertThat(ExchangeDpopProofValidation.isExchangeTarget("https://ingest.example/exchanged"))
         .isFalse();

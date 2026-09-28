@@ -8,11 +8,12 @@
                          │                                               │◄──── Discord
    Member (Android app) ►│              PROFIT BASETOOL                  │      (login identity +
                          │                                               │       guild/role gate,
-   Desktop extractor ───►│   missions · hangar · Lager · job orders ·    │       via Keycloak)
-   (refinery + blueprint │   refinery · Materialbörse · Kartellbank ·    │
-    exports → JSON)      │   notifications · audit · org chart           │◄──── UEX · SC Wiki
+                         │   missions · hangar · Lager · job orders ·    │       via Keycloak)
+                         │   refinery · Materialbörse · Kartellbank ·    │
+                         │   notifications · audit · org chart           │◄──── UEX · SC Wiki
    Exchange clients ◄───►│                                               │      (game data)
-   (VerseKit, extractor) │                                               │
+   (SC Extractor,        │                                               │
+    VerseKit)            │                                               │
    Maintainer  ─────────►│                                               │
    (@greluc)             │                                               │────► SMTP relay
                          └───────────────────────────────────────────────┘      (account mails)
@@ -28,8 +29,7 @@
 | --- | --- | --- | --- |
 | **Member, browser** | in | Interactive use of every feature, over one authenticated session | The primary actor |
 | **Member, Android app** | in | The same data, over `api.profit-base.online` with its own vhost, rate limits and deny rules; sign-in against Keycloak on the app origin (ADR-0166) | A separate repository (`basetool-android`) with its own release cycle |
-| **Desktop extractor** | in | Refinery work orders read from screenshots and blueprints read from the game log, as JSON `POST`s to the ingest gateway (`/v1/refinery-extract`, `/v1/blueprint-preview`); these legacy routes answer `410` once the extractor has moved to the exchange (REQ-XCH-033) | A separate repository (`basetool-sc-extractor`); **a restricted interface**, not an open API |
-| **Approved exchange clients** (epic #2078) | both | The member's own blueprints, personal Lager lots and ships, both ways, plus a read-only anonymised demand feed, the location list and review drafts, over `/exchange/v1/**` on the ingest gateway — consent per capability, DPoP-bound tokens, a database client registry ([`external-exchange.md`](../specs/external-exchange.md), ADR-0216 … ADR-0220). Built; the global switch stays off until the go-live | Programs on the member's PC: third-party tools approved one by one (VerseKit first) and the SC Extractor as the first-party client |
+| **Approved exchange clients** (epic #2078) | both | The member's own blueprints, personal Lager lots and ships, both ways, plus a read-only anonymised demand feed, the location list and review drafts, over `/exchange/v1/**` on the ingest gateway — consent per capability, DPoP-bound tokens, a database client registry ([`external-exchange.md`](../specs/external-exchange.md), ADR-0216 … ADR-0220). Built; the global switch stays off until the go-live | Programs on the member's PC: third-party tools approved one by one (VerseKit first) and the SC Extractor (repository `basetool-sc-extractor`) as the first-party client, which sends its refinery orders and blueprints as drafts here since release 2.10.0. Its former `/v1` routes on the ingest gateway were removed on 2026-09-28 (REQ-XCH-033) |
 | **GitHub Pages** | out | The third-party documentation at <https://krt-profit.github.io/basetool/> (`docs/exchange/`, rendered OpenAPI reference, schemas), built by `exchange-docs.yml` and deployed from `main` only; the service document's `docsUrl` points there. A static site, no runtime unit — the schemas' permanent `$id`s stay on the ingest host (REQ-XCH-002, REQ-XCH-011) | Documentation hosting |
 | **Discord** | both | OAuth2 social login, guild membership, in-guild role and nickname — all asked by the Keycloak SPI, fail-closed; the applications never call Discord | An identity the organisation already uses; the tool does not own it |
 | **Keycloak** | — | *Inside* the boundary as a deployed component, but *outside* the applications: they never see a credential | See §5 |
@@ -74,12 +74,11 @@ does not have to.
 
 - **Multi-tenancy across organisations.** The OrgUnit model divides *one* organisation. A second
   customer would be a second deployment, and nothing is built to make that cheap.
-- **Public API access.** The ingest interface publishes an OpenAPI document so the official
-  extractor can be built against a stable contract (`REQ-INGEST-010`); that is documentation of a
-  restricted interface, not an invitation — only approved clients are served (`REQ-INGEST-011`).
-  The exchange API (epic #2078) keeps that line: it opens a narrow, capability-scoped
-  contract to clients approved one by one in a public issue and PR, never the backend API
-  (ADR-0216).
+- **Public API access.** The exchange API (epic #2078) publishes its contract so approved clients
+  can be built against it, but that is documentation of a restricted interface, not an invitation:
+  it opens a narrow, capability-scoped contract to clients approved one by one in a public issue and
+  PR, never the backend API (ADR-0216). The extractor's own `/v1` contract (`REQ-INGEST-010`) was
+  retired with its routes on 2026-09-28.
 - **Handover and location of traded goods.** The Materialbörse matches offers to requests and then
   gets out of the way; where and when members meet stays off-tool and private, on purpose.
 - **Payment of any kind.** The Kartellbank is a ledger of in-game currency. No real money, no

@@ -185,3 +185,12 @@ protective); a per-member release flag (rejected by the owner — every member m
 - **A bespoke long-lived personal access token.** Rejected: Keycloak has no native PAT;
   building one means a custom long-lived-secret store with its own revocation and rotation
   machinery — strictly more attack surface than a rotating refresh token in the OS keystore.
+
+## Amendment 2 (2026-09-28) — the extractor endpoints are removed
+
+The gateway's two forward-only endpoints of decision 1 (`POST /v1/refinery-extract`,
+`POST /v1/blueprint-preview`) and the client-identity gate of amendment 1 are removed (#2092
+step 9). The desktop extractor reaches the Basetool through the exchange API since release 2.10.0
+(ADR-0216): the same device grant, now consent-gated and DPoP-bound, and the same one-time handoff
+into the browser review through the exchange's draft routes (REQ-XCH-019). The gateway's audience
+`basetool-ingest` stays; the `exchange.*` client scopes stamp it.

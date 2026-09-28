@@ -96,3 +96,16 @@ mismatch or unknown answer that never returns the handle, REQ-XCH-031), `POST ca
 references resolved by the web import's matching, REQ-XCH-012) and `GET catalog/locations` (the
 Lager's location list, ADR-0220). Any further route is added the same way: through the spec and the
 exhaustive route lists of decision 4.
+
+## Amendment — 2026-09-28: the legacy endpoints are removed, not stubbed (#2092 step 9)
+
+Decision 7 kept the legacy `/v1/*` routes behind a flag that answered `410` with a German update
+hint after the go-live. Production ran with the flag off from the go-live (S14), and SC Extractor
+2.10.0 uses only `/exchange/v1`. The owner decided on 2026-09-28 to remove the routes entirely,
+**without** the `410` stub: the flag, `LegacyEndpointGoneFilter`, the extractor's client-identity
+gate and `LegacyClientGateGuard` are gone, and a request under `/v1` gets what any unknown path of
+the gateway gets. The exchange is the gateway's only surface, so the scope split of the
+consequences is gone too: `IngestPathScope` names `/exchange/**` alone. An extractor older than
+2.10.0 now shows its generic send error instead of the update hint; that was accepted as the price
+of carrying no dead route. Going back to `/v1` needs a rollback to 1.13.0, the last release with
+the routes (REQ-XCH-033).

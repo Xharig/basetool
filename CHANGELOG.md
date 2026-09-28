@@ -10,7 +10,24 @@
   SC Extractor und zugelassene Drittanwendungen behalten ihn (ADR-0202 Amendment 5, REQ-OPS-033).
   Für Mitglieder ändert sich nichts.
 
+### Removed
+
+- **Ingest-Gateway: die alten SC-Extractor-Endpunkte sind entfernt.** `/v1/refinery-extract` und
+  `/v1/blueprint-preview` gibt es nicht mehr, auch ohne `410`-Hinweis; der SC Extractor sendet seit
+  2.10.0 über den Datenaustausch. Mit ihnen entfallen `IRI_INGEST_LEGACY_ENDPOINTS_ENABLED`,
+  `IRI_INGEST_ALLOWED_CLIENT_IDS`, `IRI_INGEST_CLIENT_AUDIT_ONLY`, `IRI_INGEST_REQUIRED_SCOPE` und
+  `IRI_INGEST_ALLOWED_TOOLS` samt Alarm `IngestUnknownClient` (#2092).
+
+- **Ingest-Gateway: kein generiertes OpenAPI-Dokument mehr.** springdoc, `/v3/api-docs` und
+  `ingest/src/main/resources/api/openapi.json` sind entfernt; der Vertrag des Gateways ist allein
+  `exchange-v1.openapi.json`, weiterhin unter `/exchange/v1/openapi.json`.
+
 ### Fixed
+
+- **Datenaustausch: das Gateway holt nach einer Abweisung seines eigenen Tokens ein neues.** Lehnt
+  das Backend das Dienstkonto-Token des Ingest-Gateways ab (`401`/`403` ohne Austausch-Code),
+  verwirft das Gateway es, sodass die nächste Anfrage ein frisches holt, statt bis zum Ablauf
+  weiter zu scheitern.
 
 - **Aufträge: „Items bearbeiten" speichert wieder ohne Umweg.** Die bearbeitende Einheit war im
   Bearbeiten-Formular nicht vorausgewählt; weil das Feld Pflicht ist, verwarf der Browser das Speichern

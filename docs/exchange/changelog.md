@@ -5,6 +5,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-28
 
+- **`LEGACY_ENDPOINT_GONE` is retired.** It answered the SC Extractor's old `/v1/*` routes, which
+  were never part of the exchange and are now removed; the code stays in the registry so it is never
+  reused ([errors](errors.md)). Nothing under `/exchange/v1` changes.
 - **`EXCHANGE_BUDGET_EXHAUSTED` tells when to retry and costs no write.** Its `Retry-After` is now
   the seconds until enough of the full budget expires, at most 3600, instead of a fixed 60 that a
   full budget never kept; and the refused write no longer counts against the daily write quota, so

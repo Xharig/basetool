@@ -30,7 +30,8 @@ exchange call's acting member holds only the reduced exchange authentication
 (`DatabaseActingMemberAuthorities.exchangeAuthoritiesFor`, REQ-XCH-009), and audit rows and API
 metrics of relayed exchange calls name the registered client (`ClientAttribution`, REQ-XCH-010,
 REQ-AUDIT-005). The legacy `/v1` extractor relay still acts with every stored role until it is
-switched off (REQ-XCH-033).*
+switched off (REQ-XCH-033).* *Amended 2026-09-28: it was switched off at the go-live and removed
+with #2092 step 9; no relay acts with a member's stored roles any more.*
 
 ## Decision
 

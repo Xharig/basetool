@@ -253,7 +253,7 @@
       },
       "type": "timeseries",
       "title": "DPoP replay-cache refusals/hour by path scope and reason",
-      "description": "DPoP proofs the gateway's jti replay cache refused, per path scope (exchange / legacy) and reason: replayed (the jti was used before), member_cap (the member already holds its app.exchange.limits.dpop-proofs-per-member live proofs) or full (the scope's cache holds dpop-proofs-total and refuses every new proof; IngestDpopReplayCacheFull fires). On the exchange scope a member_cap refusal is answered 429 DPOP_PROOF_LIMIT and counts as dpop_proof_limit on the auth-failure counter, and a full refusal is answered 503 SERVICE_UNAVAILABLE and counts as dpop_store_full; every other refusal counts as invalid_dpop_proof (REQ-XCH-006). The metric carries no client, so the client_id variable does not filter it.",
+      "description": "DPoP proofs the gateway's jti replay cache refused, per path scope (exchange / other) and reason: replayed (the jti was used before), member_cap (the member already holds its app.exchange.limits.dpop-proofs-per-member live proofs) or full (the scope's cache holds dpop-proofs-total and refuses every new proof; IngestDpopReplayCacheFull fires). On the exchange scope a member_cap refusal is answered 429 DPOP_PROOF_LIMIT and counts as dpop_proof_limit on the auth-failure counter, and a full refusal is answered 503 SERVICE_UNAVAILABLE and counts as dpop_store_full; every other refusal counts as invalid_dpop_proof (REQ-XCH-006). The metric carries no client, so the client_id variable does not filter it.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1040,7 +1040,7 @@
       },
       "type": "timeseries",
       "title": "Gateway circuit breakers not closed",
-      "description": "The gateway's two relay breakers: exchange (the exchange relay) and backend (the extractor's handoff relay). Each opens on its own, so an open exchange breaker leaves the extractor working (REQ-XCH-023). Empty while both are closed; CircuitBreakerOpen fires on either after 2 minutes open.",
+      "description": "The gateway's exchange relay breaker (REQ-XCH-023). Empty while it is closed; CircuitBreakerOpen fires after 2 minutes open.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

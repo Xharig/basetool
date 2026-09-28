@@ -120,7 +120,7 @@ class ActingMemberFilterPathMatchingTest {
     assertThat(refusalReason()).isEqualTo(MetricNames.ON_BEHALF_OF_ENDPOINT_NOT_BOUND);
     assertThat(response.getStatus()).isEqualTo(403);
     verify(chain, never()).doFilter(any(), any());
-    verify(authorities, never()).authoritiesFor(any());
+    verify(authorities, never()).exchangeAuthoritiesFor(any(), any());
   }
 
   /**
@@ -130,11 +130,13 @@ class ActingMemberFilterPathMatchingTest {
   void stillActsOnAnEncodedSpellingOfAnActingPath() throws Exception {
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
-    when(authorities.authoritiesFor(any())).thenReturn(List.of());
+    when(authorities.exchangeAuthoritiesFor(any(), any())).thenReturn(List.of());
 
-    filter().doFilter(gatewayRequest("/api/v1/%72efinery-orders/import-extract"), response, chain);
+    filter()
+        .doFilter(
+            withExchangeHeaders(gatewayRequest("/api/v1/exchange/me/%73tock")), response, chain);
 
-    verify(authorities).authoritiesFor(any());
+    verify(authorities).exchangeAuthoritiesFor(any(), any());
     verify(chain).doFilter(any(), any());
     assertThat(refusalReason()).isNull();
   }
@@ -179,7 +181,6 @@ class ActingMemberFilterPathMatchingTest {
     filter().doFilter(withExchangeHeaders(gatewayRequest(path)), response, chain);
 
     verify(authorities).exchangeAuthoritiesFor(any(), any());
-    verify(authorities, never()).authoritiesFor(any());
     verify(chain).doFilter(any(), any());
     assertThat(refusalReason()).isNull();
   }
@@ -200,19 +201,34 @@ class ActingMemberFilterPathMatchingTest {
     verify(chain, never()).doFilter(any(), any());
   }
 
-  /** The exchange relay headers are refused on the extractor's ingest routes. */
-  @Test
-  void refusesTheExchangeHeadersOnAnIngestRoute() throws Exception {
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    FilterChain chain = mock(FilterChain.class);
+  /**
+   * The import routes the removed extractor relay used no longer accept an acting member, with or
+   * without the exchange relay headers; the web keeps calling them as the member.
+   */
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "/api/v1/refinery-orders/import-extract",
+        "/api/v1/personal-blueprints/import/preview"
+      })
+  void refusesAnActingMemberOnTheFormerIngestRoutes(String path) throws Exception {
+    for (boolean exchangeHeaders : new boolean[] {false, true}) {
+      MockHttpServletResponse response = new MockHttpServletResponse();
+      FilterChain chain = mock(FilterChain.class);
+      MockHttpServletRequest request = gatewayRequest(path);
 
-    filter()
-        .doFilter(
-            withExchangeHeaders(gatewayRequest("/api/v1/personal-blueprints/import/preview")),
-            response,
-            chain);
+      filter().doFilter(exchangeHeaders ? withExchangeHeaders(request) : request, response, chain);
 
-    assertThat(refusalReason()).isEqualTo(MetricNames.ON_BEHALF_OF_FORGED_EXCHANGE_HEADER);
-    verify(chain, never()).doFilter(any(), any());
+      assertThat(response.getStatus()).isEqualTo(403);
+      verify(chain, never()).doFilter(any(), any());
+    }
+    assertThat(
+            meterRegistry
+                .get(MetricNames.ON_BEHALF_OF_REFUSED)
+                .tag(MetricNames.TAG_REASON, MetricNames.ON_BEHALF_OF_ENDPOINT_NOT_BOUND)
+                .counter()
+                .count())
+        .isEqualTo(2.0d);
+    verify(authorities, never()).exchangeAuthoritiesFor(any(), any());
   }
 }

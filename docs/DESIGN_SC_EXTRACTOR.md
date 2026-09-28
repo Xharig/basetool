@@ -239,10 +239,11 @@ goods or source screenshots. The send is the **one-click send** of epic
 2. **Browser approval (device grant).** The modal shows a short user code and opens
    the browser; under an existing Keycloak SSO session the approval is one click.
 3. **Send + open.** The exact exported bytes go to the ingest gateway over TLS with a
-   DPoP-bound token (the gateway validates it, calls the backend's import endpoint under its
-   own service identity on behalf of the member — ADR-0129 — and stages the matched draft in
-   single-use Redis), then the browser opens the **pre-filled**
-   review form via `…?handoff=<id>`. The human **review-before-commit** step (§6) is
+   DPoP-bound token (the gateway validates it, calls the backend under its own service identity
+   on behalf of the member — ADR-0129 — and stages the matched draft in single-use Redis), then
+   the browser opens the **pre-filled** review form via `…?handoff=<id>`. *(Since extractor 2.10.0
+   the bytes go to the exchange's draft routes, REQ-XCH-019; the gateway's own `/v1` routes were
+   removed on 2026-09-28.)* The human **review-before-commit** step (§6) is
    unchanged — nothing is persisted until the user confirms in the browser.
 
 The earlier **manual-upload flow** (Refinery → Import order → pick the JSON → review

@@ -27,17 +27,13 @@ import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 
 /**
- * Decides which gateway surface a request targets, shared by every scoped filter: the legacy
- * extractor endpoints ({@code /v1/**}) and the exchange ({@code /exchange/**}) together form the
- * protected surface; only the legacy one carries the extractor client gate (REQ-XCH-001).
+ * Decides whether a request targets the exchange ({@code /exchange/**}), the gateway's only
+ * protected surface, shared by every scoped filter (REQ-XCH-001).
  *
  * <p>Matches the decoded path, as the dispatcher does, so a percent-encoded path cannot bypass the
  * filters while still reaching a controller.
  */
 public final class IngestPathScope {
-
-  /** The parsed {@code /v1/**} pattern of the legacy extractor surface. */
-  private static final PathPattern LEGACY_PATHS = PathPatternParser.defaultInstance.parse("/v1/**");
 
   /** The parsed {@code /exchange/**} pattern of the exchange surface. */
   private static final PathPattern EXCHANGE_PATHS =
@@ -47,43 +43,20 @@ public final class IngestPathScope {
   private IngestPathScope() {}
 
   /**
-   * Whether the request targets the protected surface — the per-IP limit, the payload cap and the
-   * access log apply.
-   *
-   * @param request the current request
-   * @return {@code true} when the path is under {@code /v1} or {@code /exchange}
-   */
-  public static boolean isProtectedRequest(@NotNull HttpServletRequest request) {
-    return isLegacyRequest(request) || isExchangeRequest(request);
-  }
-
-  /**
-   * Whether the request targets a legacy extractor endpoint — the extractor client gate applies.
-   *
-   * @param request the current request
-   * @return {@code true} when the path is under {@code /v1}
-   */
-  public static boolean isLegacyRequest(@NotNull HttpServletRequest request) {
-    return LEGACY_PATHS.matches(PathContainer.parsePath(request.getRequestURI()));
-  }
-
-  /**
    * Returns the metric label of the surface the request targets.
    *
    * @param request the current request
-   * @return {@code legacy}, {@code exchange} or {@code other}
+   * @return {@code exchange} or {@code other}
    */
   public static @NotNull String scopeLabel(@NotNull HttpServletRequest request) {
-    if (isLegacyRequest(request)) {
-      return MetricNames.PATH_SCOPE_LEGACY;
-    }
     return isExchangeRequest(request)
         ? MetricNames.PATH_SCOPE_EXCHANGE
         : MetricNames.PATH_SCOPE_OTHER;
   }
 
   /**
-   * Whether the request targets the exchange surface.
+   * Whether the request targets the exchange surface — the per-IP limit, the payload cap and the
+   * access log apply.
    *
    * @param request the current request
    * @return {@code true} when the path is under {@code /exchange}

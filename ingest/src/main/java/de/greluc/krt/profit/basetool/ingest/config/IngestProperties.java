@@ -33,8 +33,8 @@ import org.springframework.validation.annotation.Validated;
  * (REQ-INGEST-001/-003/-005).
  *
  * @param backendBaseUrl internal base URL of the backend the gateway forwards to
- * @param frontendBaseUrl public frontend base URL used to build the {@code frontendUrl} returned to
- *     the extractor
+ * @param frontendBaseUrl public frontend base URL used to build the URL a staged draft or change
+ *     set opens at
  * @param publicBaseUrl the gateway's external origin, used only as the DPoP {@code htu} comparison
  *     target (ADR-0129); blank keeps the request-derived target
  * @param refineryPath frontend path of the pre-filled refinery form; {@code ?handoff=<id>} is
@@ -45,10 +45,8 @@ import org.springframework.validation.annotation.Validated;
  * @param maxPayloadBytes upper bound on an accepted ingest payload, in bytes (REQ-INGEST-005)
  * @param maxHandoffBytes upper bound on one staged handoff document, in bytes; kept small because
  *     the staging Redis also holds the frontend sessions
- * @param maxHandoffsPerSubject maximum live staged handoffs per subject; the oldest are evicted
  * @param verifyBackendHostname whether the backend relay also verifies the certificate's host name
  *     on top of the pinned chain (REQ-SEC-070, ADR-0211); ignored under {@code dev}/{@code test}
- * @param legacyEndpoints the switch for the legacy extractor endpoints under {@code /v1}
  */
 @Validated
 @ConfigurationProperties(prefix = "app.ingest")
@@ -61,9 +59,7 @@ public record IngestProperties(
     @NotNull @DefaultValue("PT30M") Duration handoffTtl,
     @Min(1024) @DefaultValue("2097152") long maxPayloadBytes,
     @Min(1024) @DefaultValue("262144") long maxHandoffBytes,
-    @Min(1) @DefaultValue("10") int maxHandoffsPerSubject,
-    @DefaultValue("false") boolean verifyBackendHostname,
-    @NotNull @DefaultValue LegacyEndpoints legacyEndpoints) {
+    @DefaultValue("false") boolean verifyBackendHostname) {
 
   /**
    * Normalises an absent public origin to empty, the documented "not configured" value, so {@link
@@ -72,13 +68,4 @@ public record IngestProperties(
   public IngestProperties {
     publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl;
   }
-
-  /**
-   * The legacy extractor endpoints ({@code app.ingest.legacy-endpoints}).
-   *
-   * @param enabled whether {@code /v1/refinery-extract} and {@code /v1/blueprint-preview} still
-   *     answer; switched off at the exchange go-live, after which they answer {@code 410
-   *     LEGACY_ENDPOINT_GONE} (REQ-XCH-033)
-   */
-  public record LegacyEndpoints(@DefaultValue("true") boolean enabled) {}
 }

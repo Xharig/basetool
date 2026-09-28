@@ -19,7 +19,6 @@
 
 package de.greluc.krt.profit.basetool.ingest.support;
 
-import de.greluc.krt.profit.basetool.ingest.config.ClientIdentityProperties;
 import de.greluc.krt.profit.basetool.ingest.config.IngestProperties;
 import de.greluc.krt.profit.basetool.ingest.config.RateLimitProperties;
 import de.greluc.krt.profit.basetool.ingest.config.ServiceAccountProperties;
@@ -36,7 +35,7 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
  * record's own {@code @DefaultValue} rather than from a second copy of the defaults kept here.
  *
  * <p>Overrides are given as alternating relaxed property names and values relative to the record's
- * prefix, e.g. {@code ingest("max-handoffs-per-subject", "3")}. A list is a comma-separated value,
+ * prefix, e.g. {@code ingest("max-handoff-bytes", "4096")}. A list is a comma-separated value,
  * exactly as it would be in {@code application.yml}.
  */
 public final class TestProperties {
@@ -64,20 +63,6 @@ public final class TestProperties {
    */
   public static @NotNull RateLimitProperties rateLimit(String... overrides) {
     return bind("app.rate-limit", RateLimitProperties.class, new LinkedHashMap<>(), overrides);
-  }
-
-  /**
-   * Binds {@code app.ingest.client-identity} with the given overrides.
-   *
-   * @param overrides alternating relative property names and values
-   * @return the bound properties
-   */
-  public static @NotNull ClientIdentityProperties clientIdentity(String... overrides) {
-    return bind(
-        "app.ingest.client-identity",
-        ClientIdentityProperties.class,
-        new LinkedHashMap<>(),
-        overrides);
   }
 
   /**

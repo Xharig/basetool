@@ -38,9 +38,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Assembles an acting member's authorities from the database via {@link
- * CustomJwtGrantedAuthoritiesConverter#assembleFor(User)}, and refuses a member who is no longer
- * present or enabled in Keycloak (ADR-0129).
+ * Assembles an acting member's reduced exchange authorities, checked against the stored ones from
+ * {@link CustomJwtGrantedAuthoritiesConverter#assembleFor(User)}, and refuses a member who is no
+ * longer present or enabled in Keycloak (ADR-0129).
  *
  * <p>The liveness checks rely on the persisted {@code inKeycloak} and {@code enabledInKeycloak}
  * flags, so a revocation takes effect at the next roster sync or the member's next login.
@@ -56,9 +56,15 @@ public class DatabaseActingMemberAuthorities implements ActingMemberAuthorities 
   private final UserRepository userRepository;
   private final CustomJwtGrantedAuthoritiesConverter authorityAssembler;
 
-  @Override
-  @Transactional(readOnly = true)
-  public @NotNull Collection<GrantedAuthority> authoritiesFor(@NotNull UUID member) {
+  /**
+   * Assembles the member's stored authorities, refusing a member who is unknown here or no longer
+   * live.
+   *
+   * @param member the subject named in the on-behalf-of header
+   * @return the member's authorities, assembled from the database
+   * @throws AccessDeniedException when the member is unknown here or no longer live
+   */
+  private @NotNull Collection<GrantedAuthority> storedAuthoritiesFor(@NotNull UUID member) {
     Optional<User> found = userRepository.findById(member);
     if (found.isEmpty()) {
       log.warn("Refusing to act for a subject with no local account");
@@ -80,7 +86,7 @@ public class DatabaseActingMemberAuthorities implements ActingMemberAuthorities 
   @Transactional(readOnly = true)
   public @NotNull Collection<GrantedAuthority> exchangeAuthoritiesFor(
       @NotNull UUID member, @NotNull Collection<String> capabilityScopes) {
-    Collection<GrantedAuthority> stored = authoritiesFor(member);
+    Collection<GrantedAuthority> stored = storedAuthoritiesFor(member);
     boolean gated =
         stored.stream()
             .map(GrantedAuthority::getAuthority)

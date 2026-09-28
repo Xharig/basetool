@@ -93,7 +93,7 @@ public final class DpopProofReplayStore {
   /**
    * Creates the store of one path scope.
    *
-   * @param pathScope the {@code path_scope} label, {@code exchange} or {@code legacy}
+   * @param pathScope the {@code path_scope} label, {@code exchange} or {@code other}
    * @param maxPerMember the most live proofs one member may hold
    * @param maxTotal the most live proofs the store holds
    * @param meterRegistry where the refusals are counted, registered at zero

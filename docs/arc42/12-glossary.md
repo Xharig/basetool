@@ -64,7 +64,7 @@ worth reading even if you know the domain.
 | **Promotion** | Moving a `:stable` tag onto a chosen digest. A deliberate human act; the deploy timer only consumes it. |
 | **Front end (haproxy)** | The host service that binds `:80`/`:443` and hands connections to the edge with a PROXY v2 header naming the client (ADR-0187). Not to be confused with the `frontend` module. |
 | **Edge** | The nginx container terminating TLS for the four public names, behind the haproxy front end. **acme** is a separate container that issues and renews the certificates it serves. |
-| **Ingest** | The internet-facing gateway module for the desktop extractor (legacy `/v1`) and the **Exchange (API)** of approved clients. Owns no database; relays to the backend internally. |
+| **Ingest** | The internet-facing gateway module serving the **Exchange (API)** of approved clients, the SC Extractor included; its former `/v1` extractor routes were removed on 2026-09-28. Owns no database; relays to the backend internally. |
 | **Handoff** | The single-use Redis entry through which ingest passes a matched draft to the member's browser for review. |
 | **Exchange (API)** | `/exchange/v1/**` on the ingest gateway: the capability-scoped contract through which approved external clients sync the member's own data (`REQ-XCH-*`, ADR-0216). Not the backend API, and not the **Materialbörse**, whose code is named `MaterialExchange*`. |
 | **Capability** | An OAuth scope such as `exchange.stock.write` — what an external client is approved for and a member consents to. A route passes only when its capability is both in the token and granted to the client in the registry. |

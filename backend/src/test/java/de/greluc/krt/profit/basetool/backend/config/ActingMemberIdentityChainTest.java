@@ -62,6 +62,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
@@ -70,8 +71,9 @@ import org.springframework.web.context.WebApplicationContext;
  * Tests that the acting member reaches the handler and that both person gates (approval and
  * consent) judge the member, not the gateway (ADR-0129).
  *
- * <p>Re-arms the consent gate via {@code app.security.terms.armed-in-test}. {@link
- * RefineryImportService} is mocked, and the assertions target the {@code callerId} passed down.
+ * <p>Re-arms the consent gate via {@code app.security.terms.armed-in-test}. Every acting call is
+ * the gateway's exchange refinery draft relay; {@link RefineryImportService} is mocked, and the
+ * assertions target the {@code callerId} passed down.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -83,7 +85,6 @@ import org.springframework.web.context.WebApplicationContext;
     })
 class ActingMemberIdentityChainTest {
 
-  private static final String INGEST_PATH = "/api/v1/refinery-orders/import-extract";
   private static final UUID MEMBER = UUID.fromString("44444444-4444-4444-4444-444444444444");
   private static final String GATEWAY = "55555555-5555-5555-5555-555555555555";
 
@@ -163,12 +164,8 @@ class ActingMemberIdentityChainTest {
     when(blueprintImportService.previewImport(any(), any())).thenReturn(null);
   }
 
-  /**
-   * The member's identity, not the gateway's, reaches the handler as the draft's {@code callerId}.
-   */
-  @Test
-  void anExchangeDraftIsBuiltForTheActingMemberUnderTheReducedAuthentication() throws Exception {
-    termsAcceptanceService.acceptCurrentTerms(MEMBER);
+  /** Registers an active client that may send refinery drafts and switches the exchange on. */
+  private void registerClient() {
     ExchangeClient client = new ExchangeClient();
     client.setClientId("vk-chain");
     client.setDisplayName("VerseKit");
@@ -180,36 +177,33 @@ class ActingMemberIdentityChainTest {
         settingsRepository.findById(ExchangeSettings.SINGLETON_ID).orElseThrow();
     settings.setEnabled(true);
     settingsRepository.saveAndFlush(settings);
-
-    mockMvc
-        .perform(
-            post("/api/v1/exchange/me/drafts/refinery-orders")
-                .with(
-                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-                .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "vk-chain")
-                .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.drafts.refinery")
-                .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "Kx9_" + "c".repeat(39))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(EXTRACT))
-        .andExpect(status().isOk());
-
-    verify(refineryImportService).buildDraft(any(), eq(MEMBER));
   }
 
-  @Test
-  void buildsTheDraftForTheActingMemberNotTheGateway() throws Exception {
-    termsAcceptanceService.acceptCurrentTerms(MEMBER);
+  /**
+   * Builds the gateway's refinery draft relay for {@link #MEMBER}.
+   *
+   * @return the request
+   */
+  private MockHttpServletRequestBuilder exchangeDraft() {
+    return post("/api/v1/exchange/me/drafts/refinery-orders")
+        .with(jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+        .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
+        .header(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, "vk-chain")
+        .header(ActingMemberHeader.EXCHANGE_CAPABILITIES_HEADER, "exchange.drafts.refinery")
+        .header(ActingMemberHeader.EXCHANGE_INSTALLATION_HEADER, "Kx9_" + "c".repeat(39))
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(EXTRACT);
+  }
 
-    mockMvc
-        .perform(
-            post(INGEST_PATH)
-                .with(
-                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(EXTRACT))
-        .andExpect(status().isOk());
+  /**
+   * The member's identity, not the gateway's, reaches the handler as the draft's {@code callerId}.
+   */
+  @Test
+  void anExchangeDraftIsBuiltForTheActingMemberUnderTheReducedAuthentication() throws Exception {
+    termsAcceptanceService.acceptCurrentTerms(MEMBER);
+    registerClient();
+
+    mockMvc.perform(exchangeDraft()).andExpect(status().isOk());
 
     verify(refineryImportService).buildDraft(any(), eq(MEMBER));
   }
@@ -225,14 +219,9 @@ class ActingMemberIdentityChainTest {
     userRepository.saveAndFlush(roleLess);
     termsAcceptanceService.acceptCurrentTerms(MEMBER);
 
+    registerClient();
     mockMvc
-        .perform(
-            post(INGEST_PATH)
-                .with(
-                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(EXTRACT))
+        .perform(exchangeDraft())
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("NO_ROLE"));
 
@@ -240,10 +229,11 @@ class ActingMemberIdentityChainTest {
   }
 
   /**
-   * The blueprint-preview endpoint, the second bound endpoint, also receives the member's identity.
+   * The web's import endpoints the removed extractor relay used no longer carry an acting member:
+   * the gateway is refused before any handler runs (REQ-SEC-029).
    */
   @Test
-  void carriesTheActingMemberToTheBlueprintPreviewEndpointToo() throws Exception {
+  void noLongerActsOnTheFormerIngestEndpoints() throws Exception {
     termsAcceptanceService.acceptCurrentTerms(MEMBER);
 
     mockMvc
@@ -255,9 +245,21 @@ class ActingMemberIdentityChainTest {
                 .with(
                     jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
                 .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString()))
-        .andExpect(status().isOk());
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value(ActingMemberFilter.CODE_ACTING_MEMBER_REFUSED));
+    mockMvc
+        .perform(
+            post("/api/v1/refinery-orders/import-extract")
+                .with(
+                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
+                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(EXTRACT))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value(ActingMemberFilter.CODE_ACTING_MEMBER_REFUSED));
 
-    verify(blueprintImportService).previewImport(eq(MEMBER), any());
+    verify(blueprintImportService, never()).previewImport(any(), any());
+    verify(refineryImportService, never()).buildDraft(any(), any());
   }
 
   /**
@@ -312,14 +314,9 @@ class ActingMemberIdentityChainTest {
    */
   @Test
   void refusesAnActingMemberWhoHasNotAcceptedTheTerms() throws Exception {
+    registerClient();
     mockMvc
-        .perform(
-            post(INGEST_PATH)
-                .with(
-                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(EXTRACT))
+        .perform(exchangeDraft())
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("TERMS_NOT_ACCEPTED"));
 
@@ -334,14 +331,9 @@ class ActingMemberIdentityChainTest {
     userRepository.saveAndFlush(member);
     termsAcceptanceService.acceptCurrentTerms(MEMBER);
 
+    registerClient();
     mockMvc
-        .perform(
-            post(INGEST_PATH)
-                .with(
-                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(EXTRACT))
+        .perform(exchangeDraft())
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("PENDING_APPROVAL"));
   }
@@ -354,14 +346,9 @@ class ActingMemberIdentityChainTest {
     userRepository.saveAndFlush(member);
     termsAcceptanceService.acceptCurrentTerms(MEMBER);
 
+    registerClient();
     mockMvc
-        .perform(
-            post(INGEST_PATH)
-                .with(
-                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(EXTRACT))
+        .perform(exchangeDraft())
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value(ActingMemberFilter.CODE_ACTING_MEMBER_REFUSED));
 
@@ -379,14 +366,9 @@ class ActingMemberIdentityChainTest {
     userRepository.saveAndFlush(member);
     termsAcceptanceService.acceptCurrentTerms(MEMBER);
 
+    registerClient();
     mockMvc
-        .perform(
-            post(INGEST_PATH)
-                .with(
-                    jwt().jwt(token -> token.subject(GATEWAY).claim("azp", "test-ingest-gateway")))
-                .header(ActingMemberHeader.ON_BEHALF_OF_HEADER, MEMBER.toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(EXTRACT))
+        .perform(exchangeDraft())
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value(ActingMemberFilter.CODE_ACTING_MEMBER_REFUSED));
 

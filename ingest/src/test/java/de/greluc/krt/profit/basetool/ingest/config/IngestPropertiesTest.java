@@ -26,14 +26,14 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for the defaults of the gateway's four configuration records, bound through the real
+ * Unit tests for the defaults of the gateway's three configuration records, bound through the real
  * {@code Binder}, including the handoff TTL (REQ-INGEST-003) and the property names.
  */
 class IngestPropertiesTest {
 
   /**
-   * The handoff TTL defaults to 30 minutes, leaving time between the extractor's Send and opening
-   * the pre-filled page (REQ-INGEST-003).
+   * The handoff TTL defaults to 30 minutes, leaving time between a client's draft and opening the
+   * pre-filled page (REQ-INGEST-003).
    */
   @Test
   void handoffTtlDefaultsToThirtyMinutes() {
@@ -52,20 +52,14 @@ class IngestPropertiesTest {
     assertThat(properties.blueprintPath()).isEqualTo("/personal-inventory/blueprints");
     assertThat(properties.maxPayloadBytes()).isEqualTo(2L * 1024 * 1024);
     assertThat(properties.maxHandoffBytes()).isEqualTo(256L * 1024);
-    assertThat(properties.maxHandoffsPerSubject()).isEqualTo(10);
   }
 
-  /**
-   * The per-IP budget defaults to four times the per-subject one, so a household or office sharing
-   * one public address is not throttled at the budget of a single member (REQ-INGEST-005).
-   */
+  /** The per-IP budget defaults to 120 a minute (REQ-INGEST-005). */
   @Test
-  void rateLimitDefaultsGiveTheIpBucketItsOwnLooserBudget() {
+  void rateLimitDefaultsMatchTheDocumentedValues() {
     RateLimitProperties properties = TestProperties.rateLimit();
 
     assertThat(properties.enabled()).isTrue();
-    assertThat(properties.capacity()).isEqualTo(30);
-    assertThat(properties.refillTokens()).isEqualTo(30);
     assertThat(properties.refillPeriod()).isEqualTo(Duration.ofMinutes(1));
     assertThat(properties.ipCapacity()).isEqualTo(120);
     assertThat(properties.ipRefillTokens()).isEqualTo(120);
@@ -79,30 +73,6 @@ class IngestPropertiesTest {
 
     assertThat(properties.ipCapacity()).isEqualTo(300);
     assertThat(properties.ipRefillTokens()).isEqualTo(240);
-    assertThat(properties.capacity()).as("the subject budget is untouched").isEqualTo(30);
-  }
-
-  /** Every client-identity gate is inert by default; nothing ships pre-enabled (REQ-INGEST-011). */
-  @Test
-  void clientIdentityDefaultsAreInert() {
-    ClientIdentityProperties properties = TestProperties.clientIdentity();
-
-    assertThat(properties.allowedClientIds()).isEmpty();
-    assertThat(properties.requiredScope()).isEmpty();
-    assertThat(properties.allowedTools()).isEmpty();
-    assertThat(properties.auditOnly()).isFalse();
-  }
-
-  /** A comma-separated environment value binds to the allowlist exactly as it did before. */
-  @Test
-  void clientIdentityListsBindFromACommaSeparatedValue() {
-    ClientIdentityProperties properties =
-        TestProperties.clientIdentity(
-            "allowed-client-ids", "basetool-sc-extractor,other-client", "audit-only", "true");
-
-    assertThat(properties.allowedClientIds())
-        .containsExactly("basetool-sc-extractor", "other-client");
-    assertThat(properties.auditOnly()).isTrue();
   }
 
   /** The service account is off by default, and its secret never appears in the string form. */

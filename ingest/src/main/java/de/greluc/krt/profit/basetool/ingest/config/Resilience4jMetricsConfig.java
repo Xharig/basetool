@@ -31,8 +31,8 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Binds the gateway's Resilience4j circuit-breaker and bulkhead meters, which Resilience4j's own
  * auto-configuration does not register on Spring Boot 4, so {@code CircuitBreakerOpen} and the
- * exchange relay's capacity panels see the extractor's and the exchange's breakers and the
- * large-change-set bulkhead (REQ-OBS-005, REQ-XCH-023).
+ * exchange relay's capacity panels see the exchange's breaker and the large-change-set bulkhead
+ * (REQ-OBS-005, REQ-XCH-023).
  */
 @Configuration(proxyBeanMethods = false)
 public class Resilience4jMetricsConfig {

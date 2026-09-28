@@ -56,7 +56,7 @@ tests:
               state: open
             exp_annotations:
               summary: "Circuit breaker OPEN (basetool-ingest/exchange)"
-              description: "Resilience4j circuit breaker exchange in basetool-ingest is open — a downstream dependency is failing. In basetool-ingest, backend is the extractor's relay and exchange the exchange relay's; each opens on its own."
+              description: "Resilience4j circuit breaker exchange in basetool-ingest is open — a downstream dependency is failing. In basetool-ingest, exchange is the exchange relay's."
 
   - name: silent - the large-change-set bulkhead has four slots by design
     interval: 1m

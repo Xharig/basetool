@@ -43,7 +43,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Rejects ingest requests whose body exceeds the configured cap with 413 (REQ-INGEST-005).
+ * Rejects exchange requests whose body exceeds the configured cap with 413 (REQ-INGEST-005).
  *
  * <p>A declared {@code Content-Length} is checked up front; a chunked body is counted while read
  * and rejected once it crosses the cap, otherwise re-served to the controller from a bounded
@@ -152,10 +152,10 @@ public class PayloadSizeLimitFilter extends OncePerRequestFilter {
    * IngestPathScope}.
    *
    * @param request the current request
-   * @return {@code true} for any path that is under neither {@code /v1} nor {@code /exchange}
+   * @return {@code true} for any path outside {@code /exchange}
    */
   @Override
   protected boolean shouldNotFilter(@NotNull HttpServletRequest request) {
-    return !IngestPathScope.isProtectedRequest(request);
+    return !IngestPathScope.isExchangeRequest(request);
   }
 }

@@ -52,7 +52,7 @@ import org.springframework.web.client.RestClientException;
  * Integration tests for the profile-gated TLS trust of the gateway's outbound {@code RestClient}s
  * (ADR-0204) against a real HTTPS server with a certificate issued for {@code backend}: the backend
  * relay accepts a pinned but misnamed certificate and refuses an unpinned one, while the Keycloak
- * client also verifies the hostname; and for the exchange relay's longer read timeout.
+ * client also verifies the hostname; and for the exchange relay's read timeout.
  */
 class RestClientConfigTest {
 
@@ -124,7 +124,7 @@ class RestClientConfigTest {
                   httpsUrl(backend),
                   new String[] {"prod"},
                   TestSslBundles.withTrustStore("backend-trust", trustStoreWith(BACKEND_CERT)))
-              .backendRestClient();
+              .exchangeRestClient();
 
       assertThat(client.get().uri("/api/v1/ping").retrieve().body(String.class)).isEqualTo("{}");
     }
@@ -139,7 +139,7 @@ class RestClientConfigTest {
                   new String[] {"prod"},
                   TestSslBundles.withTrustStore("backend-trust", trustStoreWith(BACKEND_CERT)),
                   true)
-              .backendRestClient();
+              .exchangeRestClient();
 
       assertThatThrownBy(() -> client.get().uri("/api/v1/ping").retrieve().body(String.class))
           .isInstanceOf(ResourceAccessException.class);
@@ -155,7 +155,7 @@ class RestClientConfigTest {
                   new String[] {"prod"},
                   TestSslBundles.withTrustStore("backend-trust", trustStoreWith(LOCALHOST_CERT)),
                   true)
-              .backendRestClient();
+              .exchangeRestClient();
 
       assertThat(client.get().uri("/api/v1/ping").retrieve().body(String.class)).isEqualTo("{}");
     }
@@ -166,7 +166,7 @@ class RestClientConfigTest {
     try (MockWebServer backend = httpsServer(BACKEND_CERT)) {
       RestClient client =
           config(httpsUrl(backend), new String[] {"dev"}, new DefaultSslBundleRegistry(), true)
-              .backendRestClient();
+              .exchangeRestClient();
 
       assertThat(client.get().uri("/api/v1/ping").retrieve().body(String.class)).isEqualTo("{}");
     }
@@ -182,7 +182,7 @@ class RestClientConfigTest {
                   httpsUrl(backend),
                   new String[] {"prod"},
                   TestSslBundles.withTrustStore("backend-trust", trustStoreWith(other)))
-              .backendRestClient();
+              .exchangeRestClient();
 
       assertThatThrownBy(() -> client.get().uri("/api/v1/ping").retrieve().body(String.class))
           .isInstanceOf(ResourceAccessException.class);
@@ -194,7 +194,7 @@ class RestClientConfigTest {
     try (MockWebServer backend = httpsServer(LOCALHOST_CERT)) {
       RestClient client =
           config(httpsUrl(backend), new String[] {"prod"}, new DefaultSslBundleRegistry())
-              .backendRestClient();
+              .exchangeRestClient();
 
       assertThatThrownBy(() -> client.get().uri("/api/v1/ping").retrieve().body(String.class))
           .isInstanceOf(ResourceAccessException.class);
@@ -207,7 +207,7 @@ class RestClientConfigTest {
       try (MockWebServer backend = httpsServer(BACKEND_CERT)) {
         RestClient client =
             config(httpsUrl(backend), new String[] {profile}, new DefaultSslBundleRegistry())
-                .backendRestClient();
+                .exchangeRestClient();
 
         assertThat(client.get().uri("/api/v1/ping").retrieve().body(String.class))
             .as("profile %s", profile)
@@ -245,32 +245,12 @@ class RestClientConfigTest {
   }
 
   @Test
-  void theExchangeRelayWaitsPastTheExtractorRelaysReadTimeout() throws Exception {
-    try (MockWebServer backend = new MockWebServer()) {
-      backend.enqueue(
-          new MockResponse()
-              .setBody("{}")
-              .setHeadersDelay(
-                  RestClientConfig.BACKEND_READ_TIMEOUT.toSeconds() + 1, TimeUnit.SECONDS));
-      backend.start();
-      RestClient client =
-          config(backend.url("/").toString(), new String[] {"test"}, new DefaultSslBundleRegistry())
-              .exchangeRestClient();
-
-      assertThat(client.get().uri("/api/v1/exchange/me/stock").retrieve().body(String.class))
-          .isEqualTo("{}");
-    }
-  }
-
-  @Test
   void theExchangeReadTimeoutEndsWhileTheWritesIdempotencyClaimIsHeld() {
     ExchangeStoreProperties store =
         new Binder(new MapConfigurationPropertySource(Map.of()))
             .bindOrCreate("app.exchange.store", Bindable.of(ExchangeStoreProperties.class));
 
-    assertThat(RestClientConfig.EXCHANGE_READ_TIMEOUT)
-        .isGreaterThan(RestClientConfig.BACKEND_READ_TIMEOUT)
-        .isLessThan(store.lockTtl());
+    assertThat(RestClientConfig.EXCHANGE_READ_TIMEOUT).isLessThan(store.lockTtl());
   }
 
   @Test
@@ -323,7 +303,7 @@ class RestClientConfigTest {
       backend.start();
       RestClient client =
           config(backend.url("/").toString(), new String[] {"test"}, new DefaultSslBundleRegistry())
-              .backendRestClient();
+              .exchangeRestClient();
 
       assertThatThrownBy(() -> client.get().uri("/api/v1/big").retrieve().body(String.class))
           .isInstanceOf(RestClientException.class);
@@ -337,7 +317,7 @@ class RestClientConfigTest {
       backend.start();
       RestClient client =
           config(backend.url("/").toString(), new String[] {"test"}, new DefaultSslBundleRegistry())
-              .backendRestClient();
+              .exchangeRestClient();
 
       String body = client.get().uri("/api/v1/ping").retrieve().body(String.class);
 

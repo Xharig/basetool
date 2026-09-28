@@ -874,7 +874,7 @@
       },
       "type": "timeseries",
       "title": "Ingest handoff rate by kind",
-      "description": "Accepted+staged ingest handoffs/s per HandoffKind (basetool_ingest_handoff_total).",
+      "description": "Staged handoffs/s per HandoffKind (basetool_ingest_handoff_total): an exchange client's draft (REFINERY, BLUEPRINT) or a change set the mass-change guard held back (MASS_CHANGE).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -919,8 +919,8 @@
         "y": 48
       },
       "type": "timeseries",
-      "title": "Ingest handoff errors by reason",
-      "description": "Ingest relay failures/s by reason (basetool_ingest_handoff_errors_total). Backs IngestHandoffErrors / IngestBackendUnavailable.",
+      "title": "Ingest gateway errors by reason",
+      "description": "Ingest gateway failures/s by reason (basetool_ingest_handoff_errors_total): staging_unavailable = Redis refused a staged draft or change set, internal = an unexpected 500. Relay failures to the backend are counted as basetool_ingest_exchange_relay_total{outcome=\"failed\"}. Backs IngestHandoffErrors / IngestStagingUnavailable.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -978,8 +978,8 @@
         "y": 48
       },
       "type": "stat",
-      "title": "Ingest handoff error ratio (10m)",
-      "description": "Share of ingest handoff attempts that failed to relay over 10m.",
+      "title": "Ingest gateway error ratio (10m)",
+      "description": "Share of staging attempts and unexpected failures against staged handoffs over 10m.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2417,104 +2417,6 @@
       ]
     },
     {
-      "id": 45,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 152
-      },
-      "type": "timeseries",
-      "title": "Ingest calls/hour by client",
-      "description": "Which client software is driving the ingest gateway (REQ-INGEST-011). The label is bounded by construction: an allowlist entry, or the literal 'other'. Traffic on 'other' means a caller whose azp is not on the allowlist - expected only while the gate runs in audit-only.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum by (client_id) (rate(basetool_ingest_client_total[1h])) * 3600",
-          "refId": "A",
-          "legendFormat": "{{client_id}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ]
-    },
-    {
-      "id": 46,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 152
-      },
-      "type": "timeseries",
-      "title": "Ingest client rejections/hour by reason",
-      "description": "Client-identity gate rejections (REQ-INGEST-011), also counted while audit-only is set. unknown_client / bad_provenance = an unapproved tool is calling the restricted interface. exchange_client = an exchange client is calling the legacy /v1 routes. missing_azp / missing_scope = a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Backs the IngestUnknownClient alert.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum by (reason) (rate(basetool_ingest_client_rejected_total[1h])) * 3600",
-          "refId": "A",
-          "legendFormat": "{{reason}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ]
-    },
-    {
       "id": 47,
       "gridPos": {
         "h": 8,
@@ -2682,7 +2584,7 @@
       },
       "type": "timeseries",
       "title": "Acting-member refusals/hour by reason",
-      "description": "Every refusal of an X-Ingest-On-Behalf-Of header, split by why (ADR-0129). The response body is byte-identical for all five reasons on purpose, so that a caller cannot use this endpoint to find out which subjects exist - which makes this panel the only place they are distinguishable. Read the reasons differently: member_not_live is usually an offboarded member whose extractor is still installed, but VARYING subjects mean somebody is enumerating user ids; not_a_gateway means either the allowlist does not match the gateway's client id (uploads are failing too) or somebody is probing for an impersonation primitive; no_authenticated_caller should be structurally impossible and indicates the security filter chain was reordered.",
+      "description": "Every refusal of an X-Ingest-On-Behalf-Of header, split by why (ADR-0129). The response body is byte-identical for all five reasons on purpose, so that a caller cannot use this endpoint to find out which subjects exist - which makes this panel the only place they are distinguishable. Read the reasons differently: member_not_live is usually an offboarded member whose connected application is still installed, but VARYING subjects mean somebody is enumerating user ids; not_a_gateway means either the allowlist does not match the gateway's client id (exchange relays are failing too) or somebody is probing for an impersonation primitive; no_authenticated_caller should be structurally impossible and indicates the security filter chain was reordered.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2731,7 +2633,7 @@
       },
       "type": "timeseries",
       "title": "DPoP replay-cache refusals/hour by path scope and reason",
-      "description": "DPoP proofs the gateway's jti replay cache refused, per path scope (exchange / legacy) and reason: replayed (the jti was used before), member_cap (the member already holds its app.exchange.limits.dpop-proofs-per-member live proofs) or full (the scope's cache holds dpop-proofs-total and refuses every new proof; IngestDpopReplayCacheFull fires). On the exchange scope a member_cap refusal is answered 429 DPOP_PROOF_LIMIT and counts as dpop_proof_limit on the auth-failure counter, and a full refusal is answered 503 SERVICE_UNAVAILABLE and counts as dpop_store_full; every other refusal counts as invalid_dpop_proof (REQ-XCH-006). The metric carries no client, so the client_id variable does not filter it.",
+      "description": "DPoP proofs the gateway's jti replay cache refused, per path scope (exchange / other) and reason: replayed (the jti was used before), member_cap (the member already holds its app.exchange.limits.dpop-proofs-per-member live proofs) or full (the scope's cache holds dpop-proofs-total and refuses every new proof; IngestDpopReplayCacheFull fires). On the exchange scope a member_cap refusal is answered 429 DPOP_PROOF_LIMIT and counts as dpop_proof_limit on the auth-failure counter, and a full refusal is answered 503 SERVICE_UNAVAILABLE and counts as dpop_store_full; every other refusal counts as invalid_dpop_proof (REQ-XCH-006). The metric carries no client, so the client_id variable does not filter it.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3470,8 +3372,8 @@
         "y": 224
       },
       "type": "stat",
-      "title": "Ingest client gates enforcing",
-      "description": "Which of the ingest gateway's four client gates actually refuse callers (REQ-INGEST-011): 1 = enforcing, 0 = unconfigured or only counting under audit-only. basetool_ingest_gate_enforcing{gate}. azp/scope/tool read 0 while the allowlist runs in audit-only, which is a legitimate rollout stage; audience at 0 means any valid realm token passes the decoder and backs the IngestAudienceGateOff alert. Every gate is switched on by the environment alone, so this panel is the only place the production posture is visible without reading the host.",
+      "title": "Ingest audience gate enforcing",
+      "description": "Whether the ingest gateway's JWT audience check refuses tokens without aud=basetool-ingest (REQ-INGEST-011): 1 = enforcing, 0 = no audience configured, so any valid realm token passes the decoder. basetool_ingest_gate_enforcing{gate=\"audience\"}; backs the IngestAudienceGateOff alert. The gate is switched on by the environment alone, so this panel is the only place the production posture is visible without reading the host.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3835,64 +3737,6 @@
           "expr": "sum by (reason) (increase(basetool_ingest_exchange_refused_total[1h]))",
           "refId": "A",
           "legendFormat": "{{reason}}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ]
-    },
-    {
-      "id": 71,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 256
-      },
-      "type": "timeseries",
-      "title": "Legacy extractor endpoints: switch and 410s/hour",
-      "description": "Client-identity gate rejections (REQ-INGEST-011), also counted while audit-only is set. unknown_client / bad_provenance = an unapproved tool is calling the restricted interface. exchange_client = an exchange client is calling the legacy /v1 routes. missing_azp / missing_scope = a Keycloak mapper or scope assignment regressed and the official extractor may be locked out. Backs the IngestUnknownClient alert.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "expr": "max(basetool_ingest_legacy_endpoints_enabled)",
-          "refId": "A",
-          "legendFormat": "enabled",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "sum(increase(basetool_ingest_legacy_gone_total[1h]))",
-          "refId": "B",
-          "legendFormat": "410 gone",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

@@ -21,6 +21,8 @@ package de.greluc.krt.profit.basetool.ingest.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
@@ -35,7 +37,6 @@ import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
@@ -64,12 +65,13 @@ class ExchangeRelayTest {
           BulkheadConfig.custom().maxConcurrentCalls(1).maxWaitDuration(Duration.ZERO).build());
   private MockRestServiceServer backend;
   private ExchangeRelay relay;
+  private ServiceAccountTokenProvider tokens;
 
   @BeforeEach
   void setUp() {
     RestClient.Builder builder = RestClient.builder().baseUrl("https://backend");
     backend = MockRestServiceServer.bindTo(builder).build();
-    ServiceAccountTokenProvider tokens = mock(ServiceAccountTokenProvider.class);
+    tokens = mock(ServiceAccountTokenProvider.class);
     when(tokens.currentToken()).thenReturn("gateway-token");
     relay = relay(builder.build(), tokens, CircuitBreakerRegistry.ofDefaults(), bulkheads);
     relay.register();
@@ -232,6 +234,48 @@ class ExchangeRelayTest {
     }
   }
 
+  /**
+   * A {@code 401} or {@code 403} without a code the client may see refuses the gateway's own token,
+   * so the relay drops it and the next call mints a fresh one.
+   */
+  @Test
+  void aRefusalOfTheGatewaysIdentityDropsTheCachedToken() {
+    for (HttpStatus status : new HttpStatus[] {HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN}) {
+      backend
+          .expect(requestTo("https://backend/api/v1/exchange/catalog/locations"))
+          .andRespond(
+              withStatus(status)
+                  .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                  .body("{\"code\":\"UNAUTHENTICATED\"}"));
+    }
+
+    ExchangeRelay.Result unauthorized =
+        relay.forward(HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
+    ExchangeRelay.Result forbidden =
+        relay.forward(HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
+
+    backend.verify();
+    assertThat(unauthorized.code()).isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(forbidden.code()).isEqualTo("BACKEND_RELAY_FAILED");
+    verify(tokens, org.mockito.Mockito.times(2)).invalidate();
+  }
+
+  /**
+   * A refusal the client may see concerns the member or the client, not the gateway, so the token
+   * stays cached.
+   */
+  @Test
+  void aRefusalOfTheMemberOrTheClientKeepsTheToken() {
+    assertThat(interpret(403, "{\"code\":\"TERMS_NOT_ACCEPTED\"}").code())
+        .isEqualTo("TERMS_NOT_ACCEPTED");
+    assertThat(interpret(403, "{\"code\":\"ACCESS_DENIED\"}").code()).isEqualTo("NOT_PERMITTED");
+    assertThat(interpret(401, "{\"code\":\"INSTALLATION_REVOKED\"}").code())
+        .isEqualTo("INSTALLATION_REVOKED");
+    assertThat(interpret(500, "{}").code()).isEqualTo("BACKEND_RELAY_FAILED");
+
+    verify(tokens, never()).invalidate();
+  }
+
   @Test
   void aBackendErrorStatusIsInterpretedNotThrown() {
     backend
@@ -304,28 +348,6 @@ class ExchangeRelayTest {
 
     assertThat(result.code()).isEqualTo("BACKEND_RELAY_FAILED");
     assertThat(count("failed")).isEqualTo(1.0d);
-  }
-
-  @Test
-  void anOpenExtractorBreakerDoesNotStopTheExchangeRelay() {
-    CircuitBreakerRegistry breakers = CircuitBreakerRegistry.ofDefaults();
-    breakers.circuitBreaker("backend").transitionToForcedOpenState();
-    RestClient.Builder builder = RestClient.builder().baseUrl("https://backend");
-    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    server
-        .expect(requestTo("https://backend/api/v1/exchange/catalog/locations"))
-        .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
-    ServiceAccountTokenProvider tokens = mock(ServiceAccountTokenProvider.class);
-    when(tokens.currentToken()).thenReturn("gateway-token");
-
-    ExchangeRelay.Result result =
-        relay(builder.build(), tokens, breakers, bulkheads)
-            .forward(HttpMethod.GET, "/api/v1/exchange/catalog/locations", null, context(), null);
-
-    server.verify();
-    assertThat(result.isOk()).isTrue();
-    assertThat(breakers.circuitBreaker(ExchangeRelay.BREAKER).getState())
-        .isEqualTo(CircuitBreaker.State.CLOSED);
   }
 
   @Test

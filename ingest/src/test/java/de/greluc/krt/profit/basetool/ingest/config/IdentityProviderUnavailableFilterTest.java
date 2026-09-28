@@ -53,7 +53,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 class IdentityProviderUnavailableFilterTest {
 
-  private static final String URI = "/v1/refinery-extract";
+  private static final String URI = "/unrouted";
 
   private IdentityProviderUnavailableFilter filter;
   private SimpleMeterRegistry meterRegistry;

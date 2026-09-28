@@ -21,7 +21,6 @@ package de.greluc.krt.profit.basetool.ingest.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.greluc.krt.profit.basetool.ingest.service.BackendImportClient;
 import de.greluc.krt.profit.basetool.ingest.service.HandoffStagingService;
 import java.io.IOException;
 import java.net.URI;
@@ -45,7 +44,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class ManagementPortIsolationTest {
 
   @MockitoBean private JwtDecoder jwtDecoder;
-  @MockitoBean private BackendImportClient backendImportClient;
   @MockitoBean private HandoffStagingService handoffStagingService;
 
   /** The public application connector's port (where NPM would re-encrypt in prod). */

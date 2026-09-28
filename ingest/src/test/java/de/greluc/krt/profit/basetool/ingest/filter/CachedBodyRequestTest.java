@@ -56,7 +56,7 @@ class CachedBodyRequestTest {
             TestLoggingProperties.defaults());
 
     MockHttpServletRequest request =
-        new MockHttpServletRequest("POST", "/v1/refinery-extract") {
+        new MockHttpServletRequest("POST", "/exchange/v1/me/drafts/refinery-orders") {
           @Override
           public long getContentLengthLong() {
             return -1;

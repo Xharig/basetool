@@ -33,7 +33,6 @@ dependencies {
   implementation(libs.json.schema.validator) {
     exclude(group = "tools.jackson.dataformat", module = "jackson-dataformat-yaml")
   }
-  implementation(libs.springdoc.openapi.starter.webmvc.api)
   implementation(libs.logstash.logback.encoder)
   implementation(project(":logging-support"))
 
