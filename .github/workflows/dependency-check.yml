@@ -128,7 +128,7 @@ jobs:
           if [ "$HAS_SARIF" = "true" ]; then
             what="The scan **finished** and failed the \`failBuildOnCVSS = 7.0\` gate: at least one dependency carries a CVE at CVSS >= 7. The SARIF is in the Security tab (category \`owasp-dependency-check\`) and the HTML report is in the run's artifact. Fix with an upgrade, or a documented, dated suppression in \`config/owasp/dependency-check-suppressions.xml\`."
           else
-            what="The scan produced **no verdict** (no SARIF): it failed or ran out of time before finishing. Check the NVD step's log. A cold NVD rebuild takes 31-38 minutes; if the log stops after \"Checking for updates and analyzing dependencies\", the NVD cache was missing."
+            what="The scan produced **no verdict** (no SARIF): it failed or ran out of time before finishing. Check the NVD step's log. A cold rebuild from the NVD JSON 2.0 data feeds takes about 7 minutes; if the log stops after \"Checking for updates and analyzing dependencies\", a feed download from nvd.nist.gov stalled or failed."
           fi
           body="$(printf '%s\n\n%s\n\nRun: %s\n' "$(date -u +%Y-%m-%d)" "$what" "$RUN_URL")"
           number="$(gh issue list --repo "$REPO" --state open --search "\"${title}\" in:title" \
