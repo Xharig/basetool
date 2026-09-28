@@ -1670,8 +1670,17 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   panel 74 of the operations dashboard).
   `basetool_ingest_exchange_idempotent_replays_total` counts writes answered from the idempotency
   cache; `basetool_ingest_exchange_budget_used_ratio` is the total byte budget's use at the last
-  measurement, and `ExchangeBudgetHigh` (warning, 10 m) fires above 0.8 (REQ-XCH-020, REQ-XCH-023). A nonce challenge counts as
-  `dpop_invalid`, since the client sees that code. `ExchangeRegistryUnreadableAtGateway` (warning,
+  measurement, and `ExchangeBudgetHigh` (warning, 10 m) fires above 0.8 (REQ-XCH-020, REQ-XCH-023).
+  `basetool_ingest_exchange_client_budget_used_ratio{client_id}` is one client's use of its own
+  budget at its last write, labelled with the admitted request's registry client id, so the
+  registry bounds it; `ExchangeClientBudgetHigh` (warning, 10 m) fires above 0.8 of it, which the
+  total's alert cannot while one client's 16 MiB are a quarter of the 64 MiB
+  (`exchange_client_budget_alert_test.yml`; panel beside the total's on the Exchange dashboard).
+  The normal DPoP nonce challenge (`use_dpop_nonce`) is not counted as a refusal: it is the
+  protocol's first round trip and stays counted on the auth-failure counter; a reason of its own
+  would break this counter's rule that the reason is the answer's code (load test of 2026-09-28,
+  finding 6). *Changed 2026-09-28: it was counted as `dpop_invalid`, a few hundred refusals per
+  five minutes at production scale.* `ExchangeRegistryUnreadableAtGateway` (warning,
   5 m) fires while the gateway fails closed on `registry_unavailable`.
 - `basetool_ingest_auth_failures_total{reason,path_scope}` gains `path_scope` (`legacy`, `exchange`,
   `other`) so a third-party client's failures stay apart from the extractor's, and four reasons:

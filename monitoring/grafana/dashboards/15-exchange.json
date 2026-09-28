@@ -155,7 +155,7 @@
       },
       "type": "timeseries",
       "title": "Gateway refusals/hour by reason",
-      "description": "The gateway's refusals of the selected clients by problem code in snake case (dpop_invalid, client_suspended, scope_missing, rate_limited, quota_exceeded, registry_unavailable, ...). REQ-XCH-028.",
+      "description": "The gateway's refusals of the selected clients by problem code in snake case (dpop_invalid, client_suspended, scope_missing, rate_limited, quota_exceeded, registry_unavailable, ...). REQ-XCH-028. The normal DPoP nonce round trip is no refusal and is not counted here; it shows as use_dpop_nonce on the ingest auth failures.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -647,7 +647,7 @@
       "id": 15,
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 6,
         "x": 0,
         "y": 52
       },
@@ -696,8 +696,8 @@
       "id": 16,
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
+        "w": 6,
+        "x": 6,
         "y": 52
       },
       "type": "timeseries",
@@ -745,8 +745,8 @@
       "id": 17,
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
+        "w": 6,
+        "x": 12,
         "y": 52
       },
       "type": "timeseries",
@@ -785,6 +785,57 @@
           "expr": "max(basetool_ingest_exchange_budget_used_ratio)",
           "refId": "A",
           "legendFormat": "used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 52
+      },
+      "type": "timeseries",
+      "title": "Exchange Redis byte budget in use per client",
+      "description": "The share of each selected client's 16 MiB Redis byte budget its cached answers, quota counters and staged drafts hold (REQ-XCH-023). ExchangeClientBudgetHigh fires above 0.8; when it is full every write of that client's members is refused EXCHANGE_BUDGET_EXHAUSTED, while the total's gauge beside it can still read a quarter. Last measured on the client's latest write.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max by (client_id) (basetool_ingest_exchange_client_budget_used_ratio{client_id=~\"$client_id\"})",
+          "refId": "A",
+          "legendFormat": "{{client_id}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
