@@ -13,8 +13,9 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 - **New code `RELAY_BUSY`, and large change sets are relayed at most four at a time.** A change set
   of more than 100 ops that arrives while the gateway already relays four such sets, over all
   clients, is answered `503 RELAY_BUSY` with `Retry-After: 10` and not relayed; retry it under the
-  same key; the refused set costs no write of the daily quota. Sets of at most 100 ops are unaffected. The gateway also waits up to 30 s for the
-  Basetool instead of 15 s, so a slow large set is answered rather than failed with
+  same key; the refused set costs no write of the daily quota. Sets of at most 100 ops are
+  unaffected. The gateway also waits up to 30 s for the Basetool instead of 15 s, so a slow large
+  set is answered rather than failed with
   `502 BACKEND_RELAY_FAILED` after it was written ([errors](errors.md),
   [sync guide](sync-guide.md#batches)).
 - **A connection without `offline_access` ends after 90 days too.** Its online session now ends
