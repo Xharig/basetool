@@ -22,10 +22,14 @@ sub-issue that implements it.
 > [!note] Each requirement's own status line is authoritative
 > Each requirement carries its work package; its status line says what is built and what remains,
 > and moves in the PR that lands the change, together with its **Enforced by** test. What remains
-> is chiefly the sandbox (WP 2.3, #2099), the clients' migrations (WP 5.1, #2088; WP 5.2, #2089), the app (#2097) and
-> the go-live (WP 6, #2092). Requirements of other specs that this one changes state it in their
-> own text; a callout there marks only what is still planned. *Corrected 2026-09-27: this note said
-> nothing was built yet, long after most of the requirements had landed.*
+> is chiefly the clients' migrations (WP 5.1, #2088; WP 5.2, #2089), the app (#2097) and the go-live
+> (WP 6, #2092). Requirements of other specs that this one changes state it in their own text; a
+> callout there marks only what is still planned. *Corrected 2026-09-27: this note said nothing was
+> built yet, long after most of the requirements had landed.* *Corrected 2026-09-28: it still named
+> the sandbox (WP 2.3, #2099) as open after #2099 had closed; the end-to-end runs the requirements
+> had deferred to it — an installation revoke, a reconnect, a departure, the account check, the
+> corpus round trip, a confirmed mass change and an admin suspension — are now built on the E2E
+> stack (`ExchangeConnectionsE2eTest`, `ExchangeSyncE2eTest`, `ExchangeDepartureE2eTest`).*
 
 ## Requirements
 
@@ -192,7 +196,9 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
 - [x] The admin page *Administration → Verbundene Anwendungen* (`/admin/exchange-clients`)
   registers, edits, suspends and activates clients and flips the switch in place; suspending, either
   direction of the switch and granting a client more capabilities each ask for confirmation first.
-  *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`.*
+  *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`; that the gateway
+  follows — `403 CLIENT_SUSPENDED` after a suspension on the page, answered again after the
+  reactivation — `ExchangeConnectionsE2eTest.anAdminSuspensionAndReactivationReachTheGateway`.*
 - [x] Each client shows its connected members and last activity, counted over live installations
   only (`GET /api/v1/admin/exchange-clients/usage`: not revoked, and not seen last before the
   member disconnected the client); the error rate per client is linked in Grafana
@@ -200,7 +206,8 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   `AdminExchangeClientsPageControllerMvcTest`.*
 
 **Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
-`AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `RedisAclBackendIntegrationTest`,
+`AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `ExchangeConnectionsE2eTest`,
+`RedisAclBackendIntegrationTest`,
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
 **Code:** `ExchangeRegistryService`, `ExchangeRegistryMirrorSync`, `RedisExchangeRegistryMirror`,
 `ExchangeRegistryReconcileTask`, `AdminExchangeRegistryController` · **Status:** registry, admin
@@ -466,12 +473,15 @@ the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user alrea
 
 **Acceptance**
 
-- [ ] A revoked installation is refused after a token refresh; another installation of the same
+- [x] A revoked installation is refused after a token refresh; another installation of the same
   client keeps working. *Backend: `ExchangeInstallationControllerTest`,
   `ExchangeRevocationMirrorIntegrationTest`. Gateway: it reads `exchange:deny:<jkt>` on every
   request, bypassing its cache, and refuses a listed key `401 INSTALLATION_REVOKED` whatever the
-  token's `iat` (`ExchangeGateTest`). The end-to-end run follows with the sandbox (WP 2.3).*
-- [ ] A revoked client is refused, and a fresh connection right after works. *The gateway half is
+  token's `iat` (`ExchangeGateTest`). End to end:
+  `ExchangeConnectionsE2eTest.revokingOneInstallationLeavesTheOtherWorking` — the member disconnects
+  one of two installations on „Verbundene Anwendungen" in place, the gateway refuses that key on
+  the next request and again after a token refresh, and the other installation keeps working.*
+- [x] A revoked client is refused, and a fresh connection right after works. *The gateway half is
   in: it reads `exchange:revoked:<client>:<member>` per request and refuses `401 CLIENT_REVOKED` an
   offline token issued at or before that second and any other token signed in at or before it or
   without `auth_time` — so a token refreshed after the disconnect from an older sign-in is refused —
@@ -482,8 +492,12 @@ the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user alrea
   clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).
   The backend re-checks it from the relayed connection time and refuses an unreadable mirror
   (backend `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the compared time in the gateway's
-  `ExchangeGateTest`, the relay header in `ExchangeRelayTest`).*
-- [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
+  `ExchangeGateTest`, the relay header in `ExchangeRelayTest`). End to end:
+  `ExchangeConnectionsE2eTest.aNewConnectionAfterAWholeClientDisconnectWorksAtOnce` — after the
+  member disconnects the client on „Verbundene Anwendungen", the gateway refuses it `401
+  CLIENT_REVOKED` on the next request, and the first call of a new device login with
+  `offline_access` is answered.*
+- [x] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
   sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
   every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
   commit, only while the registry holds a client — removes the member's consent for each client and
@@ -493,10 +507,14 @@ the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user alrea
   (`ExchangeDepartureIncomplete`) instead of failing the sync (`ExchangeDepartureServiceTest`,
   `ExchangeDepartureIntegrationTest`, `UserReconciliationServiceTest`).
   The gateway refuses the member through the per-client revocations those steps write
-  (`ExchangeGateTest`); the end-to-end run follows with the sandbox (WP 2.3).*
+  (`ExchangeGateTest`). End to end: `ExchangeDepartureE2eTest` — the member loses every realm role
+  in Keycloak, their next sign-in reconciles the departure through the login sync, and the
+  client's next request is refused `401 CLIENT_REVOKED`. The roster sync's trigger is covered by
+  `UserReconciliationServiceTest`; the E2E run leaves it alone because it reconciles every account
+  of the shared stack.*
 
-**Status:** built — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087); the end-to-end run
-follows with the sandbox (WP 2.3, #2099)
+**Status:** built — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087); end to end on the E2E
+stack (`ExchangeConnectionsE2eTest`, `ExchangeDepartureE2eTest`)
 
 ### REQ-XCH-009 — The acting member holds a reduced authentication and sees own data only
 
@@ -722,8 +740,13 @@ resolver (REQ-XCH-012) answers a blueprint with the same `bt` and accepts it bac
 
 **Acceptance**
 
-- [ ] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
+- [x] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
   in the feed of another installation.
+  *`ExchangeSyncE2eTest.theCorpusReachesMeineBlueprintsAndTheFeedOfAnotherInstallation` on the E2E
+  stack: every name of `game-log-corpus-v1.json` is resolved in one call against the twelve
+  products `ExchangeResolveCorpusTest` uses (`exchange-corpus-e2e-seed.sql`), the resolved ones are
+  added through one installation, and each appears in the feed of a second installation, read on
+  from its snapshot cursor, and on „Meine Blueprints" with the client as its source.*
 - [x] The feed marks default-granted blueprints and follows a change of the default set.
   *`ExchangeBlueprintControllerTest`.*
 
@@ -737,7 +760,7 @@ only. `basetool_exchange_writes_total{resource,outcome}` counts the ops.
 
 **Status:** read and write sides built in the backend, and the gateway's read route (`GET
 /exchange/v1/me/blueprints`) and write route (`POST …/changes`) — WP 4.1 (#2084); the corpus round
-trip follows with the sandbox (WP 2.3)
+trip built on the E2E stack (`ExchangeSyncE2eTest`)
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -1357,7 +1380,10 @@ writes the E2E realm (`frontend/src/e2e/resources/realm-export.e2e.json`) from t
 E2E accounts, production's realm settings and login theme, and the third-party client
 `e2e-exchange-client`; `E2eStackExtension` starts `ingest-dev` beside the other six services, and
 `ExchangeRoundTripE2eTest` runs the exchange round trip of REQ-XCH-032 in every browser × device
-cell of `e2e.yml`.
+cell of `e2e.yml`. `ExchangeConnectionsE2eTest` (installation revoke, reconnect, account check,
+admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass change) and
+`ExchangeDepartureE2eTest` run the same way, each as its own account (`test-exchange-2`,
+`test-exchange-3`, `test-exchange-departed`), with the steps they share in `ExchangeE2eSupport`.
 
 - [x] Profile, provisioned realm, seed, one command and the docs page — WP 2.3 part 1.
 - [x] The public sandbox images, their publishing pipeline and secret scan.
@@ -1426,9 +1452,13 @@ not count against the daily quota, but it has its own limit of ten per hour per 
   neither handle in a log line. *`ExchangeAccountCheckControllerTest`.*
 - [x] The gateway relays the route inside its own hourly limit; a value that is no handle is neither
   relayed, echoed nor logged. *`ExchangeControllerTest`, `ExchangeLimitFilterTest`.*
-- [ ] End to end on the sandbox (WP 2.3, #2099).
+- [x] End to end on the E2E stack, which runs the sandbox Keycloak and the gateway (ADR-0225).
+  *`ExchangeConnectionsE2eTest.theAccountCheckAnswersUnknownMatchAndMismatchWithoutTheHandle`:
+  `unknown` before the member stores a handle on the profile, a case-insensitive `match` and a
+  `mismatch` after, each answer carrying `result` only.*
 
-**Status:** backend and gateway relay built — WP 3.4 (#2106); the sandbox run follows with WP 2.3
+**Status:** backend and gateway relay built — WP 3.4 (#2106); end to end on the E2E stack
+(`ExchangeConnectionsE2eTest`)
 
 ### REQ-XCH-032 — „Verbundene Anwendungen" shows and controls every connection
 
@@ -1469,7 +1499,10 @@ audited.
 - [x] Undo a client's changes since a chosen span, with the skipped entries listed.
   *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
 - [x] Confirm or discard a staged mass change. *`ExchangeMassChangeControllerTest`,
-  `ConnectedAppsConfirmControllerMvcTest`.*
+  `ConnectedAppsConfirmControllerMvcTest`; end to end
+  `ExchangeSyncE2eTest.aHeldMassRemovalAppliesOnlyOnceTheMemberConfirmsIt` — a batch emptying five
+  lots is answered `409 MASS_CHANGE_CONFIRMATION_REQUIRED` and writes nothing until the member
+  confirms it on the page its `confirmationUrl` opens.*
 - [x] Recent activity: each client's last ten writes to the member's data, newest first, named by
   blueprint, material or item, or ship type, undone ones marked. *`ConnectedAppsControllerTest`,
   `ConnectedAppsPageControllerMvcTest`.*
@@ -1483,7 +1516,8 @@ Each client in `GET /api/v1/connected-apps` carries `activity`: its last ten jou
 member, newest first, each with the time, resource, action, the entry's name (read in one lookup per
 catalogue) and whether it was undone.
 
-**Status:** built — WP 4.5 (#2087); the end-to-end run with WP 2.3 (#2099)
+**Status:** built — WP 4.5 (#2087); end to end on the E2E stack — WP 2.3 (#2099),
+`ExchangeConnectionsE2eTest`, `ExchangeSyncE2eTest`
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 
