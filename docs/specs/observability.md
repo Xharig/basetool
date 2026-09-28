@@ -1680,7 +1680,11 @@ the boot run carries the last run's values over and re-reads only the reboot fla
   `503 SERVICE_UNAVAILABLE`; neither of the last two is alerted as a failing proof.
   `IngestAuthFailureSpike` and `IngestUnauthenticatedFlood` alert per scope;
   `ExchangeDpopProofsFailing` (warning, 15 m) fires on sustained refused exchange proofs
-  (REQ-XCH-006).
+  (REQ-XCH-006). `ExchangeDpopProofLimitSustained` (warning) fires when the `dpop_proof_limit`
+  rate over 10 minutes stays above 0.05/s (3 a minute) for 15 minutes: a single burst stays in the
+  10-minute window for at most 10 minutes, so it cannot hold the condition for 15, while a client
+  that ignores `Retry-After` or keeps a member at its cap can (owner decision 2026-09-28;
+  `exchange_dpop_proof_limit_alert_test.yml`).
 - `basetool_ingest_dpop_replay_refused_total{path_scope,reason}` counter — DPoP proofs the gateway's
   `jti` replay cache refused, per path scope (`exchange` / `legacy`) and reason: `replayed` (the
   `jti` was used before), `member_cap` (the member already holds its live-proof cap) or `full` (the

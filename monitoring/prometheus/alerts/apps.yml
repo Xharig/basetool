@@ -65,6 +65,15 @@ groups:
           summary: "The ingest DPoP replay cache is full"
           description: "The DPoP jti replay cache of {{ $labels.path_scope }} holds its total cap of live proofs and refuses every new proof there - on exchange with 503 SERVICE_UNAVAILABLE and Retry-After (which IdentityProviderUnavailable also counts), on legacy with 401 (REQ-XCH-006). Each member is capped on its own, so this takes many members at their cap: look at basetool_ingest_dpop_replay_refused_total{reason=\"member_cap\"} and the per-IP rate limiter, and raise app.exchange.limits.dpop-proofs-total only for real load."
 
+      - alert: ExchangeDpopProofLimitSustained
+        expr: sum(rate(basetool_ingest_auth_failures_total{application="basetool-ingest",path_scope="exchange",reason="dpop_proof_limit"}[10m])) > 0.05
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Exchange members keep hitting the DPoP proof cap"
+          description: "For 15 minutes the gateway has refused more than 3 exchange proofs a minute with 429 DPOP_PROOF_LIMIT: a member's clients together keep 600 live DPoP proofs, about 20 requests a second, far above the 120 a minute one client may send (REQ-XCH-006). A single burst cannot fire this; a client that ignores Retry-After, many installations of one member, or a stolen token being hammered can. Runbook: the refusal is counted before the client is known, so find the client by sum by (client_id) (rate(basetool_ingest_exchange_refused_total{reason=\"rate_limited\"}[10m])) - a member this busy is almost always rate limited too - and by the Exchange dashboard's per-client request panels; contact the client's author, and suspend the client under Administration - Verbundene Anwendungen if it does not stop (REQ-XCH-028). A suspected stolen token: suspend first, then ask the member to disconnect the installation. Raise app.exchange.limits.dpop-proofs-per-member only for a client whose registry requestsPerMinute is far above the default."
+
       - alert: JvmHeapHigh
         expr: |
           sum by (application) (jvm_memory_used_bytes{area="heap"})

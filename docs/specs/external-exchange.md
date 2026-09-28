@@ -353,7 +353,9 @@ keep that answer for both caps. Refusals are counted as
 and shown on the Exchange and operations dashboards; `IngestDpopReplayCacheFull` fires on any
 `full`. The auth-failure counter records the exchange cap as `dpop_proof_limit` and the full store
 as `dpop_store_full`, apart from `invalid_dpop_proof`, so `ExchangeDpopProofsFailing` fires on
-neither.
+neither. Sustained cap refusals raise `ExchangeDpopProofLimitSustained` (warning, owner decision
+2026-09-28): more than 3 a minute over 10 minutes, for 15 minutes, which a single burst cannot
+reach.
 
 **Acceptance**
 

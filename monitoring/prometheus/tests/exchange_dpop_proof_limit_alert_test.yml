@@ -1,0 +1,61 @@
+rule_files:
+  - ../alerts/apps.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - members keep hitting the DPoP proof cap
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_auth_failures_total{reason="dpop_proof_limit", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+6x60"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ExchangeDpopProofLimitSustained
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: ExchangeDpopProofLimitSustained
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Exchange members keep hitting the DPoP proof cap"
+              description: "For 15 minutes the gateway has refused more than 3 exchange proofs a minute with 429 DPOP_PROOF_LIMIT: a member's clients together keep 600 live DPoP proofs, about 20 requests a second, far above the 120 a minute one client may send (REQ-XCH-006). A single burst cannot fire this; a client that ignores Retry-After, many installations of one member, or a stolen token being hammered can. Runbook: the refusal is counted before the client is known, so find the client by sum by (client_id) (rate(basetool_ingest_exchange_refused_total{reason=\"rate_limited\"}[10m])) - a member this busy is almost always rate limited too - and by the Exchange dashboard's per-client request panels; contact the client's author, and suspend the client under Administration - Verbundene Anwendungen if it does not stop (REQ-XCH-028). A suspected stolen token: suspend first, then ask the member to disconnect the installation. Raise app.exchange.limits.dpop-proofs-per-member only for a client whose registry requestsPerMinute is far above the default."
+
+  - name: silent - a single burst of cap refusals stays below the 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_auth_failures_total{reason="dpop_proof_limit", application="basetool-ingest", path_scope="exchange"}'
+        values: "0 0 0 0 0 600x55"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ExchangeDpopProofLimitSustained
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ExchangeDpopProofLimitSustained
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: ExchangeDpopProofLimitSustained
+        exp_alerts: []
+
+  - name: silent - an occasional refusal under the threshold
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_auth_failures_total{reason="dpop_proof_limit", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+2x60"
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: ExchangeDpopProofLimitSustained
+        exp_alerts: []
+
+  - name: silent - other exchange auth failures are not the proof cap
+    interval: 1m
+    input_series:
+      - series: 'basetool_ingest_auth_failures_total{reason="invalid_dpop_proof", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+60x60"
+      - series: 'basetool_ingest_auth_failures_total{reason="dpop_store_full", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+60x60"
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: ExchangeDpopProofLimitSustained
+        exp_alerts: []

@@ -12,6 +12,9 @@
   verbundener Anwendung (Metriken und Gateway-Logs); Gateway-Logzeilen tragen Client und Route,
   neue Metriken `basetool_exchange_clients` und `basetool_exchange_registry_mirror_age_seconds` samt
   Alarm `ExchangeRegistryMirrorStaleAtGateway`.
+- **Monitoring: Alarm für die DPoP-Obergrenze.** `ExchangeDpopProofLimitSustained` (Warnung) meldet,
+  wenn Mitglieder 15 Minuten lang immer wieder an ihre Obergrenze lebender DPoP-Nachweise stoßen;
+  ein einzelner Ausreißer löst ihn nicht aus (REQ-XCH-006).
   
 - **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
   `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
