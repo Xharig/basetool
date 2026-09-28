@@ -851,7 +851,7 @@ groups:
           severity: warning
         annotations:
           summary: "Redis live-sync/notification fan-out publish errors (cross-replica delivery degraded)"
-          description: "The live-sync and/or notification Redis fan-out has failed to publish for 10 minutes — cross-replica live delivery is silently degraded to single-instance (a viewer on one replica stops seeing another replica's changes/notifications; same-replica delivery still works, no user-facing error). Check Redis reachability from the app replicas and the basetool:livesync:changed / basetool:notify:published pub/sub channels (default-user ACL `&*`)."
+          description: "The live-sync and/or notification Redis fan-out has failed to publish for 10 minutes — cross-replica live delivery is silently degraded to single-instance (a viewer on one replica stops seeing another replica's changes/notifications; same-replica delivery still works, no user-facing error). Check Redis reachability from the app replicas and the basetool:livesync:changed / basetool:notify:published pub/sub channels in each service's own ACL user (basetool-backend is granted both, basetool-frontend basetool:livesync:changed; a service whose REDIS_<SVC>_USERNAME is unset runs as the default user). RedisAclDenials fires alongside when a missing grant is the cause."
 
       - alert: AppLiveSyncBridgeSilent
         expr: |
@@ -865,7 +865,7 @@ groups:
           severity: warning
         annotations:
           summary: "App live-sync bridge silent (web changes are not reaching the app)"
-          description: "The web frontend has been publishing live-sync changed frames for 30 minutes and the backend has consumed none, while app live-sync streams are open — so a browser edit never reaches the app and an app write never reaches a browser, with no error on either side. Check app.live-sync.redis-fanout.enabled on the backend (must be true in prod), that its channel is the frontend's basetool:livesync:changed and not a channel of its own, and the Redis default-user ACL (`&*` for PUBLISH/SUBSCRIBE)."
+          description: "The web frontend has been publishing live-sync changed frames for 30 minutes and the backend has consumed none, while app live-sync streams are open — so a browser edit never reaches the app and an app write never reaches a browser, with no error on either side. Check app.live-sync.redis-fanout.enabled on the backend (must be true in prod), that its channel is the frontend's basetool:livesync:changed and not a channel of its own, and that the basetool-backend ACL user is granted that channel with PUBLISH/SUBSCRIBE (the default user while REDIS_BACKEND_USERNAME is unset)."
 
       - alert: LiveSyncRelayDropsSustained
         expr: sum by (topic_class, reason) (increase(basetool_presence_relay_dropped_total{reason!="section_filtered"}[1h])) > 3
