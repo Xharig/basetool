@@ -346,6 +346,10 @@
   Installationen eines Mitglieds gleichzeitig Änderungen an denselben Lots in anderer Reihenfolge,
   brach PostgreSQL eine davon mit einem Deadlock ab; das Backend sperrt die Lots jetzt in fester
   Reihenfolge (REQ-XCH-016).
+- **Datenaustausch: gleichzeitige Bestandsänderungen desselben Lots wirken nur einmal.** Schickten
+  zwei Installationen dieselbe Erhöhung gleichzeitig, wurden beide gebucht (aus 5 → 6 wurde 7), auch
+  bei leeren Lots; ein Zurücknehmen konnte eine gleichzeitige Änderung überschreiben. Jetzt sperrt das
+  Backend jedes Lot vorab, die zweite Änderung erhält `VERSION_CONFLICT` (ADR-0229, REQ-XCH-016).
 - **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
   auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
   90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede

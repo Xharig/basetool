@@ -1136,6 +1136,16 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("stolen") boolean stolen);
 
   /**
+   * Waits for and takes a transaction-scoped PostgreSQL advisory lock, released at commit or
+   * rollback (ADR-0229).
+   *
+   * @param key the lock key
+   * @return always {@code 1}
+   */
+  @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(:key)", nativeQuery = true)
+  int lockExchangeLot(@Param("key") long key);
+
+  /**
    * Locks a member's personal rows of one item lot for the exchange (REQ-XCH-016).
    *
    * @param member the member
