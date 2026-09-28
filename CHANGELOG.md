@@ -338,6 +338,9 @@
 
 ### Fixed
 
+- **Datenschutzerklärung: durchgehend „Sie“.** Die Sätze zu Datenkopie und Löschantrag sprachen als
+  einzige Stelle mit „du“ an.
+
 - **Sandbox: lokal gebaute Images verweigern `prod`.** `--build` baut die Images jetzt wie die
   veröffentlichten mit der Sandbox-Markierung; `sandbox.ps1` bricht unter Windows PowerShell 5.1 bei
   umgeleitetem Fehlerstrom nicht mehr mit `NativeCommandError` ab.
