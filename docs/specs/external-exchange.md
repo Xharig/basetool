@@ -1538,7 +1538,9 @@ admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass chan
       commit. It publishes `edge` on every push to `main` that changes what the images contain
       (a newer run cancels an older one), the version and `latest` on a release tag, and by hand
       from either; the production packages stay private and untouched. The packages' public
-      visibility is set once by the owner.*
+      visibility is set once by the owner. Its `ref-guard` job, which every build waits for,
+      refuses to publish from a tag that is not `vMAJOR.MINOR.PATCH` or whose commit is not on
+      `main`, the same gate as `release-images.yml` (security review G5, L3).*
 - [x] An image built from a checkout (`--build`) is built like the published one and refuses
       `prod` too. *`docker-compose.sandbox-build.yml` builds each application image from
       `docker/sandbox/app.Dockerfile` on top of a build-only `<module>-base` service
