@@ -502,10 +502,13 @@ itself (`installation_revoked`), and re-checks the client revocation the way the
 gateway that missed it is caught behind it (security review 2026-09-27): the gateway relays the
 connection time it compared — an offline token's `iat`, any other token's `auth_time`
 (`ExchangeGateFilter.connectionTime`) — as `X-Exchange-Connected-At` (honoured like the other relay
-headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from the mirror on every
-exchange request and refuses a connection made at or before that second (`client_revoked`); a request
-relayed without a connection time counts as connected before it, as a token without the claim does
-at the gateway. Both sides therefore compare the same time. A mirror the
+headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from the mirror **and**
+the member's row in `exchange_client_revocation` on every exchange request and refuses a connection
+made at or before the later of the two seconds (`client_revoked`); a request relayed without a
+connection time counts as connected before it, as a token without the claim does at the gateway.
+Both sides therefore compare the same time, and the stored row keeps the check working while the
+mirror is off or behind. *Corrected 2026-09-28 (security review G5, L2): the gate read only the
+mirror, so with mirroring switched off a whole-client disconnect went unseen by it.* A mirror the
 backend cannot read fails closed: the request is refused `503 REGISTRY_UNAVAILABLE`
 (`revocations_unreadable`), as the gateway refuses revocations it cannot read, with the gateway's
 `Retry-After: 30`. Every refusal of the backend's gate carries the gateway's code for the same
@@ -535,7 +538,8 @@ BACKEND_RELAY_FAILED`.* The backend's Redis user already holds `GET` on
   shared ones before it reads the time, and writes nothing when Keycloak fails
   (`ConnectedAppsServiceTest`, `KeycloakServiceTest`); the extension leaves the member's other
   clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).
-  The backend re-checks it from the relayed connection time and refuses an unreadable mirror
+  The backend re-checks it from the relayed connection time against the later of the stored row and
+  the mirror, so a disconnect the mirror lacks is still refused, and refuses an unreadable mirror
   (backend `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the compared time in the gateway's
   `ExchangeGateTest`, the relay header in `ExchangeRelayTest`). The disconnect answers only in a
   second after the revocation's, holding no transaction
