@@ -309,6 +309,9 @@ within the client's scope, and these clients have `fullScopeAllowed` off: the re
 `default-roles-iri` therefore carries `offline_access` as a composite, and the `offline_access`
 client scope maps the role, both converged by the provisioner (owner decision 2026-09-28, ADR-0202
 amendment 5). Without the composite the device grant's token request answers `400 not_allowed`.
+Of the first-party clients only `basetool-sc-extractor` is offered `offline_access`; the provisioner
+withholds it from the others, so the realm-wide role opens offline sessions to the exchange clients
+alone (owner decision 2026-09-28).
 Consent is shown in German, per capability. The consent and device
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
 A `verification_uri_complete` link skips the device page, so for a device login the consent page

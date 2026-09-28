@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Keycloak: Offline-Sitzungen nur noch für die Austausch-Clients.** Der Realm-Provisioner entzieht
+  `basetool-frontend`, `backend-service`, `basetool-ingest-gateway` und `grafana` den optionalen
+  Scope `offline_access`; nur der SC Extractor und zugelassene Drittanwendungen behalten ihn
+  (ADR-0202 Amendment 5, REQ-OPS-033). Für Mitglieder ändert sich nichts.
+
 ### Fixed
 
 - **Aufträge: „Items bearbeiten" speichert wieder ohne Umweg.** Die bearbeitende Einheit war im

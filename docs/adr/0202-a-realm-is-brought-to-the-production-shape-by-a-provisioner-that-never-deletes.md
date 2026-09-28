@@ -198,7 +198,7 @@ write. This narrows decision 8 by exactly these two built-in objects and reverse
   sessions are pinned at 30 days idle and 90 days in total (ADR-0217 amendments);
 - `basetool-frontend` offers it but requests `openid, profile, email, roles`; `grafana` offers it but
   requests `openid email profile`; `backend-service` and `basetool-ingest-gateway` authenticate as
-  service accounts and request it nowhere;
+  service accounts and request it nowhere — all four have it withheld since the narrowing below;
 - `basetool-android` is not offered it (decision 4, ADR-0131) and omits it from its request.
 
 Tokens of a client with full scope now also list `offline_access` in `realm_access.roles`, beside
@@ -212,3 +212,16 @@ of `KRT Member` (the same reach, hidden in an application role the roster sync m
 `offline_access` for the exchange clients (reverses the owner decision of 2026-09-26 that a web
 logout must not disconnect them). Requirements: `REQ-OPS-033`, `REQ-XCH-005`; pinned by case 18 of
 `scripts/provision-keycloak-realm.test.sh`.
+
+**Narrowed the same day (owner decision, 2026-09-28): only the exchange clients are offered the
+scope.** Offering alone is not issuing, but a client that is not offered `offline_access` cannot be
+issued an offline token whatever it requests, and that no longer rests on what each client happens
+to ask for. `basetool-frontend`, `backend-service`, `basetool-ingest-gateway` and `grafana` (when
+`--grafana-origin` manages it) therefore have `offline_access` withheld: it is gone from their
+optional scopes and converges away wherever found, like the Android client's (decision 4). The
+dry-run line is `- optional scope 'offline_access' withheld (offline sessions are for the exchange
+clients only, ADR-0202 amendment 5)`. The extractor and the third-party template keep it. The
+realm's default optional scopes still list it, so a client created by hand inherits it; the
+provisioner reports nothing about that. Pinned by case 19; production gets it with a separate
+owner-approved dry run and apply (`INGEST_KEYCLOAK_SETUP.md` → *Withholding `offline_access` from
+the first-party clients*).
