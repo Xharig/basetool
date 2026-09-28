@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -132,6 +133,39 @@ public interface ExchangeInstallationRepository extends JpaRepository<ExchangeIn
    */
   @Query("SELECT i FROM ExchangeInstallation i WHERE i.revokedAt > :since")
   List<ExchangeInstallation> findRevokedSince(@Param("since") Instant since);
+
+  /**
+   * Deletes every installation the member disconnected before the cutoff, its deny-list entry
+   * included (REQ-XCH-035).
+   *
+   * @param cutoff the oldest disconnect still kept
+   * @return the number of installations deleted
+   */
+  @Modifying
+  @Query(value = "DELETE FROM exchange_installation WHERE revoked_at < :cutoff", nativeQuery = true)
+  int deleteRevokedBefore(@Param("cutoff") Instant cutoff);
+
+  /**
+   * Deletes every installation not revoked on its own that a whole-client disconnect before the
+   * cutoff ended, that is one last seen at or before that disconnect (REQ-XCH-035).
+   *
+   * @param cutoff the oldest client revocation still kept
+   * @return the number of installations deleted
+   */
+  @Modifying
+  @Query(
+      value =
+          """
+          DELETE FROM exchange_installation i
+          WHERE i.revoked_at IS NULL
+            AND EXISTS (SELECT 1 FROM exchange_client_revocation r
+                        WHERE r.exchange_client_id = i.exchange_client_id
+                          AND r.user_id = i.user_id
+                          AND r.revoked_at < :cutoff
+                          AND i.last_seen_at <= r.revoked_at)
+          """,
+      nativeQuery = true)
+  int deleteEndedByRevocationsBefore(@Param("cutoff") Instant cutoff);
 
   /**
    * Loads a member's installations by their key thumbprints, with their clients.

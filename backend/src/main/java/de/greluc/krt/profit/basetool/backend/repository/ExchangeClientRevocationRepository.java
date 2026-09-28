@@ -56,6 +56,18 @@ public interface ExchangeClientRevocationRepository
       @Param("revokedAt") Instant revokedAt);
 
   /**
+   * Deletes every client revocation made before the cutoff (REQ-XCH-035).
+   *
+   * @param cutoff the oldest revocation still kept
+   * @return the number of revocations deleted
+   */
+  @Modifying
+  @Query(
+      value = "DELETE FROM exchange_client_revocation WHERE revoked_at < :cutoff",
+      nativeQuery = true)
+  int deleteRevokedBefore(@Param("cutoff") Instant cutoff);
+
+  /**
    * Lists the revocations after a point in time with their client ids.
    *
    * @param since the oldest revocation still enforced

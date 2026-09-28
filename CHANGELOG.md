@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Datenaustausch: getrennte Verbindungen werden nach 90 Tagen gelöscht.** Ein nächtlicher Job
+  löscht getrennte Installationen (samt ihrer Bezeichnung) und die Trennung ganzer Anwendungen 90 Tage
+  nach der Trennung, statt sie bis zum Löschen des Kontos aufzubewahren; jeder Lauf mit Löschungen
+  steht mit den Anzahlen im Audit „Verbundene Anwendungen" (REQ-XCH-035).
 - **Verbundene Anwendungen: Link auf die Liste der zugelassenen Anwendungen.** Die Seite
   *Persönlich → Verbundene Anwendungen* verlinkt die öffentliche Liste
   (`docs/legal/approved-clients.md` auf GitHub), damit Mitglieder prüfen können, welche Anwendungen
@@ -357,6 +361,10 @@
   `503 EXCHANGE_DISABLED` ablehnt. Die Backend-Prüfung erkennt das Trennen einer Anwendung jetzt
   auch aus der Datenbank, nicht nur aus dem Redis-Spiegel.
 
+- **Datenaustausch: Anmeldungen ohne `offline_access` enden nach 90 Tagen.** Der Provisioner begrenzt
+  auch die Online-Sitzung jeder Exchange-Anwendung und des SC Extractors auf 30 Tage Leerlauf und
+  90 Tage insgesamt statt der 180 Tage des Realms; so überdauert die 90 Tage lange Sperrliste jede
+  Sitzung einer getrennten Installation (ADR-0217, REQ-XCH-008).
 - **Datenschutzerklärung: durchgehend „Sie“.** Die Sätze zu Datenkopie und Löschantrag sprachen als
   einzige Stelle mit „du“ an.
 

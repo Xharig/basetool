@@ -61,6 +61,8 @@ EXTERNAL_CLIENTS_FILE = Path(__file__).resolve().parent / "keycloak" / "external
 
 EXCHANGE_OFFLINE_SESSION_IDLE_SECONDS = 2592000
 EXCHANGE_OFFLINE_SESSION_MAX_SECONDS = 7776000
+EXCHANGE_SESSION_IDLE_SECONDS = 2592000
+EXCHANGE_SESSION_MAX_SECONDS = 7776000
 
 EXCHANGE_SCOPES: list[tuple[str, str]] = [
     ("exchange.connect", "xchConsentConnect"),
@@ -383,6 +385,8 @@ def client_specs(realm: str, public_origin: str, grafana_origin: str | None,
                 "client.introspection.response.allow.jwt.claim.enabled": "false",
                 "client.offline.session.idle.timeout": str(EXCHANGE_OFFLINE_SESSION_IDLE_SECONDS),
                 "client.offline.session.max.lifespan": str(EXCHANGE_OFFLINE_SESSION_MAX_SECONDS),
+                "client.session.idle.timeout": str(EXCHANGE_SESSION_IDLE_SECONDS),
+                "client.session.max.lifespan": str(EXCHANGE_SESSION_MAX_SECONDS),
                 "client.use.lightweight.access.token.enabled": "false",
                 "display.on.consent.screen": "false",
                 "dpop.bound.access.tokens": "true",
@@ -491,6 +495,8 @@ def external_client_spec(entry: dict) -> ClientSpec:
             "backchannel.logout.session.required": "true",
             "client.offline.session.idle.timeout": str(EXCHANGE_OFFLINE_SESSION_IDLE_SECONDS),
             "client.offline.session.max.lifespan": str(EXCHANGE_OFFLINE_SESSION_MAX_SECONDS),
+            "client.session.idle.timeout": str(EXCHANGE_SESSION_IDLE_SECONDS),
+            "client.session.max.lifespan": str(EXCHANGE_SESSION_MAX_SECONDS),
             "client.use.lightweight.access.token.enabled": "false",
             "display.on.consent.screen": "false",
             "dpop.bound.access.tokens": "true",

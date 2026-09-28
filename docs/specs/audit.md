@@ -238,7 +238,10 @@ web, naming its client (REQ-AUDIT-005):
   `EXCHANGE_CHANGES_UNDONE` per member with the run id and the admin as actor, and the preceding
   suspension as `EXCHANGE_CLIENT_SUSPENDED`, REQ-XCH-034) or confirming a change set the mass-change
   guard held back
-  (`EXCHANGE_MASS_CHANGE_CONFIRMED`: the resource and the applied count, REQ-XCH-021). The subject is the registry client
+  (`EXCHANGE_MASS_CHANGE_CONFIRMED`: the resource and the applied count, REQ-XCH-021), and the
+  nightly sweep deleting disconnected installations and client revocations past their 90 days
+  (`EXCHANGE_CONNECTIONS_PURGED`: the installation and revocation counts and the cutoff, one event per
+  run that deleted anything, with no subject, target, label or user id, REQ-XCH-035). The subject is the registry client
   or the installation, labelled by the **client id**; a member's disconnect names the member as
   target, a registry change names none. A change that failed because the mirror could not be
   written rolls back and records nothing.

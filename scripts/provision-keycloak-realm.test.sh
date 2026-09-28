@@ -725,6 +725,8 @@ assert_eq "$(query "$state" "[client('versekit')[k] for k in ('publicClient', 'c
   "[True, True, False, False, False, False, False]" "public, consent required, no full scope, no other flow"
 assert_eq "$(query "$state" "[client('versekit')['attributes'][k] for k in ('oauth2.device.authorization.grant.enabled', 'dpop.bound.access.tokens', 'client.offline.session.idle.timeout', 'client.offline.session.max.lifespan', 'login_theme')]")" \
   "['true', 'true', '2592000', '7776000', 'krt-theme']" "device grant, DPoP-bound tokens, 30/90-day offline session, the Basetool theme"
+assert_eq "$(query "$state" "[client('versekit')['attributes'].get(k) for k in ('client.session.idle.timeout', 'client.session.max.lifespan')]")" \
+  "['2592000', '7776000']" "the online session is capped at 30/90 days too, never the realm's 180"
 assert_eq "$(query "$state" "client('versekit')['name']")" "VerseKit" "the consent page names the product"
 assert_eq "$(query "$state" "scope_names('default', 'versekit')")" "['basic']" "the only default scope is basic"
 assert_eq "$(query "$state" "scope_names('optional', 'versekit')")" \
@@ -735,6 +737,8 @@ assert_eq "$(query "$state" "sorted(set(scope_names('optional', 'basetool-sc-ext
   "the extractor gets its exchange scopes as optional"
 assert_eq "$(query "$state" "[client('basetool-sc-extractor')['attributes'][k] for k in ('client.offline.session.idle.timeout', 'client.offline.session.max.lifespan')]")" \
   "['2592000', '7776000']" "the extractor's offline session is 30/90 days, as the template's"
+assert_eq "$(query "$state" "[client('basetool-sc-extractor')['attributes'].get(k) for k in ('client.session.idle.timeout', 'client.session.max.lifespan')]")" \
+  "['2592000', '7776000']" "the extractor's online session is capped at 30/90 days too"
 assert_eq "$(query "$state" "'offline_access' in scope_names('optional', 'basetool-sc-extractor')")" \
   "True" "the extractor may request offline_access"
 assert_eq "$(query "$state" "scope_names('optional', 'basetool-sc-extractor')")" \

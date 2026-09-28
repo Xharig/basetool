@@ -5,6 +5,11 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-28
 
+- **A connection without `offline_access` ends after 90 days too.** Its online session now ends
+  after 30 days without use and after 90 days at the latest, as an offline session always did,
+  instead of after the browser session's 180 days. A client that requests `offline_access`, as it
+  must, is unaffected; one that omits it signs in again at the latest after 90 days
+  ([authentication](authentication.md)).
 - **Clarified: one code per situation, whichever side refuses.** The Basetool behind the gateway
   checks the switch, the registry, the revocations and the capabilities of every request again.
   Right after a change, while the gateway's registry cache still admits a request, that second

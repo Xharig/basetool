@@ -90,6 +90,12 @@ public enum ScheduledJob {
   EXCHANGE_CHANGE_RETENTION("exchange_change_retention"),
 
   /**
+   * The nightly deletion of disconnected exchange installations and client revocations past their
+   * retention ({@code ExchangeConnectionRetentionTask}, REQ-XCH-035).
+   */
+  EXCHANGE_CONNECTION_RETENTION("exchange_connection_retention"),
+
+  /**
    * An admin's bulk undo of one exchange client ({@code ExchangeBulkUndoRunner}, REQ-XCH-034); run
    * on demand, never scheduled, so it publishes no enabled gauge.
    */

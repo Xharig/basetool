@@ -298,7 +298,11 @@ Each product has its own public Keycloak client: device grant only, `consentRequ
 or `roles` scopes, `exchange.connect`, `offline_access` and every capability scope optional, the
 device code living 600 s at a pinned polling interval, and `dpop.bound.access.tokens` on. Clients
 request `offline_access`, because a device login joins the member's browser SSO session and a web
-logout would otherwise disconnect every client (owner decision 2026-09-26). Consent is shown in German, per capability. The consent and device
+logout would otherwise disconnect every client (owner decision 2026-09-26). Every session of such a
+client, offline or online, ends after 30 days without use and 90 days at the latest: the provisioner
+pins `client.offline.session.*` and `client.session.*` on the client, so a client that omits
+`offline_access` does not inherit the realm's 180-day SSO session (owner decision 2026-09-28,
+ADR-0217 amendment). Consent is shown in German, per capability. The consent and device
 pages use the Basetool theme; the device page warns to enter only codes created on one's own PC.
 A `verification_uri_complete` link skips the device page, so for a device login the consent page
 carries the same warning and shows the user code for the member to compare with the one on their PC,
@@ -319,7 +323,8 @@ accepted. The provisioner applies this on production only **after** the legacy s
   existing client too, 30/90-day offline session, owner decision 2026-09-26) and the SC Extractor's
   exchange scopes (`scripts/provision-keycloak-realm.test.sh`, sections 13–15). The extractor
   requests `offline_access` too and gets the same 30/90-day offline session pinned on its client
-  (owner decision 2026-09-27).
+  (owner decision 2026-09-27). Both clients' online sessions are pinned at 30/90 days as well, and
+  section 13 fails without the pin (owner decision 2026-09-28).
 - [ ] The extractor client loses `extractor-ingest` once the extractor has migrated (WP 5.1 / go-live).
   *The provisioner half is built: `basetool-sc-extractor` requires consent, has DPoP-bound tokens,
   only `basic` by default and withholds both ingest scopes and every non-exchange scope; section 16 of
@@ -477,7 +482,8 @@ tombstones WP 3.3 (#2083)
 ### REQ-XCH-008 — Revocation takes effect on the next request
 
 Disconnecting **one installation** puts its key thumbprint on a persistent deny list (database,
-mirrored to Redis, kept at least as long as a client session can live — 90 days, ADR-0217 amendment); every token bound to that
+mirrored to Redis, kept 90 days — longer than any session of an exchange client can live, online or
+offline, since both are capped at 90 days, REQ-XCH-005, ADR-0217 amendments); every token bound to that
 key is refused (`401 INSTALLATION_REVOKED`) whatever its `iat`, and reconnecting needs a new key.
 Disconnecting **a whole client** removes the member's Keycloak consent for it — which ends its
 offline sessions and, for a client with consent, its online sessions — deletes the member's online
@@ -494,7 +500,10 @@ needs a sign-in after the disconnect, because a device login that joins an older
 keeps that session's `auth_time`. When a member leaves the org (disabled, deleted, membership lost), their exchange
 sessions and consents end — an admin logout, which also makes offline tokens stale — and then
 revocations are written at once, not at the next roster sync. The
-gateway reads the deny list and the timestamps per request, bypassing its cache.
+gateway reads the deny list and the timestamps per request, bypassing its cache. *Corrected
+2026-09-28: the deny list was said to be kept „as long as a client session can live", but only the
+offline session was capped at 90 days; the online session of a client without `offline_access` could
+live the realm's 180 days, so a denied key could be refreshed past its 90-day mirror entry.*
 
 **How it is built** (WP 3.1). A revoked installation row is the deny-list entry for its key; a
 member's disconnect of a whole client is a row in `exchange_client_revocation` (V249). Both reach the
@@ -1799,6 +1808,61 @@ count in `basetool_exchange_undo_total{client_id,resource,outcome}` like a membe
 „Exchange" dashboard shows the runs per day by outcome.
 
 **Status:** built (#2092 follow-up)
+
+### REQ-XCH-035 — Disconnected installations and client revocations are deleted after 90 days
+
+A disconnected installation — with the label the member gave it — and a member's whole-client
+revocation are kept **90 days** after the disconnect and then deleted, not for the life of the
+account (owner decision 2026-09-28, storage limitation, Art. 5(1)(e) GDPR). 90 days is as long as
+any session of an exchange client can live, online or offline (REQ-XCH-005, ADR-0217), and as long as
+the Redis deny and revocation entries already live (REQ-XCH-008), so no token issued before a
+disconnect outlives the entry that refuses it. A live installation is never touched.
+
+**How it is built.** The nightly job `exchange_connection_retention` (`ExchangeConnectionRetentionTask`,
+03:45 UTC) calls `ExchangeConnectionRetentionService.purgeBefore(now − max-age)`, which deletes in one
+transaction and in this order:
+
+1. every installation revoked on its own before the cutoff (`revoked_at < cutoff`);
+2. every installation not revoked on its own that a whole-client disconnect before the cutoff ended —
+   one last seen at or before that revocation. A whole-client disconnect marks no installation; the
+   member's page and the client gauges hide such an installation only through the revocation row,
+   so deleting the revocation alone would show it as connected again;
+3. then every client revocation older than the cutoff.
+
+The retention is `app.exchange.connection-retention.max-age` (`ExchangeConnectionRetentionProperties`,
+default `P90D`, a floor of 90 days — the session cap — below which the backend does not start;
+`…enabled` turns the job off). The job also refuses to start when it is shorter than
+`app.exchange.change-retention.max-age`, so an installation outlives the journal and change-feed
+entries that name it: the admin bulk undo's per-installation filter (REQ-XCH-034) and a tombstone's
+`removedBy.installationId` (REQ-XCH-007) still resolve. Nothing references a deleted row by key:
+`exchange_bulk_undo_run.installation_id` is `ON DELETE SET NULL`, and the journal, the change feed and
+the ship links hold the installation's key as a string; a staged mass change of a deleted installation
+is refused like a revoked one (REQ-XCH-021).
+
+**Audit.** A run that deleted at least one row records one `EXCHANGE_CONNECTIONS_PURGED` in
+„Verbundene Anwendungen" with the installation and revocation counts and the cutoff — no subject, no
+target, no label, no user id; a run that deletes nothing records nothing.
+
+**Observability.** The job's `TaskMetrics` series carry `task="exchange_connection_retention"` (items =
+installations plus revocations deleted), and `ScheduledJobStale` watches it in both halves (stopped
+succeeding, never succeeded).
+
+**Acceptance**
+
+- [x] An installation disconnected 91 days ago is deleted, one disconnected 89 days ago kept; a client
+  revocation made 91 days ago is deleted with the installations it ended, one made 89 days ago kept
+  with them; a live installation, an installation reconnected after an old revocation and another
+  member's installation of the same client stay; the member's page shows no ended installation again;
+  a second run deletes and records nothing. *`ExchangeConnectionRetentionServiceTest`.*
+- [x] A run that deleted rows records one audit event with the counts only.
+  *`ExchangeConnectionRetentionServiceTest`.*
+- [x] The cutoff is the configured retention before now; a failure is counted and swallowed; a
+  retention shorter than the change retention, or than 90 days, refuses to start.
+  *`ExchangeConnectionRetentionTaskTest`, `BackendPropertiesValidationTest`.*
+- [x] `ScheduledJobStale` fires for the job when it stopped or never succeeded.
+  *`scheduled_job_never_succeeded_test.yml`.*
+
+**Status:** built (#2092)
 
 ## Threat model
 
