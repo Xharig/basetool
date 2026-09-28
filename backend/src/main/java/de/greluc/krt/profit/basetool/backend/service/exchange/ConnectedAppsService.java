@@ -218,14 +218,17 @@ public class ConnectedAppsService {
    * Disconnects a whole client for the member: Keycloak first removes the member's consent for the
    * client with its offline sessions and ends the client in every online session; then the
    * revocation time, read afterwards, reaches the mirror and is stored. The gateway so refuses
-   * every token of an earlier connection, and a new connection works at once (REQ-XCH-008).
+   * every token of an earlier connection, and a connection made in a later second works
+   * (REQ-XCH-008).
    *
    * @param member the member
    * @param clientId the Keycloak client id
+   * @return the time the revocation was stamped with, which the caller waits out after the commit
+   *     ({@link ExchangeRevocationSecond})
    * @throws ExternalServiceException when Keycloak or the mirror could not be reached
    */
   @Transactional
-  public void disconnectClient(@NotNull UUID member, @NotNull String clientId) {
+  public @NotNull Instant disconnectClient(@NotNull UUID member, @NotNull String clientId) {
     ExchangeClient client =
         Entities.require(
             clientRepository.findWithCapabilitiesByClientId(clientId), "Exchange client not found");
@@ -240,6 +243,7 @@ public class ConnectedAppsService {
         member,
         AuditDetails.of("by", "member"));
     count(KIND_CLIENT);
+    return now;
   }
 
   /**

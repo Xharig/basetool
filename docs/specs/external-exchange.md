@@ -464,7 +464,9 @@ clients without signing the member out of those, and **then** stores a revocatio
 read after Keycloak answered. A token of an earlier connection is refused (`401 CLIENT_REVOKED`): an
 offline token (scope `offline_access`) issued at or before the timestamp, and any other token whose
 `auth_time` — the sign-in it descends from, which a refresh keeps — is at or before it, or which
-carries no `auth_time`. A new connection afterwards works at once; one without `offline_access`
+carries no `auth_time`. A new connection afterwards works at once — the member's disconnect
+answers only once the backend clock has passed the revocation's second, so a connection started
+after it carries a later token time (ADR-0217 amendment of 2026-09-28) — and one without `offline_access`
 needs a sign-in after the disconnect, because a device login that joins an older browser session
 keeps that session's `auth_time`. When a member leaves the org (disabled, deleted, membership lost), their exchange
 sessions and consents end — an admin logout, which also makes offline tokens stale — and then
@@ -529,7 +531,12 @@ BACKEND_RELAY_FAILED`.* The backend's Redis user already holds `GET` on
   clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).
   The backend re-checks it from the relayed connection time and refuses an unreadable mirror
   (backend `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the compared time in the gateway's
-  `ExchangeGateTest`, the relay header in `ExchangeRelayTest`). End to end:
+  `ExchangeGateTest`, the relay header in `ExchangeRelayTest`). The disconnect answers only in a
+  second after the revocation's, holding no transaction
+  (`ExchangeRevocationSecondTest`, `ConnectedAppsControllerTest`). *Changed 2026-09-28: it answered
+  at once, so a device login finished in the revocation's own second got `401 CLIENT_REVOKED`
+  (E2E run 36388920243, chromium 1280x800); the `<=` comparison stays, so a refresh of the old
+  session in that second is still refused.* End to end:
   `ExchangeConnectionsE2eTest.aNewConnectionAfterAWholeClientDisconnectWorksAtOnce` — after the
   member disconnects the client on „Verbundene Anwendungen", the gateway refuses it `401
   CLIENT_REVOKED` on the next request, and the first call of a new device login with

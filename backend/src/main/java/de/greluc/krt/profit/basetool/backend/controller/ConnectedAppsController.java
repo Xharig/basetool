@@ -26,6 +26,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeUndoRequestDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.ExchangeUndoResultDto;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ConnectedAppsService;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeMassChangeService;
+import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeRevocationSecond;
 import de.greluc.krt.profit.basetool.backend.service.exchange.ExchangeUndoService;
 import de.greluc.krt.profit.basetool.backend.support.AuthenticatedSubject;
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,6 +63,7 @@ public class ConnectedAppsController {
   private final ConnectedAppsService connectedAppsService;
   private final ExchangeUndoService undoService;
   private final ExchangeMassChangeService massChangeService;
+  private final ExchangeRevocationSecond revocationSecond;
 
   /**
    * Shows what a change set the guard held back would do, writing nothing.
@@ -168,7 +170,8 @@ public class ConnectedAppsController {
   }
 
   /**
-   * Disconnects a whole client for the caller.
+   * Disconnects a whole client for the caller and answers only once the clock has left the
+   * revocation's second, so a connection the member starts afterwards is not refused (REQ-XCH-008).
    *
    * @param clientId the Keycloak client id
    * @param authentication the caller
@@ -185,7 +188,8 @@ public class ConnectedAppsController {
   @ApiResponse(responseCode = "502", description = "The gateway mirror or Keycloak was unreachable")
   public ResponseEntity<Void> disconnectClient(
       @PathVariable @NotNull String clientId, @NotNull Authentication authentication) {
-    connectedAppsService.disconnectClient(member(authentication), clientId);
+    revocationSecond.awaitSecondAfter(
+        connectedAppsService.disconnectClient(member(authentication), clientId));
     return ResponseEntity.noContent().build();
   }
 
