@@ -1459,6 +1459,57 @@
       "username": "test-exchange"
     },
     {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "test-exchange-2-pw"
+        }
+      ],
+      "email": "test-exchange-2@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "test-exchange-2"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "test-exchange-3-pw"
+        }
+      ],
+      "email": "test-exchange-3@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "test-exchange-3"
+    },
+    {
+      "credentials": [
+        {
+          "temporary": false,
+          "type": "password",
+          "value": "test-exchange-departed-pw"
+        }
+      ],
+      "email": "test-exchange-departed@example.invalid",
+      "emailVerified": true,
+      "enabled": true,
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ],
+      "username": "test-exchange-departed"
+    },
+    {
       "clientRoles": {
         "realm-management": [
           "manage-users",
