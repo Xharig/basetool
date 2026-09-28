@@ -1,6 +1,6 @@
 # Data protection (GDPR) — documentation index
 
-> **Doc type:** Living documents — kept in sync with `main`. Last reviewed: 2026-09-22.
+> **Doc type:** Living documents — kept in sync with `main`. Last reviewed: 2026-09-28.
 
 This folder holds the **organisational** half of the project's data-protection obligations: the
 documents the GDPR requires a controller to *have*, as opposed to the behaviour it requires the
@@ -52,7 +52,10 @@ a supervisory authority reads first.
 
 > [!important] Retention periods appear in prose in the privacy policy
 > The policy names the numbers (90 and 180 days for notifications, 90 days for a refused
-> registration, 24 months for the audit trails, 31 days for logs, 30 days for Keycloak events and for
+> registration, 90 days for a disconnected exchange installation and a client revocation after the
+> disconnection, 90 days for the exchange journal and change sequence, 30 and 90 days for an
+> exchange offline session, 24 hours for exchange idempotency results, 30 minutes for a staged mass
+> change, 24 months for the audit trails, 31 days for logs, 30 days for Keycloak events and for
 > a session, 14 days for traces, 180 days for metrics, about six months for backups) in sentences,
 > while the code and the platform configuration hold them. Changing a configured window without
 > changing the sentence makes the published policy false. The windows and their configuration keys

@@ -1,6 +1,6 @@
 # Handling a data-subject request (Art. 12, 15–21 GDPR)
 
-> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-22.
+> **Doc type:** Living document — kept in sync with `main`. Last reviewed: 2026-09-28.
 
 A request can arrive by any channel and in any wording. Somebody writing *"please delete my
 account"* has exercised Art. 17 whether or not they cite it, and the clock starts when the message
@@ -89,7 +89,9 @@ In short:
 
 - **Purged**: warehouse stock, hangar, personal inventory and blueprints with their free-text notes,
   notifications, notification rules, promotion evaluations, material-exchange offers and interests,
-  account permissions, their own approval records.
+  account permissions, their own approval records; **connected applications** — installations with
+  their labels, client revocations, ship links, the change sequence and the write journal — and,
+  with the Keycloak account, the member's consents and the clients' offline sessions.
 - **Reassigned to an admin**: missions and refinery orders — operational history that must stay
   readable.
 - **Unlinked**: mission participation survives as *"Gelöschter Nutzer"* with no name; the
