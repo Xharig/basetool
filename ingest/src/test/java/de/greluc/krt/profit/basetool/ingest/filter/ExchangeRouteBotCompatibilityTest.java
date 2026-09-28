@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import de.greluc.krt.profit.basetool.ingest.service.ExchangeDocuments;
+import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,7 +45,11 @@ class ExchangeRouteBotCompatibilityTest {
   private static final List<String> HTTP_METHODS =
       List.of("get", "put", "post", "delete", "options", "head", "patch", "trace");
 
-  private final BotProtectionFilter filter = new BotProtectionFilter(mock(MeterRegistry.class));
+  private final BotProtectionFilter filter =
+      new BotProtectionFilter(
+          mock(MeterRegistry.class),
+          JsonMapper.builder().build(),
+          TestLoggingProperties.defaults());
 
   @Test
   void everyDocumentedRoutePassesTheBotFilter() throws IOException {

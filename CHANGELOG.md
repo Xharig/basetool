@@ -369,6 +369,11 @@
   verpackt über der Grenze liegt, wird mit `413` und dem Registry-Code abgelehnt statt mit
   `400 BAD_REQUEST`, und diese Antwort wird nicht mehr zwischengespeichert.
 
+- **Datenaustausch: jede Ablehnung mit Registry-Code.** Ein Rumpf, der kein JSON ist, wird mit
+  `400 SCHEMA_INVALID` statt `400 BAD_REQUEST` abgelehnt und nicht mehr zwischengespeichert; ein
+  anderer Medientyp erhält den neuen Code `415 UNSUPPORTED_MEDIA_TYPE`, und vom Bot-Filter
+  gesperrte Methoden und Pfade unter `/exchange` antworten `404 NOT_FOUND` statt mit leerem `405`.
+
 - **Datenaustausch: Redis-Ausfälle.** Ein nicht erreichbarer Speicher auf einer Austausch-Route
   antwortet mit `503 SERVICE_UNAVAILABLE` und `Retry-After: 60`, nie mit `500`; Registry und
   Tageskontingent antworten weiter mit `Retry-After: 30`.

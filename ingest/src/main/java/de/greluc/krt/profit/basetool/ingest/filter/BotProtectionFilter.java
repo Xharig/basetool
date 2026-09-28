@@ -19,29 +19,40 @@
 
 package de.greluc.krt.profit.basetool.ingest.filter;
 
+import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.ingest.web.ProblemResponseWriter;
+import de.greluc.krt.profit.basetool.ingest.web.Problems;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Rejects bot, scanner and exploit-probe requests before Spring Security (REQ-INGEST-009).
  *
  * <p>In order: a query chunk with an empty parameter name gets 400; a method other than GET, POST,
- * HEAD or OPTIONS gets 405; a known scanner path prefix or a foreign file extension gets 404.
- * Matching is case-insensitive, and only the bounded rule is counted on {@code
- * basetool_bot_blocked_total}.
+ * HEAD or OPTIONS gets 405; a known scanner path prefix or a foreign file extension gets 404. On an
+ * exchange route every refusal is a problem with a registered code instead (REQ-XCH-025): {@code
+ * 400 SCHEMA_INVALID} for the query, {@code 404 NOT_FOUND} for the rest. Matching is
+ * case-insensitive, and only the bounded rule is counted on {@code basetool_bot_blocked_total}.
  */
 @Component
 @Order(BotProtectionFilter.ORDER)
@@ -55,8 +66,20 @@ public class BotProtectionFilter extends OncePerRequestFilter {
    */
   public static final int ORDER = Ordered.HIGHEST_PRECEDENCE + 12;
 
+  /** The exchange's code of an unknown route or method. */
+  static final String CODE_NOT_FOUND = "NOT_FOUND";
+
+  /** The exchange's code of a request that breaks the v1 contract. */
+  static final String CODE_SCHEMA_INVALID = "SCHEMA_INVALID";
+
   /** The Micrometer registry the per-rule bot-block counter is bumped against. */
   private final @NotNull MeterRegistry meterRegistry;
+
+  /** Serializes the problem an exchange request is refused with. */
+  private final @NotNull ObjectMapper objectMapper;
+
+  /** Supplies the MDC key the problem's {@code correlationId} is read from. */
+  private final @NotNull LoggingProperties loggingProperties;
 
   /**
    * URI path prefixes of known scanners and exploit probes, answered with 404 (case-insensitive);
@@ -144,9 +167,15 @@ public class BotProtectionFilter extends OncePerRequestFilter {
     String uri = request.getRequestURI();
     String method = request.getMethod();
 
+    boolean exchange = IngestPathScope.isExchangeRequest(request);
+
     if (isMalformedQueryString(request.getQueryString())) {
       log.debug("Blocked malformed query string: {} {}", method, uri);
       recordBlocked(MetricNames.BOT_RULE_QUERY_STRING);
+      if (exchange) {
+        writeUnnamedParameter(response);
+        return;
+      }
       response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
       response.setContentLength(0);
       return;
@@ -155,25 +184,73 @@ public class BotProtectionFilter extends OncePerRequestFilter {
     if (!ALLOWED_HTTP_METHODS.contains(method.toUpperCase())) {
       log.debug("Blocked disallowed HTTP method: {} {}", method, uri);
       recordBlocked(MetricNames.BOT_RULE_METHOD);
-      response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+      refuse(response, exchange, HttpServletResponse.SC_METHOD_NOT_ALLOWED);
       return;
     }
 
     if (isBotPath(uri)) {
       log.debug("Blocked bot/scanner path: {} {}", method, uri);
       recordBlocked(MetricNames.BOT_RULE_PATH_PREFIX);
-      response.sendError(HttpServletResponse.SC_NOT_FOUND);
+      refuse(response, exchange, HttpServletResponse.SC_NOT_FOUND);
       return;
     }
 
     if (isBotFileExtension(uri)) {
       log.debug("Blocked bot/scanner file extension: {} {}", method, uri);
       recordBlocked(MetricNames.BOT_RULE_FILE_EXTENSION);
-      response.sendError(HttpServletResponse.SC_NOT_FOUND);
+      refuse(response, exchange, HttpServletResponse.SC_NOT_FOUND);
       return;
     }
 
     filterChain.doFilter(request, response);
+  }
+
+  /**
+   * Refuses a blocked request: on an exchange route with the exchange's {@code 404 NOT_FOUND}
+   * problem, as its gate answers an unknown route or method (REQ-XCH-025); elsewhere with the bare
+   * status.
+   *
+   * @param response the response
+   * @param exchange whether the request targets an exchange route
+   * @param status the bare status used outside the exchange
+   * @throws IOException if writing fails
+   */
+  private void refuse(@NotNull HttpServletResponse response, boolean exchange, int status)
+      throws IOException {
+    if (!exchange) {
+      response.sendError(status);
+      return;
+    }
+    ProblemResponseWriter.write(
+        response,
+        objectMapper,
+        loggingProperties,
+        HttpStatus.NOT_FOUND,
+        "Not found",
+        CODE_NOT_FOUND,
+        "No such exchange route.");
+  }
+
+  /**
+   * Answers an exchange request whose query names a parameter without a name with {@code 400
+   * SCHEMA_INVALID} and one error at {@code /}, the pointer of a parameter with an empty name.
+   *
+   * @param response the response
+   * @throws IOException if writing fails
+   */
+  private void writeUnnamedParameter(@NotNull HttpServletResponse response) throws IOException {
+    ProblemDetail problem =
+        Problems.of(
+            loggingProperties,
+            HttpStatus.BAD_REQUEST,
+            "Bad request",
+            CODE_SCHEMA_INVALID,
+            "The query names a parameter without a name.");
+    problem.setProperty("errors", List.of(Map.of("pointer", "/", "message", "has no name")));
+    response.setStatus(HttpStatus.BAD_REQUEST.value());
+    response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+    response.getWriter().write(objectMapper.writeValueAsString(problem));
   }
 
   /**

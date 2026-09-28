@@ -1007,7 +1007,8 @@ Every write carries an `Idempotency-Key` (`400 IDEMPOTENCY_KEY_MISSING`), kept 2
 (client, member, key). Authentication, gates and rate limits run before the lookup; only results
 produced after them are cached — never `401`, `403`, `429`, `503`,
 `MASS_CHANGE_CONFIRMATION_REQUIRED` or a `5xx`. A duplicate in flight gets
-`409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different body `422 IDEMPOTENCY_KEY_REUSED`.
+`409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different request — another method, path or
+body — `422 IDEMPOTENCY_KEY_REUSED`.
 These two and `400 IDEMPOTENCY_KEY_MISSING` are the filter's own answers about the key, written
 before anything is claimed, and are never cached; the cached statuses below are those of the route
 behind the filter (`ExchangeIdempotencyFilter.cacheable`). An answer above
@@ -1018,16 +1019,20 @@ The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash
 `ingest:xch:idem:<client>:<member>:<sha256>`; a request's fingerprint is the SHA-256 of method, path
 and body. The same request under a known key is answered from the cache with `Idempotency-Replayed:
 true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and never a staged mass
-change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
-the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write. That
-holds on every exchange route and for every kind of Redis failure — a lost connection, a timeout, a
-refused command while staging a draft or a mass change, or a store failure escaping a route — each
-answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`. Two Redis reads answer
-otherwise: an unreadable registry or revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003)
-and a write quota that cannot be counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with
-`Retry-After: 30`; a full byte budget is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`.
-*Corrected 2026-09-27: this paragraph said every Redis failure answered `Retry-After: 60`; the
-registry and quota reads have answered 30 since they were built.*
+change or the `400 SCHEMA_INVALID` for a body that is not a JSON document: `GlobalExceptionHandler`
+marks that request `ExchangeIdempotencyFilter.NOT_REPLAYABLE`, since a truncated body retried whole
+under its key must run, not meet `422`. A body of another media type is `415
+UNSUPPORTED_MEDIA_TYPE`, which is not cached either. The lock of a key in flight lives two minutes,
+so a crashed request cannot block a key for the day. A store Redis cannot reach is `503
+SERVICE_UNAVAILABLE`, never an unguarded write. That holds on every exchange route and for every
+kind of Redis failure — a lost connection, a timeout, a refused command while staging a draft or a
+mass change, or a store failure escaping a route — each answers `503 SERVICE_UNAVAILABLE` with
+`Retry-After: 60`, never a `500`. Two Redis reads answer otherwise: an unreadable registry or
+revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003) and a write quota that cannot be
+counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with `Retry-After: 30`; a full byte budget
+is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. *Corrected 2026-09-27: this paragraph
+said every Redis failure answered `Retry-After: 60`; the registry and quota reads have answered 30
+since they were built.*
 
 The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
 per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
@@ -1048,8 +1053,9 @@ outlived the two minutes never frees the lock of the request that took the key a
   between its lookup and its lock replays instead of writing again, sixteen parallel duplicates run
   the write once per key, and an expired holder's token does not release the next holder's lock.*
 
-**Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest` · **Status:**
-built — WP 3.2 (#2082)
+**Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest`,
+`ExchangeChangeRouteTest` (a body that is no JSON and one of another media type are never cached) ·
+**Status:** built — WP 3.2 (#2082)
 
 ### REQ-XCH-021 — Mass changes are confirmed by the member in the browser
 
@@ -1286,6 +1292,14 @@ Every error is RFC 9457 problem+json with a `code` from the registry in `docs/ex
 each with its HTTP status and the client action it requires. Codes are never reused or repurposed;
 the gateway-side codes are the `reason` labels of the exchange metrics.
 
+No answer on an exchange route falls outside the registry. A body that is not a JSON document is
+`400 SCHEMA_INVALID` with one error at the pointer `""` (on the legacy `/v1` routes it stays
+`BAD_REQUEST`); a body of another media type is `415 UNSUPPORTED_MEDIA_TYPE`; the bot filter
+answers an exchange path it blocks with `404 NOT_FOUND`, as the gate answers an unknown route or
+method, and a query parameter without a name with `400 SCHEMA_INVALID` at `/`; an unexpected
+failure is the generic `500 INTERNAL_ERROR`. *Changed 2026-09-28: the first two answered
+`400 BAD_REQUEST` and a `415` without `code`, and the bot filter a bare `405`, `404` or `400`.*
+
 A backend refusal reaches a client with its registry code and a **fixed English detail per code**
 (`ExchangeRelay.DETAILS`); the backend's own `detail` is never relayed. The security review of
 2026-09-27 audited what the backend puts there on the passed-through codes. The gate filters
@@ -1311,10 +1325,12 @@ reserves the latter, and `Retry-After` is the header. The schema allowed a `corr
 64 characters while the gateway echoes one of up to 128; the schema was widened to 128 on
 2026-09-27 (widening is compatible within v1, REQ-XCH-026).
 
-**Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error
-statuses), `ExchangeRelayTest` (no backend detail reaches a client) · **Status:** registry published
-— WP 0.2 (#2080); the gateway's refusal metrics carry the codes as `reason` labels
-(`ExchangeRefusals`) — WP 3.2 (#2082)
+**Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error statuses,
+and every code the gateway answers on its own is registered), `ExchangeRelayTest` (no backend detail
+reaches a client), `ExchangeChangeRouteTest` and `BotProtectionFilterTest` (the unreadable body, the
+media type and the bot filter's answers on exchange paths) · **Status:** registry published — WP 0.2
+(#2080); the gateway's refusal metrics carry the codes as `reason` labels (`ExchangeRefusals`) — WP
+3.2 (#2082)
 
 ### REQ-XCH-026 — The contract grows additively under `/exchange/v1`
 

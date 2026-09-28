@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -190,6 +191,41 @@ class ExchangeChangeRouteTest {
             "{\"ops\":[{\"op\":\"add\",\"ref\":{\"name\":\"Arrowhead\"},\"" + name + "\":1}]}")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.warnings[0].pointer").value("/ops/0/" + name));
+  }
+
+  @Test
+  void aBodyThatIsNoJsonIsSchemaInvalidAndNeverCached() throws Exception {
+    for (String body : new String[] {"{\"ops\":[", "not json", ""}) {
+      post("/exchange/v1/me/blueprints/changes", body)
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("SCHEMA_INVALID"))
+          .andExpect(jsonPath("$.errors[0].pointer").value(""))
+          .andExpect(header().doesNotExist("Idempotency-Replayed"));
+    }
+
+    verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+    verify(idempotency, never()).store(anyString(), any());
+    verify(budget, never())
+        .settle(anyString(), anyString(), anyString(), anyLong(), anyString(), anyLong(), any());
+    verify(budget, times(3))
+        .release(eq(ExchangeTestSupport.CLIENT), eq(member), anyString(), anyLong());
+  }
+
+  @Test
+  void aBodyOfAnotherMediaTypeIsRefusedWithARegisteredCodeAndNeverCached() throws Exception {
+    ExchangeTestSupport.call(
+            mockMvc,
+            key,
+            TOKEN,
+            HttpMethod.POST,
+            "/exchange/v1/me/stock/changes",
+            null,
+            "VerseKit/2.1.0")
+        .andExpect(status().isUnsupportedMediaType())
+        .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"));
+
+    verify(relay, never()).forward(any(), anyString(), any(), any(), any());
+    verify(idempotency, never()).store(anyString(), any());
   }
 
   @Test

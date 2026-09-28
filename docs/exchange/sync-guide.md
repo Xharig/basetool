@@ -105,7 +105,8 @@ Every change set and draft carries an `Idempotency-Key` of 8 to 128 characters o
 - Keys are kept per client and member, not per installation: two installations of your client for
   one member share them. Random keys never collide.
 
-`401`, `403`, `413`, `429`, `5xx` and `409 MASS_CHANGE_CONFIRMATION_REQUIRED` are never cached, and
+`401`, `403`, `413`, `415`, `429`, `5xx`, `409 MASS_CHANGE_CONFIRMATION_REQUIRED` and the
+`400 SCHEMA_INVALID` for a body that is not a JSON document are never cached, and
 neither are the answers about the key itself — `400 IDEMPOTENCY_KEY_MISSING`,
 `409 IDEMPOTENCY_IN_PROGRESS` and `422 IDEMPOTENCY_KEY_REUSED` — so a retry after
 `IDEMPOTENCY_IN_PROGRESS` gets the first request's answer once it is stored. An answer the server

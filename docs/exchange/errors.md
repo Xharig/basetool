@@ -36,7 +36,7 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `NO_ROLE` | 403 | backend | The member holds no role. | Stop and tell the member. |
 | `ACTING_MEMBER_REFUSED` | 403 | backend | The relay refused the member (unknown, disabled or deleted). | Stop and tell the member. |
 | `NOT_PERMITTED` | 403 | backend | The member may not do this. | Stop; do not retry. |
-| `SCHEMA_INVALID` | 400 | gateway, backend | The body or a query parameter does not match the v1 contract; `errors[]` points at the fields, a parameter as `/<name>`. From the backend, without `errors[]`: the content is malformed although it matches the schema, such as a refinery draft of an unsupported panel type. | Fix the request. |
+| `SCHEMA_INVALID` | 400 | gateway, backend | The body or a query parameter does not match the v1 contract; `errors[]` points at the fields, a parameter as `/<name>`. A body that is not a JSON document has one error at the pointer `""` and is never cached for its `Idempotency-Key`; a query parameter without a name has one at `/`. From the backend, without `errors[]`: the content is malformed although it matches the schema, such as a refinery draft of an unsupported panel type. | Fix the request. |
 | `BATCH_TOO_LARGE` | 413 | gateway | A change set holds more than 500 ops, or is too large to hold for the member's confirmation. | Split the batch. |
 | `PAYLOAD_TOO_LARGE` | 413 | gateway | The body exceeds the size cap, or the draft built from it is too large to hand off. | Split or shrink the request. |
 | `IDEMPOTENCY_KEY_MISSING` | 400 | gateway | A write carries no `Idempotency-Key`. | Send a fresh key per logical write. |
@@ -50,6 +50,8 @@ case. The **per-op** reasons never arrive as a problem: they appear in a change 
 | `BACKEND_RELAY_FAILED` | 502 | gateway | The backend did not answer usably: an error, a refusal the contract does not name, or an answer that breaks the v1 schema. | Back off; retry with the same key. |
 | `SERVICE_UNAVAILABLE` | 503 | gateway | Temporarily unavailable: a store the exchange needs cannot be reached (`Retry-After: 60`), the daily write quota cannot be counted (`Retry-After: 30`), the identity provider cannot be reached to check the token (`Retry-After: 5`), or all members together hold the gateway's cap of live DPoP proofs ([live proofs](authentication.md#live-proofs-per-member); `Retry-After` is the seconds until the earliest of them no longer counts). | Wait at least `Retry-After`, then retry the same request under the same key, with a new DPoP proof. |
 | `NOT_FOUND` | 404 | gateway | The requested document, such as a schema name, does not exist. | Check the name. |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | gateway | A request body is not sent as `Content-Type: application/json`. Never cached for its `Idempotency-Key`. | Send the body as `application/json`. |
+| `INTERNAL_ERROR` | 500 | gateway | An unexpected failure of the gateway, the generic fallback. Never cached. | Back off and retry under the same key; report the `correlationId` if it persists. |
 | `LEGACY_ENDPOINT_GONE` | 410 | gateway | A legacy `/v1/*` extractor endpoint after the go-live. | Update the client. |
 
 ## Per-op reasons in a change result
