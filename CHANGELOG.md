@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Aufträge: „Items bearbeiten" speichert wieder ohne Umweg.** Die bearbeitende Einheit war im
+  Bearbeiten-Formular nicht vorausgewählt; weil das Feld Pflicht ist, verwarf der Browser das Speichern
+  ohne sichtbare Meldung, und z. B. ein entferntes Item blieb im Auftrag. Beide Einheiten sind jetzt
+  mit den gespeicherten Werten vorbelegt (REQ-ORDERS-032).
+
 ## [v1.13.0](https://github.com/krt-profit/basetool/releases/tag/v1.13.0) - 2026-09-28
 
 ### Added

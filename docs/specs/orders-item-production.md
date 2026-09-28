@@ -647,6 +647,12 @@ line with booked production renders its `id` as a hidden input, pins the amount 
 `manufacturedAmount`, drops its remove button, and shows how many units are already produced
 (`orders.create.item.producedLocked`).
 
+The editor MUST open with the order's stored **responsible** and **requesting** org units preselected.
+Both pickers are `required`, so an empty one makes the browser refuse the save before any request is
+sent — a line removal the user believes saved simply never reaches the server. The logistician update
+ignores the responsible unit (it changes only through `PATCH /{id}/responsible-org-unit`), but the
+picker must still carry it for the form to submit.
+
 Before this requirement the edit paths ran `jobOrder.getItems().clear()` followed by a full rebuild.
 `orphanRemoval` deleted every line and its materials, and the rebuilt rows started at
 `manufacturedAmount = 0` — so **every** save of an item order silently reset all recorded production,
@@ -657,7 +663,8 @@ with no error and no audit trace. The handover freeze did not cover it: it block
 (`matchedLine_isReDerivedInPlace_soBookedProductionSurvives`,
 `droppingALineWithBookedProduction_throwsBadRequest`,
 `loweringAmountBelowManufactured_throwsBadRequest`),
-`JobOrderItemServiceTest.applyItemLineReDerivesMaterialsInPlaceAndKeepsBookedProduction` ·
+`JobOrderItemServiceTest.applyItemLineReDerivesMaterialsInPlaceAndKeepsBookedProduction`,
+`JobOrderPageControllerItemEditMvcTest.editForm_itemOrder_preselectsStoredResponsibleAndRequestingOrgUnit` ·
 **Code:** `JobOrderService#reconcileItemLines` / `#assertLineEditable` / `#assertLineRemovable`,
 `JobOrderItemService#applyItemLine`, `CreateJobOrderItemLineDto#id`,
 `JobOrderPageController#buildEditItems`, `orders-create.js` (`addItemLine`) ·

@@ -549,8 +549,8 @@ public class JobOrderPageController {
   }
 
   /**
-   * Renders the item-order edit page: the create form in edit mode, with the existing lines
-   * injected as {@code window.EDIT_ITEMS}.
+   * Renders the item-order edit page: the create form in edit mode, with the stored responsible and
+   * requesting org units preselected and the existing lines injected as {@code window.EDIT_ITEMS}.
    *
    * <p>Non-item orders and orders with an item handover redirect to the detail page.
    *
@@ -588,6 +588,8 @@ public class JobOrderPageController {
       JobOrderItemForm itemForm = new JobOrderItemForm();
       itemForm.setHandle(order.handle());
       itemForm.setComment(order.comment());
+      itemForm.setResponsibleOrgUnitId(
+          order.responsibleOrgUnit() != null ? order.responsibleOrgUnit().id() : null);
       itemForm.setRequestingOrgUnitId(
           order.requestingOrgUnit() != null ? order.requestingOrgUnit().id() : null);
       itemForm.setVersion(order.version());
