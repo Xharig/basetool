@@ -1,0 +1,66 @@
+rule_files:
+  - ../alerts/business.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fires - the backend keeps answering 503 for an unreachable identity provider
+    interval: 1m
+    input_series:
+      - series: 'basetool_http_error_total{code="SERVICE_UNAVAILABLE", application="basetool-backend"}'
+        values: "0+12x30"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: IdentityProviderUnavailable
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: IdentityProviderUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              application: basetool-backend
+            exp_annotations:
+              summary: "Identity provider unavailable (503 spike, basetool-backend)"
+              description: "basetool-backend is re-mapping unreachable-Keycloak-JWKS failures to 503 at an elevated rate — the root cause of the past Http5xxRateHigh incident. Check Keycloak reachability / DNS before 5xx surfaces to users. The ingest gateway's 503 for a full DPoP replay store (auth-failure reason dpop_store_full) is not counted here; IngestDpopReplayCacheFull reports it."
+
+  - name: silent - a full DPoP replay store's 503s are not an identity provider outage
+    interval: 1m
+    input_series:
+      - series: 'basetool_http_error_total{code="SERVICE_UNAVAILABLE", application="basetool-ingest"}'
+        values: "0+60x30"
+      - series: 'basetool_ingest_auth_failures_total{reason="dpop_store_full", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+60x30"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: IdentityProviderUnavailable
+        exp_alerts: []
+
+  - name: fires - an identity provider outage on ingest still fires while the store is full
+    interval: 1m
+    input_series:
+      - series: 'basetool_http_error_total{code="SERVICE_UNAVAILABLE", application="basetool-ingest"}'
+        values: "0+120x30"
+      - series: 'basetool_ingest_auth_failures_total{reason="dpop_store_full", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+60x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: IdentityProviderUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              application: basetool-ingest
+            exp_annotations:
+              summary: "Identity provider unavailable (503 spike, basetool-ingest)"
+              description: "basetool-ingest is re-mapping unreachable-Keycloak-JWKS failures to 503 at an elevated rate — the root cause of the past Http5xxRateHigh incident. Check Keycloak reachability / DNS before 5xx surfaces to users. The ingest gateway's 503 for a full DPoP replay store (auth-failure reason dpop_store_full) is not counted here; IngestDpopReplayCacheFull reports it."
+
+  - name: silent - other auth failures of ingest are not subtracted from the backend
+    interval: 1m
+    input_series:
+      - series: 'basetool_http_error_total{code="SERVICE_UNAVAILABLE", application="basetool-backend"}'
+        values: "0+3x30"
+      - series: 'basetool_ingest_auth_failures_total{reason="invalid_dpop_proof", application="basetool-ingest", path_scope="exchange"}'
+        values: "0+600x30"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: IdentityProviderUnavailable
+        exp_alerts: []
