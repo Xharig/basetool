@@ -899,9 +899,21 @@ REQ-INGEST-004 requires today; nothing is written until the member confirms.
   uploads or another client's drafts. *`HandoffStagingServiceTest`.*
 - [x] The backend previews a blueprint draft as an upload would and writes nothing; each draft
   needs its own capability. *`ExchangeDraftControllerTest`.*
+- [x] A blueprint envelope of a `formatVersion` major other than 1 is refused by the gateway with
+  `errors[]` at `/formatVersion` before the relay, and by the backend on the draft route and in the
+  web import; any `1.x` passes. *`ExchangeDraftRouteTest`, `ExchangeDraftControllerTest`.*
 
 The gateway checks a draft against `blueprint-draft.schema.json` or `refinery-draft.schema.json`
-(`SCHEMA_INVALID`) and relays it to `POST /api/v1/exchange/me/drafts/blueprints` or
+(`SCHEMA_INVALID`). **A blueprint envelope's `formatVersion` must have the major `1`** (owner
+decision 2026-09-28): every `1.x` is read, a later minor only adds optional fields, and any other
+major — the part before the dot must be exactly `1` — is refused. The schema is not narrowed, since
+narrowing a `pattern` would break the v1 promise that schemas only grow; its description states the
+rule, and the gateway checks it right after the schema, answering `400 SCHEMA_INVALID` with
+`errors[{pointer:"/formatVersion", message:"unsupported major version"}]` before anything is
+relayed. The backend checks it again: `ExchangeBlueprintDraftDto.formatVersion` carries
+`@Pattern("^1\.[0-9]+$")` (a relayed refusal reaches the client as `SCHEMA_INVALID`), and the web
+import refuses a well-formed other major with the localised
+`error.personalBlueprint.formatVersionUnsupported` (REQ-INV-014). The gateway relays the draft to `POST /api/v1/exchange/me/drafts/blueprints` or
 `…/refinery-orders` (`exchange.drafts.blueprints` / `exchange.drafts.refinery`). The backend builds
 exactly what the extractor's upload builds: for blueprints it resolves each `ref` as
 `catalog/resolve` does and previews a resolved ref under its product's name and any other under the

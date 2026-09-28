@@ -84,11 +84,15 @@ can upload such a file in the web's blueprint import, and a client can send the 
 
 - **Size.** The web import refuses a file larger than 8 MiB (8 388 608 bytes) before reading it; the
   draft route takes a body of at most 2 MiB.
-- **`formatVersion`.** Write `1.0`. The Basetool does not read the field today: a file with any
-  `<major>.<minor>` the schema allows is read as this page describes.
-- **What is checked.** The draft route checks the whole envelope against its schema. The web import
-  checks only `format` and the items — at most 2000, each with a `ref` — and ignores `formatVersion`,
-  `generator`, `generatedAt`, `provenance` and `extensions`. Write files that pass the schema anyway.
+- **`formatVersion`.** Write `1.0`. Every `1.x` is read as this page describes; a later minor only
+  adds optional fields. A major other than `1` is refused: the draft route answers
+  `400 SCHEMA_INVALID` with `errors[{"pointer":"/formatVersion","message":"unsupported major
+  version"}]`, and the web import refuses the file. The part before the dot must be exactly `1`, so
+  `01.0` is refused too.
+- **What is checked.** The draft route checks the whole envelope against its schema and the major
+  version. The web import checks `format`, `formatVersion` when it is present (it must be a `1.x`),
+  and the items — at most 2000, each with a `ref` — and ignores `generator`, `generatedAt`,
+  `provenance` and `extensions`. Write files that pass the schema anyway.
 - **Provenance.** A blueprint taken over from the review is recorded with the source `import`,
   whatever the item's `provenance` says.
 

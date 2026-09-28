@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.controller.exchange;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -198,6 +199,39 @@ class ExchangeDraftControllerTest {
 
     upload("{\"format\":\"basetool.blueprints\",\"items\":[{\"acquiredAt\":\"x\"}]}")
         .andExpect(status().isBadRequest());
+
+    upload(
+            """
+            {"format":"basetool.blueprints","formatVersion":"1.1",
+             "items":[{"ref":{"bt":"%s"}}]}
+            """
+                .formatted(rifle))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.matched").value(1));
+
+    upload(
+            """
+            {"format":"basetool.blueprints","formatVersion":"2.0",
+             "items":[{"ref":{"bt":"%s"}}]}
+            """
+                .formatted(rifle))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+        .andExpect(jsonPath("$.detail").value(containsString("1.x")));
+  }
+
+  @Test
+  void aBlueprintDraftOfAnotherMajorFormatVersionIsRefused() throws Exception {
+    send(
+            BLUEPRINTS,
+            "{\"format\":\"basetool.blueprints\",\"formatVersion\":\"2.0\",\"items\":[]}",
+            "exchange.drafts.blueprints")
+        .andExpect(status().isBadRequest());
+    send(
+            BLUEPRINTS,
+            "{\"format\":\"basetool.blueprints\",\"formatVersion\":\"1.3\",\"items\":[]}",
+            "exchange.drafts.blueprints")
+        .andExpect(status().isOk());
   }
 
   @Test

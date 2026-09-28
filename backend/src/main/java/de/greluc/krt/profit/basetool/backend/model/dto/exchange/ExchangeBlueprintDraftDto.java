@@ -34,12 +34,17 @@ import org.jetbrains.annotations.Nullable;
  * (REQ-XCH-019).
  *
  * @param format the envelope's format, always {@code basetool.blueprints}
+ * @param formatVersion the envelope's format version, any {@code 1.x}, or {@code null} when absent
  * @param items the blueprints, at most {@value #MAX_ITEMS}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExchangeBlueprintDraftDto(
     @NotNull @Pattern(regexp = "^basetool\\.blueprints$") String format,
+    @Nullable @Pattern(regexp = SUPPORTED_FORMAT_VERSION) String formatVersion,
     @NotNull @Size(max = MAX_ITEMS) List<@NotNull @Valid Item> items) {
+
+  /** The format versions the Basetool reads: major {@code 1}, any minor (REQ-XCH-019). */
+  public static final String SUPPORTED_FORMAT_VERSION = "^1\\.[0-9]+$";
 
   /** The most blueprints one draft may carry. */
   public static final int MAX_ITEMS = 2000;

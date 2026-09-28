@@ -61655,6 +61655,10 @@
             "type" : "string",
             "pattern" : "^basetool\\.blueprints$"
           },
+          "formatVersion" : {
+            "type" : "string",
+            "pattern" : "^1\\.[0-9]+$"
+          },
           "items" : {
             "type" : "array",
             "items" : {

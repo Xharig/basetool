@@ -219,6 +219,9 @@
 - **Datenaustausch: feste Zahlen für Back-off und Sync-Takt.** Fremd-Anwendungen warten nach einem
   Fehler ab 5 Sekunden, verdoppelt bis höchstens 5 Minuten, mit Jitter und nie kürzer als
   `Retry-After`; zeitgesteuert synchronisieren sie höchstens alle 5 Minuten (REQ-XCH-027).
+- **Blueprint-Import: nur Formatversion 1.x.** Eine `basetool.blueprints`-Datei oder ein
+  Blueprint-Entwurf mit einer anderen Hauptversion als 1 (etwa `2.0`) wird abgelehnt statt als 1.0
+  gelesen (REQ-XCH-019, REQ-INV-014).
 - **Datenaustausch: Doku-Seite im KRT-Design.** Die öffentliche Entwickler-Doku
   (`krt-profit.github.io/basetool`) nutzt statt des Standard-Themes das DAS-KARTELL-Design mit
   Basetool-Logo, Seitennavigation, „Improve this page“-Link und einer eingefärbten API-Referenz;

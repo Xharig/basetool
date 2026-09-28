@@ -16,6 +16,12 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   5 minutes, with random jitter and never less than `Retry-After`; a client syncs on start and after
   a local change, and a timed sync runs at most every 5 minutes
   ([sync guide](sync-guide.md#back-off-and-sync-cadence), [client security](client-security.md)).
+- **A `formatVersion` major other than 1 is refused.** A blueprint draft whose `formatVersion` is not
+  a `1.x` gets `400 SCHEMA_INVALID` with `errors[]` at `/formatVersion` ("unsupported major
+  version"), and the web import refuses such a file; every `1.x` is still read
+  ([formats](formats.md#offline-file--envelope), [drafts](resources/drafts.md#errors)). The schema
+  is unchanged; its description states the rule. Until now the field was not read, and `2.0` was
+  read as `1.0`.
 
 ## 2026-09-27
 

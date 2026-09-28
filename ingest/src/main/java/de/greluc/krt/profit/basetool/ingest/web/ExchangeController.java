@@ -110,6 +110,15 @@ public class ExchangeController {
   /** The frontend page where the member confirms a staged mass change. */
   static final String CONFIRMATION_PATH = "/connected-apps/confirm";
 
+  /** The only offline-file major version the gateway reads. */
+  static final String FORMAT_MAJOR = "1";
+
+  /** The envelope field that names the offline-file format version. */
+  static final String FORMAT_VERSION = "formatVersion";
+
+  /** The violation message of an envelope of another major version. */
+  static final String UNSUPPORTED_MAJOR = "unsupported major version";
+
   /** Seconds a client waits after the budget or the staging store refused. */
   private static final String RETRY_AFTER_SECONDS = "60";
 
@@ -502,6 +511,11 @@ public class ExchangeController {
     List<ExchangeSchemas.Violation> violations = schemas.validate(schema, body);
     if (!violations.isEmpty()) {
       return schemaInvalid(violations);
+    }
+    ExchangeSchemas.Violation unsupported =
+        kind == HandoffKind.BLUEPRINT ? unsupportedFormatMajor(body) : null;
+    if (unsupported != null) {
+      return schemaInvalid(List.of(unsupported));
     }
     ExchangeRelay.Result result =
         relay.forward(
@@ -917,6 +931,26 @@ public class ExchangeController {
             .distinct()
             .toList();
     return violations.isEmpty() ? null : schemaInvalid(violations);
+  }
+
+  /**
+   * Refuses an envelope whose {@code formatVersion} names a major other than {@value
+   * #FORMAT_MAJOR}; every {@code 1.x} passes (REQ-XCH-019).
+   *
+   * @param envelope an envelope that already matches its schema
+   * @return the violation at {@code /formatVersion}, or {@code null} when the major is supported
+   */
+  static @Nullable ExchangeSchemas.Violation unsupportedFormatMajor(@NotNull JsonNode envelope) {
+    JsonNode version = envelope.get(FORMAT_VERSION);
+    if (version == null || !version.isString()) {
+      return null;
+    }
+    String value = version.stringValue();
+    int dot = value.indexOf('.');
+    String major = dot < 0 ? value : value.substring(0, dot);
+    return FORMAT_MAJOR.equals(major)
+        ? null
+        : new ExchangeSchemas.Violation("/" + FORMAT_VERSION, UNSUPPORTED_MAJOR);
   }
 
   /**
