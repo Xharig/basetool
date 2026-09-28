@@ -33,6 +33,12 @@
     <div class="greeting hud-box">
         <h1 th:text="#{connectedApps.title}">Verbundene Anwendungen</h1>
         <p th:text="#{connectedApps.subtitle}">Anwendungen, die du mit deinem Konto verbunden hast.</p>
+        <p>
+            <span th:text="#{connectedApps.approvedClients.lead}">Nur zugelassene Anwendungen d&uuml;rfen sich mit deinem Konto verbinden.</span>
+            <a href="https://github.com/krt-profit/basetool/blob/main/docs/legal/approved-clients.md"
+               target="_blank" rel="noopener noreferrer" data-testid="ca-approved-clients"
+               th:text="#{connectedApps.approvedClients.link}">Liste der zugelassenen Anwendungen</a>
+        </p>
     </div>
 
     <div id="ca-host">

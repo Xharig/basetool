@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Verbundene Anwendungen: Link auf die Liste der zugelassenen Anwendungen.** Die Seite
+  *Persönlich → Verbundene Anwendungen* verlinkt die öffentliche Liste
+  (`docs/legal/approved-clients.md` auf GitHub), damit Mitglieder prüfen können, welche Anwendungen
+  zugelassen sind.
 - **Datenaustausch: Zurücknehmen für alle Mitglieder.** Unter *Administration → Verbundene
   Anwendungen* nimmt ein Admin die Änderungen einer Anwendung seit einem Zeitpunkt bei allen
   Mitgliedern zurück (optional nur eine Installation oder ein Bereich); die Anwendung wird vorher
