@@ -4,14 +4,14 @@
 > [ADR-0129](adr/0129-ingest-gateway-is-a-trusted-subsystem-not-a-token-relay.md) and
 > [`docs/specs/desktop-ingest.md`](specs/desktop-ingest.md) (`REQ-INGEST-002`, `-007`, `-008`,
 > `-011`, `-012`). The *decision* and the *requirements* live there; this document is the operator's
-> *how*. Registered in [`docs/specs/INDEX.md`](specs/INDEX.md). Last reviewed: 2026-09-22.
+> *how*. Registered in [`docs/specs/INDEX.md`](specs/INDEX.md). Last reviewed: 2026-09-28.
 
 **Status: implemented.** The setup this runbook describes is live: epic #639 and its issues #641
 (Keycloak client + audience scope) and #642 (the gateway) closed on 2026-06-17, and #1247 (backend
 audience enforcement) on 2026-08-28. What the document is for now:
 
 1. **the record of the configured state** — [*Configured state*](#configured-state) below;
-2. **the repeatable procedure for onboarding a new approved ingest client** —
+2. **the repeatable procedure for onboarding a new approved exchange client** —
    [*Onboarding a new approved client*](#onboarding-a-new-approved-client); and
 3. **how a new or out-of-date realm gets the same shape** —
    [*New or out-of-date realm: run the provisioner*](#new-or-out-of-date-realm-run-the-provisioner).
@@ -31,13 +31,19 @@ the throwaway `frontend/src/e2e/resources/realm-export.e2e.json` test artifact �
 > ## ⚠️ The ingest interface is restricted to approved clients
 >
 > **Only client software explicitly approved by the basetool developer (@greluc) may use the ingest
-> interface.** Approving a client means doing **both** of the following — neither alone grants
-> access:
+> interface.** How a client is approved depends on the routes it uses:
 >
-> 1. registering a dedicated Keycloak client for it (steps 1–3 below), and
-> 2. adding its client id to `IRI_INGEST_ALLOWED_CLIENT_IDS` on the gateway.
+> - **An exchange client** (`/exchange/v1/**`, every third-party client) is approved through the
+>   provisioner template and the backend's client registry —
+>   [*Onboarding a new approved client*](#onboarding-a-new-approved-client) below. It never goes on
+>   the allowlist.
+> - **A legacy `/v1` client** (today only the SC extractor, until the exchange go-live switches those
+>   routes off, `REQ-XCH-033`) needs **both** of the following — neither alone grants access:
 >
-> Removing the allowlist entry revokes a client immediately (existing access tokens expire within the
+>   1. a dedicated Keycloak client for it (steps 1–3 below), and
+>   2. its client id in `IRI_INGEST_ALLOWED_CLIENT_IDS` on the gateway.
+>
+> For the legacy routes, removing the allowlist entry revokes a client immediately (existing access tokens expire within the
 > access-token lifespan, ~5 min) without needing a Keycloak change or a release. Do not add a client
 > id here on anyone's request but the owner's.
 

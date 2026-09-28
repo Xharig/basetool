@@ -19,9 +19,11 @@
 
 package de.greluc.krt.profit.basetool.backend.model.dto.exchange;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
 /**
@@ -31,8 +33,32 @@ import org.jetbrains.annotations.Unmodifiable;
  * @param materials the open material lines
  * @param items the open item lines of item orders
  * @param updatedAt when the demand was computed
+ * @param reason why both lists are empty regardless of the orders, or {@code null} when the member
+ *     may see the demand
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ExchangeOrgDemandDto(
     @NotNull @Unmodifiable List<ExchangeDemandMaterialDto> materials,
     @NotNull @Unmodifiable List<ExchangeDemandItemDto> items,
-    @NotNull Instant updatedAt) {}
+    @NotNull Instant updatedAt,
+    @Nullable Reason reason) {
+
+  /**
+   * An empty demand withheld for the given reason.
+   *
+   * @param reason why the demand is withheld
+   * @param updatedAt when the answer was computed
+   * @return two empty lists carrying the reason
+   */
+  public static @NotNull ExchangeOrgDemandDto withheld(
+      @NotNull Reason reason, @NotNull Instant updatedAt) {
+    return new ExchangeOrgDemandDto(List.of(), List.of(), updatedAt, reason);
+  }
+
+  /** Why a demand is withheld. */
+  public enum Reason {
+
+    /** The member may not see job orders: no unit of theirs is profit-eligible. */
+    NOT_PERMITTED
+  }
+}

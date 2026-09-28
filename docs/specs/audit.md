@@ -496,6 +496,7 @@ dangerous on-behalf-of decision (ADR-0129) — so recording it introduces no new
 |                                        Recorded value                                         |                                                                                     Means                                                                                     |
 |-----------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | a configured client id (`basetool-frontend`, `basetool-android`, a configured ingest gateway) | that client                                                                                                                                                                   |
+| a registered exchange client (relayed by the gateway, REQ-XCH-010)                            | that connected application, named by the gateway's `X-Exchange-Client` and held in the client registry (see below)                                                          |
 | `other`                                                                                       | an authenticated caller whose `azp` names no client this deployment knows                                                                                                     |
 | `none`                                                                                        | a caller with **no token at all** (a scheduled job — the row's actor handle then reads `system`), or a token carrying no `azp` (a Keycloak mapper regression)                 |
 | `NULL`                                                                                        | **only** a row written before the column existed (V237 for `audit_event`, V238 for `bank_audit_event`) — see below, and note the two tables' nulls do not mean the same thing |
@@ -553,6 +554,11 @@ than a feature, so the viewer offers the identical list everywhere.
   filter, and a blank filter value means "no filter" rather than "matches nothing".
 - [x] The bounded vocabulary is the same object the `client_id` metric label uses.
 - [x] The filter is offered on every tab and every offered value carries a DE/EN label.
+- [x] A write through a connected application records that client: the gateway's
+  `X-Exchange-Client` is honoured only from the gateway and only for a registered client, `other`
+  otherwise. *`ClientAttributionTest#labelOf_namesTheExternalClientOfAnActingMember`,
+  `#relayedLabelOf_namesARegisteredClientOnlyFromTheGateway`, `ExchangeBlueprintWriteControllerTest`
+  (the `BLUEPRINT_ADDED` / `BLUEPRINT_REMOVED` rows carry the client id).*
 
 **Enforced by:** `AuditServiceTest`, `BankAuditServiceTest`, `ClientAttributionTest`,
 `AuditQueryIntegrationTest`, `BankAuditQueryIntegrationTest`, `AdminAuditLogPageControllerTest`,

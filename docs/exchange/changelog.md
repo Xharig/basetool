@@ -5,6 +5,13 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-28
 
+- **The org demand is withheld with `reason: NOT_PERMITTED`.** A member who may not see their
+  organisation's job orders in the Basetool — no unit of theirs takes part in the profit sharing —
+  now gets `200` with two empty lists and `"reason": "NOT_PERMITTED"` instead of their units' demand;
+  a member whose unit leaves the profit sharing stops seeing it at once
+  ([org demand](resources/org-demand.md#whose-demand)). `org-demand.schema.json` gains the optional
+  `reason`, absent whenever the demand is shown. A client that does not read it shows an empty
+  demand, as it already did for a member of no unit; the sandbox shows both answers.
 - **A full proof store answers `503 SERVICE_UNAVAILABLE`.** When all members together hold the
   gateway's 100 000 live DPoP proofs, a proof is no longer refused like a replayed one
   (`401 DPOP_INVALID`) but with `503 SERVICE_UNAVAILABLE` and `Retry-After`, the seconds until the

@@ -254,6 +254,9 @@ class Smoke:
             self.step(label, status in (200, 201), f"{status} {json.dumps(answer)[:300]}")
             if path == "/exchange/v1/me/stock":
                 stock = answer
+            if path == "/exchange/v1/me/org-demand":
+                self.step("the org demand is not withheld", "reason" not in answer,
+                          json.dumps(answer)[:300])
         refs = {}
         for kind, ref in [("BLUEPRINT", {"scRecord": "BP_CRAFT_SBXM_HELMET_01"}),
                           ("SHIP_TYPE", {"name": "Sandbox Miner"}),

@@ -41,6 +41,7 @@ import de.greluc.krt.profit.basetool.backend.repository.PersonalBlueprintReposit
 import de.greluc.krt.profit.basetool.backend.service.BlueprintVariantFamilyResolver;
 import de.greluc.krt.profit.basetool.backend.service.JobOrderMaterialRequirementResolver;
 import de.greluc.krt.profit.basetool.backend.service.JobOrderStockProjectionService;
+import de.greluc.krt.profit.basetool.backend.service.OwnerScopeService;
 import de.greluc.krt.profit.basetool.backend.support.QuantityTypeRounding;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -63,7 +64,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Only orders a unit of the member is responsible for count, never ones the member merely
  * oversees or administers. A material line is the outstanding requirement per material, quality
  * floor and source summed across those orders, as the Materialbedarf computes it; an item line is
- * what item orders still need per game item. Nothing names a person or an order.
+ * what item orders still need per game item. Nothing names a person or an order. A member who fails
+ * the web's job-order gate gets no demand at all, only the reason.
  */
 @Service
 @RequiredArgsConstructor
@@ -95,25 +97,36 @@ public class ExchangeDemandService {
   private final MaterialRepository materialRepository;
   private final PersonalBlueprintRepository blueprintRepository;
   private final BlueprintVariantFamilyResolver familyResolver;
+
+  /** The web's job-order gate, evaluated for the acting member. */
+  private final OwnerScopeService ownerScopeService;
+
   private final Clock clock = Clock.systemUTC();
 
   /**
-   * Computes the member's org demand.
+   * Computes the member's org demand, withheld unless the member passes the web's job-order gate.
    *
-   * @param member the member
-   * @return the demand; empty lists when the member belongs to no unit or no order is open
+   * @param member the member the current request acts for
+   * @return the demand; empty lists when the member belongs to no unit or no order is open, and
+   *     empty lists with {@link ExchangeOrgDemandDto.Reason#NOT_PERMITTED} when {@link
+   *     OwnerScopeService#canViewJobOrders()} refuses the member
    */
   @Transactional(readOnly = true)
   public @NotNull ExchangeOrgDemandDto demand(@NotNull UUID member) {
+    if (!ownerScopeService.canViewJobOrders()) {
+      return ExchangeOrgDemandDto.withheld(
+          ExchangeOrgDemandDto.Reason.NOT_PERMITTED, clock.instant());
+    }
     Set<UUID> units = membershipRepository.findOrgUnitIdsByUserId(member);
     List<JobOrder> orders =
         units.isEmpty()
             ? List.of()
             : jobOrderRepository.findOpenForExchangeDemand(OPEN_STATUSES, units);
     if (orders.isEmpty()) {
-      return new ExchangeOrgDemandDto(List.of(), List.of(), clock.instant());
+      return new ExchangeOrgDemandDto(List.of(), List.of(), clock.instant(), null);
     }
-    return new ExchangeOrgDemandDto(materials(orders), items(member, orders), clock.instant());
+    return new ExchangeOrgDemandDto(
+        materials(orders), items(member, orders), clock.instant(), null);
   }
 
   /**

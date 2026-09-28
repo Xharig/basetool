@@ -975,9 +975,11 @@ certificate rotation*, *Token rotation*
 > and its Quadlet units, an owner-approved production step that must precede the first exchange
 > release.
 
-The Redis instance backing Spring Session (frontend) and the ingest handoff staging runs with a
-durability and memory posture matched to a store whose loss forces users to re-login — **not** a
-throwaway cache (Redis is session-store only, ADR-0074):
+The Redis instance backing Spring Session (frontend) and the ingest handoff staging — and, for the
+exchange, the backend's registry mirror, revocations and key deny list under `exchange:*` and the
+gateway's quotas, byte budget and idempotency results under `ingest:xch:*` (ADR-0221,
+REQ-XCH-023) — runs with a durability and memory posture matched to a store whose loss forces users
+to re-login — **not** a throwaway cache (ADR-0074):
 
 - **Durable persistence — RDB + AOF.** `--appendonly yes --appendfsync everysec` makes AOF the
   primary durability layer (~1 fsync/s regardless of write volume; ~1 s worst-case loss on a crash),
@@ -1017,19 +1019,23 @@ posture has ever had on the **primary** durability layer.
 
 **Acceptance**
 
-- [ ] Both redis command lines in `docker-compose.yml` set `--appendonly yes --appendfsync everysec`,
+- [x] Both redis command lines in `docker-compose.yml` set `--appendonly yes --appendfsync everysec`,
   `--save "60 1"`, `--maxmemory 768mb`, and `--maxmemory-policy noeviction`; the prod override keeps
   `--aclfile` and the two lines carry identical persistence/memory flags and
   `--notify-keyspace-events Egx`.
-- [ ] `--maxmemory` (768mb) is strictly below the container memory limit (1024M) so a snapshot /
+- [x] `--maxmemory` (768mb) is strictly below the container memory limit (1024M) so a snapshot /
   AOF-rewrite fork has copy-on-write headroom.
-- [ ] The eviction policy is `noeviction`; no `allkeys-*` / `volatile-*` policy is configured.
-- [ ] `RedisMemoryHigh`, `RedisEvictions`, `RedisRdbStale`, `RedisRdbSaveFailing` and
+- [x] The eviction policy is `noeviction`; no `allkeys-*` / `volatile-*` policy is configured.
+- [x] `RedisMemoryHigh`, `RedisEvictions`, `RedisRdbStale`, `RedisRdbSaveFailing` and
   `RedisAofWriteFailing` exist in `infrastructure.yml` and their descriptions match this posture
   (768mb maxmemory, noeviction semantics, AOF-primary durability).
-- [ ] `RedisRdbStale` carries the `and redis_rdb_changes_since_last_save > 0` guard, so an idle store
+- [x] `RedisRdbStale` carries the `and redis_rdb_changes_since_last_save > 0` guard, so an idle store
   with an ageing snapshot does not page. Pinned by
   `monitoring/prometheus/tests/redisrdbstale_idle_guard_test.yml`.
+
+*Ticked 2026-09-28 against the repository (`docker-compose.yml`, `quadlet/systemd/redis.container`,
+`infrastructure.yml`); production carries the 768mb / 1024M pair only after the rollout in the note
+above.*
 
 **Enforced by:** `docker-compose.yml` (`x-redis` template + `redis` prod override) · the generated
 `quadlet/systemd/redis.container` (`Exec=` carries the prod line; `quadlet-drift` keeps it equal) ·
