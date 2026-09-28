@@ -21,6 +21,23 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
   parameter without a name is `400 SCHEMA_INVALID` at `/` instead of a bare `400`. The registry
   now also lists `500 INTERNAL_ERROR`, the generic fallback ([errors](errors.md)). New codes are
   additive; a client handles them by their status.
+- **Documented: the per-IP limit.** 120 requests a minute per source IP address, over all members
+  and clients, are checked before the token is read; every client behind one address shares them.
+  Its `429 RATE_LIMITED` carries no `RateLimit` headers and no `DPoP-Nonce`
+  ([sync guide](sync-guide.md#rate-limits-quota-and-back-off)). The limit existed before.
+- **Corrected: which answers carry `DPoP-Nonce`, and when the nonce challenge comes.** The answers
+  given before the token is read — the per-IP `429`, `413 PAYLOAD_TOO_LARGE`, the identity
+  provider's `503`, a refused method, path or query — carry no nonce; keep the last one. The
+  challenge comes before the proof's claim checks, but a proof that cannot be parsed or verified is
+  refused `invalid_dpop_proof` without a challenge
+  ([authentication](authentication.md#the-server-nonce)). The behaviour is unchanged.
+- **Corrected: smaller statements.** `NOT_FOUND` also means an unknown route or method, checked
+  right after the token's audience; `IDEMPOTENCY_KEY_REUSED` means another route or another body
+  under the key, and `IDEMPOTENCY_KEY_MISSING` also a malformed key; `RATE_LIMITED` also covers the
+  hourly account check and the per-IP limit; `LOC_KEY_UNRESOLVED` is added whenever the key fields,
+  the `locKey` included, resolve to no single entry; the schema check runs before the relay, after
+  the gates; the installation label must not start with a space; only the gates' refusals are
+  counted as metric reasons.
 - **A full proof store answers `503 SERVICE_UNAVAILABLE`.** When all members together hold the
   gateway's 100 000 live DPoP proofs, a proof is no longer refused like a replayed one
   (`401 DPOP_INVALID`) but with `503 SERVICE_UNAVAILABLE` and `Retry-After`, the seconds until the

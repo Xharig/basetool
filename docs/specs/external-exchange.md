@@ -315,14 +315,22 @@ A request to an exchange route without a valid DPoP proof bound to the token's `
 (`401 DPOP_REQUIRED` / `401 DPOP_INVALID`). The legacy `/v1/*` routes keep today's behaviour
 (`REQ-INGEST-012`) until they end (REQ-XCH-033).
 
-Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and a
-replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
+Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and
+a replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
 proof without a current one is answered `401 DPOP_INVALID` with `WWW-Authenticate: DPoP …,
-error="use_dpop_nonce"` and a fresh `DPoP-Nonce`, and the client retries once with it. Every exchange
-response carries the current nonce. A nonce is stateless — a five-minute window and its HMAC under a
-key drawn at startup — and holds for its window and the next; a restart invalidates them all, which
-costs a client one retry. A bearer-scheme request, or a token without `cnf.jkt`, is `401
-DPOP_REQUIRED` with the DPoP challenge.
+error="use_dpop_nonce"` and a fresh `DPoP-Nonce`, and the client retries once with it. Every answer
+past the authentication filter carries the current nonce (`ExchangeTokenGateFilter`, and
+`SecurityProblemResponseHandler` for a refused token or proof); the answers written before it — the
+bot filter's, the per-IP `429 RATE_LIMITED`, `413 PAYLOAD_TOO_LARGE` and the identity provider's
+`503` — and the anonymous contract documents carry none. The nonce check runs after Spring's proof
+decoder has parsed the proof and verified its header and signature, and before every claim check: a
+proof with a wrong `typ`, an unsupported `alg`, a missing or private `jwk` or a bad signature is
+`invalid_dpop_proof` without a challenge. *Corrected 2026-09-28: this paragraph said every exchange
+response carried the nonce, and the developer docs said the challenge came before every proof check;
+the code has behaved as described here since the nonce was built.* A nonce is stateless — a
+five-minute window and its HMAC under a key drawn at startup — and holds for its window and the
+next; a restart invalidates them all, which costs a client one retry. A bearer-scheme request, or a
+token without `cnf.jkt`, is `401 DPOP_REQUIRED` with the DPoP challenge.
 
 **Which proofs need the nonce.** Only a proof whose target has a readable path outside `/exchange` —
 the legacy `/v1` routes — skips it; an unparseable target, a target without a path and `/exchange`
@@ -1209,6 +1217,13 @@ SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted a
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
+**In front of them**, before the token is read, the ingest-wide per-IP bucket
+(`RateLimitingFilter`, REQ-INGEST-005; `app.rate-limit.ip-capacity` / `ip-refill-tokens`, 120 a
+minute) covers every `/v1` and `/exchange` request, the anonymous schema reads included. Its
+`429 RATE_LIMITED` carries `Retry-After` but no `RateLimit` headers and no `DPoP-Nonce`, and every
+member and client behind one address shares it, so the per-client 1200 a minute cannot be reached
+from a single address.
+
 **Per instance, not per deployment.** The three in-process buckets — requests per client and member,
 per client, and the ten account checks an hour — and Spring's DPoP `jti` replay cache (REQ-XCH-006)
 are held in each gateway process's memory. A second gateway instance behind the edge would therefore
@@ -1289,8 +1304,12 @@ A missing or unparseable `User-Agent` counts as older, and a pre-release of the 
 ### REQ-XCH-025 — Errors are problem+json with a stable code
 
 Every error is RFC 9457 problem+json with a `code` from the registry in `docs/exchange/errors.md`,
-each with its HTTP status and the client action it requires. Codes are never reused or repurposed;
-the gateway-side codes are the `reason` labels of the exchange metrics.
+each with its HTTP status and the client action it requires. Codes are never reused or repurposed.
+The gateway's gates count their refusals on `basetool_ingest_exchange_refused_total` with the code
+as the `reason` label (`ExchangeRefusals.CODES`); the routes' own answers (`SCHEMA_INVALID`,
+`BATCH_TOO_LARGE`, `PAYLOAD_TOO_LARGE`, `CURSOR_EXPIRED`, `BACKEND_RELAY_FAILED`, a staging store's
+`503`) and those written before the token is read are not counted there. *Corrected 2026-09-28: this
+said every gateway-side code was such a label.*
 
 No answer on an exchange route falls outside the registry. A body that is not a JSON document is
 `400 SCHEMA_INVALID` with one error at the pointer `""` (on the legacy `/v1` routes it stays

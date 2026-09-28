@@ -33,8 +33,9 @@ even a single one, because they are never taken without the member. Store the `b
 and send it from then on.
 
 `POST /exchange/v1/catalog/resolve` resolves up to 500 references of one `kind` (`BLUEPRINT`,
-`ITEM`, `MATERIAL`, `SHIP_TYPE`) at a time. A `locKey` that resolved to nothing falls through to the
-name and adds a `LOC_KEY_UNRESOLVED` warning at `/refs/<i>/locKey`.
+`ITEM`, `MATERIAL`, `SHIP_TYPE`) at a time. A reference with a `locKey` whose key fields, the
+`locKey` included, did not resolve to exactly one entry falls through to the name and adds a
+`LOC_KEY_UNRESOLVED` warning at `/refs/<i>/locKey`.
 
 ## Quantity — `quantity`
 
