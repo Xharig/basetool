@@ -22,10 +22,14 @@ sub-issue that implements it.
 > [!note] Each requirement's own status line is authoritative
 > Each requirement carries its work package; its status line says what is built and what remains,
 > and moves in the PR that lands the change, together with its **Enforced by** test. What remains
-> is chiefly the sandbox (WP 2.3, #2099), the clients' migrations (WP 5.1, #2088; WP 5.2, #2089), the app (#2097) and
-> the go-live (WP 6, #2092). Requirements of other specs that this one changes state it in their
-> own text; a callout there marks only what is still planned. *Corrected 2026-09-27: this note said
-> nothing was built yet, long after most of the requirements had landed.*
+> is chiefly the clients' migrations (WP 5.1, #2088; WP 5.2, #2089), the app (#2097) and the go-live
+> (WP 6, #2092). Requirements of other specs that this one changes state it in their own text; a
+> callout there marks only what is still planned. *Corrected 2026-09-27: this note said nothing was
+> built yet, long after most of the requirements had landed.* *Corrected 2026-09-28: it still named
+> the sandbox (WP 2.3, #2099) as open after #2099 had closed; the end-to-end runs the requirements
+> had deferred to it — an installation revoke, a reconnect, a departure, the account check, the
+> corpus round trip, a confirmed mass change and an admin suspension — are now built on the E2E
+> stack (`ExchangeConnectionsE2eTest`, `ExchangeSyncE2eTest`, `ExchangeDepartureE2eTest`).*
 
 ## Requirements
 
@@ -192,7 +196,9 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
 - [x] The admin page *Administration → Verbundene Anwendungen* (`/admin/exchange-clients`)
   registers, edits, suspends and activates clients and flips the switch in place; suspending, either
   direction of the switch and granting a client more capabilities each ask for confirmation first.
-  *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`.*
+  *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`; that the gateway
+  follows — `403 CLIENT_SUSPENDED` after a suspension on the page, answered again after the
+  reactivation — `ExchangeConnectionsE2eTest.anAdminSuspensionAndReactivationReachTheGateway`.*
 - [x] Each client shows its connected members and last activity, counted over live installations
   only (`GET /api/v1/admin/exchange-clients/usage`: not revoked, and not seen last before the
   member disconnected the client); the error rate per client is linked in Grafana
@@ -200,7 +206,8 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   `AdminExchangeClientsPageControllerMvcTest`.*
 
 **Enforced by:** `ExchangeRegistryMirrorIntegrationTest`, `ExchangeRegistrySnapshotTest`,
-`AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `RedisAclBackendIntegrationTest`,
+`AdminExchangeRegistryControllerTest`, `AdminExchangeClientsE2eTest`, `ExchangeConnectionsE2eTest`,
+`RedisAclBackendIntegrationTest`,
 `RedisAclIngestIntegrationTest`, `monitoring/prometheus/tests/exchange_registry_alerts_test.yml` ·
 **Code:** `ExchangeRegistryService`, `ExchangeRegistryMirrorSync`, `RedisExchangeRegistryMirror`,
 `ExchangeRegistryReconcileTask`, `AdminExchangeRegistryController` · **Status:** registry, admin
@@ -300,7 +307,7 @@ accepted. The provisioner applies this on production only **after** the legacy s
   the consent page on every login, also when consent exists; access and refresh tokens carry
   `cnf.jkt`, and a refresh without a DPoP proof is refused.
 
-**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — WP 5.1; the consent page's warning and user code — built (#2092, M1, ADR-0228)
+**Status:** behaviour observed — WP 0.4; template, scopes and theme pages — WP 2.2 (#2081); the extractor's `extractor-ingest` removal — provisioner and extractor built (#2201, basetool-sc-extractor #69–#71), production apply with WP 6 (#2092); the consent page's warning and user code — built (#2092, M1, ADR-0228)
 
 ### REQ-XCH-006 — DPoP is required on every exchange route
 
@@ -308,14 +315,22 @@ A request to an exchange route without a valid DPoP proof bound to the token's `
 (`401 DPOP_REQUIRED` / `401 DPOP_INVALID`). The legacy `/v1/*` routes keep today's behaviour
 (`REQ-INGEST-012`) until they end (REQ-XCH-033).
 
-Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and a
-replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
+Spring's proof verifier checks `htm`, `htu`, `iat` (30 s skew), the binding to `cnf.jkt`, `ath` and
+a replayed `jti`. On exchange routes the gateway also requires a **server nonce** (RFC 9449 §8): a
 proof without a current one is answered `401 DPOP_INVALID` with `WWW-Authenticate: DPoP …,
-error="use_dpop_nonce"` and a fresh `DPoP-Nonce`, and the client retries once with it. Every exchange
-response carries the current nonce. A nonce is stateless — a five-minute window and its HMAC under a
-key drawn at startup — and holds for its window and the next; a restart invalidates them all, which
-costs a client one retry. A bearer-scheme request, or a token without `cnf.jkt`, is `401
-DPOP_REQUIRED` with the DPoP challenge.
+error="use_dpop_nonce"` and a fresh `DPoP-Nonce`, and the client retries once with it. Every answer
+past the authentication filter carries the current nonce (`ExchangeTokenGateFilter`, and
+`SecurityProblemResponseHandler` for a refused token or proof); the answers written before it — the
+bot filter's, the per-IP `429 RATE_LIMITED`, `413 PAYLOAD_TOO_LARGE` and the identity provider's
+`503` — and the anonymous contract documents carry none. The nonce check runs after Spring's proof
+decoder has parsed the proof and verified its header and signature, and before every claim check: a
+proof with a wrong `typ`, an unsupported `alg`, a missing or private `jwk` or a bad signature is
+`invalid_dpop_proof` without a challenge. *Corrected 2026-09-28: this paragraph said every exchange
+response carried the nonce, and the developer docs said the challenge came before every proof check;
+the code has behaved as described here since the nonce was built.* A nonce is stateless — a
+five-minute window and its HMAC under a key drawn at startup — and holds for its window and the
+next; a restart invalidates them all, which costs a client one retry. A bearer-scheme request, or a
+token without `cnf.jkt`, is `401 DPOP_REQUIRED` with the DPoP challenge.
 
 **Which proofs need the nonce.** Only a proof whose target has a readable path outside `/exchange` —
 the legacy `/v1` routes — skips it; an unparseable target, a target without a path and `/exchange`
@@ -403,14 +418,21 @@ labels are letters and are accepted: the label is always shown after the registe
 - [x] Label validation tests, including control, bidi and homoglyph-only input
   (`ExchangeInstallationControllerTest`).
 - [x] Log-capture test: the label never appears in any log line (`ExchangeInstallationControllerTest`).
-- [ ] The installation response and the service document carry the same `installationId`, and a
+- [x] The installation response and the service document carry the same `installationId`, and a
   tombstone written by that installation names it. *The gateway half is in: `POST
   /exchange/v1/me/installation` checks the label against `installation.schema.json` before the relay
   (a rule-breaking label never reaches the backend), and the service document takes
   `installationId` from the backend's installation of the relayed key (`ExchangeControllerTest`).*
+  *The backend keeps the id across first sight and labelling
+  (`ExchangeInstallationControllerTest.theInstallationIsCreatedOnFirstSightAndKeepsItsIdWhenLabelled`),
+  the service document names it
+  (`ExchangeControllerTest.theServiceDocumentNamesTheGrantsLimitsAndInstallation`), and a tombstone's
+  `removedBy.installationId` is the removing installation's id
+  (`ExchangeBlueprintControllerTest.theFeedAnswersAnAdditionAndATombstoneNamingTheRemovingInstallation`).
+  Ticked 2026-09-28.*
 
-**Status:** gateway routes built — WP 3.2 (#2082); the backend's installations with WP 3.1 (#2083),
-tombstones with WP 3.3
+**Status:** built — gateway routes WP 3.2 (#2082), the backend's installations WP 3.1 (#2083),
+tombstones WP 3.3 (#2083)
 
 ### REQ-XCH-008 — Revocation takes effect on the next request
 
@@ -466,12 +488,15 @@ the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user alrea
 
 **Acceptance**
 
-- [ ] A revoked installation is refused after a token refresh; another installation of the same
+- [x] A revoked installation is refused after a token refresh; another installation of the same
   client keeps working. *Backend: `ExchangeInstallationControllerTest`,
   `ExchangeRevocationMirrorIntegrationTest`. Gateway: it reads `exchange:deny:<jkt>` on every
   request, bypassing its cache, and refuses a listed key `401 INSTALLATION_REVOKED` whatever the
-  token's `iat` (`ExchangeGateTest`). The end-to-end run follows with the sandbox (WP 2.3).*
-- [ ] A revoked client is refused, and a fresh connection right after works. *The gateway half is
+  token's `iat` (`ExchangeGateTest`). End to end:
+  `ExchangeConnectionsE2eTest.revokingOneInstallationLeavesTheOtherWorking` — the member disconnects
+  one of two installations on „Verbundene Anwendungen" in place, the gateway refuses that key on
+  the next request and again after a token refresh, and the other installation keeps working.*
+- [x] A revoked client is refused, and a fresh connection right after works. *The gateway half is
   in: it reads `exchange:revoked:<client>:<member>` per request and refuses `401 CLIENT_REVOKED` an
   offline token issued at or before that second and any other token signed in at or before it or
   without `auth_time` — so a token refreshed after the disconnect from an older sign-in is refused —
@@ -482,8 +507,12 @@ the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user alrea
   clients signed in and needs `manage-users` over the member (`ExchangeClientSessionResourceTest`).
   The backend re-checks it from the relayed connection time and refuses an unreadable mirror
   (backend `ExchangeGateTest`, `ExchangeCatalogControllerTest`; the compared time in the gateway's
-  `ExchangeGateTest`, the relay header in `ExchangeRelayTest`).*
-- [ ] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
+  `ExchangeGateTest`, the relay header in `ExchangeRelayTest`). End to end:
+  `ExchangeConnectionsE2eTest.aNewConnectionAfterAWholeClientDisconnectWorksAtOnce` — after the
+  member disconnects the client on „Verbundene Anwendungen", the gateway refuses it `401
+  CLIENT_REVOKED` on the next request, and the first call of a new device login with
+  `offline_access` is answered.*
+- [x] A departed member is refused on the next request. *The backend half is in (WP 3.1): the roster
   sync and the login sync publish `MemberDepartedEvent` when an active member is disabled, loses
   every role or disappears from Keycloak, and `ExchangeDepartureService` then — after the sync's
   commit, only while the registry holds a client — removes the member's consent for each client and
@@ -493,10 +522,14 @@ the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user alrea
   (`ExchangeDepartureIncomplete`) instead of failing the sync (`ExchangeDepartureServiceTest`,
   `ExchangeDepartureIntegrationTest`, `UserReconciliationServiceTest`).
   The gateway refuses the member through the per-client revocations those steps write
-  (`ExchangeGateTest`); the end-to-end run follows with the sandbox (WP 2.3).*
+  (`ExchangeGateTest`). End to end: `ExchangeDepartureE2eTest` — the member loses every realm role
+  in Keycloak, their next sign-in reconciles the departure through the login sync, and the
+  client's next request is refused `401 CLIENT_REVOKED`. The roster sync's trigger is covered by
+  `UserReconciliationServiceTest`; the E2E run leaves it alone because it reconciles every account
+  of the shared stack.*
 
-**Status:** built — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087); the end-to-end run
-follows with the sandbox (WP 2.3, #2099)
+**Status:** built — WP 3.1 / 3.3 (#2083), WP 3.2 (#2082), WP 4.5 (#2087); end to end on the E2E
+stack (`ExchangeConnectionsE2eTest`, `ExchangeDepartureE2eTest`)
 
 ### REQ-XCH-009 — The acting member holds a reduced authentication and sees own data only
 
@@ -518,16 +551,22 @@ demand feed needs, arriving with it; the feed was built without any membership a
 
 **Acceptance**
 
-- [ ] An `ADMIN` member reads and writes only own rows and holds no admin authority on exchange
-  paths. *The authority half is in (`ExchangeCatalogControllerTest`: an `ADMIN` member's exchange
-  request holds only `ROLE_EXCHANGE_MEMBER` and the relayed capabilities); the own-rows half is
-  proven by each read and write route as it ships (WP 3.3).*
+- [x] An `ADMIN` member reads and writes only own rows and holds no admin authority on exchange
+  paths. *The authority half: `ExchangeCatalogControllerTest` — an `ADMIN` member's exchange
+  request holds only `ROLE_EXCHANGE_MEMBER` and the relayed capabilities. The own-rows half:
+  `ExchangeAdminActingMemberTest` — an `ADMIN` acting through the exchange, with an admin pin on
+  the request, reads only their own blueprints, stock lots and ships beside another member's; a
+  blueprint `remove` of the other's product is `unchanged`, a `set-quantity` on a lot only the
+  other holds is `VERSION_CONFLICT`, and a ship `remove` or `upsert` of the other's ship is
+  `unmatched`, each leaving the other's rows as they were.*
+  *Corrected 2026-09-28: this box said the own-rows half was proven by each route as it shipped;
+  no route test used an `ADMIN` member until then (epic #2078 plan audit).*
 - [x] ArchUnit: exchange services never call an admin-gated method or the admin scope predicate;
   exchange controllers call exchange services only; exchange DTOs stay in the exchange layer
   (`ArchitectureTest`).
 
 **Status:** relay and reduced authentication built — WP 3.1 (#2083); the data routes built with
-WP 3.3 and WP 4.1–4.4
+WP 3.3 and WP 4.1–4.4; the `ADMIN` own-rows test built (`ExchangeAdminActingMemberTest`)
 
 ### REQ-XCH-010 — The relay names the external client, and only the gateway may
 
@@ -722,8 +761,13 @@ resolver (REQ-XCH-012) answers a blueprint with the same `bt` and accepts it bac
 
 **Acceptance**
 
-- [ ] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
+- [x] Round trip: the corpus fixture added through the exchange appears in „Meine Blueprints" and
   in the feed of another installation.
+  *`ExchangeSyncE2eTest.theCorpusReachesMeineBlueprintsAndTheFeedOfAnotherInstallation` on the E2E
+  stack: every name of `game-log-corpus-v1.json` is resolved in one call against the twelve
+  products `ExchangeResolveCorpusTest` uses (`exchange-corpus-e2e-seed.sql`), the resolved ones are
+  added through one installation, and each appears in the feed of a second installation, read on
+  from its snapshot cursor, and on „Meine Blueprints" with the client as its source.*
 - [x] The feed marks default-granted blueprints and follows a change of the default set.
   *`ExchangeBlueprintControllerTest`.*
 
@@ -737,7 +781,7 @@ only. `basetool_exchange_writes_total{resource,outcome}` counts the ops.
 
 **Status:** read and write sides built in the backend, and the gateway's read route (`GET
 /exchange/v1/me/blueprints`) and write route (`POST …/changes`) — WP 4.1 (#2084); the corpus round
-trip follows with the sandbox (WP 2.3)
+trip built on the E2E stack (`ExchangeSyncE2eTest`)
 
 ### REQ-XCH-016 — Stock syncs as lots, booked like the web
 
@@ -873,17 +917,41 @@ line sums `max(0, ordered − delivered − earmarked)` per game item, and `craf
 member's blueprints the way the order's blueprint coverage does (variant family when the order counts
 variants). Lines with nothing open are left out; `bt` is the material's or game item's id.
 
+Only a member who passes the web's job-order gate gets the demand: `ExchangeDemandService` asks
+`OwnerScopeService.canViewJobOrders()` — the same rule that opens the Aufträge area and the
+Materialbedarf (REQ-ORDERS-034) — before reading any order. Any other member gets `200` with two
+empty lists and `reason: "NOT_PERMITTED"`; a permitted member's answer carries no `reason`, even
+when nothing is open. The rule is evaluated with the exchange's reduced authorities (REQ-XCH-009),
+so it reduces to "a member, or a leadership seat above a member, of at least one profit-eligible
+unit" — an `ADMIN` role does not open it. It runs on every request, so a unit that loses its profit
+eligibility while its orders stay open stops showing its demand to members who have no other
+eligible unit. As on the web, the gate is per member: a permitted member sees the demand of every
+unit they belong to (owner decision 2026-09-28, #2095). `reason` is an optional field of
+`org-demand.schema.json` with the one value `NOT_PERMITTED`; the gateway refuses any other value as
+a relay failure. *Corrected 2026-09-28: #2095 promised this gate and the `reason`, but the feed was
+built without either, so a member of a unit that lost its profit eligibility kept seeing its open
+demand.*
+
 **Acceptance**
 
+- [x] A member who fails `canViewJobOrders` gets empty lists with `reason: NOT_PERMITTED` and no
+  order is read; a member who passes it gets the demand without a `reason`; a unit that loses its
+  profit eligibility stops showing its demand. *`ExchangeDemandServiceTest`,
+  `ExchangeDemandControllerTest` (against the real gate and database), `ExchangeDemandParityTest`
+  (the web's Materialbedarf is withheld by the same gate); `ExchangeOrgDemandRouteTest` relays the
+  withheld answer and refuses an unknown `reason`; fixtures for both shapes under
+  `docs/exchange/examples/v1/org-demand/`.*
 - [x] An overseer who is not a member of a unit does not see its demand.
   *`ExchangeDemandServiceTest` — only the member's own units are asked.*
 - [x] The feed's open quantities equal the Materialbedarf's gaps for the same orders.
   *`ExchangeDemandParityTest`.*
 - [x] The response schema admits no name or free-text field.
-  *`ExchangeOrgDemandRouteTest` pins the schema's field sets; the only names are catalogue names.*
+  *`ExchangeOrgDemandRouteTest` pins the schema's field sets and the `reason` enum; the only names
+  are catalogue names.*
 
 **Status:** the backend location list is built — WP 3.1 (#2083); the backend's demand and the
-gateway's demand route (`GET /exchange/v1/me/org-demand`) are built — WP 4.3 (#2095)
+gateway's demand route (`GET /exchange/v1/me/org-demand`) are built — WP 4.3 (#2095); the
+job-order gate with `reason: NOT_PERMITTED` is built (#2095 follow-up)
 
 ### REQ-XCH-019 — Drafts keep review-before-commit
 
@@ -892,7 +960,10 @@ REQ-INGEST-004 requires today; nothing is written until the member confirms.
 
 **Acceptance**
 
-- [ ] The SC Extractor's draft flows pass unchanged through the exchange routes.
+- [ ] The SC Extractor's draft flows pass unchanged through the exchange routes. *As of 2026-09-28
+  both sides are merged — the server routes (#2175) and the extractor's exchange client
+  (basetool-sc-extractor #69–#71); the box closes with the extractor's 2.10.0 release at the go-live
+  (#2088, #2092).*
 - [x] A draft is checked against its schema, relayed, staged and answered with its handoff; a
   refused one stages nothing. *`ExchangeDraftRouteTest`.*
 - [x] A client's drafts evict only its own oldest drafts for that member, never the extractor's
@@ -944,7 +1015,8 @@ Every write carries an `Idempotency-Key` (`400 IDEMPOTENCY_KEY_MISSING`), kept 2
 (client, member, key). Authentication, gates and rate limits run before the lookup; only results
 produced after them are cached — never `401`, `403`, `429`, `503`,
 `MASS_CHANGE_CONFIRMATION_REQUIRED` or a `5xx`. A duplicate in flight gets
-`409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different body `422 IDEMPOTENCY_KEY_REUSED`.
+`409 IDEMPOTENCY_IN_PROGRESS`; a reused key with a different request — another method, path or
+body — `422 IDEMPOTENCY_KEY_REUSED`.
 These two and `400 IDEMPOTENCY_KEY_MISSING` are the filter's own answers about the key, written
 before anything is claimed, and are never cached; the cached statuses below are those of the route
 behind the filter (`ExchangeIdempotencyFilter.cacheable`). An answer above
@@ -955,16 +1027,20 @@ The key is 8 to 128 characters of `[A-Za-z0-9._~-]` and is stored only as a hash
 `ingest:xch:idem:<client>:<member>:<sha256>`; a request's fingerprint is the SHA-256 of method, path
 and body. The same request under a known key is answered from the cache with `Idempotency-Replayed:
 true`. Cached are the answers `2xx`, `400`, `404`, `409`, `410` and `422`, and never a staged mass
-change. The lock of a key in flight lives two minutes, so a crashed request cannot block a key for
-the day. A store Redis cannot reach is `503 SERVICE_UNAVAILABLE`, never an unguarded write. That
-holds on every exchange route and for every kind of Redis failure — a lost connection, a timeout, a
-refused command while staging a draft or a mass change, or a store failure escaping a route — each
-answers `503 SERVICE_UNAVAILABLE` with `Retry-After: 60`, never a `500`. Two Redis reads answer
-otherwise: an unreadable registry or revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003)
-and a write quota that cannot be counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with
-`Retry-After: 30`; a full byte budget is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`.
-*Corrected 2026-09-27: this paragraph said every Redis failure answered `Retry-After: 60`; the
-registry and quota reads have answered 30 since they were built.*
+change or the `400 SCHEMA_INVALID` for a body that is not a JSON document: `GlobalExceptionHandler`
+marks that request `ExchangeIdempotencyFilter.NOT_REPLAYABLE`, since a truncated body retried whole
+under its key must run, not meet `422`. A body of another media type is `415
+UNSUPPORTED_MEDIA_TYPE`, which is not cached either. The lock of a key in flight lives two minutes,
+so a crashed request cannot block a key for the day. A store Redis cannot reach is `503
+SERVICE_UNAVAILABLE`, never an unguarded write. That holds on every exchange route and for every
+kind of Redis failure — a lost connection, a timeout, a refused command while staging a draft or a
+mass change, or a store failure escaping a route — each answers `503 SERVICE_UNAVAILABLE` with
+`Retry-After: 60`, never a `500`. Two Redis reads answer otherwise: an unreadable registry or
+revocation mirror is `503 REGISTRY_UNAVAILABLE` (REQ-XCH-003) and a write quota that cannot be
+counted is `503 SERVICE_UNAVAILABLE` (REQ-XCH-023), both with `Retry-After: 30`; a full byte budget
+is `503 EXCHANGE_BUDGET_EXHAUSTED` with `Retry-After: 60`. *Corrected 2026-09-27: this paragraph
+said every Redis failure answered `Retry-After: 60`; the registry and quota reads have answered 30
+since they were built.*
 
 The lock is `ingest:xch:idem-lock:<client>:<member>:<sha256>`, taken with `SET NX` and a random
 per-request token. Holding it, the gateway reads the cache again: a duplicate that looked before the
@@ -985,8 +1061,9 @@ outlived the two minutes never frees the lock of the request that took the key a
   between its lookup and its lock replays instead of writing again, sixteen parallel duplicates run
   the write once per key, and an expired holder's token does not release the next holder's lock.*
 
-**Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest` · **Status:**
-built — WP 3.2 (#2082)
+**Enforced by:** `ExchangeIdempotencyFilterTest`, `ExchangeStoreRedisIntegrationTest`,
+`ExchangeChangeRouteTest` (a body that is no JSON and one of another media type are never cached) ·
+**Status:** built — WP 3.2 (#2082)
 
 ### REQ-XCH-021 — Mass changes are confirmed by the member in the browser
 
@@ -999,7 +1076,16 @@ within one batch is not a removal. Only the member's browser session can confirm
 
 **Acceptance**
 
-- [ ] One test per counting rule, including repeated 89 % cuts and a move.
+- [x] One test per counting rule, including repeated 89 % cuts and a move. *The thresholds
+  (`ExchangeMassChangeGuardTest.theWindowTripsAbove25OrAboveAFifthWithAtLeastFive`), the 24 h window
+  (`…theWindowIsTheLast24HoursOfTheClientsRemovals`), `remove`
+  (`ExchangeBlueprintWriteControllerTest.aBatchThatRemovesTooMuchIsHeldBackWholly`), a quantity set to 0
+  and the exempt move (`ExchangeStockWriteControllerTest.emptyingEveryLotIsHeldBackButAMoveIsNot`),
+  repeated cuts — 100 → 50 → 11 passes, → 10 trips
+  (`…repeatedCutsCountOnlyOnceTheyReachNinetyPercentOfTheWindowStart`) — and a ship's name-and-type
+  change (`ExchangeShipWriteControllerTest.anUpdateThatChangesNameAndTypeCountsAsARemoval`). A ship's
+  `remove` has no test of its own; it shares `ExchangeShipWriteService.isRemoval` with the name-and-type
+  case. Ticked 2026-09-28.*
 - [x] A batch is not confirmed after the client or installation was disconnected, or the client
   suspended, since its staging, nor past its 30-minute staging lifetime, and a kept session entry
   expires with it. *`ExchangeMassChangeControllerTest`, `ConnectedAppsConfirmControllerMvcTest`.*
@@ -1131,6 +1217,13 @@ SERVICE_UNAVAILABLE` with `Retry-After: 30`, never a free pass. Every admitted a
 `RateLimit-Policy: <limit>;w=60` and `RateLimit: limit=…, remaining=…, reset=…` for the member's
 bucket. The in-process buckets live per gateway instance and are bounded (least recently used out).
 
+**In front of them**, before the token is read, the ingest-wide per-IP bucket
+(`RateLimitingFilter`, REQ-INGEST-005; `app.rate-limit.ip-capacity` / `ip-refill-tokens`, 120 a
+minute) covers every `/v1` and `/exchange` request, the anonymous schema reads included. Its
+`429 RATE_LIMITED` carries `Retry-After` but no `RateLimit` headers and no `DPoP-Nonce`, and every
+member and client behind one address shares it, so the per-client 1200 a minute cannot be reached
+from a single address.
+
 **Per instance, not per deployment.** The three in-process buckets — requests per client and member,
 per client, and the ten account checks an hour — and Spring's DPoP `jti` replay cache (REQ-XCH-006)
 are held in each gateway process's memory. A second gateway instance behind the edge would therefore
@@ -1211,8 +1304,20 @@ A missing or unparseable `User-Agent` counts as older, and a pre-release of the 
 ### REQ-XCH-025 — Errors are problem+json with a stable code
 
 Every error is RFC 9457 problem+json with a `code` from the registry in `docs/exchange/errors.md`,
-each with its HTTP status and the client action it requires. Codes are never reused or repurposed;
-the gateway-side codes are the `reason` labels of the exchange metrics.
+each with its HTTP status and the client action it requires. Codes are never reused or repurposed.
+The gateway's gates count their refusals on `basetool_ingest_exchange_refused_total` with the code
+as the `reason` label (`ExchangeRefusals.CODES`); the routes' own answers (`SCHEMA_INVALID`,
+`BATCH_TOO_LARGE`, `PAYLOAD_TOO_LARGE`, `CURSOR_EXPIRED`, `BACKEND_RELAY_FAILED`, a staging store's
+`503`) and those written before the token is read are not counted there. *Corrected 2026-09-28: this
+said every gateway-side code was such a label.*
+
+No answer on an exchange route falls outside the registry. A body that is not a JSON document is
+`400 SCHEMA_INVALID` with one error at the pointer `""` (on the legacy `/v1` routes it stays
+`BAD_REQUEST`); a body of another media type is `415 UNSUPPORTED_MEDIA_TYPE`; the bot filter
+answers an exchange path it blocks with `404 NOT_FOUND`, as the gate answers an unknown route or
+method, and a query parameter without a name with `400 SCHEMA_INVALID` at `/`; an unexpected
+failure is the generic `500 INTERNAL_ERROR`. *Changed 2026-09-28: the first two answered
+`400 BAD_REQUEST` and a `415` without `code`, and the bot filter a bare `405`, `404` or `400`.*
 
 A backend refusal reaches a client with its registry code and a **fixed English detail per code**
 (`ExchangeRelay.DETAILS`); the backend's own `detail` is never relayed. The security review of
@@ -1239,10 +1344,12 @@ reserves the latter, and `Retry-After` is the header. The schema allowed a `corr
 64 characters while the gateway echoes one of up to 128; the schema was widened to 128 on
 2026-09-27 (widening is compatible within v1, REQ-XCH-026).
 
-**Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error
-statuses), `ExchangeRelayTest` (no backend detail reaches a client) · **Status:** registry published
-— WP 0.2 (#2080); the gateway's refusal metrics carry the codes as `reason` labels
-(`ExchangeRefusals`) — WP 3.2 (#2082)
+**Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error statuses,
+and every code the gateway answers on its own is registered), `ExchangeRelayTest` (no backend detail
+reaches a client), `ExchangeChangeRouteTest` and `BotProtectionFilterTest` (the unreadable body, the
+media type and the bot filter's answers on exchange paths) · **Status:** registry published — WP 0.2
+(#2080); the gateway's refusal metrics carry the codes as `reason` labels (`ExchangeRefusals`) — WP
+3.2 (#2082)
 
 ### REQ-XCH-026 — The contract grows additively under `/exchange/v1`
 
@@ -1357,7 +1464,10 @@ writes the E2E realm (`frontend/src/e2e/resources/realm-export.e2e.json`) from t
 E2E accounts, production's realm settings and login theme, and the third-party client
 `e2e-exchange-client`; `E2eStackExtension` starts `ingest-dev` beside the other six services, and
 `ExchangeRoundTripE2eTest` runs the exchange round trip of REQ-XCH-032 in every browser × device
-cell of `e2e.yml`.
+cell of `e2e.yml`. `ExchangeConnectionsE2eTest` (installation revoke, reconnect, account check,
+admin suspension), `ExchangeSyncE2eTest` (corpus round trip, confirmed mass change) and
+`ExchangeDepartureE2eTest` run the same way, each as its own account (`test-exchange-2`,
+`test-exchange-3`, `test-exchange-departed`), with the steps they share in `ExchangeE2eSupport`.
 
 - [x] Profile, provisioned realm, seed, one command and the docs page — WP 2.3 part 1.
 - [x] The public sandbox images, their publishing pipeline and secret scan.
@@ -1426,19 +1536,27 @@ not count against the daily quota, but it has its own limit of ten per hour per 
   neither handle in a log line. *`ExchangeAccountCheckControllerTest`.*
 - [x] The gateway relays the route inside its own hourly limit; a value that is no handle is neither
   relayed, echoed nor logged. *`ExchangeControllerTest`, `ExchangeLimitFilterTest`.*
-- [ ] End to end on the sandbox (WP 2.3, #2099).
+- [x] End to end on the E2E stack, which runs the sandbox Keycloak and the gateway (ADR-0225).
+  *`ExchangeConnectionsE2eTest.theAccountCheckAnswersUnknownMatchAndMismatchWithoutTheHandle`:
+  `unknown` before the member stores a handle on the profile, a case-insensitive `match` and a
+  `mismatch` after, each answer carrying `result` only.*
 
-**Status:** backend and gateway relay built — WP 3.4 (#2106); the sandbox run follows with WP 2.3
+**Status:** backend and gateway relay built — WP 3.4 (#2106); end to end on the E2E stack
+(`ExchangeConnectionsE2eTest`)
 
 ### REQ-XCH-032 — „Verbundene Anwendungen" shows and controls every connection
 
 The web page „Verbundene Anwendungen" lists the member's connected clients with their capabilities,
 installations (label, first and last seen) and recent activity, and lets the member disconnect one
 installation or a whole client, undo, and confirm a staged mass change. Every new connection or
-installation raises a notification and stays highlighted until seen. `ADMIN` manages the registry
-on an admin page with a suspend switch. The page is web-only; the app links to it.
+installation raises a notification and stays highlighted until seen. The page links the public
+list of approved clients (REQ-XCH-002, REQ-SEC-027). `ADMIN` manages the registry on an admin page
+with a suspend switch. The page is web-only; the app links to it.
 
 The page is `/connected-apps` (sidebar *Persönlich*, every member), over `/api/v1/connected-apps`.
+Its header links `docs/legal/approved-clients.md` on GitHub
+(`https://github.com/krt-profit/basetool/blob/main/docs/legal/approved-clients.md`) in a new tab,
+the address the developer site's onboarding page links as well.
 An installation is always named as `‹client name› – „‹label›"`, the client-supplied label escaped
 and never first, so a label cannot pose as the Basetool. Both disconnects ask first and re-swap the
 `connected-apps :: apps` fragment; the page is the member's own and joins no peer sync.
@@ -1457,6 +1575,10 @@ audited.
 - [x] List the clients with their capabilities and installations (label, first and last seen), and
   disconnect one installation or a whole client. *`ConnectedAppsPageControllerMvcTest`.*
 - [x] The admin registry page. *See REQ-XCH-003.*
+- [x] The page links the public list of approved clients, opening in a new tab.
+  *`ConnectedAppsPageControllerMvcTest.thePageLinksThePublicListOfApprovedApplicationsInANewTab`.*
+  *Corrected 2026-09-28: #2087 required the link, but this requirement did not name it and the
+  page shipped without it (epic #2078 plan audit).*
 - [x] A new installation notifies its member once, by the client's name; the list reports it
   unseen until marked seen. *`ExchangeInstallationServiceTest`, `ExchangeInstallationControllerTest`,
   `ConnectedAppsControllerTest`.*
@@ -1469,7 +1591,10 @@ audited.
 - [x] Undo a client's changes since a chosen span, with the skipped entries listed.
   *`ConnectedAppsPageControllerMvcTest`, `ExchangeUndoControllerTest`.*
 - [x] Confirm or discard a staged mass change. *`ExchangeMassChangeControllerTest`,
-  `ConnectedAppsConfirmControllerMvcTest`.*
+  `ConnectedAppsConfirmControllerMvcTest`; end to end
+  `ExchangeSyncE2eTest.aHeldMassRemovalAppliesOnlyOnceTheMemberConfirmsIt` — a batch emptying five
+  lots is answered `409 MASS_CHANGE_CONFIRMATION_REQUIRED` and writes nothing until the member
+  confirms it on the page its `confirmationUrl` opens.*
 - [x] Recent activity: each client's last ten writes to the member's data, newest first, named by
   blueprint, material or item, or ship type, undone ones marked. *`ConnectedAppsControllerTest`,
   `ConnectedAppsPageControllerMvcTest`.*
@@ -1483,7 +1608,8 @@ Each client in `GET /api/v1/connected-apps` carries `activity`: its last ten jou
 member, newest first, each with the time, resource, action, the entry's name (read in one lookup per
 catalogue) and whether it was undone.
 
-**Status:** built — WP 4.5 (#2087); the end-to-end run with WP 2.3 (#2099)
+**Status:** built — WP 4.5 (#2087); end to end on the E2E stack — WP 2.3 (#2099),
+`ExchangeConnectionsE2eTest`, `ExchangeSyncE2eTest`
 
 ### REQ-XCH-033 — The legacy extractor endpoints end at the go-live
 

@@ -199,6 +199,28 @@ class ExchangeContractTest {
   }
 
   @Test
+  void everyCodeTheGatewayAnswersOnItsOwnIsRegistered() throws IOException {
+    String text = Files.readString(ERRORS, StandardCharsets.UTF_8);
+    Matcher matcher = ERROR_ROW.matcher(text.substring(0, text.indexOf("## Per-op reasons")));
+    Set<String> registered = new TreeSet<>();
+    while (matcher.find()) {
+      registered.add(matcher.group(1));
+    }
+    Set<String> answered = new TreeSet<>(ExchangeRefusals.CODES);
+    answered.addAll(
+        List.of(
+            "SCHEMA_INVALID",
+            "BATCH_TOO_LARGE",
+            "PAYLOAD_TOO_LARGE",
+            "CURSOR_EXPIRED",
+            ExchangeRelay.RELAY_FAILED,
+            "LEGACY_ENDPOINT_GONE",
+            "UNSUPPORTED_MEDIA_TYPE",
+            "INTERNAL_ERROR"));
+    assertThat(registered).containsAll(answered);
+  }
+
+  @Test
   void theSchemasOnlyGrewSinceThePreviousRelease() throws IOException {
     String baselineDir = System.getProperty("exchange.baseline", "");
     Path baseline = Path.of(baselineDir);

@@ -43,6 +43,7 @@ import de.greluc.krt.profit.basetool.backend.model.dto.MaterialDemandRowDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.MaterialDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.SquadronReferenceDto;
 import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeDemandMaterialDto;
+import de.greluc.krt.profit.basetool.backend.model.dto.exchange.ExchangeOrgDemandDto;
 import de.greluc.krt.profit.basetool.backend.repository.InventoryItemRepository;
 import de.greluc.krt.profit.basetool.backend.repository.JobOrderRepository;
 import de.greluc.krt.profit.basetool.backend.repository.MaterialRepository;
@@ -78,7 +79,7 @@ import org.mockito.quality.Strictness;
  * Pins that the exchange's anonymised org demand (REQ-XCH-018) equals the web's Materialbedarf
  * (REQ-ORDERS-034) for the same orders: per material and quality floor, summed over the member's
  * units, the exchange's open quantity is the web's {@code required - booked} clamped at zero, and a
- * fully covered bucket is absent from the exchange.
+ * fully covered bucket is absent from the exchange. Both are withheld by the same job-order gate.
  */
 @ExtendWith(MockitoExtension.class)
 class ExchangeDemandParityTest {
@@ -114,7 +115,8 @@ class ExchangeDemandParityTest {
             inventoryRepository,
             materialRepository,
             blueprintRepository,
-            familyResolver);
+            familyResolver,
+            ownerScopeService);
     web =
         new JobOrderMaterialDemandService(
             jobOrderRepository,
@@ -124,7 +126,7 @@ class ExchangeDemandParityTest {
             materialClaimService,
             squadronMapper);
     stock = mock(OrderLinkedStockIndex.class, withSettings().strictness(Strictness.LENIENT));
-    when(stockProjectionService.loadOrderLinkedStockIndex(any())).thenReturn(stock);
+    lenient().when(stockProjectionService.loadOrderLinkedStockIndex(any())).thenReturn(stock);
     lenient()
         .when(squadronMapper.orgUnitToReferenceDto(any()))
         .thenAnswer(
@@ -169,6 +171,19 @@ class ExchangeDemandParityTest {
         .extracting(ExchangeDemandMaterialDto::source)
         .containsExactlyInAnyOrder(
             ExchangeDemandService.MATERIAL_ORDER, ExchangeDemandService.ITEM_ORDER);
+  }
+
+  @Test
+  void theJobOrderGateWithholdsTheDemandOnBothSurfaces() {
+    when(ownerScopeService.canViewJobOrders()).thenReturn(false);
+
+    MaterialDemandOverviewDto overview = web.getMaterialDemandOverview();
+    ExchangeOrgDemandDto demand = exchange.demand(MEMBER);
+
+    assertThat(overview.groups()).isEmpty();
+    assertThat(demand.materials()).isEmpty();
+    assertThat(demand.items()).isEmpty();
+    assertThat(demand.reason()).isEqualTo(ExchangeOrgDemandDto.Reason.NOT_PERMITTED);
   }
 
   @Test

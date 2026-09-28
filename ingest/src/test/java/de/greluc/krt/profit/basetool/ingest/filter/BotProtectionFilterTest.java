@@ -29,21 +29,26 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.ingest.support.TestLoggingProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.json.ProblemDetailJacksonMixin;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Unit tests for the gateway {@link BotProtectionFilter} (REQ-INGEST-009): known bot/scanner paths
- * and file extensions get 404, disallowed HTTP methods get 405, and the gateway's real surface
- * ({@code /v1/...}, {@code /actuator/health}, {@code /actuator/prometheus}, {@code /v3/api-docs})
- * passes through. Every reject bumps {@code basetool_bot_blocked_total} under its bounded {@code
- * rule} tag.
+ * and file extensions get 404, disallowed HTTP methods get 405 — on an exchange route a problem
+ * with a registered code instead — and the gateway's real surface ({@code /v1/...}, {@code
+ * /actuator/health}, {@code /actuator/prometheus}, {@code /v3/api-docs}) passes through. Every
+ * reject bumps {@code basetool_bot_blocked_total} under its bounded {@code rule} tag.
  */
 class BotProtectionFilterTest {
 
@@ -54,7 +59,13 @@ class BotProtectionFilterTest {
   @BeforeEach
   void setUp() {
     registry = new SimpleMeterRegistry();
-    filter = new BotProtectionFilter(registry);
+    filter =
+        new BotProtectionFilter(
+            registry,
+            JsonMapper.builder()
+                .addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class)
+                .build(),
+            TestLoggingProperties.defaults());
     filterChain = mock(FilterChain.class);
   }
 
@@ -413,6 +424,68 @@ class BotProtectionFilterTest {
     assertEquals(200, response.getStatus(), "well-formed query string must pass: " + queryString);
     verify(filterChain, times(1)).doFilter(request, response);
     assertEquals(0.0, botCount(MetricNames.BOT_RULE_QUERY_STRING));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"PUT", "DELETE", "PATCH", "TRACE"})
+  void doFilterInternal_shouldAnswerNotFoundProblem_whenAnExchangeRouteIsCalledWithABlockedMethod(
+      String method) throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest(method, "/exchange/v1/me/stock");
+    request.setRequestURI("/exchange/v1/me/stock");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    filter.doFilterInternal(request, response, filterChain);
+
+    assertEquals(404, response.getStatus());
+    assertTrue(response.getContentType().startsWith("application/problem+json"));
+    assertEquals("NOT_FOUND", problem(response).path("code").asString());
+    verify(filterChain, never()).doFilter(request, response);
+    assertEquals(1.0, botCount(MetricNames.BOT_RULE_METHOD));
+  }
+
+  @Test
+  void doFilterInternal_shouldAnswerNotFoundProblem_whenAnExchangePathHasABotExtension()
+      throws Exception {
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("GET", "/exchange/v1/schemas/dump.sql");
+    request.setRequestURI("/exchange/v1/schemas/dump.sql");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    filter.doFilterInternal(request, response, filterChain);
+
+    assertEquals(404, response.getStatus());
+    assertEquals("NOT_FOUND", problem(response).path("code").asString());
+    assertNull(response.getErrorMessage());
+    verify(filterChain, never()).doFilter(request, response);
+  }
+
+  @Test
+  void doFilterInternal_shouldAnswerSchemaInvalid_whenAnExchangeQueryNamesNoParameter()
+      throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/exchange/v1/me/stock");
+    request.setRequestURI("/exchange/v1/me/stock");
+    request.setQueryString("=1");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    filter.doFilterInternal(request, response, filterChain);
+
+    assertEquals(400, response.getStatus());
+    JsonNode problem = problem(response);
+    assertEquals("SCHEMA_INVALID", problem.path("code").asString());
+    assertEquals("/", problem.path("errors").path(0).path("pointer").asString());
+    verify(filterChain, never()).doFilter(request, response);
+    assertEquals(1.0, botCount(MetricNames.BOT_RULE_QUERY_STRING));
+  }
+
+  /**
+   * Reads the problem document a refusal wrote.
+   *
+   * @param response the response
+   * @return the problem
+   * @throws Exception if the body is no JSON
+   */
+  private static JsonNode problem(MockHttpServletResponse response) throws Exception {
+    return JsonMapper.builder().build().readTree(response.getContentAsString());
   }
 
   @Test

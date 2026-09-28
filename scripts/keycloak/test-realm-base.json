@@ -394,6 +394,57 @@
         "default-roles-iri",
         "KRT Member"
       ]
+    },
+    {
+      "username": "test-exchange-2",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-exchange-2@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-exchange-2-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-exchange-3",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-exchange-3@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-exchange-3-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ]
+    },
+    {
+      "username": "test-exchange-departed",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test-exchange-departed@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-exchange-departed-pw",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-iri",
+        "KRT Member"
+      ]
     }
   ],
   "defaultRole": {

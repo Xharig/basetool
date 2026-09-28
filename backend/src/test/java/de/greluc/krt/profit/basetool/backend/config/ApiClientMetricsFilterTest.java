@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
+import de.greluc.krt.profit.basetool.backend.support.ActingMemberHeader;
 import de.greluc.krt.profit.basetool.backend.support.ApiClientMetricsProperties;
 import de.greluc.krt.profit.basetool.backend.support.ClientAttribution;
 import de.greluc.krt.profit.basetool.backend.support.IngestGatewayProperties;
@@ -48,7 +49,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 /**
  * Tests the client attribution of {@link ApiClientMetricsFilter} (A8, REQ-OBS-018): a known {@code
- * azp} keeps its name, everything else collapses to a bounded literal, and nothing about the
+ * azp} keeps its name, a call the gateway relays counts under the registered exchange client it
+ * names (REQ-XCH-010), everything else collapses to a bounded literal, and nothing about the
  * request can make a call disappear from the count.
  */
 class ApiClientMetricsFilterTest {
@@ -60,6 +62,7 @@ class ApiClientMetricsFilterTest {
   private List<String> gatewayClientIds;
 
   private MeterRegistry meterRegistry;
+  private KnownExchangeClients knownExchangeClients;
   private ApiClientMetricsFilter filter;
 
   @BeforeEach
@@ -68,10 +71,10 @@ class ApiClientMetricsFilterTest {
     gatewayClientIds = new ArrayList<>();
     gatewayProperties = new IngestGatewayProperties(gatewayClientIds);
     meterRegistry = new SimpleMeterRegistry();
+    knownExchangeClients = Mockito.mock(KnownExchangeClients.class);
     filter =
         new ApiClientMetricsFilter(
-            new ClientAttribution(
-                properties, gatewayProperties, Mockito.mock(KnownExchangeClients.class)),
+            new ClientAttribution(properties, gatewayProperties, knownExchangeClients),
             meterRegistry);
   }
 
@@ -102,8 +105,22 @@ class ApiClientMetricsFilterTest {
    * @throws Exception if the chain fails
    */
   private void send(String uri) throws Exception {
+    send(uri, null);
+  }
+
+  /**
+   * Sends one request through the filter, optionally naming a relayed exchange client.
+   *
+   * @param uri the request URI
+   * @param relayedClient the {@code X-Exchange-Client} header value, or {@code null} for none
+   * @throws Exception if the chain fails
+   */
+  private void send(String uri, String relayedClient) throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("GET", uri);
     request.setRequestURI(uri);
+    if (relayedClient != null) {
+      request.addHeader(ActingMemberHeader.EXCHANGE_CLIENT_HEADER, relayedClient);
+    }
     filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
   }
 
@@ -163,6 +180,59 @@ class ApiClientMetricsFilterTest {
     authenticateWithAzp("basetool-ingest");
 
     send("/api/v1/refinery/imports");
+
+    assertEquals(1.0d, requests("basetool-ingest"));
+  }
+
+  @Test
+  @DisplayName(
+      "a call the gateway relays for a registered exchange client counts under that client")
+  void aRelayedRegisteredExchangeClientIsCountedUnderItsOwnId() throws Exception {
+    gatewayClientIds.add("basetool-ingest");
+    Mockito.when(knownExchangeClients.isRegistered("versekit")).thenReturn(true);
+    authenticateWithAzp("basetool-ingest");
+
+    send("/api/v1/exchange/me/blueprints", "versekit");
+
+    assertEquals(1.0d, requests("versekit"));
+    assertEquals(0.0d, requests("basetool-ingest"));
+  }
+
+  @Test
+  void aRelayedClientTheRegistryDoesNotHoldCollapsesToTheBoundedLiteral() throws Exception {
+    gatewayClientIds.add("basetool-ingest");
+    authenticateWithAzp("basetool-ingest");
+
+    send("/api/v1/exchange/me/blueprints", "some-tool-nobody-registered");
+
+    assertEquals(1.0d, requests(MetricNames.CLIENT_ID_OTHER));
+    assertNull(
+        meterRegistry
+            .find(MetricNames.API_CLIENT_REQUESTS)
+            .tag(MetricNames.TAG_CLIENT_ID, "some-tool-nobody-registered")
+            .counter(),
+        "a relayed header is caller input; it is never a label on its own (REQ-OBS-006)");
+  }
+
+  @Test
+  @DisplayName("only a configured gateway can name a relayed client")
+  void aRelayHeaderFromAnyoneButTheGatewayIsIgnored() throws Exception {
+    gatewayClientIds.add("basetool-ingest");
+    Mockito.when(knownExchangeClients.isRegistered("versekit")).thenReturn(true);
+    authenticateWithAzp("basetool-android");
+
+    send("/api/v1/missions", "versekit");
+
+    assertEquals(1.0d, requests("basetool-android"));
+    assertEquals(0.0d, requests("versekit"));
+  }
+
+  @Test
+  void theGatewayWithABlankRelayedClientKeepsItsOwnId() throws Exception {
+    gatewayClientIds.add("basetool-ingest");
+    authenticateWithAzp("basetool-ingest");
+
+    send("/api/v1/refinery/imports", " ");
 
     assertEquals(1.0d, requests("basetool-ingest"));
   }

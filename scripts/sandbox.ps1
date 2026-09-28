@@ -77,7 +77,7 @@ function Start-Sandbox {
     Invoke-Compose @('run', '--rm', 'sandbox-seed')
     Write-Host 'sandbox: up. Issuer http://host.docker.internal:18080/auth/realms/iri,'
     Write-Host 'sandbox: gateway https://localhost:11262/exchange/v1, web https://localhost:18081'
-    Write-Host 'sandbox: the gateway answers 503 EXCHANGE_DISABLED for up to about 90 s until it sees the switch'
+    Write-Host 'sandbox: the gateway answers 503 EXCHANGE_DISABLED for up to about 15 s until it sees the switch'
 }
 
 function Stop-Sandbox {

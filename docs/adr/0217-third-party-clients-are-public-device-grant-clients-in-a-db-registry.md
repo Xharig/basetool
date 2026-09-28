@@ -1,7 +1,8 @@
 # ADR-0217 — Third-party clients are public device-grant clients, bound by DPoP and consent, approved in a database registry
 
 - **Status:** Accepted — owner gate G0 of epic [#2078](https://github.com/krt-profit/basetool/issues/2078),
-  taken with the merge of #2111 and #2112 (2026-09-26); implementation pending. Amends [ADR-0152](0152-the-audit-row-records-which-client-a-mutation-came-through.md)
+  taken with the merge of #2111 and #2112 (2026-09-26); implemented on main by 2026-09-28 (epic #2078), production rollout with the go-live
+  ([#2092](https://github.com/krt-profit/basetool/issues/2092)). Amends [ADR-0152](0152-the-audit-row-records-which-client-a-mutation-came-through.md)
   (client attribution on the relay hop).
 - **Date:** 2026-09-26
 - **Deciders:** @greluc
@@ -22,6 +23,14 @@ Today the gateway accepts DPoP but does not require it, and the backend, on the 
 the acting member's authentication from **every** stored role (`DatabaseActingMemberAuthorities`
 calls `assembleFor(user)`), so an admin's extractor upload runs with admin authority. Audit rows of
 relayed writes record `client_id=none`, because the acting authentication carries no token.
+
+*Note 2026-09-28: the paragraph above is the state when the decision was taken (2026-09-26). On
+main, the exchange routes require a DPoP-bound token and a proof (`ExchangeTokenGateFilter`), an
+exchange call's acting member holds only the reduced exchange authentication
+(`DatabaseActingMemberAuthorities.exchangeAuthoritiesFor`, REQ-XCH-009), and audit rows and API
+metrics of relayed exchange calls name the registered client (`ClientAttribution`, REQ-XCH-010,
+REQ-AUDIT-005). The legacy `/v1` extractor relay still acts with every stored role until it is
+switched off (REQ-XCH-033).*
 
 ## Decision
 

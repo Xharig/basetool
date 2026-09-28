@@ -76,6 +76,10 @@ class ExchangeOrgDemandRouteTest {
        "updatedAt":"2026-09-27T12:00:00Z"}
       """
           .formatted(UUID.randomUUID(), UUID.randomUUID());
+  private static final String WITHHELD =
+      """
+      {"materials":[],"items":[],"updatedAt":"2026-09-28T12:00:00Z","reason":"%s"}
+      """;
 
   @Autowired private WebApplicationContext context;
 
@@ -132,10 +136,36 @@ class ExchangeOrgDemandRouteTest {
   }
 
   @Test
+  void aWithheldDemandIsRelayedWithItsReason() throws Exception {
+    when(relay.forward(
+            eq(HttpMethod.GET), eq("/api/v1/exchange/me/org-demand"), isNull(), any(), any()))
+        .thenReturn(ok(WITHHELD.formatted("NOT_PERMITTED")));
+
+    call()
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.reason").value("NOT_PERMITTED"))
+        .andExpect(jsonPath("$.materials.length()").value(0))
+        .andExpect(jsonPath("$.items.length()").value(0));
+  }
+
+  @Test
+  void aReasonOutsideTheContractIsARelayFailure() throws Exception {
+    when(relay.forward(any(), anyString(), any(), any(), any()))
+        .thenReturn(ok(WITHHELD.formatted("HIDDEN")));
+
+    call()
+        .andExpect(status().isBadGateway())
+        .andExpect(jsonPath("$.code").value(ExchangeRelay.RELAY_FAILED));
+  }
+
+  @Test
   void theSchemaDeclaresNoPersonOrderOrFreeTextField() throws Exception {
     JsonNode schema = MAPPER.readTree(Files.readString(SCHEMAS.resolve("org-demand.schema.json")));
 
-    assertThat(names(schema.at("/properties"))).containsExactly("items", "materials", "updatedAt");
+    assertThat(names(schema.at("/properties")))
+        .containsExactly("items", "materials", "reason", "updatedAt");
+    assertThat(schema.at("/properties/reason/enum").valueStream().map(JsonNode::asString))
+        .containsExactly("NOT_PERMITTED");
     assertThat(names(schema.at("/properties/materials/items/properties")))
         .containsExactly("material", "minQuality", "openQuantity", "rawRefs", "source");
     assertThat(names(schema.at("/properties/items/items/properties")))

@@ -111,6 +111,9 @@ in the order the filter applies them):
 
 Guard 4 splits into two counted reasons — a subject that is not a UUID never reaches persistence —
 so `basetool_on_behalf_of_refused_total{reason}` carries **five** values for these four guards. The
+exchange relay headers (REQ-XCH-010) add three more — `forged_exchange_header`,
+`exchange_client_invalid` and `exchange_installation_invalid` — so the metric carries **eight**
+values in all (`MetricNames.ON_BEHALF_OF_*`). The
 refusal *answer* is byte-identical for all of them: an unknown member and an offboarded one must
 look the same from outside, or the endpoint becomes an oracle for which subjects exist. The reason
 lives only in the metric and the log line.
@@ -125,11 +128,12 @@ internet-unreachable — the gateway reaches it over the internal network only.
 
 **Acceptance**
 
-- [x] The gateway exposes only the two documented ingest endpoints plus the actuator
-  health endpoint; every other path is 404/401. (Since **ADR-0090**, in prod the actuator
-  endpoints move to a dedicated internal-only `management.server.port` — port `11272`, reachable
-  only from the scrape network and the container-local healthcheck — so the **public** connector
-  exposes only the two `/v1` ingest endpoints; `/actuator/**` there answers 404.)
+- [x] The gateway exposes only the two documented ingest endpoints and the exchange routes of
+  REQ-XCH-001, plus the actuator health endpoint; every other path is 404/401. (Since **ADR-0090**,
+  in prod the actuator endpoints move to a dedicated internal-only `management.server.port` — port
+  `11272`, reachable only from the scrape network and the container-local healthcheck — so the
+  **public** connector exposes only the two `/v1` ingest endpoints and the exchange routes;
+  `/actuator/**` there answers 404.)
 - [x] An ingest call results in exactly one forwarded call to the matching backend import
   endpoint, carrying the gateway's own service-account bearer and the `X-Ingest-On-Behalf-Of`
   header naming the caller (ADR-0129), and no backend write.
@@ -230,6 +234,15 @@ never acts for a user other than the one it authenticated.
 > `scripts/provision-keycloak-realm.py`, which removes both from every realm it provisions;
 > production follows on the owner's apply.
 
+> **Amended 2026-09-28 (security finding H1, REQ-XCH-005).** Since #2201 the provisioner's target
+> shape for `basetool-sc-extractor` is exchange-only: consent required, DPoP-bound access and refresh
+> tokens, only `basic` by default, its exchange scopes and `offline_access` optional, and both ingest
+> scopes (`extractor-ingest`, `extractor-ingest-only`) withheld — so a token of that shape carries
+> no `aud=basetool-backend` any more; its `aud=basetool-ingest` comes from the exchange scopes.
+> Production applies it only after the legacy `/v1` switch-off (REQ-XCH-033, #2092), because released
+> extractors up to 2.9.1 still need the ingest audience on `/v1/*`; until then the paragraphs above
+> describe production.
+
 **Acceptance**
 
 - [x] A request without a valid signed realm token is rejected 401/403; no forward happens. With
@@ -322,6 +335,14 @@ by-reason `IngestHandoffErrors` threshold. This mirrors the treatment
   existence.
 - [x] A Redis outage during staging yields a `503` with `Retry-After` and a `WARN`, not a `500` with
   an `ERROR` stack trace, and is counted under its own `staging_unavailable` reason.
+- [x] An exchange client's drafts evict only its own oldest drafts for that member, never the
+  extractor's uploads or another client's drafts; a held-back mass change takes one slot per client
+  and member, replaces only that client's older one, evicts no draft, and is refused above its size
+  cap. *`HandoffStagingServiceTest#shouldKeepExchangeDraftsApartFromTheExtractorAndFromOtherClients`,
+  `#shouldKeepOneMassChangePerClientAndMemberWithoutEvictingDrafts`,
+  `#shouldKeepOneMassChangePerClientApartFromOtherClients`, `#shouldRefuseAMassChangeAboveItsCap`,
+  `ExchangeChangeRouteTest#aHeldBackMassChangeIsStagedForTheMembersConfirmation` (REQ-XCH-019,
+  REQ-XCH-021).*
 
 **Enforced by:** `HandoffStagingServiceTest` (Testcontainers Redis: stage + consume-once through a
 test-side consume that reads the frontend's literal `ingest:handoff:<sub>:<id>` key schema — the
@@ -544,18 +565,24 @@ or an identity-provider round-trip — using four fixed, case-insensitive strate
   500 with a stack trace. No browser or `URLSearchParams` caller emits such a chunk. Deliberately
   narrow — Tomcat's other two parameter-parse rejects (a percent-escape that fails to decode, the
   `maxParameterCount` cap) are left to the exception handler rather than re-implemented here.
-- **Disallowed HTTP method → 405.** The gateway only ever uses `GET` (actuator / api-docs), `POST`
-  (the two `/v1` ingest endpoints), `HEAD` (health probes) and `OPTIONS` (CORS preflight). Every
-  other method — `PUT`/`DELETE`/`PATCH` verb-tampering, `TRACE`/`CONNECT`, WebDAV `PROPFIND`/`MKCOL`/…
-  — is refused. This method set is deliberately narrower than the frontend's.
+- **Disallowed HTTP method → 405.** The gateway only ever uses `GET` (actuator / api-docs and the
+  exchange reads), `POST` (the two `/v1` ingest endpoints and the exchange writes), `HEAD` (health
+  probes) and `OPTIONS` (CORS preflight). Every other method — `PUT`/`DELETE`/`PATCH`
+  verb-tampering, `TRACE`/`CONNECT`, WebDAV `PROPFIND`/`MKCOL`/… — is refused. This method set is
+  deliberately narrower than the frontend's.
 - **Known bot/scanner path prefix → 404** (`/wp-*`, `/.env`, `/phpmyadmin`, `/actuator/env`, …).
 - **Never-served file extension → 404** (`.php`, `.asp`, `.sql`, `.env`, …).
 
+On an `/exchange` path every refusal is instead a problem with a code from the exchange registry
+(REQ-XCH-025), written directly without an error dispatch: the query rule answers
+`400 SCHEMA_INVALID` with one error at `/`, the other three `404 NOT_FOUND`, as the exchange gate
+answers an unknown route or method.
+
 The filter runs after `CorrelationIdFilter` (a blocked request is still correlation-tagged) and
 before the size-cap, rate-limit and Spring Security filters. The gateway's real surface — `/v1/**`,
-`/actuator/health` (+ liveness/readiness), `/actuator/prometheus` (exact match → the fail-closed
-scrape chain still runs) and `/v3/api-docs` (non-prod) — is never blocked. Each reject bumps
-`basetool_bot_blocked_total{rule}` (bounded `rule` ∈ {`method`, `path_prefix`, `file_extension`,
+the exchange routes under `/exchange/**` (REQ-XCH-001), `/actuator/health` (+ liveness/readiness),
+`/actuator/prometheus` (exact match → the fail-closed scrape chain still runs) and `/v3/api-docs`
+(non-prod) — is never blocked. Each reject bumps `basetool_bot_blocked_total{rule}` (bounded `rule` ∈ {`method`, `path_prefix`, `file_extension`,
 `query_string`}; never the URI or method — `REQ-OBS-006/-011`), shared with the frontend counter
 and distinguished by the `application` common tag; it makes the otherwise `log.debug`-only rejects visible and surfaces a
 self-inflicted false positive if a future legit route matches a blocked prefix.
@@ -651,6 +678,11 @@ the realm defaults, so an app token passed the audience and capability checks an
 allowlist kept it out. The app requests neither scope and never calls ingest; its own
 `aud=basetool-backend` comes from its `backend-audience` mapper. `provision-keycloak-realm.py`
 removes both scopes from the app in every realm it provisions (production on the owner's apply).
+
+*Amended 2026-09-28 (H1, REQ-XCH-005):* since #2201 the provisioner's target shape withholds both
+ingest scopes from `basetool-sc-extractor` as well — the extractor is exchange-only from its 2.10.0
+release. Production applies that only after the legacy `/v1` switch-off (REQ-XCH-033, #2092); until
+then the extractor keeps `extractor-ingest-only` on production as described above.
 
 The reject reasons
 stay distinct (`unknown_client`, `missing_azp`, `missing_scope`, `bad_provenance`) because they split
@@ -782,8 +814,8 @@ authentication: the field is client-supplied and the contract that documents it 
 **Enforced by:** `ClientIdentityFilterTest` (all four checks, fail-closed on absent claims, audit-only,
 bounded label, unauthenticated pass-through, non-JWT principal refused, percent-encoded path,
 exchange-registry clients refused), `LegacyClientGateGuardTest` (the production start refused with an empty allowlist),
-`IngestEndpointSurfaceTest` (the routed surface is exactly the two `/v1` endpoints),
-`IngestGatePostureMetricTest` and `StartupBannerListenerTest` (the posture gauge and log line),
+`IngestEndpointSurfaceTest` (the routed surface is exactly the two `/v1` endpoints and the exchange
+routes), `IngestGatePostureMetricTest` and `StartupBannerListenerTest` (the posture gauge and log line),
 the promtool test `ingest_audience_gate_off_test.yml`, `IngestPathScopeTest` (decoded
 scope matching), `FiltersTest` / `RequestLoggingFilterTest` (payload cap, rate limit and access log
 on an encoded path), `ProvenanceGuardTest` (allowlist, absent producer,

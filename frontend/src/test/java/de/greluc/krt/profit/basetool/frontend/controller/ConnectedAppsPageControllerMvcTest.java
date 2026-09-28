@@ -171,6 +171,27 @@ class ConnectedAppsPageControllerMvcTest {
 
   @Test
   @WithMockUser(roles = "KRT_MEMBER")
+  void thePageLinksThePublicListOfApprovedApplicationsInANewTab() throws Exception {
+    when(backendApiClient.get(eq("/api/v1/connected-apps"), anyTypeRef())).thenReturn(List.of());
+
+    mockMvc
+        .perform(get("/connected-apps"))
+        .andExpect(status().isOk())
+        .andExpect(
+            content()
+                .string(
+                    containsString(
+                        "href=\"https://github.com/krt-profit/basetool/blob/main/docs/legal/"
+                            + "approved-clients.md\"")))
+        .andExpect(
+            content().string(containsString("target=\"_blank\" rel=\"noopener noreferrer\"")))
+        .andExpect(content().string(containsString("data-testid=\"ca-approved-clients\"")))
+        .andExpect(content().string(containsString("Liste der zugelassenen Anwendungen")))
+        .andExpect(content().string(containsString("Nur zugelassene Anwendungen dürfen")));
+  }
+
+  @Test
+  @WithMockUser(roles = "KRT_MEMBER")
   void markingOneInstallationSeenIsRelayed() throws Exception {
     mockMvc
         .perform(

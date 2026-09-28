@@ -101,11 +101,13 @@ Every change set and draft carries an `Idempotency-Key` of 8 to 128 characters o
 - For 24 hours the server answers the same request under the same key with its first answer and
   `Idempotency-Replayed: true`. That includes `2xx`, `400`, `404`, `409`, `410` and `422` answers, so
   a request you changed — after a conflict, after a merge — needs a new key.
-- The same key with a different body is `422 IDEMPOTENCY_KEY_REUSED`.
+- The same key with a different request — another route or another body — is
+  `422 IDEMPOTENCY_KEY_REUSED`.
 - Keys are kept per client and member, not per installation: two installations of your client for
   one member share them. Random keys never collide.
 
-`401`, `403`, `413`, `429`, `5xx` and `409 MASS_CHANGE_CONFIRMATION_REQUIRED` are never cached, and
+`401`, `403`, `413`, `415`, `429`, `5xx`, `409 MASS_CHANGE_CONFIRMATION_REQUIRED` and the
+`400 SCHEMA_INVALID` for a body that is not a JSON document are never cached, and
 neither are the answers about the key itself — `400 IDEMPOTENCY_KEY_MISSING`,
 `409 IDEMPOTENCY_IN_PROGRESS` and `422 IDEMPOTENCY_KEY_REUSED` — so a retry after
 `IDEMPOTENCY_IN_PROGRESS` gets the first request's answer once it is stored. An answer the server
@@ -177,13 +179,17 @@ mass-change window of your client.
 | --- | --- | --- |
 | Requests | 120 per minute, or the service document's `limits.requestsPerMinute` | client and member |
 | Requests | 1200 per minute | client, over all its members |
+| Requests | 120 per minute | source IP address, over all members and clients, anonymous schema reads included |
 | Account checks | 10 per hour | client and member |
 | Writes (change sets and drafts) | 500 per UTC day, or `limits.writesPerDay` | client and member |
 | Live DPoP proofs | 600 at a time, each live until just after 30 seconds past its `iat` (`429 DPOP_PROOF_LIMIT`, [details](authentication.md#live-proofs-per-member)) | member, over all clients |
 | Live DPoP proofs | 100 000 at a time (`503 SERVICE_UNAVAILABLE`) | gateway, over all members |
 
 Every attempt counts, retries and replays included. Admitted answers carry `RateLimit` and
-`RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out.
+`RateLimit-Policy` headers for the member's per-minute limit; slow down before it runs out. The
+per-IP limit is checked first, before the token is read: every member and client behind one address
+shares it, so the per-client 1200 cannot be reached from a single address, and its
+`429 RATE_LIMITED` carries neither `RateLimit` headers nor a `DPoP-Nonce`.
 
 The per-minute limits and the account-check limit are counted by each gateway instance on its own,
 as is the DPoP `jti` replay check; the daily write quota is shared. The Basetool runs a single

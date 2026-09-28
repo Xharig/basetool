@@ -20,14 +20,18 @@
 package de.greluc.krt.profit.basetool.ingest.web;
 
 import de.greluc.krt.profit.basetool.ingest.config.LoggingProperties;
+import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeIdempotencyFilter;
 import de.greluc.krt.profit.basetool.ingest.exchange.ExchangeUnavailableException;
+import de.greluc.krt.profit.basetool.ingest.filter.IngestPathScope;
 import de.greluc.krt.profit.basetool.ingest.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.ingest.ratelimit.RateLimitedException;
 import de.greluc.krt.profit.basetool.ingest.service.ServiceAccountTokenProvider;
 import de.greluc.krt.profit.basetool.logging.LogSafe;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -40,11 +44,13 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import tools.jackson.core.JacksonException;
@@ -54,9 +60,10 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Translates gateway failures into RFC 7807 {@code application/problem+json} (REQ-INGEST-001).
  *
- * <p>Validation and malformed bodies are 400; a backend 4xx keeps its status with only the
- * sanitized {@code detail}; a backend 401/403 or 5xx, a transport failure or an open circuit is
- * 502; anything else is 500. Never echoes a token or PII.
+ * <p>Validation and malformed bodies are 400, on an exchange route {@code SCHEMA_INVALID}; a body
+ * of another media type is 415; a backend 4xx keeps its status with only the sanitized {@code
+ * detail}; a backend 401/403 or 5xx, a transport failure or an open circuit is 502; anything else
+ * is 500. Never echoes a token or PII.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -71,6 +78,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   private static final String CODE_NOT_FOUND = "NOT_FOUND";
   private static final String CODE_UPSTREAM = "BACKEND_RELAY_FAILED";
   private static final String CODE_INTERNAL = "INTERNAL_ERROR";
+
+  /** An exchange body that does not match the v1 contract, a body that is no JSON included. */
+  private static final String CODE_SCHEMA_INVALID = "SCHEMA_INVALID";
+
+  /** A body sent with a media type the route does not take. */
+  static final String CODE_UNSUPPORTED_MEDIA_TYPE = "UNSUPPORTED_MEDIA_TYPE";
 
   /** The gateway could not obtain its own backend identity (ADR-0129). */
   private static final String CODE_GATEWAY_IDENTITY = "GATEWAY_IDENTITY_UNAVAILABLE";
@@ -140,6 +153,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
   }
 
+  /**
+   * Answers a body that cannot be read as JSON with {@code 400}: on an exchange route as {@code
+   * SCHEMA_INVALID} with one error at the document root, marked never to be replayed under its
+   * {@code Idempotency-Key} (REQ-XCH-020, REQ-XCH-025); elsewhere as {@code BAD_REQUEST}.
+   *
+   * @param ex the read failure
+   * @param headers the headers Spring prepared for the answer
+   * @param status the status Spring chose
+   * @param request the current request
+   * @return the {@code 400} problem
+   */
   @Override
   protected ResponseEntity<Object> handleHttpMessageNotReadable(
       @NotNull HttpMessageNotReadableException ex,
@@ -147,6 +171,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
       @NotNull HttpStatusCode status,
       @NotNull WebRequest request) {
     log.warn("Ingest body could not be parsed as JSON ({})", ex.getClass().getSimpleName());
+    HttpServletRequest exchange = exchangeRequest(request);
+    if (exchange != null) {
+      exchange.setAttribute(ExchangeIdempotencyFilter.NOT_REPLAYABLE, Boolean.TRUE);
+      ProblemDetail problem =
+          problem(
+              HttpStatus.BAD_REQUEST,
+              "Bad request",
+              CODE_SCHEMA_INVALID,
+              "The body is not a JSON document.");
+      problem.setProperty(
+          "errors", List.of(Map.of("pointer", "", "message", "is not a JSON document")));
+      return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
+    }
     ProblemDetail problem =
         problem(
             HttpStatus.BAD_REQUEST,
@@ -154,6 +191,45 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             CODE_BAD_REQUEST,
             "The request body could not be read as JSON.");
     return handleExceptionInternal(ex, problem, headers, HttpStatus.BAD_REQUEST, request);
+  }
+
+  /**
+   * Answers a body of a media type the route does not take with {@code 415} and the code {@code
+   * UNSUPPORTED_MEDIA_TYPE}, keeping the {@code Accept} header Spring adds.
+   *
+   * @param ex the media-type failure
+   * @param headers the headers Spring prepared for the answer
+   * @param status the status Spring chose
+   * @param request the current request
+   * @return the {@code 415} problem
+   */
+  @Override
+  protected ResponseEntity<Object> handleHttpMediaTypeNotSupported(
+      @NotNull HttpMediaTypeNotSupportedException ex,
+      @NotNull HttpHeaders headers,
+      @NotNull HttpStatusCode status,
+      @NotNull WebRequest request) {
+    ProblemDetail problem =
+        problem(
+            HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+            "Unsupported media type",
+            CODE_UNSUPPORTED_MEDIA_TYPE,
+            "The body must be sent as application/json.");
+    return handleExceptionInternal(
+        ex, problem, headers, HttpStatus.UNSUPPORTED_MEDIA_TYPE, request);
+  }
+
+  /**
+   * Returns the servlet request behind a web request when it targets an exchange route.
+   *
+   * @param request the web request
+   * @return the servlet request, or {@code null} outside {@code /exchange}
+   */
+  private static @Nullable HttpServletRequest exchangeRequest(@NotNull WebRequest request) {
+    return request instanceof ServletWebRequest servlet
+            && IngestPathScope.isExchangeRequest(servlet.getRequest())
+        ? servlet.getRequest()
+        : null;
   }
 
   /**

@@ -156,13 +156,27 @@ entry level (`BlueprintExportEntryDto`):
 
 **Acceptance**
 
-- [ ] Bare-array, SCMDB-document, Extractor-document, and scmdb.net-document uploads all parse.
-- [ ] An Extractor export with `additionalSourceFolders` populated, explicitly `null`, or absent
+- [x] Bare-array, SCMDB-document, Extractor-document, and scmdb.net-document uploads all parse.
+  *`BlueprintImportServiceTest#preview_acceptsBareArrayForm`,
+  `#preview_acceptsFullScmdbWatcherDocumentShape`, `#preview_acceptsBpExtractorReceivedAtFormat`,
+  `#preview_acceptsFullScmdbNetProfileExportIgnoringMissions`.*
+- [x] An Extractor export with `additionalSourceFolders` populated, explicitly `null`, or absent
   (older extractor version) imports identically.
-- [ ] An scmdb.net entry naming the product under `name` resolves the same product as `productName`.
-- [ ] An scmdb.net entry with `completed == false` is dropped; `true` / absent is kept.
-- [ ] The scmdb.net `missions` array, `profile`, `url`, and `favorite` never affect the import.
-- [ ] Unknown envelope fields never fail the parse.
+  *`#preview_acceptsBpExtractorWithAdditionalSourceFolders`,
+  `#preview_acceptsBpExtractorWithNullAdditionalSourceFolders`,
+  `#preview_acceptsBpExtractorReceivedAtFormat` (absent).*
+- [x] An scmdb.net entry naming the product under `name` resolves the same product as `productName`.
+  *`#preview_acceptsScmdbNetNameAlias`.*
+- [x] An scmdb.net entry with `completed == false` is dropped; `true` / absent is kept.
+  *`#preview_skipsNotCompletedScmdbNetEntries`, `#preview_acceptsScmdbNetNameAlias` (absent).*
+- [x] The scmdb.net `missions` array, `profile`, `url`, and `favorite` never affect the import.
+  *`#preview_acceptsFullScmdbNetProfileExportIgnoringMissions`.*
+- [x] Unknown envelope fields never fail the parse. *`#preview_acceptsFullScmdbWatcherDocumentShape`,
+  `#preview_acceptsBpExtractorReceivedAtFormat` (envelope fields the DTO does not declare).*
+- [x] The `basetool.blueprints` envelope is previewed like the exchange's draft, the older exports
+  still import, a broken envelope is refused with a localised detail, any `formatVersion` `1.x` is
+  read and another major refused.
+  *`ExchangeDraftControllerTest#theWebImportReadsTheEnvelopeAndStillTheOldExport`.*
 - [x] A refused import reaches the page with its localised detail: the backend resolves its
   refusals to messages, and both proxies relay them as `problem+json` or answer their own checks
   with one (`ExchangeDraftControllerTest`, `PersonalBlueprintImportProxyControllerTest`,

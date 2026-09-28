@@ -49,7 +49,8 @@ import tools.jackson.databind.ObjectMapper;
  * in flight waits for the first. Under the claim the cache is read again, so a request that raced
  * the first one's answer replays it instead of writing twice. The gates, limits and quota run
  * before this filter, so a refused request is never cached; neither is any {@code 401}, {@code
- * 403}, {@code 429}, {@code 5xx} or a staged mass change.
+ * 403}, {@code 429}, {@code 5xx}, a staged mass change or the answer to a body that is not a JSON
+ * document ({@link #NOT_REPLAYABLE}).
  */
 public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
 
@@ -58,6 +59,13 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
 
   /** The response header marking a replayed answer. */
   public static final String REPLAYED = "Idempotency-Replayed";
+
+  /**
+   * The request attribute that keeps an answer out of the cache whatever its status, set for a body
+   * that is not a JSON document.
+   */
+  public static final String NOT_REPLAYABLE =
+      ExchangeIdempotencyFilter.class.getName() + ".notReplayable";
 
   /** The shape of an idempotency key. */
   private static final Pattern KEY = Pattern.compile("^[A-Za-z0-9._~-]{8,128}$");
@@ -222,7 +230,9 @@ public class ExchangeIdempotencyFilter extends OncePerRequestFilter {
     boolean settled = false;
     try {
       filterChain.doFilter(request, wrapper);
-      settled = cacheIfAllowed(context, namespace, fingerprint, reservation, reserved, wrapper);
+      settled =
+          request.getAttribute(NOT_REPLAYABLE) == null
+              && cacheIfAllowed(context, namespace, fingerprint, reservation, reserved, wrapper);
     } finally {
       if (!settled) {
         budget.release(context.clientId(), context.member(), reservation, reserved);

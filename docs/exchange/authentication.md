@@ -183,14 +183,19 @@ its time once with the corrected clock; if that fails too, ask the member to syn
 
 Every exchange call needs the gateway's **server nonce** (RFC 9449 §8).
 
-- Every exchange answer carries `DPoP-Nonce`, refusals included. Keep the latest one per server
-  and put it into the next proof.
+- Every answer of an exchange route carries `DPoP-Nonce`, refusals included, except those the
+  gateway gives before it reads the token: the per-IP `429 RATE_LIMITED`, `413 PAYLOAD_TOO_LARGE`,
+  the `503 SERVICE_UNAVAILABLE` when the identity provider cannot be reached, and a refused method,
+  path or query. The anonymous schema and OpenAPI reads carry none either. Keep the latest nonce per
+  server, put it into the next proof, and keep it when an answer carries none.
 - A proof without a current nonce is answered `401` with the code `DPOP_INVALID`,
   `WWW-Authenticate: DPoP algs="…", error="use_dpop_nonce"` and a fresh `DPoP-Nonce`. **Retry once**
   with a new proof carrying that nonce; a write keeps its `Idempotency-Key`.
-- The nonce challenge comes before every other proof check. A proof that is also wrong in another
-  way gets the challenge first and `DPOP_INVALID` with `error="invalid_dpop_proof"` on the retry —
-  do not retry again.
+- The nonce challenge comes before every claim check: `htm`, `htu`, `iat`, the key binding, `ath`
+  and the `jti` replay. A proof whose claims are also wrong gets the challenge first and
+  `DPOP_INVALID` with `error="invalid_dpop_proof"` on the retry — do not retry again. A proof that
+  cannot be parsed or verified at all — a wrong `typ`, an unsupported `alg`, a missing or private
+  `jwk`, a bad signature — is refused `invalid_dpop_proof` at once, without a challenge.
 - A nonce holds five to ten minutes; a restart of the gateway invalidates every nonce, which costs
   one retry.
 - Nonces belong to one server. Never send the gateway's nonce to Keycloak. Keycloak issues none
@@ -290,10 +295,11 @@ from anything the client says.
 
 ## Errors
 
-The gateway checks a request in this order: the token and the proof, the token's audience, the
-exchange switch and the registry, the installation's key, the client revocation, the route's scope,
-the minimum version; then the Basetool checks the member. Every refusal is an RFC 9457 problem with
-a `code` from the [error registry](errors.md).
+The gateway checks a request in this order: its method, path and query, the per-IP limit and the
+body's size, the token and the proof, the token's audience, the route, the exchange switch and the
+registry, the installation's key, the client revocation, the route's scope, the minimum version, the
+limits and the quota, the `Idempotency-Key`, the body; then the Basetool checks the member. Every
+refusal is an RFC 9457 problem with a `code` from the [error registry](errors.md).
 
 | Code | HTTP | When | Client action |
 | --- | --- | --- | --- |
