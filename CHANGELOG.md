@@ -358,6 +358,15 @@
 
 ### Fixed
 
+- **Datenaustausch: keine Deadlocks mehr bei gleichzeitigen Bestandsänderungen.** Sendeten zwei
+  Installationen eines Mitglieds gleichzeitig Änderungen an denselben Lots in anderer Reihenfolge,
+  brach PostgreSQL eine davon mit einem Deadlock ab; das Backend sperrt die Lots jetzt in fester
+  Reihenfolge (REQ-XCH-016).
+- **Datenaustausch: gleichzeitige Bestandsänderungen desselben Lots wirken nur einmal.** Schickten
+  zwei Installationen dieselbe Erhöhung gleichzeitig, wurden beide gebucht (aus 5 → 6 wurde 7), auch
+  bei leeren Lots; ein Zurücknehmen konnte eine gleichzeitige Änderung überschreiben. Jetzt sperrt das
+  Backend jedes Lot vorab, die zweite Änderung erhält `VERSION_CONFLICT` (ADR-0229, REQ-XCH-016).
+
 - **Datenaustausch: volles Speicherbudget ehrlich melden.** `503 EXCHANGE_BUDGET_EXHAUSTED` nennt im
   `Retry-After` die Sekunden, bis genug Budget abläuft (höchstens eine Stunde), statt pauschal 60,
   und zählt nicht mehr gegen das Tageskontingent von 500 Schreibzugriffen. Neue Metrik

@@ -1118,7 +1118,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
    * @param locationId the location
    * @param quality the quality
    * @param stolen whether the lot is stolen
-   * @return the rows, locked for the transaction
+   * @return the rows, locked in the order of their ids for the transaction
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
@@ -1126,6 +1126,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       SELECT i FROM InventoryItem i WHERE i.user.id = :member AND i.personal = true
         AND i.material.id = :materialId AND i.location.id = :locationId
         AND COALESCE(i.quality, 0) = :quality AND i.stolen = :stolen
+      ORDER BY i.id
       """)
   List<InventoryItem> lockPersonalMaterialLot(
       @Param("member") UUID member,
@@ -1135,19 +1136,30 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
       @Param("stolen") boolean stolen);
 
   /**
+   * Waits for and takes a transaction-scoped PostgreSQL advisory lock, released at commit or
+   * rollback (ADR-0229).
+   *
+   * @param key the lock key
+   * @return always {@code 1}
+   */
+  @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(:key)", nativeQuery = true)
+  int lockExchangeLot(@Param("key") long key);
+
+  /**
    * Locks a member's personal rows of one item lot for the exchange (REQ-XCH-016).
    *
    * @param member the member
    * @param gameItemId the item
    * @param locationId the location
    * @param stolen whether the lot is stolen
-   * @return the rows, locked for the transaction
+   * @return the rows, locked in the order of their ids for the transaction
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       """
       SELECT i FROM InventoryItem i WHERE i.user.id = :member AND i.personal = true
         AND i.gameItem.id = :gameItemId AND i.location.id = :locationId AND i.stolen = :stolen
+      ORDER BY i.id
       """)
   List<InventoryItem> lockPersonalItemLot(
       @Param("member") UUID member,

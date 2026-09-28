@@ -875,10 +875,17 @@ client.
 
 **Acceptance**
 
-- [x] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`.
-  *`ExchangeStockWriteControllerTest`: the lot's row locks serialise the two, and the second finds
-  the quantity changed. An optimistic-lock failure a write meets anyway reaches the client as
-  `409 VERSION_CONFLICT`, not as a relay failure.*
+- [x] Concurrent `set-quantity` on one lot: one applies, the other gets `VERSION_CONFLICT`, for a
+  lot with rows and for an empty one. *`ExchangeStockWriteConcurrencyIntegrationTest` (PostgreSQL):
+  two installations send the same rise while the first holds its locks; `ExchangeStockWriteControllerTest`:
+  an optimistic-lock failure a write meets anyway reaches the client as `409 VERSION_CONFLICT`, not
+  as a relay failure. Corrected 2026-09-28 (load test, finding 7): the row locks alone let the
+  second rise apply too — it did not see the row the first booked in, and an empty lot had no row
+  to lock — so a lot set `5 → 6` twice ended at 7.*
+- [x] Two installations of one member sending sets over the same lots in opposite orders both
+  finish; neither deadlocks. *`ExchangeStockWriteConcurrencyIntegrationTest` (PostgreSQL).
+  Corrected 2026-09-28 (load test, finding 1): the lots were locked in the order the ops arrived,
+  and such sets deadlocked (`40P01`).*
 - [x] A book-out below an offered amount lowers the offer and records the audit event.
   *`ExchangeStockWriteControllerTest`.*
 - [x] A lot sums the member's personal rows across pools, leaves shared rows out, and becomes a
@@ -897,8 +904,12 @@ refused `400` (`ExchangeStockChangeSetValidationTest`, `ExchangeStockWriteContro
 The backend applies a change set at `POST /api/v1/exchange/me/stock/changes`
 (`exchange.stock.write`) in one transaction. Each op resolves its material — a material first, an
 item otherwise — and its place, the UEX link first, then the exact name of a non-hidden location
-(`LOCATION_UNKNOWN`), checks both units against the material's (`UNIT_MISMATCH`), locks the lot's
-rows and compares `expectedQuantity` (`VERSION_CONFLICT`). A trade good is stored at quality 0. A
+(`LOCATION_UNKNOWN`), checks both units against the material's (`UNIT_MISMATCH`); then every lot
+the batch names is locked before any op compares `expectedQuantity` (`VERSION_CONFLICT`): first a
+transaction-scoped advisory lock per member and lot key, all of them in ascending order of the
+lock key, then the lots' rows in the order of the lots' keys, each lot's rows in id order
+(ADR-0229). So two sets of one member over the same lots never deadlock whatever order their ops
+come in, and the one that waited sees what the other booked, an empty lot included. A trade good is stored at quality 0. A
 lot emptied by another channel or installation is refilled only with `override`
 (`REMOVED_ELSEWHERE`); stock reserved for a job order or mission is never taken (`STOCK_EARMARKED`,
 owner decision 2026-09-27 — personal rows carry no reservations, so this guards the invariant);
@@ -1236,6 +1247,9 @@ the same undo for every member of one client at once (REQ-XCH-034).
 **Acceptance**
 
 - [x] Undo after a later web edit skips that row and reports it. *`ExchangeUndoControllerTest`.*
+- [x] An undo started while a client write of the same lot runs waits for it and skips the lot as
+  `CHANGED_AFTERWARDS`. *`ExchangeStockWriteConcurrencyIntegrationTest` (PostgreSQL). Corrected
+  2026-09-28: the undo checked before it locked, and set the lot back over the write.*
 - [x] An entry without a change-log entry is skipped, the reach follows the configured retention, a
   removed ship of a member of several units comes back without a unit, and a replaced link is not
   put back on another member's ship. *`ExchangeUndoControllerTest`.*
@@ -1256,7 +1270,9 @@ change-log entry is not the client's last write, or is missing, then it is skipp
 `CHANGED_AFTERWARDS`: without the change-log entry nothing proves that nobody changed the entry
 since. One that no longer belongs to the member or names something gone is skipped as `GONE`. A
 ship is locked only when it is still the member's; one given to another member is skipped without
-locking its row. A recreated ship is stamped like a client's create (REQ-XCH-017): the member's
+locking its row. The lots to restore are locked like a stock write's (ADR-0229) before any entry is
+checked, and restored in the order of their keys, so an undo meeting a running write waits for it
+and then skips its lot as `CHANGED_AFTERWARDS`. A recreated ship is stamped like a client's create (REQ-XCH-017): the member's
 only direct org unit, or none for a member of several. Links the client made are taken back, and a
 link one of them replaced is put back only while the ship is still the member's. The restored
 entries' journal rows are marked undone, the undo is audited as `EXCHANGE_CHANGES_UNDONE` (restored

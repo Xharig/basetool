@@ -59,8 +59,13 @@ import de.greluc.krt.profit.basetool.backend.support.InventoryProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -72,6 +77,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -120,6 +127,9 @@ public class ExchangeStockWriteService {
 
   /** The refusal of taking stock that is reserved for a job order or mission. */
   static final String STOCK_EARMARKED = "STOCK_EARMARKED";
+
+  /** The prefix that keeps the exchange's lot locks apart from any other advisory lock. */
+  private static final String LOT_LOCK_PREFIX = "exchange-stock-lot|";
 
   /** The refusal of a stolen lot while the stolen marking is switched off. */
   static final String STOLEN_MARKING_DISABLED = "STOLEN_MARKING_DISABLED";
@@ -260,6 +270,7 @@ public class ExchangeStockWriteService {
       return false;
     }
     Lot lot = parsed.get();
+    lockLots(member, List.of(lotKey));
     List<InventoryItem> rows = lockRows(member, lot);
     BigDecimal delta = round(target, unit).subtract(round(sum(rows), unit));
     if (delta.signum() > 0) {
@@ -311,7 +322,8 @@ public class ExchangeStockWriteService {
   }
 
   /**
-   * Decides every op in order, locking each lot's rows, as if the earlier ops had run.
+   * Decides every op in order, as if the earlier ops had run, after locking every lot the batch
+   * names in the order of the lots' keys.
    *
    * @param caller the caller
    * @param ops the ops
@@ -320,33 +332,48 @@ public class ExchangeStockWriteService {
   private @NotNull List<Planned> plan(
       @NotNull ExchangeCaller caller, @NotNull List<ExchangeStockChangeSet.Op> ops) {
     Map<Integer, Catalogue> catalogue = resolve(ops);
-    Map<String, BigDecimal> quantities = new HashMap<>();
-    List<Planned> plan = new ArrayList<>();
+    List<Skip> early = new ArrayList<>(ops.size());
+    List<Lot> lots = new ArrayList<>(ops.size());
     for (int i = 0; i < ops.size(); i++) {
       ExchangeStockChangeSet.Op op = ops.get(i);
       Catalogue entry = catalogue.get(i);
+      Skip skip = null;
+      Lot lot = null;
       if (entry.result() != null) {
-        plan.add(new Skip(entry.result(), entry.reason()));
+        skip = new Skip(entry.result(), entry.reason());
+      } else {
+        Optional<Location> location = locationResolver.resolve(op.location());
+        String unit = entry.unit();
+        if (location.isEmpty()) {
+          skip = new Skip(REJECTED, LOCATION_UNKNOWN);
+        } else if (!unit.equals(op.quantity().unit())
+            || !unit.equals(op.expectedQuantity().unit())) {
+          skip = new Skip(REJECTED, UNIT_MISMATCH);
+        } else if (Boolean.TRUE.equals(op.stolen())
+            && !inventoryProperties.stolenMarkingEnabled()) {
+          skip = new Skip(REJECTED, STOLEN_MARKING_DISABLED);
+        } else {
+          Integer quality = entry.material() == null || entry.commodity() ? null : op.quality();
+          lot =
+              new Lot(
+                  entry.material(), entry.gameItem(), location.get(), quality, op.stolen(), unit);
+        }
+      }
+      early.add(skip);
+      lots.add(lot);
+    }
+    Map<String, List<InventoryItem>> locked = lockInKeyOrder(caller.member(), lots);
+    Map<String, BigDecimal> quantities = new HashMap<>();
+    List<Planned> plan = new ArrayList<>();
+    for (int i = 0; i < ops.size(); i++) {
+      if (early.get(i) != null) {
+        plan.add(early.get(i));
         continue;
       }
-      Optional<Location> location = locationResolver.resolve(op.location());
-      if (location.isEmpty()) {
-        plan.add(new Skip(REJECTED, LOCATION_UNKNOWN));
-        continue;
-      }
-      String unit = entry.unit();
-      if (!unit.equals(op.quantity().unit()) || !unit.equals(op.expectedQuantity().unit())) {
-        plan.add(new Skip(REJECTED, UNIT_MISMATCH));
-        continue;
-      }
-      if (Boolean.TRUE.equals(op.stolen()) && !inventoryProperties.stolenMarkingEnabled()) {
-        plan.add(new Skip(REJECTED, STOLEN_MARKING_DISABLED));
-        continue;
-      }
-      Integer quality = entry.material() == null || entry.commodity() ? null : op.quality();
-      Lot lot =
-          new Lot(entry.material(), entry.gameItem(), location.get(), quality, op.stolen(), unit);
-      List<InventoryItem> rows = lockRows(caller.member(), lot);
+      ExchangeStockChangeSet.Op op = ops.get(i);
+      Lot lot = lots.get(i);
+      String unit = lot.unit();
+      List<InventoryItem> rows = locked.get(lot.key());
       BigDecimal current = quantities.computeIfAbsent(lot.key(), k -> round(sum(rows), unit));
       BigDecimal expected = round(op.expectedQuantity().amount(), unit);
       BigDecimal target = round(op.quantity().amount(), unit);
@@ -417,6 +444,67 @@ public class ExchangeStockWriteService {
       }
     }
     return byIndex;
+  }
+
+  /**
+   * Locks every distinct lot of a batch, first by its advisory lock, then its rows in the order of
+   * the lots' keys, so two batches of one member that share lots never deadlock and the later one
+   * reads the rows the earlier one booked in (ADR-0229).
+   *
+   * @param member the member
+   * @param lots the batch's lots by op, {@code null} for an op that ends before its lot
+   * @return each lot's locked rows by the lot's key
+   */
+  private @NotNull Map<String, List<InventoryItem>> lockInKeyOrder(
+      @NotNull UUID member, @NotNull List<@Nullable Lot> lots) {
+    Map<String, Lot> byKey = new TreeMap<>();
+    for (Lot lot : lots) {
+      if (lot != null) {
+        byKey.putIfAbsent(lot.key(), lot);
+      }
+    }
+    lockLots(member, byKey.keySet());
+    Map<String, List<InventoryItem>> locked = new HashMap<>();
+    byKey.forEach((key, lot) -> locked.put(key, lockRows(member, lot)));
+    return locked;
+  }
+
+  /**
+   * Takes the transaction-scoped advisory lock of each of a member's lots, in the order of the lock
+   * keys, before any of their rows is read (ADR-0229).
+   *
+   * <p>The lock exists whether or not the lot has rows, so a writer that waited reads the rows the
+   * holder booked in. Two lots whose keys collide share one lock, which only serialises them.
+   *
+   * @param member the member
+   * @param lotKeys the lots' keys as the change feed records them
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void lockLots(@NotNull UUID member, @NotNull Collection<String> lotKeys) {
+    Set<Long> keys = new TreeSet<>();
+    for (String lotKey : lotKeys) {
+      keys.add(lotLockKey(member, lotKey));
+    }
+    keys.forEach(inventoryRepository::lockExchangeLot);
+  }
+
+  /**
+   * Derives a lot's 64-bit advisory lock key: the first eight bytes of the SHA-256 of the member
+   * and the lot key under the exchange's own prefix.
+   *
+   * @param member the member
+   * @param lotKey the lot's key
+   * @return the lock key
+   */
+  static long lotLockKey(@NotNull UUID member, @NotNull String lotKey) {
+    try {
+      byte[] digest =
+          MessageDigest.getInstance("SHA-256")
+              .digest((LOT_LOCK_PREFIX + member + '|' + lotKey).getBytes(StandardCharsets.UTF_8));
+      return ByteBuffer.wrap(digest).getLong();
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is not available", e);
+    }
   }
 
   /**
