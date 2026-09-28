@@ -20,6 +20,7 @@
 package de.greluc.krt.profit.basetool.backend.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -121,11 +122,24 @@ class ExternalContractTest {
    */
   private static final String ALLOW_LIST = "docker/edge/include/api-allowlist.conf";
 
-  /** {@code if ($uri = "/api/v1/…") { set $krt_api_allowed 1; }} */
-  private static final Pattern EXACT_RULE = Pattern.compile("\\$uri\\s*=\\s*\"([^\"]+)\"");
+  /**
+   * One admission rule: {@code if ($uri = "…")}, {@code if ($uri ~ "…")} or {@code if ($uri ~*
+   * "…")}, followed by {@code { set $krt_api_allowed 1; }}; group 1 is the operator, group 2 the
+   * operand.
+   */
+  private static final Pattern ADMISSION_RULE =
+      Pattern.compile(
+          "^\\s*if\\s*\\(\\s*\\$uri\\s*(=|~\\*?)\\s*\"([^\"]+)\"\\s*\\)"
+              + "\\s*\\{\\s*set\\s+\\$krt_api_allowed\\s+1\\s*;\\s*}\\s*$");
 
-  /** {@code if ($uri ~ "^/api/v1/…$") { set $krt_api_allowed 1; }} */
-  private static final Pattern REGEX_RULE = Pattern.compile("\\$uri\\s*~\\s*\"([^\"]+)\"");
+  /** {@code set $krt_api_allowed 0;}, the default every request starts from. */
+  private static final Pattern DEFAULT_DENY =
+      Pattern.compile("^\\s*set\\s+\\$krt_api_allowed\\s+0\\s*;\\s*$");
+
+  /** {@code if ($krt_api_allowed = 0) { return 404; }}, the refusal of every unadmitted URI. */
+  private static final Pattern UNADMITTED_REFUSAL =
+      Pattern.compile(
+          "^\\s*if\\s*\\(\\s*\\$krt_api_allowed\\s*=\\s*0\\s*\\)\\s*\\{\\s*return\\s+404\\s*;\\s*}\\s*$");
 
   /** A {@code {name}} segment in a contract path. */
   private static final Pattern PLACEHOLDER = Pattern.compile("\\{[a-zA-Z]+}");
@@ -2675,34 +2689,109 @@ class ExternalContractTest {
   }
 
   /**
-   * Parses the allow-list into predicates over a concrete URI: {@code $uri = "…"} as an exact
-   * match, {@code $uri ~ "…"} as a regular expression; other lines are ignored.
+   * Verifies that a line touching the admission flag in a form the parser does not know fails the
+   * parse instead of being skipped, so no rule can admit a URI the exchange guard never probes.
+   */
+  @Test
+  @DisplayName("an allow-list line the parser cannot read fails instead of being skipped")
+  void anAllowListLineTheParserCannotReadFails() {
+    List<String> unreadable =
+        List.of(
+            "if ($request_uri ~ \"^/api/v1/exchange/\") { set $krt_api_allowed 1; }",
+            "if ($uri !~ \"^/api/v1/users/\") { set $krt_api_allowed 1; }",
+            "if ($uri ~ ^/api/v1/exchange/) { set $krt_api_allowed 1; }",
+            "if ($uri ~ \"^/api/v1/exchange/\") { set $krt_api_allowed \"1\"; }",
+            "set $krt_api_allowed 1;",
+            "    set $krt_api_allowed 1;");
+
+    for (String line : unreadable) {
+      assertThatThrownBy(() -> parseAllowList(List.of("set $krt_api_allowed 0;", line)))
+          .as(line)
+          .isInstanceOf(AssertionError.class)
+          .hasMessageContaining("line 2");
+    }
+  }
+
+  /**
+   * Verifies that a {@code ~*} rule is parsed as the case-insensitive regular expression nginx
+   * evaluates, so a rule written in upper case still counts as admitting the lower-case path.
+   */
+  @Test
+  @DisplayName("a ~* allow-list rule is parsed as a case-insensitive regular expression")
+  void aCaseInsensitiveRuleIsParsedCaseInsensitively() {
+    List<Predicate<String>> rules =
+        parseAllowList(
+            List.of(
+                "set $krt_api_allowed 0;",
+                "if ($uri ~* \"^/API/V1/EXCHANGE/\") { set $krt_api_allowed 1; }",
+                "if ($uri ~ \"^/API/V1/CONNECTED-APPS\") { set $krt_api_allowed 1; }",
+                "if ($krt_api_allowed = 0) { return 404; }"));
+
+    assertThat(rules).hasSize(2);
+    assertThat(rules.get(0).test("/api/v1/exchange/me/blueprints")).isTrue();
+    assertThat(rules.get(1).test("/api/v1/connected-apps")).isFalse();
+  }
+
+  /**
+   * Reads the committed allow-list and parses it with {@link #parseAllowList(List)}.
    *
-   * @return one predicate per parsed rule
+   * @return one predicate per admission rule
    * @throws IOException if the allow-list cannot be read
    */
   private static List<Predicate<String>> allowListRules() throws IOException {
     Path allowList = findRepoRoot().resolve(ALLOW_LIST);
     assertThat(Files.exists(allowList)).as("%s must exist", allowList).isTrue();
+    return parseAllowList(Files.readAllLines(allowList));
+  }
 
+  /**
+   * Parses allow-list lines into predicates over a concrete URI: {@code $uri = "…"} as an exact
+   * match, {@code $uri ~ "…"} as a regular expression and {@code $uri ~* "…"} as a case-insensitive
+   * one. Lines that do not mention {@code krt_api_allowed} are ignored.
+   *
+   * @param lines the lines of the nginx include
+   * @return one predicate per admission rule, in file order
+   * @throws AssertionError if a line mentioning {@code krt_api_allowed} is neither an admission
+   *     rule, the default nor the refusal
+   */
+  private static List<Predicate<String>> parseAllowList(List<String> lines) {
     List<Predicate<String>> rules = new java.util.ArrayList<>();
-    for (String line : Files.readAllLines(allowList)) {
-      if (!line.contains("krt_api_allowed 1")) {
+    for (int index = 0; index < lines.size(); index++) {
+      String line = lines.get(index);
+      if (!line.contains("krt_api_allowed")) {
         continue;
       }
-      Matcher exact = EXACT_RULE.matcher(line);
-      if (exact.find()) {
-        String literal = exact.group(1);
-        rules.add(literal::equals);
+      Matcher rule = ADMISSION_RULE.matcher(line);
+      if (rule.matches()) {
+        String operand = rule.group(2);
+        switch (rule.group(1)) {
+          case "=" -> rules.add(operand::equals);
+          case "~" -> rules.add(regexRule(Pattern.compile(operand)));
+          default -> rules.add(regexRule(Pattern.compile(operand, Pattern.CASE_INSENSITIVE)));
+        }
         continue;
       }
-      Matcher regex = REGEX_RULE.matcher(line);
-      if (regex.find()) {
-        Pattern compiled = Pattern.compile(regex.group(1));
-        rules.add(uri -> compiled.matcher(uri).find());
+      if (!DEFAULT_DENY.matcher(line).matches() && !UNADMITTED_REFUSAL.matcher(line).matches()) {
+        throw new AssertionError(
+            String.format(
+                "%s line %d touches krt_api_allowed in a form this test cannot evaluate, so it "
+                    + "cannot prove the rule keeps the exchange off the API vhost: %s — write it "
+                    + "as a one-line if ($uri = \"…\"), if ($uri ~ \"…\") or if ($uri ~* \"…\") "
+                    + "rule, or teach parseAllowList the new form",
+                ALLOW_LIST, index + 1, line.strip()));
       }
     }
     return rules;
+  }
+
+  /**
+   * Wraps a compiled nginx regular expression as a predicate with nginx's unanchored semantics.
+   *
+   * @param compiled the rule's regular expression
+   * @return a predicate that is true when the expression is found anywhere in the URI
+   */
+  private static Predicate<String> regexRule(Pattern compiled) {
+    return uri -> compiled.matcher(uri).find();
   }
 
   /**

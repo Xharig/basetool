@@ -32,7 +32,8 @@
 
 - **Datenaustausch: öffentliche Sandbox-Images.** Eine eigene Pipeline baut
   `basetool-sandbox-{backend,frontend,ingest,keycloak}` mit reinen Testwerten; die Images verweigern
-  das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Die
+  das Profil `prod` beim Start, und ein Secret-Scan läuft vor jeder Veröffentlichung. Eine Version
+  und `latest` erscheinen nur zu einem Release-Tag `vX.Y.Z` auf `main`. Die
   Produktions-Images bleiben privat. Ein Smoke-Test (`scripts/sandbox-smoke.py`) zieht sie danach
   ohne Anmeldung und prüft Geräte-Login, DPoP, alle Ressourcen und die Konformitäts-Beispiele.
 
