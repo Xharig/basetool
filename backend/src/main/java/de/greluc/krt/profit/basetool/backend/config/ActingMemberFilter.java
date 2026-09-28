@@ -320,8 +320,8 @@ public class ActingMemberFilter extends OncePerRequestFilter {
    * runs before exception translation.
    *
    * <p>Every reason produces the same body, worded for an exchange request on the exchange layer
-   * and for an import elsewhere; the reason goes only to the metric and the log, so the endpoint
-   * cannot reveal which subjects exist.
+   * and, elsewhere, as the rule that acting for a member is only possible there; the reason goes
+   * only to the metric and the log, so the endpoint cannot reveal which subjects exist.
    *
    * @param request the refused request, for the problem {@code instance} and the locale
    * @param response the response to write into
@@ -359,7 +359,7 @@ public class ActingMemberFilter extends OncePerRequestFilter {
             null,
             exchangeRoute
                 ? "The exchange request could not be attributed to a valid member and application."
-                : "The import could not be attributed to a valid member.",
+                : "Acting for a member is only possible through the exchange routes.",
             locale);
 
     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
