@@ -145,7 +145,13 @@ switch off, revocations) are written to Redis **before** the database commit and
 the mirror write fails; permissive changes are written **after** the commit. The gateway reads the
 mirror through a cache of at most 5 s and refuses every exchange request when it cannot read it or
 the revocations (`503 REGISTRY_UNAVAILABLE`) or when the switch is off (`503 EXCHANGE_DISABLED`),
-each with `Retry-After: 30`.
+each with `Retry-After: 30`. Within that cache's five seconds the gateway may still admit a request
+for a client just suspended, unregistered or cut off by the switch; the backend's `@exchangeGate`
+then refuses it with the **same** code and status the gateway would have answered
+(`403 CLIENT_SUSPENDED`, `403 CLIENT_NOT_ALLOWED`, `503 EXCHANGE_DISABLED`), and the gateway relays
+it unchanged (REQ-XCH-025), so a client never sees one situation under two codes. *Corrected
+2026-09-28: the backend answered these as a generic `403`, which reached the client as
+`NOT_PERMITTED` (E2E run 36388920243).*
 
 **How the backend keeps the mirror** (WP 3.1). The tables are `exchange_client`,
 `exchange_client_capability` and the single-row `exchange_settings` (`V248`); the switch starts
@@ -198,7 +204,13 @@ reserved: it joins the exchange as a registry client of its own at the go-live.
   direction of the switch and granting a client more capabilities each ask for confirmation first.
   *`AdminExchangeClientsPageControllerMvcTest`, `AdminExchangeClientsE2eTest`; that the gateway
   follows — `403 CLIENT_SUSPENDED` after a suspension on the page, answered again after the
-  reactivation — `ExchangeConnectionsE2eTest.anAdminSuspensionAndReactivationReachTheGateway`.*
+  reactivation — `ExchangeConnectionsE2eTest.anAdminSuspensionAndReactivationReachTheGateway`,
+  which requires the first refusal and every refusal until the reactivation reaches the gateway
+  to be `403 CLIENT_SUSPENDED`, whichever side gave it.*
+- [x] The backend's gate refuses a suspended or unregistered client and a switched-off exchange
+  with the gateway's code and status, and the gateway relays them unchanged. *Backend
+  `ExchangeGateTest`, `ExchangeCatalogControllerTest`; gateway `ExchangeRelayTest`,
+  `ExchangeControllerTest`.*
 - [x] Each client shows its connected members and last activity, counted over live installations
   only (`GET /api/v1/admin/exchange-clients/usage`: not revoked, and not seen last before the
   member disconnected the client); the error rate per client is linked in Grafana
@@ -245,7 +257,12 @@ relayed for an external client whose authorities hold `ROLE_EXCHANGE_MEMBER`, wh
 switch is on, the client is in the registry and `ACTIVE`, neither the installation nor — after the
 token was issued — the client is disconnected (REQ-XCH-008), and the scope was both relayed (the
 `XCH_CAPABILITY:<scope>` authority) and granted to the client. Every refusal is counted as
-`basetool_exchange_gate_refused_total{reason}`.
+`basetool_exchange_gate_refused_total{reason}`. A relayed request it refuses is answered as an
+`ExchangeProblemException` with the code and status the gateway's `ExchangeGateFilter` gives the
+same situation — `503 EXCHANGE_DISABLED`, `403 CLIENT_NOT_ALLOWED`, `403 CLIENT_SUSPENDED`,
+`401 INSTALLATION_REVOKED`, `401 CLIENT_REVOKED`, `403 SCOPE_MISSING`, and `503
+REGISTRY_UNAVAILABLE` for revocations it cannot read (REQ-XCH-025); only a caller that is not a
+relayed acting member gets the generic `403`.
 
 **Status:** built — the scopes (WP 2.2, #2081), the registry's per-client grants
 (`ExchangeCapability`, WP 3.1) and the backend's `ExchangeGate` (WP 3.1, #2083), and the gateway
@@ -481,8 +498,13 @@ headers, REQ-XCH-010), the gate reads `exchange:revoked:<client>:<member>` from 
 exchange request and refuses a connection made at or before that second (`client_revoked`); a request
 relayed without a connection time counts as connected before it, as a token without the claim does
 at the gateway. Both sides therefore compare the same time. A mirror the
-backend cannot read fails closed: the request is refused as `502` (`revocations_unreadable`), which
-the gateway relays as `502 BACKEND_RELAY_FAILED`. The backend's Redis user already holds `GET` on
+backend cannot read fails closed: the request is refused `503 REGISTRY_UNAVAILABLE`
+(`revocations_unreadable`), as the gateway refuses revocations it cannot read, with the gateway's
+`Retry-After: 30`. Every refusal of the backend's gate carries the gateway's code for the same
+situation — `401 INSTALLATION_REVOKED`, `401 CLIENT_REVOKED` — and passes the gateway unchanged
+(REQ-XCH-025). *Corrected 2026-09-28: the backend refused these as a generic `403` and an
+unreadable mirror as `502`, which reached the client as `403 NOT_PERMITTED` and `502
+BACKEND_RELAY_FAILED`.* The backend's Redis user already holds `GET` on
 `exchange:*`. The member's controls are `/api/v1/connected-apps` (list,
 `DELETE /{clientId}`, `DELETE /installations/{id}`), reachable only from the member's own web session.
 
@@ -1320,7 +1342,16 @@ failure is the generic `500 INTERNAL_ERROR`. *Changed 2026-09-28: the first two 
 `400 BAD_REQUEST` and a `415` without `code`, and the bot filter a bare `405`, `404` or `400`.*
 
 A backend refusal reaches a client with its registry code and a **fixed English detail per code**
-(`ExchangeRelay.DETAILS`); the backend's own `detail` is never relayed. The security review of
+(`ExchangeRelay.DETAILS`); the backend's own `detail` is never relayed. The backend's
+`@exchangeGate` re-checks what the gateway's registry gate checked and refuses with the
+gateway's own codes (`EXCHANGE_DISABLED`, `CLIENT_NOT_ALLOWED`, `CLIENT_SUSPENDED`,
+`INSTALLATION_REVOKED`, `CLIENT_REVOKED`, `SCOPE_MISSING`, `REGISTRY_UNAVAILABLE`); the relay
+passes each of them only with the status the gateway's gate answers it with
+(`ExchangeRelay.GATE_STATUSES`, a `503` included), with the gateway gate's `detail` and, for the
+two `503`s, its `Retry-After: 30`, and the service document answers such a refusal instead of
+a document. Any other status for such a code, and any other `5xx`, stays `502
+BACKEND_RELAY_FAILED`. So a request the gateway admitted from its five-second registry cache and
+the backend refused reads exactly as the gateway's own refusal (security of REQ-XCH-003/-008). The security review of
 2026-09-27 audited what the backend puts there on the passed-through codes. The gate filters
 (`TERMS_NOT_ACCEPTED`, `PENDING_APPROVAL`, `NO_ROLE`, `ACTING_MEMBER_REFUSED`), `ACCESS_DENIED`,
 `VALIDATION_FAILED`, `OPTIMISTIC_LOCK` and the exchange layer's own `ExchangeProblemException` codes
@@ -1346,7 +1377,8 @@ reserves the latter, and `Retry-After` is the header. The schema allowed a `corr
 
 **Enforced by:** `ExchangeContractTest` (the registry's codes are unique and carry error statuses,
 and every code the gateway answers on its own is registered), `ExchangeRelayTest` (no backend detail
-reaches a client), `ExchangeChangeRouteTest` and `BotProtectionFilterTest` (the unreadable body, the
+reaches a client; the gate codes pass with their status only), backend `ExchangeGateTest` and
+`ExchangeCatalogControllerTest` (the backend's gate answers the gateway's codes), `ExchangeChangeRouteTest` and `BotProtectionFilterTest` (the unreadable body, the
 media type and the bot filter's answers on exchange paths) · **Status:** registry published — WP 0.2
 (#2080); the gateway's refusal metrics carry the codes as `reason` labels (`ExchangeRefusals`) — WP
 3.2 (#2082)

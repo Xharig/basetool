@@ -15,19 +15,27 @@ with the code in snake case as its `reason` label; the answers of the routes the
 given before the token is checked are not counted there. The **per-op** reasons never arrive as a
 problem: they appear in a change result's `results[].reason` for an op that was not applied.
 
+The Basetool behind the gateway checks the switch, the registry, the revocations and the
+capabilities of every request again. The gateway reads the registry through a cache of up to
+five seconds, so right after a change the Basetool may be the one that refuses. It then answers
+with the **same** code, status, `Retry-After` and `detail` the gateway would have — the codes
+raised by *gateway, backend* below, `SCHEMA_INVALID` aside — and such a refusal is not counted on
+the gateway's metric. A client never sees one situation under two
+codes, whichever side refuses it.
+
 ## Request errors
 
 | Code | HTTP | Raised by | Meaning | Client action |
 | --- | --- | --- | --- | --- |
-| `CLIENT_NOT_ALLOWED` | 403 | gateway | The token's client is not in the registry. | Stop; the client is not approved. |
-| `CLIENT_SUSPENDED` | 403 | gateway | The client is suspended in the registry. | Stop and tell the member. Nothing tells a client when the suspension ends, so do not retry on a timer: try again at the client's next start or when the member asks. |
-| `CLIENT_REVOKED` | 401 | gateway | The member disconnected this client after this connection was made: an offline token issued before the disconnect, or a token without `offline_access` whose sign-in (`auth_time`) came before it. | Discard tokens; start a new device login only when the member asks. |
-| `INSTALLATION_REVOKED` | 401 | gateway | The member disconnected this installation; its DPoP key is refused for good. | Discard tokens **and** the DPoP key; reconnecting needs a new key. |
+| `CLIENT_NOT_ALLOWED` | 403 | gateway, backend | The token's client is not in the registry. | Stop; the client is not approved. |
+| `CLIENT_SUSPENDED` | 403 | gateway, backend | The client is suspended in the registry. | Stop and tell the member. Nothing tells a client when the suspension ends, so do not retry on a timer: try again at the client's next start or when the member asks. |
+| `CLIENT_REVOKED` | 401 | gateway, backend | The member disconnected this client after this connection was made: an offline token issued before the disconnect, or a token without `offline_access` whose sign-in (`auth_time`) came before it. | Discard tokens; start a new device login only when the member asks. |
+| `INSTALLATION_REVOKED` | 401 | gateway, backend | The member disconnected this installation; its DPoP key is refused for good. | Discard tokens **and** the DPoP key; reconnecting needs a new key. |
 | `CLIENT_VERSION_UNSUPPORTED` | 403 | gateway | The `User-Agent` version is below the client's minimum. | Ask the member to update. |
-| `EXCHANGE_DISABLED` | 503 | gateway | The exchange is switched off globally. `Retry-After: 30`. | Wait at least `Retry-After`, then retry. |
-| `REGISTRY_UNAVAILABLE` | 503 | gateway | The gateway cannot read the client registry or the revocations and fails closed. `Retry-After: 30`. | Wait at least `Retry-After`, then retry. |
+| `EXCHANGE_DISABLED` | 503 | gateway, backend | The exchange is switched off globally. `Retry-After: 30`. | Wait at least `Retry-After`, then retry. |
+| `REGISTRY_UNAVAILABLE` | 503 | gateway, backend | The gateway cannot read the client registry or the revocations, or the Basetool cannot read the revocations, and fails closed. `Retry-After: 30`. | Wait at least `Retry-After`, then retry. |
 | `EXCHANGE_BUDGET_EXHAUSTED` | 503 | gateway | A Redis byte budget of the exchange is full. `Retry-After: 60`. | Wait at least `Retry-After`, then retry the same request under the same key. |
-| `SCOPE_MISSING` | 403 | gateway | The route's capability is not in the token or not granted to the client. A missing consent looks the same. | Start a device login requesting the scope, if the member wants it. |
+| `SCOPE_MISSING` | 403 | gateway, backend | The route's capability is not in the token or not granted to the client. A missing consent looks the same. | Start a device login requesting the scope, if the member wants it. |
 | `UNAUTHENTICATED` | 401 | gateway | The token is missing, invalid, expired, or not issued for this gateway. | Refresh the token once and retry. Only when the refresh answers `invalid_grant` is the connection over: delete the refresh token and start a device login when the member asks. A freshly refreshed token that is refused again is not retried in a loop. |
 | `DPOP_REQUIRED` | 401 | gateway | The request carries no DPoP proof or an unbound token. | Send `Authorization: DPoP` with a proof. |
 | `DPOP_INVALID` | 401 | gateway | The proof is invalid, replayed, for another key, or lacks the server nonce. | Fix the proof; on a nonce challenge retry once with the `DPoP-Nonce`. |
