@@ -212,14 +212,17 @@ class ExchangeInstallationControllerTest {
   }
 
   @Test
-  void aRevokedInstallationIsRefused() throws Exception {
+  void aRevokedInstallationIsRefusedWithTheGatewaysCode() throws Exception {
     mockMvc.perform(relayed(get(PATH))).andExpect(status().isOk());
     ExchangeInstallation installation =
         installationRepository.findByKey("versekit-inst", MEMBER, KEY).orElseThrow();
     installation.setRevokedAt(Instant.now());
     installationRepository.saveAndFlush(installation);
 
-    mockMvc.perform(relayed(get(PATH))).andExpect(status().isForbidden());
+    mockMvc
+        .perform(relayed(get(PATH)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("INSTALLATION_REVOKED"));
   }
 
   @Test

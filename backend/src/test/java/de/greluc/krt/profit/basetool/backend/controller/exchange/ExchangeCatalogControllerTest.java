@@ -183,23 +183,43 @@ class ExchangeCatalogControllerTest {
   }
 
   @Test
-  void theSwitchOffRefuses() throws Exception {
+  void theSwitchOffRefusesWithTheGatewaysCode() throws Exception {
     setSwitch(false);
 
-    mockMvc.perform(relayed("exchange.connect")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(relayed("exchange.connect"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.code").value("EXCHANGE_DISABLED"));
   }
 
   @Test
-  void aSuspendedClientIsRefused() throws Exception {
+  void aSuspendedClientIsRefusedWithTheGatewaysCode() throws Exception {
     client.setStatus(ExchangeClientStatus.SUSPENDED);
     clientRepository.saveAndFlush(client);
 
-    mockMvc.perform(relayed("exchange.connect")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(relayed("exchange.connect"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("CLIENT_SUSPENDED"));
+  }
+
+  @Test
+  void aClientTheRegistryDoesNotListIsRefusedWithTheGatewaysCode() throws Exception {
+    clientRepository.delete(client);
+    clientRepository.flush();
+
+    mockMvc
+        .perform(relayed("exchange.connect"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("CLIENT_NOT_ALLOWED"));
   }
 
   @Test
   void aCapabilityTheRegistryDoesNotGrantIsNotEnough() throws Exception {
-    mockMvc.perform(relayed("exchange.stock.write")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(relayed("exchange.stock.write"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("SCOPE_MISSING"));
   }
 
   @Test
@@ -213,8 +233,12 @@ class ExchangeCatalogControllerTest {
                 .header(
                     ActingMemberHeader.EXCHANGE_CONNECTED_AT_HEADER,
                     Long.toString(revokedAt.getEpochSecond())))
-        .andExpect(status().isForbidden());
-    mockMvc.perform(relayed("exchange.connect")).andExpect(status().isForbidden());
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
+    mockMvc
+        .perform(relayed("exchange.connect"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("CLIENT_REVOKED"));
     mockMvc
         .perform(
             relayed("exchange.connect")
@@ -225,14 +249,14 @@ class ExchangeCatalogControllerTest {
   }
 
   @Test
-  void anUnreadableRevocationMirrorFailsClosed() throws Exception {
+  void anUnreadableRevocationMirrorFailsClosedWithTheGatewaysCode() throws Exception {
     when(revocationMirror.revokedAt("versekit-test", MEMBER))
         .thenThrow(new RedisConnectionFailureException("down"));
 
     mockMvc
         .perform(relayed("exchange.connect"))
-        .andExpect(status().isBadGateway())
-        .andExpect(jsonPath("$.code").value("EXTERNAL_SERVICE_ERROR"));
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.code").value("REGISTRY_UNAVAILABLE"));
   }
 
   @Test

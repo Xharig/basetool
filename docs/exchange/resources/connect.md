@@ -37,6 +37,11 @@ Read it at the start of every session. Offer only the features whose scopes are 
 store `installationId`, and tell the member to update when your version is below
 `minClientVersion` — the gateway refuses such a release with `403 CLIENT_VERSION_UNSUPPORTED` anyway.
 
+When the Basetool refuses the installation lookup because the client was just suspended or
+disconnected, or the exchange switched off — a change the gateway's registry cache has not seen
+yet — the service document is not sent: the answer is that refusal, with the code the gateway uses
+for it, such as `403 CLIENT_SUSPENDED` ([errors](../errors.md)).
+
 ## Label the installation — `POST /exchange/v1/me/installation`
 
 An installation is one client on one device for one member, identified by the thumbprint of its DPoP

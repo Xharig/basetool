@@ -5,6 +5,15 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-28
 
+- **Clarified: one code per situation, whichever side refuses.** The Basetool behind the gateway
+  checks the switch, the registry, the revocations and the capabilities of every request again.
+  Right after a change, while the gateway's registry cache still admits a request, that second
+  check used to refuse it as `403 NOT_PERMITTED`, or `502 BACKEND_RELAY_FAILED` when it could not
+  read the revocations. It now answers with the code, status, `Retry-After` and `detail` the gateway
+  gives the same situation: `CLIENT_SUSPENDED`, `CLIENT_NOT_ALLOWED`, `EXCHANGE_DISABLED`,
+  `INSTALLATION_REVOKED`, `CLIENT_REVOKED`, `SCOPE_MISSING`, `REGISTRY_UNAVAILABLE`; the service
+  document answers such a refusal as well ([errors](errors.md)). No code is new, and the contract
+  always documented these codes for these situations.
 - **The org demand is withheld with `reason: NOT_PERMITTED`.** A member who may not see their
   organisation's job orders in the Basetool — no unit of theirs takes part in the profit sharing —
   now gets `200` with two empty lists and `"reason": "NOT_PERMITTED"` instead of their units' demand;

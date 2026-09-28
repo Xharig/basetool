@@ -143,6 +143,44 @@ class ExchangeRelayTest {
   }
 
   @Test
+  void theBackendGatesRefusalsPassThroughWithTheGatewayGatesCodeStatusAndDetail() {
+    assertGate(503, "EXCHANGE_DISABLED", ExchangeGateFilter.EXCHANGE_DISABLED_DETAIL);
+    assertGate(503, "REGISTRY_UNAVAILABLE", ExchangeGateFilter.REGISTRY_UNAVAILABLE_DETAIL);
+    assertGate(403, "CLIENT_NOT_ALLOWED", ExchangeGateFilter.CLIENT_NOT_ALLOWED_DETAIL);
+    assertGate(403, "CLIENT_SUSPENDED", ExchangeGateFilter.CLIENT_SUSPENDED_DETAIL);
+    assertGate(401, "INSTALLATION_REVOKED", ExchangeGateFilter.INSTALLATION_REVOKED_DETAIL);
+    assertGate(401, "CLIENT_REVOKED", ExchangeGateFilter.CLIENT_REVOKED_DETAIL);
+    assertGate(403, "SCOPE_MISSING", ExchangeGateFilter.SCOPE_MISSING_DETAIL);
+    assertThat(ExchangeRelay.GATE_STATUSES).hasSize(7);
+    assertThat(count("refused")).isEqualTo(7.0d);
+  }
+
+  @Test
+  void aGateCodeWithAnotherStatusOrAnotherFiveHundredIsARelayFailure() {
+    assertThat(interpret(403, "{\"code\":\"CLIENT_REVOKED\"}").code())
+        .isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(interpret(403, "{\"code\":\"EXCHANGE_DISABLED\"}").code())
+        .isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(interpret(503, "{\"code\":\"CLIENT_SUSPENDED\"}").code())
+        .isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(interpret(503, "{\"code\":\"NOT_PERMITTED\"}").code())
+        .isEqualTo("BACKEND_RELAY_FAILED");
+    assertThat(interpret(502, "{\"code\":\"EXTERNAL_SERVICE_ERROR\"}").status()).isEqualTo(502);
+    assertThat(count("failed")).isEqualTo(5.0d);
+  }
+
+  @Test
+  void theUnavailableGateCodesCarryTheGatewayGatesRetryAfter() {
+    assertThat(ExchangeRelay.retryAfterSeconds("EXCHANGE_DISABLED")).isEqualTo("30");
+    assertThat(ExchangeRelay.retryAfterSeconds("REGISTRY_UNAVAILABLE")).isEqualTo("30");
+    assertThat(ExchangeRelay.retryAfterSeconds("CLIENT_SUSPENDED")).isNull();
+    assertThat(ExchangeRelay.retryAfterSeconds(null)).isNull();
+    assertThat(ExchangeRelay.isGateCode("CLIENT_SUSPENDED")).isTrue();
+    assertThat(ExchangeRelay.isGateCode("NOT_PERMITTED")).isFalse();
+    assertThat(ExchangeRelay.isGateCode(null)).isFalse();
+  }
+
+  @Test
   void anythingElseIsARelayFailure() {
     assertThat(interpret(401, "{\"code\":\"UNAUTHENTICATED\"}").code())
         .isEqualTo("BACKEND_RELAY_FAILED");
@@ -179,8 +217,10 @@ class ExchangeRelayTest {
           .doesNotContain("Secret", "5f1d2c3b", "SELECT", "de.greluc");
     }
     for (String code : ExchangeRelay.PASSED_THROUGH) {
+      int status = ExchangeRelay.GATE_STATUSES.getOrDefault(code, 409);
       assertThat(
-              interpret(409, "{\"code\":\"" + code + "\",\"detail\":\"" + leaky + "\"}").detail())
+              interpret(status, "{\"code\":\"" + code + "\",\"detail\":\"" + leaky + "\"}")
+                  .detail())
           .isEqualTo(ExchangeRelay.DETAILS.get(code))
           .isNotBlank()
           .doesNotContain("Secret");
@@ -267,6 +307,22 @@ class ExchangeRelayTest {
 
     assertThat(result.code()).isEqualTo("BACKEND_RELAY_FAILED");
     assertThat(count("failed")).isEqualTo(1.0d);
+  }
+
+  /**
+   * Asserts a backend refusal with a gate code passes through unchanged but for the detail.
+   *
+   * @param status the status both gates answer the code with
+   * @param code the gate code
+   * @param detail the gateway gate's detail for it
+   */
+  private void assertGate(int status, String code, String detail) {
+    ExchangeRelay.Result result =
+        interpret(status, "{\"code\":\"" + code + "\",\"detail\":\"backend text\"}");
+
+    assertThat(result.status()).isEqualTo(status);
+    assertThat(result.code()).isEqualTo(code);
+    assertThat(result.detail()).isEqualTo(detail);
   }
 
   /**

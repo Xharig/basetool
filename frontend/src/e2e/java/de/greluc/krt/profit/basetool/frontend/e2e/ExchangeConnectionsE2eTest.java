@@ -191,8 +191,10 @@ class ExchangeConnectionsE2eTest {
   }
 
   /**
-   * Suspends the client on the admin registry page, waits until the gateway refuses it with {@code
-   * 403 CLIENT_SUSPENDED}, reactivates it there and waits until the gateway answers again.
+   * Suspends the client on the admin registry page, waits until a call is refused and checks the
+   * first refusal is {@code 403 CLIENT_SUSPENDED} — whether the gateway's gate or, while its
+   * registry cache still holds the client active, the backend's gate refused it — then reactivates
+   * it there and waits until the gateway answers again, every refusal meanwhile being the same.
    *
    * @throws Exception if a call to Keycloak or the gateway cannot be sent
    */
@@ -218,12 +220,13 @@ class ExchangeConnectionsE2eTest {
         assertThat(row).hasAttribute("data-status", "SUSPENDED");
 
         ExchangeTestClient.Answer refused =
-            awaitAnswer(client, "GET", READ, answer -> answer.status() == 403);
+            awaitAnswer(client, "GET", READ, answer -> answer.status() != 200);
+        assertEquals(403, refused.status(), "the first refusal is the suspension: " + refused);
         assertEquals("CLIENT_SUSPENDED", refused.code(), "refused as suspended: " + refused);
 
         row.locator("[data-xc-activate]").click();
         assertThat(row).hasAttribute("data-status", "ACTIVE");
-        awaitAnswer(client, "GET", READ, answer -> answer.status() == 200);
+        awaitAnswer(client, "GET", READ, ExchangeConnectionsE2eTest::answeredOrStillSuspended);
       } catch (AssertionError | RuntimeException failure) {
         E2eSupport.dump(page, "exchange-admin-suspension");
         throw failure;
@@ -231,6 +234,21 @@ class ExchangeConnectionsE2eTest {
         ExchangeE2eSupport.registerClient(seeder);
       }
     }
+  }
+
+  /**
+   * Tells whether a call after the reactivation is answered, and fails on any refusal other than
+   * the suspension the gateway's registry cache or the backend may still report (REQ-XCH-003).
+   *
+   * @param answer the gateway's answer
+   * @return {@code true} once the call is answered
+   */
+  private static boolean answeredOrStillSuspended(ExchangeTestClient.Answer answer) {
+    if (answer.status() != 200) {
+      assertEquals(403, answer.status(), "still refused as suspended: " + answer);
+      assertEquals("CLIENT_SUSPENDED", answer.code(), "still refused as suspended: " + answer);
+    }
+    return answer.status() == 200;
   }
 
   /**

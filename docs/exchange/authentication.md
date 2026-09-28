@@ -298,8 +298,11 @@ from anything the client says.
 The gateway checks a request in this order: its method, path and query, the per-IP limit and the
 body's size, the token and the proof, the token's audience, the route, the exchange switch and the
 registry, the installation's key, the client revocation, the route's scope, the minimum version, the
-limits and the quota, the `Idempotency-Key`, the body; then the Basetool checks the member. Every
-refusal is an RFC 9457 problem with a `code` from the [error registry](errors.md).
+limits and the quota, the `Idempotency-Key`, the body; then the Basetool checks the member and
+repeats the switch, registry, revocation and scope checks. The gateway reads the registry through a
+cache of up to five seconds, so right after a change the Basetool may be the side that refuses; it
+answers with the same code and status as the gateway would. Every refusal is an RFC 9457 problem
+with a `code` from the [error registry](errors.md).
 
 | Code | HTTP | When | Client action |
 | --- | --- | --- | --- |

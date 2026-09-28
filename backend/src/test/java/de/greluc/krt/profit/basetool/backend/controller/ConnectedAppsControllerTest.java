@@ -264,6 +264,25 @@ class ConnectedAppsControllerTest {
   }
 
   @Test
+  void theDisconnectAnswersOnlyInASecondAfterTheRevocationsSecond() throws Exception {
+    Thread.sleep(1_000 - Instant.now().toEpochMilli() % 1_000);
+
+    mockMvc
+        .perform(delete(PATH + "/versekit-ca").with(browser(MEMBER)))
+        .andExpect(status().isNoContent());
+    Instant answered = Instant.now();
+
+    Instant revokedAt =
+        revocationRepository
+            .findById(new ExchangeClientRevocation.Key(client.getId(), MEMBER))
+            .orElseThrow()
+            .getRevokedAt();
+    assertThat(answered.getEpochSecond())
+        .as("a connection started once the disconnect answered is issued after the revocation")
+        .isGreaterThan(revokedAt.getEpochSecond());
+  }
+
+  @Test
   void anUnreachableKeycloakFailsTheDisconnect() throws Exception {
     doThrow(new IllegalStateException("down"))
         .when(keycloakService)

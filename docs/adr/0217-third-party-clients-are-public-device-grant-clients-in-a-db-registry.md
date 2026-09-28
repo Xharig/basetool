@@ -149,3 +149,27 @@ lifetime.
 The owner chose the SPI endpoint the same day: [ADR-0226](0226-a-keycloak-admin-extension-ends-one-client-inside-a-shared-session.md)
 ends the client inside shared sessions too, and the gateway's `auth_time` check of point 2 stays as
 the backstop for a Keycloak without it.
+
+## Amendment — 2026-09-28: the disconnect answers in the next second
+
+E2E run 36388920243 (chromium 1280x800) found the first call of a device login started right after a
+whole-client disconnect refused `401 CLIENT_REVOKED`. The revocation is stored as the epoch second of
+the backend's clock, and a token counts as connected at or before it when its `iat` or `auth_time` —
+whole seconds as well — is `<=` that second. A new connection issued within the revocation's own
+second was therefore refused, although „a new connection works at once" is decision 4's promise.
+The `<=` is what keeps a refresh of the old session in that same second refused (point 1 above), so
+the comparison stays.
+
+1. **The member's whole-client disconnect answers only once the backend clock has passed the stored
+   second** (`ExchangeRevocationSecond`, called by `ConnectedAppsController` after the service's
+   transaction committed): at most one second, holding no transaction and no lock. A device login the
+   member starts after the page confirms the disconnect is issued in a later second and passes; the
+   gateway and the backend share the host clock with Keycloak, which the comparison already assumes.
+2. **Nothing else needs it.** A departure revokes a member who has lost access; they cannot connect
+   again within the second. The reconcile rewrites stored times and stamps none. An installation
+   revocation denies a key, not a time, and a reconnect needs a new key anyway.
+3. **Not chosen** (owner decision 2026-09-28): telling clients to retry once after a second (moves the
+   cost to third parties and breaks the promise); a strict `<` (reopens the same-second refresh of the
+   old session for a whole access-token lifetime); a millisecond issue-time claim through a Keycloak
+   mapper (precise, but an SPI, a realm, a mirror-format and two-gate change for a one-second window);
+   denying the old session ids (a device login joins the same browser session and would be refused).

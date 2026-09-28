@@ -19,7 +19,7 @@
 
 package de.greluc.krt.profit.basetool.backend.service.exchange;
 
-import de.greluc.krt.profit.basetool.backend.exception.ExternalServiceException;
+import de.greluc.krt.profit.basetool.backend.exception.ExchangeProblemException;
 import de.greluc.krt.profit.basetool.backend.metrics.MetricNames;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeCapability;
 import de.greluc.krt.profit.basetool.backend.model.ExchangeClient;
@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.security.core.Authentication;
@@ -52,8 +53,11 @@ import org.springframework.transaction.annotation.Transactional;
  * PreAuthorize} on every exchange controller method (REQ-XCH-004): the caller is an acting member
  * relayed for a registry client, the global switch is on, the client is active, the member has not
  * disconnected the installation or, after the connection was made, the client (REQ-XCH-008), and
- * the needed capability was both relayed and granted in the registry. Every refusal is counted.
+ * the needed capability was both relayed and granted in the registry. Every refusal is counted; a
+ * relayed request is refused with the code and status the gateway's own gate answers for the same
+ * situation (REQ-XCH-025), so a client sees one code whichever side refuses it.
  */
+@Slf4j
 @Component("exchangeGate")
 @RequiredArgsConstructor
 public class ExchangeGate {
@@ -111,7 +115,10 @@ public class ExchangeGate {
    *
    * @param scope the capability's OAuth scope
    * @param authentication the current authentication
-   * @return {@code true} when every condition holds
+   * @return {@code true} when every condition holds, {@code false} when the caller is not a relayed
+   *     acting member
+   * @throws ExchangeProblemException with the gateway's code for a relayed request the registry,
+   *     the revocations or the grants refuse
    */
   @Transactional(readOnly = true)
   public boolean allows(@NotNull String scope, @Nullable Authentication authentication) {
@@ -120,7 +127,7 @@ public class ExchangeGate {
       return false;
     }
     if (!usable.get().contains(scope)) {
-      return refuse(REASON_SCOPE_MISSING);
+      throw refuse(REASON_SCOPE_MISSING, ExchangeProblemException.scopeMissing());
     }
     return true;
   }
@@ -129,7 +136,10 @@ public class ExchangeGate {
    * Allows a request that any exchange capability serves.
    *
    * @param authentication the current authentication
-   * @return {@code true} when every condition holds for at least one capability
+   * @return {@code true} when every condition holds for at least one capability, {@code false} when
+   *     the caller is not a relayed acting member
+   * @throws ExchangeProblemException with the gateway's code for a relayed request the registry,
+   *     the revocations or the grants refuse
    */
   @Transactional(readOnly = true)
   public boolean allowsAny(@Nullable Authentication authentication) {
@@ -138,7 +148,7 @@ public class ExchangeGate {
       return false;
     }
     if (usable.get().isEmpty()) {
-      return refuse(REASON_SCOPE_MISSING);
+      throw refuse(REASON_SCOPE_MISSING, ExchangeProblemException.scopeMissing());
     }
     return true;
   }
@@ -147,7 +157,9 @@ public class ExchangeGate {
    * Returns the scopes both relayed and granted, after the relay, switch and client checks.
    *
    * @param authentication the current authentication
-   * @return the usable scopes, or empty after a counted refusal
+   * @return the usable scopes, or empty after a counted refusal of a caller that is not relayed
+   * @throws ExchangeProblemException for a relayed request the switch, the registry or a revocation
+   *     refuses
    */
   @NotNull
   private Optional<Set<String>> usableScopes(@Nullable Authentication authentication) {
@@ -155,7 +167,7 @@ public class ExchangeGate {
         || subject.externalClient() == null
         || authentication.getAuthorities().stream()
             .noneMatch(a -> Roles.authority(Roles.EXCHANGE_MEMBER).equals(a.getAuthority()))) {
-      refuse(REASON_NOT_RELAYED);
+      count(REASON_NOT_RELAYED);
       return Optional.empty();
     }
     boolean enabled =
@@ -164,29 +176,24 @@ public class ExchangeGate {
             .map(ExchangeSettings::isEnabled)
             .orElse(false);
     if (!enabled) {
-      refuse(REASON_SWITCH_OFF);
-      return Optional.empty();
+      throw refuse(REASON_SWITCH_OFF, ExchangeProblemException.exchangeDisabled());
     }
-    Optional<ExchangeClient> client =
-        clientRepository.findWithCapabilitiesByClientId(subject.externalClient());
-    if (client.isEmpty()) {
-      refuse(REASON_CLIENT_UNKNOWN);
-      return Optional.empty();
-    }
-    if (client.get().getStatus() != ExchangeClientStatus.ACTIVE) {
-      refuse(REASON_CLIENT_SUSPENDED);
-      return Optional.empty();
+    ExchangeClient client =
+        clientRepository
+            .findWithCapabilitiesByClientId(subject.externalClient())
+            .orElseThrow(
+                () -> refuse(REASON_CLIENT_UNKNOWN, ExchangeProblemException.clientNotAllowed()));
+    if (client.getStatus() != ExchangeClientStatus.ACTIVE) {
+      throw refuse(REASON_CLIENT_SUSPENDED, ExchangeProblemException.clientSuspended());
     }
     if (installationRevoked(subject)) {
-      refuse(REASON_INSTALLATION_REVOKED);
-      return Optional.empty();
+      throw refuse(REASON_INSTALLATION_REVOKED, ExchangeProblemException.installationRevoked());
     }
     if (clientRevoked(subject)) {
-      refuse(REASON_CLIENT_REVOKED);
-      return Optional.empty();
+      throw refuse(REASON_CLIENT_REVOKED, ExchangeProblemException.clientRevoked());
     }
     Set<String> granted =
-        client.get().getCapabilities().stream()
+        client.getCapabilities().stream()
             .map(ExchangeCapability::getScope)
             .collect(Collectors.toSet());
     Set<String> relayed =
@@ -223,7 +230,8 @@ public class ExchangeGate {
    *
    * @param subject the acting member's authentication, relayed for an external client
    * @return {@code true} when a disconnect covers the token
-   * @throws ExternalServiceException when the mirror cannot be read, so the request fails closed
+   * @throws ExchangeProblemException {@code 503 REGISTRY_UNAVAILABLE} when the mirror cannot be
+   *     read, so the request fails closed
    */
   private boolean clientRevoked(@NotNull SubjectAuthentication subject) {
     Instant revokedAt;
@@ -232,8 +240,8 @@ public class ExchangeGate {
           revocationMirror.revokedAt(
               Objects.requireNonNull(subject.externalClient()), UUID.fromString(subject.subject()));
     } catch (RuntimeException e) {
-      refuse(REASON_REVOCATIONS_UNREADABLE);
-      throw new ExternalServiceException("The exchange revocations could not be read", e);
+      log.warn("The exchange revocations could not be read: {}", e.getClass().getSimpleName());
+      throw refuse(REASON_REVOCATIONS_UNREADABLE, ExchangeProblemException.registryUnavailable(e));
     }
     if (revokedAt == null) {
       return false;
@@ -243,15 +251,26 @@ public class ExchangeGate {
   }
 
   /**
+   * Counts a refusal and returns the problem to throw for it.
+   *
+   * @param reason the bounded reason
+   * @param problem the refusal with the gateway's code for the same situation
+   * @return {@code problem}
+   */
+  private @NotNull ExchangeProblemException refuse(
+      @NotNull String reason, @NotNull ExchangeProblemException problem) {
+    count(reason);
+    return problem;
+  }
+
+  /**
    * Counts a refusal.
    *
    * @param reason the bounded reason
-   * @return {@code false}
    */
-  private boolean refuse(@NotNull String reason) {
+  private void count(@NotNull String reason) {
     meterRegistry
         .counter(MetricNames.EXCHANGE_GATE_REFUSED, MetricNames.TAG_REASON, reason)
         .increment();
-    return false;
   }
 }
