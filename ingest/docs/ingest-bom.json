@@ -1,10 +1,10 @@
 {
   "bomFormat" : "CycloneDX",
   "specVersion" : "1.6",
-  "serialNumber" : "urn:uuid:1c1fbf45-43e6-4867-8931-48a25112966f",
+  "serialNumber" : "urn:uuid:02b35737-1f97-46ac-a2cf-ca41b2ff9bd3",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-09-25T17:23:54Z",
+    "timestamp" : "2026-09-28T14:13:25Z",
     "tools" : {
       "components" : [
         {
@@ -26,7 +26,7 @@
       "externalReferences" : [
         {
           "type" : "build-system",
-          "url" : "https://github.com/krt-profit/basetool/actions/runs/36166639808"
+          "url" : "https://github.com/krt-profit/basetool/actions/runs/36433970183"
         },
         {
           "type" : "vcs",
@@ -222,6 +222,73 @@
         {
           "type" : "vcs",
           "url" : "http://github.com/bucket4j/bucket4j/bucket4j_jdk17-core"
+        }
+      ],
+      "properties" : [
+        {
+          "name" : "cdx:maven:package:test",
+          "value" : "false"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/com.ethlo.time/itu@1.14.0?type=jar",
+      "group" : "com.ethlo.time",
+      "name" : "itu",
+      "version" : "1.14.0",
+      "description" : "Extremely fast date-time parser and formatter - RFC 3339 (ISO 8601 profile) and W3C format",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "e537d0a2bc8066726f7e4654c253cf84"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "c0f9f9d4f4404787e992ab3af5ae95f2fad79e47"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "5cf40ab0cc77828ab2b875b1f3ecd71c8295d7721933476abc2e08fddcea164a"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "aa69a6af3a7123eb41425bbaf6834e16dc3323172709e2338b8a21b970fd21333d996515f42da4aa0225251e30542ad7d9c8332bdf7d62ed96b42fadc8a1520d"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "f18d275dd2a0038a82432e06bb9f396151310136e3a316a869ef54d7fae834c5"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "8a51b3c6144eb2e363f8804da316d9e3dc246be07af4c0bb55e9540c2a0deb5eb9beb825120d3d203e3a561fd8a605ad64f3af5d233725e1b9c7e06232deaea9"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "8d201334c39b68d13d66fc9df2440fa848b055a9b901e1c630ff66a47e70c8816484d106ae18c642d4257034f33e55f2"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "033715e1422cb3f22c1073bc7b058fd16d1436c6314f49f13480d81c86b656cb77a4d852cbba35542bc8f2ce49244ba6"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "id" : "Apache-2.0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/com.ethlo.time/itu@1.14.0?type=jar",
+      "modified" : false,
+      "externalReferences" : [
+        {
+          "type" : "distribution",
+          "url" : "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/ethlo/itu"
         }
       ],
       "properties" : [
@@ -627,6 +694,77 @@
         {
           "type" : "vcs",
           "url" : "https://github.com/FasterXML/java-classmate"
+        }
+      ],
+      "properties" : [
+        {
+          "name" : "cdx:maven:package:test",
+          "value" : "false"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/com.networknt/json-schema-validator@3.0.7?type=jar",
+      "group" : "com.networknt",
+      "name" : "json-schema-validator",
+      "version" : "3.0.7",
+      "description" : "A json schema validator that supports draft v4, v6, v7, v2019-09 and v2020-12",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "bc40b1ae0b880a3bc94179ad6ddce1d5"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "5e755525565bf48be0049c129b4005c2ca6a43eb"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "27b90bce60845f353b203b735cda2e0cb9a32c4962550e249141a2b065b9be5c"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "aace0c5b7eb64e404201a713d1621ca8728392150fa98fda007ae819041742b602aa406cbfa28b54fb2a985cee71bee87ed2184a2818a4d4332c52a36e127e09"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "770af0ca389bce3803911ed669784629cc3267256afaf9831536c5908c62f998"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "d63d1754c21bc282a82d0481398183c3f14a22c4f44163980394152c02170c5ac33674d6a57b6352515c8ef7cc8c3bd26966c782058cc85fb71c68681fb813e1"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "0f5870dd4404fa98ff6cf680a71d1d883b63938cae71da62339d6ab740ea7d4ec7eb2488f56128055f23f50bdcee09ab"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "e43e19226409aa060879001c273db23394cdd37cde59829724442d1b7594852ddb2e97233e31d6675a1ced8496814f87"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "id" : "Apache-2.0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/com.networknt/json-schema-validator@3.0.7?type=jar",
+      "modified" : false,
+      "externalReferences" : [
+        {
+          "type" : "distribution",
+          "url" : "https://central.sonatype.com/service/local/staging/deploy/maven2/"
+        },
+        {
+          "type" : "issue-tracker",
+          "url" : "https://github.com/networknt/json-schema-validator/issues"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/networknt/json-schema-validator.git"
         }
       ],
       "properties" : [
@@ -10253,6 +10391,10 @@
       "dependsOn" : [ ]
     },
     {
+      "ref" : "pkg:maven/com.ethlo.time/itu@1.14.0?type=jar",
+      "dependsOn" : [ ]
+    },
+    {
       "ref" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.21?type=jar",
       "dependsOn" : [ ]
     },
@@ -10297,6 +10439,14 @@
       "dependsOn" : [ ]
     },
     {
+      "ref" : "pkg:maven/com.networknt/json-schema-validator@3.0.7?type=jar",
+      "dependsOn" : [
+        "pkg:maven/com.ethlo.time/itu@1.14.0?type=jar",
+        "pkg:maven/org.slf4j/slf4j-api@2.0.18?type=jar",
+        "pkg:maven/tools.jackson.core/jackson-databind@3.1.5?type=jar"
+      ]
+    },
+    {
       "ref" : "pkg:maven/com.nimbusds/nimbus-jose-jwt@10.9.1?type=jar",
       "dependsOn" : [ ]
     },
@@ -10333,6 +10483,7 @@
       "ref" : "pkg:maven/de.greluc.krt.profit.basetool/ingest@0.0.1-SNAPSHOT?project_path=%3Aingest",
       "dependsOn" : [
         "pkg:maven/com.bucket4j/bucket4j_jdk17-core@8.20.0?type=jar",
+        "pkg:maven/com.networknt/json-schema-validator@3.0.7?type=jar",
         "pkg:maven/de.greluc.krt.profit.basetool/logging-support@0.0.1-SNAPSHOT?project_path=%3Alogging-support",
         "pkg:maven/io.github.resilience4j/resilience4j-spring-boot3@2.4.0?type=jar",
         "pkg:maven/io.micrometer/micrometer-registry-prometheus@1.17.1?type=jar",
