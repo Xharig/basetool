@@ -198,12 +198,31 @@ class ExchangeDraftRouteTest {
     when(stagingService.stageDraft(
             eq("versekit"), eq(member), eq(HandoffKind.BLUEPRINT), anyString(), eq(10)))
         .thenThrow(new RedisConnectionFailureException("refused"));
+    double before = stagingFailures();
 
     post("/exchange/v1/me/drafts/blueprints", example("blueprint-draft/valid/corpus-slice.json"))
         .andExpect(status().isServiceUnavailable())
         .andExpect(header().string("Retry-After", "60"))
         .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
         .andExpect(jsonPath("$.detail").value("The draft cannot be staged; try again later."));
+
+    assertThat(stagingFailures() - before)
+        .as("IngestStagingUnavailable reads this series")
+        .isEqualTo(1.0);
+  }
+
+  /**
+   * Reads {@code basetool_ingest_handoff_errors_total{reason="staging_unavailable"}}.
+   *
+   * @return the count so far
+   */
+  private double stagingFailures() {
+    return meterRegistry
+        .counter(
+            MetricNames.INGEST_HANDOFF_ERRORS,
+            MetricNames.TAG_REASON,
+            MetricNames.REASON_STAGING_UNAVAILABLE)
+        .count();
   }
 
   @Test

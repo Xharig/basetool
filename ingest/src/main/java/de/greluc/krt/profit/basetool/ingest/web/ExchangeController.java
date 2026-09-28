@@ -566,6 +566,7 @@ public class ExchangeController {
       }
     } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A draft could not be staged: {}", e.getClass().getSimpleName());
+      countStagingFailure();
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE,
           "The draft cannot be staged; try again later.",
@@ -686,6 +687,7 @@ public class ExchangeController {
       }
     } catch (ExchangeUnavailableException | DataAccessException e) {
       log.warn("A mass change could not be staged: {}", e.getClass().getSimpleName());
+      countStagingFailure();
       return unavailable(
           ExchangeRefusals.SERVICE_UNAVAILABLE,
           "The confirmation cannot be prepared; try again later.",
@@ -765,6 +767,20 @@ public class ExchangeController {
         ExchangeRefusals.EXCHANGE_BUDGET_EXHAUSTED,
         BUDGET_EXHAUSTED_DETAIL,
         budget.retryAfterSeconds(context.clientId(), context.member(), bytes));
+  }
+
+  /**
+   * Counts a draft or change set that could not be staged on {@code
+   * basetool_ingest_handoff_errors_total{reason="staging_unavailable"}}, the series {@code
+   * IngestStagingUnavailable} reads.
+   */
+  private void countStagingFailure() {
+    meterRegistry
+        .counter(
+            MetricNames.INGEST_HANDOFF_ERRORS,
+            MetricNames.TAG_REASON,
+            MetricNames.REASON_STAGING_UNAVAILABLE)
+        .increment();
   }
 
   /**
