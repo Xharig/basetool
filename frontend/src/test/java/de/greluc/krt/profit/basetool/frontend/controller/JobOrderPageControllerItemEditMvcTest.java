@@ -19,6 +19,8 @@
 
 package de.greluc.krt.profit.basetool.frontend.controller;
 
+import static de.greluc.krt.profit.basetool.frontend.support.ResponseTypeMatchers.anyTypeRef;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -38,10 +40,16 @@ import de.greluc.krt.profit.basetool.frontend.model.dto.GameItemReferenceDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.JobOrderDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.JobOrderItemDto;
 import de.greluc.krt.profit.basetool.frontend.model.dto.JobOrderItemHandoverDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.OrgUnitMembershipOptionDto;
+import de.greluc.krt.profit.basetool.frontend.model.dto.SquadronReferenceDto;
 import de.greluc.krt.profit.basetool.frontend.service.BackendApiClient;
+import de.greluc.krt.profit.basetool.frontend.service.CachedCatalog;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -113,6 +121,78 @@ class JobOrderPageControllerItemEditMvcTest {
             content()
                 .string(org.hamcrest.Matchers.containsString("/orders/" + id + "/items/update")))
         .andExpect(content().string(org.hamcrest.Matchers.containsString("Auftrag bearbeiten")));
+  }
+
+  @Test
+  @WithMockUser(roles = {"KRT_MEMBER", "LOGISTICIAN"})
+  void editForm_itemOrder_preselectsStoredResponsibleAndRequestingOrgUnit() throws Exception {
+    UUID id = UUID.randomUUID();
+    UUID responsibleId = UUID.randomUUID();
+    UUID requestingId = UUID.randomUUID();
+    JobOrderDto order =
+        new JobOrderDto(
+            id,
+            7,
+            new SquadronReferenceDto(responsibleId, "ARGON", "ARG"),
+            new SquadronReferenceDto(requestingId, "CERBERUS", "CER"),
+            "Handle",
+            null,
+            1,
+            "OPEN",
+            "ITEM",
+            true,
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            Instant.now(),
+            1L,
+            null,
+            false);
+    doReturn(order).when(backendApiClient).get(eq("/api/v1/orders/" + id), eq(JobOrderDto.class));
+    doReturn(
+            List.of(
+                new OrgUnitMembershipOptionDto(
+                    responsibleId, "ARGON", "ARG", "SPECIAL_COMMAND", true),
+                new OrgUnitMembershipOptionDto(requestingId, "CERBERUS", "CER", "SQUADRON", true)))
+        .when(backendApiClient)
+        .getCached(eq(CachedCatalog.ORG_UNITS_ACTIVE_ALL_KINDS), anyTypeRef());
+
+    String html =
+        mockMvc
+            .perform(get("/orders/" + id + "/items/edit"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertThat(selectedOptionValues(html, "item-responsibleOrgUnitId"))
+        .containsExactly(responsibleId.toString());
+    assertThat(selectedOptionValues(html, "item-requestingOrgUnitId"))
+        .containsExactly(requestingId.toString());
+  }
+
+  /**
+   * Extracts the values of the preselected options of one rendered {@code <select>}.
+   *
+   * @param html the rendered page
+   * @param selectId the id of the select to read
+   * @return the {@code value} of every option carrying {@code selected}, in document order
+   */
+  private static List<String> selectedOptionValues(String html, String selectId) {
+    Matcher select =
+        Pattern.compile("<select id=\"" + selectId + "\"[^>]*>(.*?)</select>", Pattern.DOTALL)
+            .matcher(html);
+    assertThat(select.find()).as("select #%s is rendered", selectId).isTrue();
+    Matcher option =
+        Pattern.compile("<option value=\"([^\"]*)\"[^>]*\\bselected\\b").matcher(select.group(1));
+    List<String> values = new ArrayList<>();
+    while (option.find()) {
+      values.add(option.group(1));
+    }
+    return values;
   }
 
   @Test
