@@ -513,6 +513,7 @@ dependencyCheck {
   setConnectionTimeout(java.time.Duration.ofSeconds(30))
   setReadTimeout(java.time.Duration.ofSeconds(120))
   nvd.validForHours = 168
+  nvd.datafeedUrl = "https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz"
   val resolvedNvdApiKey = (project.findProperty("nvdApiKey") as String?)?.takeIf { it.isNotBlank() }
   if (resolvedNvdApiKey != null) {
     nvd.apiKey = resolvedNvdApiKey
