@@ -19,6 +19,7 @@
 
 package de.greluc.krt.profit.basetool.frontend.e2e;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -116,7 +117,7 @@ final class ExchangeE2eSupport {
       throws Exception {
     ExchangeTestClient client = new ExchangeTestClient(CLIENT_ID);
     ExchangeTestClient.DeviceLogin login = client.startDeviceLogin(SCOPES);
-    approveOnTheDevicePage(browser, login.verificationUriComplete(), member, password);
+    approveOnTheDevicePage(browser, login, member, password);
     client.awaitToken(login);
     awaitAnswer(client, "GET", "/exchange/v1", a -> a.status() == 200);
     return client;
@@ -136,36 +137,50 @@ final class ExchangeE2eSupport {
   }
 
   /**
-   * Signs the member in on Keycloak's device page and grants the consent, in a fresh browser
-   * context, until neither a login form, a code form nor a consent form is left.
+   * Approves a device login as a member does, in a fresh browser context: opens the bare
+   * verification page, types the user code, signs in and grants the consent, until neither a login
+   * form, a code form nor a consent form is left (REQ-XCH-005, REQ-XCH-027).
+   *
+   * <p>Asserts that the code page shows the phishing warning and that the consent page shows its
+   * warning and exactly this login's user code, and that both pages were reached.
    *
    * @param browser the browser
-   * @param verificationUriComplete the device page with the user code
+   * @param login the started device login, whose bare verification page and user code are used
    * @param member the member's Keycloak username
    * @param password the member's throwaway password
    */
   static void approveOnTheDevicePage(
-      Browser browser, String verificationUriComplete, String member, String password) {
+      Browser browser, ExchangeTestClient.DeviceLogin login, String member, String password) {
     try (BrowserContext context =
         browser.newContext(new Browser.NewContextOptions().setIgnoreHTTPSErrors(true))) {
       Page page = context.newPage();
       try {
-        page.navigate(verificationUriComplete);
+        page.navigate(login.verificationUri());
+        boolean codePageSeen = false;
+        boolean consentPageSeen = false;
         for (int step = 0; step < 6; step++) {
           page.waitForLoadState(LoadState.LOAD);
           Locator accept = page.locator("input[name='accept']");
           Locator passwordField = page.locator("#password");
           Locator userCode = page.locator("input[name='device_user_code']");
           if (accept.count() > 0) {
+            assertThat(page.locator("#krt-device-consent-warning")).isVisible();
+            assertThat(page.locator("#krt-device-user-code")).hasText(login.userCode());
+            consentPageSeen = true;
             accept.click();
             detached(accept);
           } else if (passwordField.count() > 0) {
             E2eSupport.submitKeycloakLogin(page, member, password);
             detached(passwordField);
           } else if (userCode.count() > 0) {
+            assertThat(page.locator("#krt-device-phishing-warning")).isVisible();
+            userCode.fill(login.userCode());
+            codePageSeen = true;
             page.locator("#kc-user-verify-device-user-code-form input[type='submit']").click();
             detached(userCode);
           } else {
+            assertTrue(codePageSeen, "the bare verification page asked for the user code");
+            assertTrue(consentPageSeen, "the device login reached the consent page");
             return;
           }
         }

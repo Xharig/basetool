@@ -40,7 +40,10 @@ public enum ExchangeMirrorPhase {
   STARTUP("startup"),
 
   /** The periodic reconcile. */
-  RECONCILE("reconcile");
+  RECONCILE("reconcile"),
+
+  /** At application startup while mirroring is off, switching off a document left behind. */
+  SWITCHED_OFF("switched_off");
 
   /** The metric label value. */
   @Getter @NotNull private final String tag;

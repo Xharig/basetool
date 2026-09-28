@@ -59,7 +59,9 @@ is drift.
 
 **One script writes the whole Basetool-owned part of a realm:** `scripts/provision-keycloak-realm.py`
 brings a realm to the production shape of the table above (`grafana` only with `--grafana-origin`),
-dry run by default, never deleting what only the target has, and never printing a secret
+dry run by default, never deleting what only the target has except the entries its ADR names (the
+withheld ones, and any client-level mapper on the extractor or a third-party client), and never
+printing a secret
 ([ADR-0202](../adr/0202-a-realm-is-brought-to-the-production-shape-by-a-provisioner-that-never-deletes.md),
 `REQ-OPS-033`). It imports the Android client's definition from the mobile provisioner below, so the
 two cannot disagree about it. Procedure:

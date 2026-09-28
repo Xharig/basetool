@@ -142,4 +142,17 @@ class TermsControllerTest {
     assertThat(html)
         .doesNotContain("<ul class=\"krtm-list-style-type-disc-margin-left-2rem-a571\"></ul>");
   }
+
+  /**
+   * The document sits in the {@code terms-body} container that lets an unbroken string wrap.
+   *
+   * <p>The terms spell out the approved-clients URL as plain text; without the wrapping container
+   * that URL widens the page past a 375 px screen (REQ-UI-009).
+   */
+  @Test
+  void rendersTheDocumentInsideTheWrappingContainer() throws Exception {
+    String html = mockMvc.perform(get("/terms")).andReturn().getResponse().getContentAsString();
+
+    assertThat(html).contains("<div class=\"terms-body\">");
+  }
 }
