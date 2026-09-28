@@ -5,6 +5,11 @@ Changes to the Exchange API contract, newest first. Every change within `v1` is 
 
 ## 2026-09-28
 
+- **`EXCHANGE_BUDGET_EXHAUSTED` tells when to retry and costs no write.** Its `Retry-After` is now
+  the seconds until enough of the full budget expires, at most 3600, instead of a fixed 60 that a
+  full budget never kept; and the refused write no longer counts against the daily write quota, so
+  a client that honours `Retry-After` keeps its writes ([errors](errors.md),
+  [sync guide](sync-guide.md#rate-limits-quota-and-back-off)).
 - **A connection without `offline_access` ends after 90 days too.** Its online session now ends
   after 30 days without use and after 90 days at the latest, as an offline session always did,
   instead of after the browser session's 180 days. A client that requests `offline_access`, as it
