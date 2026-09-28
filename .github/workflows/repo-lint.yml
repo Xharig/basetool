@@ -165,6 +165,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/build-sandbox-realm.py --check
 
+      - name: realm-reference / Self-test the realm export sanitizer
+        if: ${{ !cancelled() }}
+        run: python3 scripts/sanitize-realm-export.py --selftest
+
       - name: loki-rule-signatures / Self-test the signature matcher
         if: ${{ !cancelled() }}
         run: python3 scripts/check-loki-rule-signatures.py --selftest
