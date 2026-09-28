@@ -1,7 +1,9 @@
 # ADR-0221 — Redis grows to 768 MB and holds a bounded exchange partition
 
 - **Status:** Accepted — owner gate G0 of epic [#2078](https://github.com/krt-profit/basetool/issues/2078),
-  taken with the merge of #2111 and #2112 (2026-09-26); implementation pending. Amends [ADR-0085](0085-scale-user-sync-and-stack-capacity-for-5000-accounts.md) (the
+  taken with the merge of #2111 and #2112 (2026-09-26); implemented on main by 2026-09-28 (the Redis size #2115, the partition and the
+  ACL rows with epic #2078); the production resize and ACL render follow with the go-live
+  ([#2092](https://github.com/krt-profit/basetool/issues/2092)). Amends [ADR-0085](0085-scale-user-sync-and-stack-capacity-for-5000-accounts.md) (the
   Redis ceiling) and [ADR-0207](0207-each-service-reaches-redis-as-its-own-acl-user.md) (two new key
   families in the ACL).
 - **Date:** 2026-09-26
@@ -18,6 +20,11 @@ restarts: the registry mirror, revocations and the `jkt` deny list (written by t
 daily quotas and idempotency results (written by the gateway). A full Redis under `noeviction`
 refuses writes — logins would fail first. Today the backend's ACL user has no key access at all,
 and the ingest user has `SET` and `EXPIRE` on `ingest:*` but no `GET` or `INCR`.
+
+*Note 2026-09-28: the last sentence above is the ACL when the decision was taken (2026-09-26). The
+template on main, `scripts/redis-users.acl.tmpl`, gives the backend `GET` and `SET` on `exchange:*`,
+and the ingest user `GET`, `INCR`, the sorted-set commands, `EVAL` and `EVALSHA` on `ingest:*` plus
+read-only access to `exchange:*`; production renders it with the go-live (#2092).*
 
 ## Decision
 
