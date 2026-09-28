@@ -161,7 +161,7 @@ at once with exit code 64.
 
 | Tag | What it is |
 | --- | --- |
-| `edge` | The default. Built from `main` after every change to what the images contain, so it trails `main` by the time a build takes. A change to anything else, such as these pages, the seed or the start scripts, publishes nothing: those come from your checkout. |
+| `edge` | The default. Built from `main` after every change to what the images contain, so it trails `main` by the time a build takes. A change to these pages or the start scripts publishes nothing: those come from your checkout. A change under `docker/sandbox/`, the seed included, republishes `edge` with a new revision even when the images' content is unchanged; the seed itself still comes from your checkout. |
 | `X.Y.Z`, such as `1.13.0` | Built from the release tag `vX.Y.Z` — without the `v` — and only when that tag's commit is on `main`. Published with every release from the first one that contains the sandbox; until then `edge` is the only tag. |
 | `latest` | The newest release. |
 
