@@ -22,7 +22,10 @@ so a contract change has to be made twice. Two gates watch for drift (`FrontendD
 **`ingest`** owns no database. It authenticates the desktop extractor, checks the client is an
 approved one, relays over the internal network to the backend under its own service identity, and
 stages the returned draft in Redis for a one-time browser pickup — saving happens later, in the
-browser, through the ordinary create path. It exists so that the surface an unauthenticated
+browser, through the ordinary create path. It also fronts the exchange API for approved
+third-party clients — token and DPoP gate, registry gate, limits, idempotency and the Redis budget —
+whose writes the backend applies directly through the domain services (§5.5, ADR-0216); only
+drafts go through the browser pickup. It exists so that the surface an unauthenticated
 internet can reach is a small module with one job, rather than the module that holds every table.
 
 ## 4.3 Let Keycloak own identity, and centralise authorisation on `@PreAuthorize`

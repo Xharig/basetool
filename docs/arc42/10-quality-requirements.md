@@ -35,13 +35,14 @@ because a quality goal nobody measures is a preference, and a gate that cannot f
 
 ## 10.3 What operationalises them
 
-- **182 alert rules** in six rule files — `apps`, `business`, `containers-runtime`,
-  `infrastructure`, `meta`, `ops-automation` — with `promtool` unit tests beside them. The `meta`
+- **213 alert rules** in six rule files — `apps`, `business`, `containers-runtime`,
+  `infrastructure`, `meta`, `ops-automation` — with `promtool` unit tests beside them, plus 14
+  LogQL alerts in the Loki ruler. The `meta`
   rules are the ones that matter most and are easiest to forget: they alert on the *monitoring
   itself* being silent, which is the failure mode that makes every other alert useless.
-- **Thirteen Grafana dashboards** — host, containers, Spring apps, PostgreSQL, Redis, Keycloak,
+- **Fourteen Grafana dashboards** — host, containers, Spring apps, PostgreSQL, Redis, Keycloak,
   Basetool operations, edge, SSH host authentication, logs and errors, ops automation, meta
-  monitoring, tracing.
+  monitoring, tracing, exchange (per client).
 - **A large blackbox probe fleet** — not just liveness: the deny rules, the members-only boundary,
   the public surface, HSTS, forced SSL, internal TLS, IPv6 and DNS (A and AAAA) for both public
   names.

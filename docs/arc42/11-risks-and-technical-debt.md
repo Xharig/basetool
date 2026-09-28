@@ -211,9 +211,7 @@ not happened.
   confidential (PKCE **and** a client secret), closing security-audit finding M-6. The code shipped
   on 2026-09-23 (REQ-SEC-069) and is inert until `KEYCLOAK_FRONTEND_CLIENT_SECRET` is set; the
   production switch is two owner steps with no login window —
-  [`OAUTH2_CONFIDENTIAL_CLIENT_MIGRATION.md`](../OAUTH2_CONFIDENTIAL_CLIENT_MIGRATION.md). Until
-  then the frontend client carries PKCE `S256` as the interim state. Closed when the provisioner
-  reports `basetool-frontend` confidential in production.
+  [`OAUTH2_CONFIDENTIAL_CLIENT_MIGRATION.md`](../OAUTH2_CONFIDENTIAL_CLIENT_MIGRATION.md).
 - **Three of the twelve Keycloak hardening steps are open** —
   [`KEYCLOAK_HARDENING_RUNBOOK.md`](../KEYCLOAK_HARDENING_RUNBOOK.md): step 2 (decide *Forgot
   password* on Keycloak's own SMTP; `resetPasswordAllowed` was still on at the last recorded
@@ -285,8 +283,6 @@ and its global switch stays off until the go-live; the risks hold from then on.
   as the stock rule does. A batch that retypes every ship or clears their names and locations is
   not held back; the journal records it and the member's undo restores it. Accepted by the owner
   on 2026-09-27 rather than extending the rule (security review 2 of #2092, L2; REQ-XCH-021).
-- **Undo is per member.** A malicious release that changes many members' data has to be undone by
-  each member on their own page. Being addressed: an admin bulk undo is being built.
 
 ## 11.8 Smaller, known, and deliberately left
 
